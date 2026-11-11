@@ -880,13 +880,45 @@ const calendar = async (t) => {
   );
   await t.eval(`document.activeElement.blur()`);
 
+  await t.eval(`(() => {
+    const t0 = performance.now();
+    const log = (window.__diag = []);
+    const at = (e) => e.target?.closest?.("[data-calendar-marker]")?.dataset.calendarMarker ?? e.target?.localName;
+    for (const type of ["pointerover", "pointerout", "pointerenter", "pointerleave", "mousemove", "mouseover", "focusin", "focusout", "keydown"])
+      document.addEventListener(type, (e) => { if (type !== "mousemove" || e.target?.closest?.("[data-calendar-marker]")) log.push([Math.round(performance.now() - t0), type, at(e), e.clientX, e.clientY]); }, true);
+    new MutationObserver((ms) => { for (const m of ms) { for (const n of m.addedNodes) if (n.querySelector?.("[data-calendar-popup]")) log.push([Math.round(performance.now() - t0), "popup+"]); for (const n of m.removedNodes) if (n.querySelector?.("[data-calendar-popup]")) log.push([Math.round(performance.now() - t0), "popup-"]); if (m.type === "attributes" && m.target.matches?.("[data-calendar-marker], [data-calendar-popup]")) log.push([Math.round(performance.now() - t0), "attr", m.attributeName, m.target.dataset.calendarMarker ?? "popup", m.target.getAttribute(m.attributeName)]); } }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-popup-open", "data-open", "data-closed", "data-starting-style", "data-ending-style", "data-instant"] });
+    new ResizeObserver(() => log.push([Math.round(performance.now() - t0), "grid-resize", document.querySelectorAll("[data-calendar-day]").length])).observe(document.querySelector('[data-testid="calendar-grid"]'));
+  })()`);
   await t.click('[data-calendar-day="-1"]');
   await t.waitFor(
     `document.querySelector(${JSON.stringify(DAY_PANEL)})`,
     "a day is open for the Escape check",
   );
   await t.hover("[data-calendar-marker]");
-  await popupOpen("with a day open");
+  try {
+    await popupOpen("with a day open");
+  } catch (error) {
+    console.log(
+      "DIAG",
+      JSON.stringify(
+        await t.eval(`(() => {
+      const m = document.querySelector("[data-calendar-marker]");
+      const r = m.getBoundingClientRect();
+      const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+      const top = document.elementFromPoint(cx, cy);
+      return {
+        reduce: matchMedia("(prefers-reduced-motion: reduce)").matches,
+        marker: { ref: m.dataset.calendarMarker, rect: [r.left, r.top, r.right, r.bottom], hover: m.matches(":hover"), attrs: [...m.attributes].map((a) => a.name + "=" + a.value).filter((s) => !s.startsWith("style") && !s.startsWith("class")) },
+        top: top && (top.closest("[data-calendar-marker]")?.dataset.calendarMarker ?? top.outerHTML.slice(0, 120)),
+        active: document.activeElement?.outerHTML.slice(0, 120),
+        popups: [...document.querySelectorAll("[data-calendar-popup]")].map((p) => ({ attrs: [...p.attributes].map((a) => a.name + "=" + a.value).filter((s) => !s.startsWith("style") && !s.startsWith("class")), anims: p.getAnimations({ subtree: true }).map((a) => ({ kind: a.constructor.name, prop: a.transitionProperty ?? a.animationName, state: a.playState, t: a.currentTime, d: a.effect?.getTiming().duration, it: a.effect?.getTiming().iterations, on: a.effect?.target?.localName })) })),
+        log: window.__diag,
+      };
+    })()`),
+      ),
+    );
+    throw error;
+  }
   await t.key("Escape");
   await t.waitFor(
     `!document.querySelector(${JSON.stringify(MARKER_POPUP)})`,
