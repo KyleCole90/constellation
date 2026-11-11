@@ -43,7 +43,8 @@ export default defineConfig({
       entry: "src/main/index.ts",
       outDir: "out/main",
       format: "esm",
-      deps: { neverBundle: ["electron"] },
+      // The packaged app ships no node_modules, so every dependency main imports goes in its bundle. `npm run smoke:packaged` fails on one left out.
+      deps: { neverBundle: ["electron"], alwaysBundle: ["valibot"] },
     },
     {
       entry: "src/preload/index.ts",

@@ -26,6 +26,12 @@ const HIDDEN = !app.isPackaged && process.env.CONSTELLATION_WINDOW === "hidden";
 const DEV_ORIGIN = app.isPackaged
   ? undefined
   : (DEV_URL ?? process.env.CONSTELLATION_VERIFY_ORIGIN);
+/** Only the unpackaged app takes CDP. A packaged app quits before it opens a window (`npm run smoke:packaged`). */
+const DEBUGGER_ASKED =
+  app.isPackaged &&
+  ["remote-debugging-port", "remote-debugging-pipe"].some((name) =>
+    app.commandLine.hasSwitch(name),
+  );
 
 protocol.registerSchemesAsPrivileged([
   { scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -79,5 +85,6 @@ const start = async () => {
   await window.loadURL(DEV_URL ?? APP_URL);
 };
 
-if (app.requestSingleInstanceLock()) void start();
+if (DEBUGGER_ASKED) app.exit(1);
+else if (app.requestSingleInstanceLock()) void start();
 else app.quit();

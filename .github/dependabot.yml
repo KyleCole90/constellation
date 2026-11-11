@@ -1,0 +1,18 @@
+version: 2
+updates:
+  # Electron is pinned exactly and updates in its own PR, so a new major is never buried in a group (docs/electron-spec.md, D32).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]
+        exclude-patterns: ["electron"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
