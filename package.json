@@ -82,7 +82,12 @@
         }
       ],
       "category": "public.app-category.education",
-      "entitlements": "build/entitlements.mac.plist"
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "dmg": {
+      "sign": true,
+      "writeUpdateInfo": false
     },
     "electronFuses": {
       "runAsNode": false,
