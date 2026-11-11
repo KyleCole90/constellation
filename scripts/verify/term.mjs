@@ -446,6 +446,12 @@ const publish = async (t, code) => {
     !(await t.has(`${id("published-card")} ${id("save-template")}`)),
     `${code}: the published card offers no end-of-term template`,
   );
+  // The card shows before the send's sync lands. The sync adds the course row above the other offers, so a click aimed before it lands misses.
+  await t.waitFor(
+    `![...document.querySelectorAll('${id("setup-offer")}[data-surface="sidebar"]')].some((el) => el.innerText.includes(${JSON.stringify(code)}))`,
+    `${code}: once the sync lands, the published course leaves the setup offers`,
+    WAIT,
+  );
 };
 
 const until = async (t, expression, ms = 3000) => {
