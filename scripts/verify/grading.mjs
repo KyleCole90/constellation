@@ -468,9 +468,7 @@ const rationale = async (t) => {
   );
   await t.shot("rationale-scrolled-small-window");
 
-  await t.cdp("Emulation.setEmulatedMedia", {
-    features: [{ name: "prefers-reduced-motion", value: "reduce" }],
-  });
+  await t.media({ "prefers-reduced-motion": "reduce" });
   await t.eval(`document.querySelector('${scroller}').scrollTop = 0`);
   await t.click(`${PANEL} [data-reason-key] button:first-of-type`);
   await t.click(`${PANEL} [data-reason-key] button:last-of-type`);
@@ -482,7 +480,7 @@ const rationale = async (t) => {
     "with reduced motion on, a rationale jumps to its passage instead of gliding",
     String(jumped),
   );
-  await t.cdp("Emulation.setEmulatedMedia", { features: [] });
+  await t.media({});
   await t.viewport(1440, 1300);
   await t.sleep(150);
   const reasonsBack = await t.eval(
@@ -575,9 +573,7 @@ const motion = async (t) => {
 
   await t.viewport(1440, 900);
   await t.sleep(200);
-  await t.cdp("Emulation.setEmulatedMedia", {
-    features: [{ name: "prefers-reduced-motion", value: "reduce" }],
-  });
+  await t.media({ "prefers-reduced-motion": "reduce" });
   await reopen();
   await t.click("Preview", { within: tabs });
   await t.sleep(250);
@@ -597,7 +593,7 @@ const motion = async (t) => {
       0,
     "reduced motion also turns off the overlay slide",
   );
-  await t.cdp("Emulation.setEmulatedMedia", { features: [] });
+  await t.media({});
   await reopen();
   t.assert(
     (await started()).includes("panel-slide"),

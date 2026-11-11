@@ -233,11 +233,17 @@ const main = async () => {
       await send("Page.enable");
       await send("Runtime.enable");
       await send("Log.enable");
-      // Every module but theme sees the dark theme, whatever the machine's own setting.
-      await send("Emulation.setEmulatedMedia", {
-        features: [{ name: "prefers-color-scheme", value: "dark" }],
-      });
+      await media({});
     };
+    // Every module sees the dark theme and full motion, whatever the machine's own settings. A module overrides one by name, and the rest keep these.
+    const media = (features) =>
+      send("Emulation.setEmulatedMedia", {
+        features: Object.entries({
+          "prefers-color-scheme": "dark",
+          "prefers-reduced-motion": "no-preference",
+          ...features,
+        }).map(([name, value]) => ({ name, value })),
+      });
     await freshPage();
 
     const locate = (query, within, nth) =>
@@ -308,6 +314,7 @@ const main = async () => {
       sleep,
       consoleEntries,
       cdp: send,
+      media,
       /** Calls `handler` with each CDP event named `method` until the returned function stops it. */
       on(method, handler) {
         listeners.set(method, handler);
