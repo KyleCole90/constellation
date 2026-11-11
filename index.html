@@ -4,16 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <script>
-      // Before first paint, so a theme chosen in Settings never flashes the OS one. src/renderer/lib/theme.ts writes this key and sets the same two values.
-      {
-        const theme = localStorage.getItem("constellation.theme");
-        if (theme === "light" || theme === "dark") {
-          document.documentElement.dataset.theme = theme;
-          document.documentElement.style.colorScheme = theme;
-        }
-      }
-    </script>
+    <script src="/theme.js"></script>
     <title>Constellation</title>
     <meta name="description" content="Each school is a star in your academic journey." />
     <link rel="icon" type="image/svg+xml" href="/src/renderer/assets/mark.svg" />

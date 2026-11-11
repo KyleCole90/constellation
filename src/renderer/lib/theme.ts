@@ -8,7 +8,7 @@ export const THEMES = [
 
 export type Theme = (typeof THEMES)[number]["id"];
 
-/** index.html reads the same key before first paint, so a chosen theme never flashes the OS one. */
+/** public/theme.js reads the same key before first paint, so a chosen theme never flashes the OS one. */
 const KEY = "constellation.theme";
 const listeners = new Set<() => void>();
 

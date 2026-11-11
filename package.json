@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "out/main/index.mjs",
   "scripts": {
     "prepare": "vp config --no-agent",
-    "dev": "vp dev",
-    "build": "vp build",
+    "dev": "node scripts/dev.mjs",
+    "build": "vp build && vp pack",
     "typecheck": "tsgo -b",
     "test": "vp test run",
     "lint": "vp lint --report-unused-disable-directives",
@@ -14,7 +15,8 @@
     "fmt:check": "vp fmt --check",
     "check": "vp check",
     "knip": "knip",
-    "verify": "node scripts/verify.mjs"
+    "verify": "node scripts/verify.mjs",
+    "dev:web": "vp dev"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -35,6 +37,7 @@
     "@types/react-dom": "~19.2.3",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitejs/plugin-react": "^6.1.2",
+    "electron": "45.3.0",
     "knip": "6.44.1",
     "playwright": "^1.64.1",
     "tailwindcss": "^4.3.3",
@@ -44,5 +47,6 @@
   },
   "overrides": {
     "vite": "$vite"
-  }
+  },
+  "productName": "Constellation"
 }
