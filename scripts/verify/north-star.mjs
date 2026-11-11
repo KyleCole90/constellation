@@ -699,8 +699,7 @@ const nextUp = async (t) => {
     ["1440x900", 1440, 900, 4],
   ]) {
     await t.viewport(width, height);
-    await t.sleep(150);
-    const seen = await t.eval(listed);
+    const seen = await t.steady(listed);
     t.assert(
       seen.whole >= rows &&
         seen.cut === 0 &&

@@ -356,8 +356,7 @@ const sidebarRail = async (t) => {
 
 const assertWelcomeLayout = async (t, width, height, tag) => {
   await t.viewport(width, height);
-  await t.sleep(150);
-  const result = await t.eval(`(() => {
+  const result = await t.steady(`(() => {
     const box = (selector) => document.querySelector(selector)?.getBoundingClientRect();
     const heading = box("main h1"), mark = box("main img"), button = [...document.querySelectorAll("main button")].find((el) => el.innerText === "Set up")?.getBoundingClientRect();
     const center = (r) => r && (r.left + r.right) / 2;
@@ -377,8 +376,7 @@ const assertWelcomeLayout = async (t, width, height, tag) => {
 
 const assertSetupLayout = async (t, width, height, tag) => {
   await t.viewport(width, height);
-  await t.sleep(150);
-  const result = await t.eval(`(() => {
+  const result = await t.steady(`(() => {
     const column = document.querySelector('[data-testid="where-you-teach"]').getBoundingClientRect();
     const clipped = [...document.querySelectorAll("main button, main input, main a, main h2")].filter((el) => { const r = el.getBoundingClientRect(); return r.width > 0 && (r.right > innerWidth + 0.5 || r.left < -0.5); }).map((el) => el.innerText || el.getAttribute("aria-label") || el.tagName);
     return { width: column.width, sideways: document.documentElement.scrollWidth - innerWidth, clipped };
@@ -390,8 +388,7 @@ const assertSetupLayout = async (t, width, height, tag) => {
 
 const assertFinishInView = async (t, width, height, tag) => {
   await t.viewport(width, height);
-  await t.sleep(150);
-  const seen = await t.eval(`(() => {
+  const seen = await t.steady(`(() => {
     const button = [...document.querySelectorAll("main button")].find((b) => b.innerText === "Finish setup");
     const reason = document.getElementById(button.getAttribute("aria-describedby"));
     return [button, reason].map((el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; });
