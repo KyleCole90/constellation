@@ -4,6 +4,10 @@ import { APP_URL, CSP } from "../../src/main/security.ts";
 
 export const run = async (t) => {
   await t.goto(APP_URL);
+  await t.waitFor(
+    `!!document.querySelector("h1")?.innerText.trim()`,
+    "the built app renders its first screen under app://",
+  );
   const header = await t.eval(
     `fetch(location.href).then((response) => response.headers.get("content-security-policy"))`,
   );
