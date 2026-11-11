@@ -183,6 +183,7 @@ const useChatScroll = (thread: Thread, ui: ThreadUi, stickOn: string | undefined
   const sentSeen = useRef(countUserMessages(thread));
   const placedFor = useRef<{ stickOn: string; length: number } | null>(null);
   const rested = useRef(0);
+  const seenTop = useRef(0);
 
   const focusedCard = (el: HTMLElement) =>
     thread.focus ? el.querySelector(`[data-change="${thread.focus}"]`) : null;
@@ -311,12 +312,15 @@ const useChatScroll = (thread: Thread, ui: ThreadUi, stickOn: string | undefined
     // The browser's own scroll anchoring moves scrollTop too, so a scroll only counts as the user's if it moved the card.
     const card = focusedCard(el);
     const delta = card ? cardDelta(el, card) - rested.current : null;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= 1;
     const held =
       anchor.current === "card" &&
       delta !== null &&
-      (Math.abs(delta) <= 1 ||
-        (delta > 0 && el.scrollHeight - el.scrollTop - el.clientHeight <= 1));
-    if (!held) anchor.current = nearBottom(el) ? "bottom" : "free";
+      (Math.abs(delta) <= 1 || (delta > 0 && atBottom));
+    // Scrolling up leaves the bottom even inside the stick band; otherwise the next render pulls a short chat back down.
+    const up = el.scrollTop < seenTop.current;
+    seenTop.current = el.scrollTop;
+    if (!held) anchor.current = nearBottom(el) && (!up || atBottom) ? "bottom" : "free";
     lastTop.current =
       anchor.current === "free" || (anchor.current === "card" && screen) ? el.scrollTop : null;
     window.clearTimeout(saveTimer.current);
