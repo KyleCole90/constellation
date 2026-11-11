@@ -4,7 +4,8 @@
     "scripts/verify/*.mjs",
     "scripts/make-imscc.mjs",
     "scripts/block-commands.mjs",
-    "src/preload/index.ts"
+    "src/preload/index.ts",
+    "src/main/index.ts"
   ],
   "ignore": [".audit/**", ".claude/**"],
   "tanstack-router": {
