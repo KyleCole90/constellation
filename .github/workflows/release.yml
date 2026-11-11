@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# Uploads assets to a draft release. Kyle publishes it by hand.
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release
+    runs-on: macos-15
+    # Holds the signing and notarisation secrets. Only Kyle can approve a run.
+    environment: release
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - name: Require the tag to match package.json
+        run: test "$GITHUB_REF_NAME" = "v$(node -p 'require("./package.json").version')"
+      - run: npm ci
+      - run: npm run build
+      # electron-builder imports CSC_LINK into a temporary keychain, signs with hardened runtime, notarises with the
+      # App Store Connect API key, staples, and uploads the DMGs, zips and latest-mac.yml to a draft release.
+      - name: Package, sign, notarise and upload
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          export APPLE_API_KEY="$RUNNER_TEMP/AuthKey_$APPLE_API_KEY_ID.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$APPLE_API_KEY"
+          npx electron-builder --mac --publish always
+      # electron-builder notarises and staples the app inside each DMG and zip. Gatekeeper must name it notarised.
+      - name: Check Gatekeeper accepts both apps
+        run: |
+          for app in out/release/mac-arm64/Constellation.app out/release/mac/Constellation.app; do
+            xcrun stapler validate "$app"
+            spctl --assess --type execute --verbose=4 "$app" 2>&1 | tee /dev/stderr | grep -q "source=Notarized Developer ID"
+          done
+      # The runner is Apple silicon, so this boots the signed arm64 app.
+      - run: node scripts/smoke-packaged.mjs
