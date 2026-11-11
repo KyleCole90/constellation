@@ -309,11 +309,14 @@ const pinnedQueue = async (t) => {
   await expandQueue(t);
   const MORE = '[data-testid="queue-more"]';
   const hiddenBelow = `(() => { const list = document.querySelector(${JSON.stringify(LIST)}).getBoundingClientRect(); return [...document.querySelectorAll("[data-row]")].filter((row) => row.getBoundingClientRect().bottom > list.bottom + 1).length; })()`;
-  const below = await t.eval(hiddenBelow);
+  // The list refits its height a frame after the card resizes, so a count read before it settles is off by the rows the refit adds or takes away.
+  const { below, cue } = await t.steady(
+    `({ below: ${hiddenBelow}, cue: document.querySelector(${JSON.stringify(MORE)})?.innerText })`,
+  );
   t.assert(
-    below > 0 && (await t.text(MORE)) === `${below} more below`,
+    below > 0 && cue === `${below} more below`,
     "a list that cuts rows off counts the ones below it",
-    await t.text(MORE),
+    cue,
   );
   await t.click(MORE);
   await t.waitFor(

@@ -251,8 +251,7 @@ const main = async () => {
 
     // Null while the target is missing, disabled, or under something else, so a click can only land where a person's would.
     // The press listener judges a hit by the same rule, at the moment of the press, because the click may unmount the target or navigate.
-    const hitPoint = (query, within, nth) =>
-      evaluate(`(() => {
+    const hitPoint = (query, within, nth) => `(() => {
         const el = ${locate(query, within, nth)};
         if (!el || el.disabled) return null;
         el.scrollIntoViewIfNeeded?.();
@@ -290,26 +289,35 @@ const main = async () => {
         // scrollIntoViewIfNeeded can leave the target under a sticky bar; centering clears it.
         el.scrollIntoView({ block: "center" });
         return reachable();
-      })()`);
+      })()`;
 
-    const waitPoint = async (query, within, nth, timeout) => {
+    // A reading counts once no finite animation is running and it holds across painted frames. A click aimed at something still sliding or reflowing lands beside it.
+    // Time between readings is not enough. Headless Chrome on a hosted runner can go 100ms without a frame, and an animation can hold at its first frame until one comes.
+    const steady = async (expression, ready, timeout, failure) => {
       const end = Date.now() + timeout;
-      // A point only counts once it holds still across a painted frame. A click aimed at something still sliding or reflowing lands beside it.
-      // Time between samples is not enough. Headless Chrome on a hosted runner can go 100ms without a frame, and reflows from a ResizeObserver or an animation start only on the next one.
       let last = null;
       for (;;) {
-        const point = await hitPoint(query, within, nth);
-        if (point && last && point.x === last.x && point.y === last.y) return point;
-        last = point;
-        if (Date.now() > end)
-          throw new Error(
-            `nothing clickable for ${JSON.stringify(query)}${within ? ` within ${within}` : ""}`,
-          );
-        await evaluate(
-          `new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))`,
-        );
+        const value = await evaluate(expression);
+        const seen = ready(value) ? JSON.stringify(value) : null;
+        if (seen !== null && seen === last) return value;
+        last = seen;
+        if (Date.now() > end) throw new Error(failure);
+        await Promise.race([
+          evaluate(
+            `Promise.allSettled(document.getAnimations().filter((a) => a.playState === "running" && a.effect?.getTiming().iterations !== Infinity).map((a) => a.finished)).then(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))).then(() => null)`,
+          ),
+          sleep(Math.max(0, end - Date.now())),
+        ]);
       }
     };
+
+    const waitPoint = (query, within, nth, timeout) =>
+      steady(
+        hitPoint(query, within, nth),
+        Boolean,
+        timeout,
+        `nothing clickable for ${JSON.stringify(query)}${within ? ` within ${within}` : ""}`,
+      );
 
     const t = {
       origin,
@@ -324,6 +332,9 @@ const main = async () => {
         return () => listeners.delete(method);
       },
       eval: evaluate,
+      /** Evaluates `expression` until its value holds across painted frames with no animation running, and returns it. */
+      steady: (expression, timeout = WAIT_MS) =>
+        steady(expression, () => true, timeout, `never held still: ${expression.slice(0, 80)}`),
       async goto(path) {
         const load = new Promise((resolve) => loaded.push(resolve));
         await send("Page.navigate", { url: `${origin}${path}` });
