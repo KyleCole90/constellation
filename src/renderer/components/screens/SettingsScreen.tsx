@@ -1,3 +1,4 @@
+import { VAULT_PLACE } from "~/renderer/desktop";
 import { Link, useSearch } from "@tanstack/react-router";
 import { FlaskConical, Plug, Sparkles, SunMoon } from "lucide-react";
 import { useEffect, useRef } from "react";
@@ -48,7 +49,7 @@ function ConnectionsSection() {
   return (
     <SettingsSection
       title="Connections"
-      description="Each school's token stays in this browser's vault and is never shown again. Nothing reaches a school until you approve it."
+      description={`Each school's token stays in ${VAULT_PLACE} and is never shown again. Nothing reaches a school until you approve it.`}
     >
       <div className="flex flex-col gap-3">
         {schools.map((school) => (

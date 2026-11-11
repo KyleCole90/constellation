@@ -24,6 +24,18 @@ export const windowOptions = (preload: string): BrowserWindowConstructorOptions 
   webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, preload },
 });
 
+/**
+ * Whether an IPC call comes from the app: a frame on `app://`, or on the dev server's origin when `npm run dev`
+ * or verify serves the renderer. Anything else the window could ever load gets no handler.
+ */
+export const trustedSender =
+  (devOrigin: string | undefined) =>
+  (sender: string): boolean => {
+    const url = URL.parse(sender);
+    if (url?.protocol === `${APP_SCHEME}:`) return url.host === APP_HOST;
+    return devOrigin !== undefined && url?.origin === URL.parse(devOrigin)?.origin;
+  };
+
 const openIfHttps = (url: string, openExternal: (url: string) => void) => {
   if (URL.parse(url)?.protocol === "https:") openExternal(url);
 };

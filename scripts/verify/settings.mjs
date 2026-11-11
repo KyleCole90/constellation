@@ -55,6 +55,9 @@ const READ_SURFACES = `async () => {
     url: location.href + "\\n" + JSON.stringify(history.state),
     indexedDB: indexedValues.map((entry) => entry.text).join("\\n"),
     indexedStores: indexedValues.map((entry) => entry.store),
+    window: Object.getOwnPropertyNames(window).map((name) => { try { const value = window[name]; return typeof value === "string" ? value : ""; } catch { return ""; } }).join("\\n"),
+    // What DevTools can ask main for: every key, and each one's stand-in.
+    bridge: window.constellation ? JSON.stringify(await Promise.all((await window.constellation.invoke("vault.keys")).map(async (key) => [key, await window.constellation.invoke("vault.standIn", { key })]))) : "",
   };
 }`;
 
@@ -65,6 +68,7 @@ const surfaces = async (t) => {
     ...page,
     history: entries.map((entry) => `${entry.url}\n${entry.title}`).join("\n"),
     console: t.consoleEntries.join("\n"),
+    mainVault: await t.vaultFile(),
   };
 };
 
@@ -78,7 +82,12 @@ const whereFound = (read, needle) =>
     "indexedDB",
     "history",
     "console",
+    "window",
+    "bridge",
+    "mainVault",
   ].filter((surface) => read[surface].includes(needle));
+
+const vaultKeys = (text) => Object.keys(JSON.parse(text)).sort().join();
 
 const assertNoLeak = async (t, tag) => {
   const read = await surfaces(t);
@@ -92,6 +101,7 @@ const assertScanWorks = async (t) => {
   const canary = "CANARY-proves-the-scan-looks-4e1f";
   await t.eval(`(async () => {
     document.body.dataset.canary = ${JSON.stringify(canary)};
+    window.verifyCanary = ${JSON.stringify(canary)};
     localStorage.setItem("verify.canary", ${JSON.stringify(canary)});
     sessionStorage.setItem("verify.canary", ${JSON.stringify(canary)});
     console.log(${JSON.stringify(canary)});
@@ -110,6 +120,7 @@ const assertScanWorks = async (t) => {
     "indexedDB",
     "history",
     "console",
+    "window",
   ];
   t.assert(
     expected.every((surface) => found.includes(surface)),
@@ -118,6 +129,7 @@ const assertScanWorks = async (t) => {
   );
   await t.eval(`(async () => {
     delete document.body.dataset.canary;
+    delete window.verifyCanary;
     localStorage.removeItem("verify.canary");
     sessionStorage.removeItem("verify.canary");
     await new Promise((resolve) => { const del = indexedDB.deleteDatabase("verify-canary"); del.onsuccess = resolve; del.onerror = resolve; });
@@ -840,12 +852,36 @@ const onboarding = async (t, shot) => {
     JSON.stringify(await t.eval(storedHosts)),
   );
   await assertNoLeak(t, "after connecting Riverbend");
+  t.assert(
+    vaultKeys(await t.vaultFile()) === "lcc,rsu",
+    "main's vault holds an entry for each connected school",
+    await t.vaultFile(),
+  );
+  t.assert(
+    !(await t.eval(
+      `indexedDB.databases().then((dbs) => dbs.some((db) => db.name === "lms-app-vault"))`,
+    )),
+    "the desktop app keeps no vault in IndexedDB",
+  );
+  t.assert(
+    (await surfaces(t)).bridge.match(/stand-in:/g)?.length === 2,
+    "DevTools can get a stand-in for each school from main, and the leak scan read both",
+  );
 
   await t.click(`[aria-label="Remove ${RSU}"]`);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(DIALOG)})?.innerText.includes("forgets the token in your Mac's Keychain")`,
+    "on the desktop, Remove says the token is forgotten from the Keychain, not a browser",
+  );
   await t.click("Remove", { within: DIALOG });
   await t.waitFor(
     `!document.querySelector(${JSON.stringify(ROW(RSU))})`,
     "confirming Remove drops the connected school",
+  );
+  t.assert(
+    vaultKeys(await t.vaultFile()) === "lcc",
+    "removing a school deletes its entry from main's vault",
+    await t.vaultFile(),
   );
   t.assert(
     (await t.eval(storedHosts)).join() === LCC,

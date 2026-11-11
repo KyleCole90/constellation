@@ -10,6 +10,7 @@
   "include": [
     "tests",
     "src/renderer/env.d.ts",
+    "src/renderer/bridge.d.ts",
     "src/renderer/css-properties.d.ts",
     "src/renderer/router.ts"
   ]

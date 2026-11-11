@@ -1,4 +1,6 @@
+import { desktopBridge } from "~/renderer/desktop";
 import { parseIsoTime } from "~/shared/domain/ids";
+import type { Bridge } from "~/shared/ipc";
 import {
   Secret,
   revealSecret,
@@ -139,7 +141,7 @@ const masterKey = async (db: IDBDatabase): Promise<CryptoKey> => {
   return created;
 };
 
-export const createBrowserVault = (): Vault => {
+const createBrowserVault = (): Vault => {
   let opened: Promise<IDBDatabase> | null = null;
   const db = () => (opened ??= openDb());
 
@@ -192,3 +194,38 @@ export const createBrowserVault = (): Vault => {
   };
   return vault;
 };
+
+/**
+ * The desktop app's vault. Main keeps each token, encrypted with `safeStorage`, and never sends one back.
+ * A lease gets a stand-in, which the fake LMS checks the way it would check the token.
+ */
+export const createBridgeVault = (bridge: Bridge): Vault => {
+  const keys = () => bridge.invoke("vault.keys", undefined);
+  const forget = (key: VaultKey) => bridge.invoke("vault.forget", { key });
+  const vault: Vault = {
+    enroll: async (key, credential) => {
+      if (credential.kind !== "bearer")
+        throw new Error("The desktop app saves personal access tokens only.");
+      const token = revealSecret(credential.token, (raw) => raw);
+      await bridge.invoke("vault.enroll", { key, token }).catch(() => {
+        throw new Error("The token could not be saved to the Keychain.");
+      });
+    },
+    has: async (key) => (await keys()).includes(key),
+    keys,
+    forget,
+    forgetAll: async () => {
+      for (const key of await keys()) await forget(key);
+    },
+    leaseFor: (key) =>
+      lease(vault, key, async () => {
+        const standIn = await bridge.invoke("vault.standIn", { key });
+        return standIn === null ? null : { kind: "bearer", token: new Secret(standIn) };
+      }),
+  };
+  return vault;
+};
+
+/** The desktop app keeps tokens in main. The web demo has no main process, so it keeps them in IndexedDB. */
+export const createAppVault = (): Vault =>
+  desktopBridge ? createBridgeVault(desktopBridge) : createBrowserVault();

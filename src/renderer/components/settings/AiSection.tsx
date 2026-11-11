@@ -1,3 +1,4 @@
+import { VAULT_PLACE } from "~/renderer/desktop";
 import { useState } from "react";
 
 import type { AiSource } from "~/renderer/stores/types";
@@ -16,7 +17,7 @@ const SOURCE_VIEW: Readonly<Record<AiSource, { label: string; badge: BadgeTone; 
     key: {
       label: "Anthropic key",
       badge: "success",
-      words: "A key is saved in this browser's vault. It is never shown again.",
+      words: `A key is saved in ${VAULT_PLACE}. It is never shown again.`,
     },
     "on-device": {
       label: "On-device model",
@@ -113,8 +114,8 @@ export function AiSection() {
         onConfirm={() => store().turnOffAi()}
       >
         <p>
-          {turnOff.key ? "This forgets the key in this browser's vault. " : ""}North Star, chat, and
-          AI drafts turn off, and you fill in grades and replies by hand.
+          {turnOff.key ? `This forgets the key in ${VAULT_PLACE}. ` : ""}North Star, chat, and AI
+          drafts turn off, and you fill in grades and replies by hand.
         </p>
         <p>Drafts already written stay. {CHATS_KEPT}</p>
       </ConfirmDialog>
@@ -122,8 +123,8 @@ export function AiSection() {
         <DialogPopup>
           <DialogTitle>{source === "key" ? "Replace the AI key" : "Add an AI key"}</DialogTitle>
           <DialogDescription>
-            The key goes in this browser's vault and is never shown again. A saved key turns on AI
-            drafts, which come from built-in rules for now.
+            The key goes in {VAULT_PLACE} and is never shown again. A saved key turns on AI drafts,
+            which come from built-in rules for now.
           </DialogDescription>
           <AiKeyForm
             submitLabel={source === "key" ? "Replace key" : "Save key"}

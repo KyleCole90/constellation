@@ -1,3 +1,4 @@
+import { VAULT_PLACE } from "~/renderer/desktop";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { Check, Lock } from "lucide-react";
 import { useState } from "react";
@@ -35,7 +36,7 @@ const AI_OPTIONS: readonly AiOption[] = [
   {
     source: "key",
     title: "Claude, with your Anthropic API key",
-    body: () => "The key stays in this browser's vault and is never shown again.",
+    body: () => `The key stays in ${VAULT_PLACE} and is never shown again.`,
   },
   {
     source: "on-device",

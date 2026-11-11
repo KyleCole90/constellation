@@ -1,3 +1,4 @@
+import { VAULT_PLACE } from "~/renderer/desktop";
 import type { School } from "~/shared/domain/lms";
 
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -21,7 +22,9 @@ export function RemoveSchoolDialog({
       confirmLabel="Remove"
       onConfirm={onConfirm}
     >
-      <p>This forgets the token in this browser and the course data read from {school.host}.</p>
+      <p>
+        This forgets the token in {VAULT_PLACE} and the course data read from {school.host}.
+      </p>
       <p>Nothing is deleted from the LMS. Add the school again at any time.</p>
     </ConfirmDialog>
   );

@@ -1,3 +1,4 @@
+import { VAULT_PLACE } from "~/renderer/desktop";
 import type { ChangeRecord, LmsError } from "~/shared/domain/change";
 import type { IsoTime, SchoolId } from "~/shared/domain/ids";
 import { summarizeFor } from "~/renderer/stores/selectors";
@@ -162,7 +163,7 @@ export const courseWords = (count: number): string =>
   count === 1 ? "1 course found" : `${count} courses found`;
 
 export const STAGE_WORDS = {
-  saving: "Saving to this browser's vault",
+  saving: `Saving to ${VAULT_PLACE}`,
   checking: "Checking token",
   reading: "Reading your courses",
 } as const;
