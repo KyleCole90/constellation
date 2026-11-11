@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { ApprovalWitness, fingerprintOf, type RiskKey } from "~/domain/approval";
-import { fieldText, riskOf, summarize, transition } from "~/domain/change";
-import type { IsoTime } from "~/domain/ids";
-import { copyMigration } from "~/domain/setup";
-import { FALL_2026 } from "~/providers/fake-canvas/seed-term";
+import { ApprovalWitness, fingerprintOf, type RiskKey } from "~/shared/domain/approval";
+import { fieldText, riskOf, summarize, transition } from "~/shared/domain/change";
+import type { IsoTime } from "~/shared/domain/ids";
+import { copyMigration } from "~/shared/domain/setup";
+import { FALL_2026 } from "~/shared/providers/fake-canvas/seed-term";
 
 import { clickWitness } from "./fixtures/changes";
 import { LCC, RSU } from "./fixtures/rig";

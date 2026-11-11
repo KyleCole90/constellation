@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { DRAFT_GRADE_REQUEST } from "~/agent/agent";
-import { ApprovalWitness } from "~/domain/approval";
-import { summarize, zeroPatch, type ChangePatch } from "~/domain/change";
-import type { ChangeId, IsoTime, LmsRef, SchoolId, ThreadId } from "~/domain/ids";
-import { previewOf } from "~/domain/preview";
-import { DEMO_CONFLICT, DEMO_PARTIAL, QUIET_NOISE } from "~/providers/fake-canvas/faults";
-import { FakeCanvasServer, LMS_STORAGE_KEY } from "~/providers/fake-canvas/server";
-import { SEED } from "~/providers/fake-canvas/seed";
-import { Secret } from "~/providers/provider";
-import { createMemoryVault } from "~/providers/vault";
+import { DRAFT_GRADE_REQUEST } from "~/shared/agent/agent";
+import { ApprovalWitness } from "~/shared/domain/approval";
+import { summarize, zeroPatch, type ChangePatch } from "~/shared/domain/change";
+import type { ChangeId, IsoTime, LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
+import { previewOf } from "~/shared/domain/preview";
+import { DEMO_CONFLICT, DEMO_PARTIAL, QUIET_NOISE } from "~/shared/providers/fake-canvas/faults";
+import { FakeCanvasServer, LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
+import { SEED } from "~/shared/providers/fake-canvas/seed";
+import { Secret } from "~/shared/providers/provider";
+import { createMemoryVault } from "~/renderer/providers/vault";
 import {
   selectCalendar,
   selectCourseOverview,
@@ -22,9 +22,9 @@ import {
   selectThreadStatus,
   selectWhatsDue,
   summarizeFor,
-} from "~/stores/selectors";
-import type { ConnectionRecord } from "~/stores/types";
-import { WORKSPACE_STORAGE_KEY } from "~/stores/workspace";
+} from "~/renderer/stores/selectors";
+import type { ConnectionRecord } from "~/renderer/stores/types";
+import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";

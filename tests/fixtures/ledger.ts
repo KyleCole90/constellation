@@ -1,6 +1,11 @@
-import { transition, type ChangeEvent, type ChangeRecord, type Rejection } from "~/domain/change";
-import type { ChangeId, Result } from "~/domain/ids";
-import type { ChangeLedger } from "~/writeback/writeback";
+import {
+  transition,
+  type ChangeEvent,
+  type ChangeRecord,
+  type Rejection,
+} from "~/shared/domain/change";
+import type { ChangeId, Result } from "~/shared/domain/ids";
+import type { ChangeLedger } from "~/renderer/writeback/writeback";
 
 export interface Crash {
   /** 1-based count of accepted commits since armed. */

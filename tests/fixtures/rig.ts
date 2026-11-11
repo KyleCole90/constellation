@@ -4,16 +4,20 @@ import {
   type ChangeRecord,
   type FieldKey,
   type GradeContent,
-} from "~/domain/change";
-import type { ChangeId, IsoTime, SchoolId } from "~/domain/ids";
-import type { Submission } from "~/domain/lms";
-import type { SendPermit } from "~/domain/permit";
-import { QUIET_NOISE } from "~/providers/fake-canvas/faults";
-import { FAKE_SCHOOLS, createFakeCanvasDescriptor } from "~/providers/fake-canvas/provider";
-import { FakeCanvasServer } from "~/providers/fake-canvas/server";
-import { Secret, type LmsProvider } from "~/providers/provider";
-import { createMemoryVault } from "~/providers/vault";
-import { DEFAULT_RETRY_POLICY, createWriteback, type Writeback } from "~/writeback/writeback";
+} from "~/shared/domain/change";
+import type { ChangeId, IsoTime, SchoolId } from "~/shared/domain/ids";
+import type { Submission } from "~/shared/domain/lms";
+import type { SendPermit } from "~/shared/domain/permit";
+import { QUIET_NOISE } from "~/shared/providers/fake-canvas/faults";
+import { FAKE_SCHOOLS, createFakeCanvasDescriptor } from "~/shared/providers/fake-canvas/provider";
+import { FakeCanvasServer } from "~/shared/providers/fake-canvas/server";
+import { Secret, type LmsProvider } from "~/shared/providers/provider";
+import { createMemoryVault } from "~/renderer/providers/vault";
+import {
+  DEFAULT_RETRY_POLICY,
+  createWriteback,
+  type Writeback,
+} from "~/renderer/writeback/writeback";
 
 import { clickWitness } from "./changes";
 import { VirtualClock } from "./clock";

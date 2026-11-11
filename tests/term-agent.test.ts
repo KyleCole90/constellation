@@ -9,9 +9,9 @@ import {
   type AgentInput,
   type AgentScope,
   type AgentViolation,
-} from "~/agent/agent";
-import { createRuleAgent } from "~/agent/rules";
-import type { ChangeContent } from "~/domain/change";
+} from "~/shared/agent/agent";
+import { createRuleAgent } from "~/shared/agent/rules";
+import type { ChangeContent } from "~/shared/domain/change";
 
 import { LCC } from "./fixtures/rig";
 import { makeTermRig, planFor, termOf } from "./fixtures/term";

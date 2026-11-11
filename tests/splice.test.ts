@@ -7,7 +7,7 @@ import {
   spliceAt,
   spliceState,
   type Splice,
-} from "~/domain/splice";
+} from "~/shared/domain/splice";
 
 const at = (body: string, text: string, after: string, from = 0): Splice =>
   spliceAt(body, body.indexOf(text, from), text.length, after);

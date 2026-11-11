@@ -7,5 +7,10 @@
     "jsx": "react-jsx",
     "paths": { "~/*": ["./src/*"] }
   },
-  "include": ["tests", "src/env.d.ts", "src/css-properties.d.ts", "src/router.ts"]
+  "include": [
+    "tests",
+    "src/renderer/env.d.ts",
+    "src/renderer/css-properties.d.ts",
+    "src/renderer/router.ts"
+  ]
 }

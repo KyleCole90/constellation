@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { CLASS_TOKENS, cn } from "../src/lib/utils";
+import { CLASS_TOKENS, cn } from "../src/renderer/lib/utils";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(ROOT, "src");
@@ -58,12 +58,14 @@ const bringsValue = (clause: string, name: string): boolean => {
 const mintingFiles = (sources: readonly SourceFile[]): readonly string[] =>
   sources
     .filter(
-      (file) => file.path !== "domain/approval.ts" && file.path !== "components/ApproveButton.tsx",
+      (file) =>
+        file.path !== "shared/domain/approval.ts" &&
+        file.path !== "renderer/components/ApproveButton.tsx",
     )
     .filter((file) => {
       const imports = file.imports.some(
         (entry) =>
-          entry.spec === "domain/approval" &&
+          entry.spec === "shared/domain/approval" &&
           /\*\s+as\s+/.test(entry.clause) &&
           !entry.clause.startsWith("type "),
       );
@@ -75,27 +77,35 @@ const witnessValueImporters = (sources: readonly SourceFile[]): readonly string[
   sources
     .filter((file) =>
       file.imports.some(
-        (entry) => entry.spec === "domain/approval" && bringsValue(entry.clause, "ApprovalWitness"),
+        (entry) =>
+          entry.spec === "shared/domain/approval" && bringsValue(entry.clause, "ApprovalWitness"),
       ),
     )
     .map((file) => file.path);
 
 const permitImporters = (sources: readonly SourceFile[]): readonly string[] =>
   sources
-    .filter((file) => !startsWith(file, "writeback") && file.path !== "domain/permit.ts")
+    .filter(
+      (file) => !startsWith(file, "renderer/writeback") && file.path !== "shared/domain/permit.ts",
+    )
     .filter((file) =>
       file.imports.some(
         (entry) =>
-          entry.spec === "domain/permit" &&
+          entry.spec === "shared/domain/permit" &&
           (bringsValue(entry.clause, "mintSendPermit") || /\bSendPermit\.mint\b/.test(file.text)),
       ),
     )
     .map((file) => file.path);
 
-const FORBIDDEN_FOR_AGENT = ["stores", "writeback", "providers/fake-canvas", "providers/vault"];
+const FORBIDDEN_FOR_AGENT = [
+  "renderer/stores",
+  "renderer/writeback",
+  "shared/providers/fake-canvas",
+  "renderer/providers/vault",
+];
 const agentViolations = (sources: readonly SourceFile[]): readonly string[] =>
   sources
-    .filter((file) => startsWith(file, "agent"))
+    .filter((file) => startsWith(file, "shared/agent"))
     .flatMap((file) =>
       file.imports
         .filter((entry) =>
@@ -105,7 +115,7 @@ const agentViolations = (sources: readonly SourceFile[]): readonly string[] =>
     );
 
 const isScreen = (file: SourceFile) =>
-  (startsWith(file, "components") || startsWith(file, "routes")) &&
+  (startsWith(file, "renderer/components") || startsWith(file, "renderer/routes")) &&
   !/\.test\.tsx?$/.test(file.path);
 const screensMatching = (sources: readonly SourceFile[], pattern: RegExp): readonly string[] =>
   sources
@@ -125,7 +135,9 @@ const providerImplementationImporters = (sources: readonly SourceFile[]): readon
     .filter(isScreen)
     .filter((file) =>
       file.imports.some(
-        (entry) => entry.spec.startsWith("providers/") && entry.spec !== "providers/provider",
+        (entry) =>
+          /^(shared|renderer)\/providers\//.test(entry.spec) &&
+          entry.spec !== "shared/providers/provider",
       ),
     )
     .map((file) => file.path);
@@ -145,7 +157,9 @@ const fakeFile = (path: string, text: string): SourceFile => {
 describe("who may read a secret", () => {
   it("nothing but the vault, the provider layer and the store's validity check calls revealSecret", () => {
     const allowed = (path: string) =>
-      path.startsWith("providers/") || path === "stores/workspace.ts";
+      path.startsWith("shared/providers/") ||
+      path.startsWith("renderer/providers/") ||
+      path === "renderer/stores/workspace.ts";
     expect(
       SOURCES.filter((file) => /\brevealSecret\b/.test(file.text) && !allowed(file.path)).map(
         (file) => file.path,
@@ -161,35 +175,40 @@ describe("who may approve", () => {
 
   it("only ApproveButton and the state machine import the witness class as a value", () => {
     expect(
-      witnessValueImporters(SOURCES).filter((path) => path !== "components/ApproveButton.tsx"),
-    ).toEqual(["domain/change.ts"]);
+      witnessValueImporters(SOURCES).filter(
+        (path) => path !== "renderer/components/ApproveButton.tsx",
+      ),
+    ).toEqual(["shared/domain/change.ts"]);
   });
 
   it("the check catches a screen calling fromClick", () => {
     const screen = fakeFile(
-      "routes/evil.tsx",
-      'import { ApprovalWitness } from "~/domain/approval";\nApprovalWitness.fromClick(event, targets);',
+      "renderer/routes/evil.tsx",
+      'import { ApprovalWitness } from "~/shared/domain/approval";\nApprovalWitness.fromClick(event, targets);',
     );
-    expect(mintingFiles([screen])).toEqual(["routes/evil.tsx"]);
-    expect(witnessValueImporters([screen])).toEqual(["routes/evil.tsx"]);
+    expect(mintingFiles([screen])).toEqual(["renderer/routes/evil.tsx"]);
+    expect(witnessValueImporters([screen])).toEqual(["renderer/routes/evil.tsx"]);
   });
 
   it("the check catches a relative import and a namespace import", () => {
     const relativeImport = fakeFile(
-      "stores/evil.ts",
-      'import { ApprovalWitness as W } from "../domain/approval";',
+      "renderer/stores/evil.ts",
+      'import { ApprovalWitness as W } from "../../shared/domain/approval";',
     );
-    const namespace = fakeFile("stores/evil2.ts", 'import * as approval from "~/domain/approval";');
-    expect(witnessValueImporters([relativeImport])).toEqual(["stores/evil.ts"]);
-    expect(mintingFiles([namespace])).toEqual(["stores/evil2.ts"]);
+    const namespace = fakeFile(
+      "renderer/stores/evil2.ts",
+      'import * as approval from "~/shared/domain/approval";',
+    );
+    expect(witnessValueImporters([relativeImport])).toEqual(["renderer/stores/evil.ts"]);
+    expect(mintingFiles([namespace])).toEqual(["renderer/stores/evil2.ts"]);
   });
 
   it("the check allows ApproveButton by its path", () => {
     expect(
       mintingFiles([
         fakeFile(
-          "components/ApproveButton.tsx",
-          'import { ApprovalWitness } from "~/domain/approval";\nApprovalWitness.fromClick(e, t);',
+          "renderer/components/ApproveButton.tsx",
+          'import { ApprovalWitness } from "~/shared/domain/approval";\nApprovalWitness.fromClick(e, t);',
         ),
       ]),
     ).toEqual([]);
@@ -198,22 +217,26 @@ describe("who may approve", () => {
   it("a type-only import of the witness is fine", () => {
     expect(
       witnessValueImporters([
-        fakeFile("stores/fine.ts", 'import type { ApprovalWitness } from "~/domain/approval";'),
+        fakeFile(
+          "renderer/stores/fine.ts",
+          'import type { ApprovalWitness } from "~/shared/domain/approval";',
+        ),
       ]),
     ).toEqual([]);
   });
 });
 
 describe("who may mint a permit", () => {
-  it("nothing outside src/writeback imports mintSendPermit", () => {
+  it("nothing outside src/renderer/writeback imports mintSendPermit", () => {
     expect(permitImporters(SOURCES)).toEqual([]);
   });
 
-  it("src/writeback does import it, so this check is looking at the right module", () => {
+  it("src/renderer/writeback does import it, so this check is looking at the right module", () => {
     expect(
-      SOURCES.filter((file) => startsWith(file, "writeback")).some((file) =>
+      SOURCES.filter((file) => startsWith(file, "renderer/writeback")).some((file) =>
         file.imports.some(
-          (entry) => entry.spec === "domain/permit" && bringsValue(entry.clause, "mintSendPermit"),
+          (entry) =>
+            entry.spec === "shared/domain/permit" && bringsValue(entry.clause, "mintSendPermit"),
         ),
       ),
     ).toBe(true);
@@ -222,27 +245,35 @@ describe("who may mint a permit", () => {
   it("the check catches a store importing it", () => {
     expect(
       permitImporters([
-        fakeFile("stores/evil.ts", 'import { mintSendPermit } from "~/domain/permit";'),
+        fakeFile(
+          "renderer/stores/evil.ts",
+          'import { mintSendPermit } from "~/shared/domain/permit";',
+        ),
       ]),
-    ).toEqual(["stores/evil.ts"]);
+    ).toEqual(["renderer/stores/evil.ts"]);
   });
 
   it("the check catches a namespace import", () => {
     expect(
-      permitImporters([fakeFile("stores/evil.ts", 'import * as permit from "../domain/permit";')]),
-    ).toEqual(["stores/evil.ts"]);
+      permitImporters([
+        fakeFile(
+          "renderer/stores/evil.ts",
+          'import * as permit from "../../shared/domain/permit";',
+        ),
+      ]),
+    ).toEqual(["renderer/stores/evil.ts"]);
   });
 });
 
 describe("what the agent can reach", () => {
-  it("src/agent imports nothing from stores, writeback, or provider implementations", () => {
+  it("src/shared/agent imports nothing from stores, writeback, or provider implementations", () => {
     expect(agentViolations(SOURCES)).toEqual([]);
   });
 
   it("the check catches each forbidden import, relative or aliased", () => {
     const evil = fakeFile(
-      "agent/evil.ts",
-      'import { a } from "~/writeback/writeback";\nimport { b } from "../stores/workspace";\nimport { c } from "~/providers/fake-canvas/server";\nimport { d } from "../providers/vault";\nconst e = import("~/stores/selectors");',
+      "shared/agent/evil.ts",
+      'import { a } from "~/renderer/writeback/writeback";\nimport { b } from "../../renderer/stores/workspace";\nimport { c } from "~/shared/providers/fake-canvas/server";\nimport { d } from "../../renderer/providers/vault";\nconst e = import("~/renderer/stores/selectors");',
     );
     expect(agentViolations([evil])).toHaveLength(5);
   });
@@ -251,21 +282,21 @@ describe("what the agent can reach", () => {
 const SETUP_KIND = /course-copy|item-set/;
 const agentNamingSetupKinds = (sources: readonly SourceFile[]): readonly string[] =>
   sources
-    .filter((file) => startsWith(file, "agent") && SETUP_KIND.test(file.text))
+    .filter((file) => startsWith(file, "shared/agent") && SETUP_KIND.test(file.text))
     .map((file) => file.path);
 
 describe("what the agent can name", () => {
-  it("src/agent never names a copy or a setting kind, so no agent path can build one", () => {
+  it("src/shared/agent never names a copy or a setting kind, so no agent path can build one", () => {
     expect(agentNamingSetupKinds(SOURCES)).toEqual([]);
   });
 
   it("the check catches a kind written as a string or a type", () => {
     expect(
       agentNamingSetupKinds([
-        fakeFile("agent/evil.ts", 'const k = "course-copy";'),
-        fakeFile("agent/evil2.ts", 'type K = Extract<ChangeContent, { kind: "item-set" }>;'),
+        fakeFile("shared/agent/evil.ts", 'const k = "course-copy";'),
+        fakeFile("shared/agent/evil2.ts", 'type K = Extract<ChangeContent, { kind: "item-set" }>;'),
       ]),
-    ).toEqual(["agent/evil.ts", "agent/evil2.ts"]);
+    ).toEqual(["shared/agent/evil.ts", "shared/agent/evil2.ts"]);
   });
 });
 
@@ -273,10 +304,13 @@ describe("how the app finds a vendor", () => {
   it("only the store's one wiring function and the provider folder name the fake LMS", () => {
     const named = SOURCES.filter(
       (file) =>
-        !startsWith(file, "providers/fake-canvas") &&
-        file.imports.some((entry) => entry.spec.startsWith("providers/fake-canvas")),
+        !startsWith(file, "shared/providers/fake-canvas") &&
+        file.imports.some((entry) => entry.spec.startsWith("shared/providers/fake-canvas")),
     ).map((file) => file.path);
-    expect(named.sort()).toEqual(["stores/seedThreads.ts", "stores/workspace.ts"]);
+    expect(named.sort()).toEqual([
+      "renderer/stores/seedThreads.ts",
+      "renderer/stores/workspace.ts",
+    ]);
   });
 });
 
@@ -295,10 +329,10 @@ describe("what a screen can know", () => {
 
   it("only the store and the AI choice's own screens read the AI source", () => {
     expect(aiSourceReaders(SOURCES)).toEqual([
-      "components/screens/WelcomeScreen.tsx",
-      "components/settings/AiSection.tsx",
-      "stores/types.ts",
-      "stores/workspace.ts",
+      "renderer/components/screens/WelcomeScreen.tsx",
+      "renderer/components/settings/AiSection.tsx",
+      "renderer/stores/types.ts",
+      "renderer/stores/workspace.ts",
     ]);
   });
 
@@ -307,7 +341,7 @@ describe("what a screen can know", () => {
   });
 
   describe("cn and the tokens in index.css", () => {
-    const css = readFileSync(join(ROOT, "src/index.css"), "utf8");
+    const css = readFileSync(join(ROOT, "src/renderer/index.css"), "utf8");
     const theme = css.slice(css.indexOf("@theme"), css.indexOf("\n}", css.indexOf("@theme")));
     const tokens = (prefix: string) =>
       [...theme.matchAll(new RegExp(`^\\s*--${prefix}-([a-z0-9-]+):`, "gm"))]
@@ -375,8 +409,8 @@ describe("what a screen can know", () => {
   describe("one type family on one scale", () => {
     const MONO = /\bfont-mono\b/;
     const RAW_SIZE = /\btext-(xs|sm|base|lg|xl|[2-9]xl)\b|\btext-\[\d/;
-    const MONO_ALLOWED = ["components/settings/SecretForm.tsx"];
-    const RAW_SIZE_ALLOWED = ["components/thread/Composer.tsx"];
+    const MONO_ALLOWED = ["renderer/components/settings/SecretForm.tsx"];
+    const RAW_SIZE_ALLOWED = ["renderer/components/thread/Composer.tsx"];
     const hits = (
       sources: readonly SourceFile[],
       pattern: RegExp,
@@ -407,14 +441,14 @@ describe("what a screen can know", () => {
 
     it("the checks catch mono, a raw size, and a responsive raw size", () => {
       const screen = fakeFile(
-        "components/evil.tsx",
+        "renderer/components/evil.tsx",
         '<span className="font-mono">a</span>\n<p className="text-lg">b</p>\n<p className="sm:text-2xl">c</p>\n<p className="text-[15px]">d</p>',
       );
-      expect(hits([screen], MONO, MONO_ALLOWED)).toEqual(["components/evil.tsx:1"]);
+      expect(hits([screen], MONO, MONO_ALLOWED)).toEqual(["renderer/components/evil.tsx:1"]);
       expect(hits([screen], RAW_SIZE, RAW_SIZE_ALLOWED)).toEqual([
-        "components/evil.tsx:2",
-        "components/evil.tsx:3",
-        "components/evil.tsx:4",
+        "renderer/components/evil.tsx:2",
+        "renderer/components/evil.tsx:3",
+        "renderer/components/evil.tsx:4",
       ]);
     });
   });
@@ -422,10 +456,12 @@ describe("what a screen can know", () => {
   it("nothing in the app or the README talks about diffs", () => {
     const texts = [
       ...filesUnder(SRC).map((path) => ({ path, text: readFileSync(path, "utf8") })),
-      ...["src/index.css", "src/stores/API.md", "README.md", "index.html"].map((path) => ({
-        path,
-        text: readFileSync(join(ROOT, path), "utf8"),
-      })),
+      ...["src/renderer/index.css", "src/renderer/stores/API.md", "README.md", "index.html"].map(
+        (path) => ({
+          path,
+          text: readFileSync(join(ROOT, path), "utf8"),
+        }),
+      ),
     ];
     expect(
       texts
@@ -437,7 +473,7 @@ describe("what a screen can know", () => {
   it("the app and the README are Canvas-only, with no other vendor named", () => {
     const texts = [
       ...filesUnder(SRC).map((path) => ({ path, text: readFileSync(path, "utf8") })),
-      ...["src/stores/API.md", "README.md", "index.html"].map((path) => ({
+      ...["src/renderer/stores/API.md", "README.md", "index.html"].map((path) => ({
         path,
         text: readFileSync(join(ROOT, path), "utf8"),
       })),
@@ -451,32 +487,41 @@ describe("what a screen can know", () => {
 
   it("the checks are looking at real screens", () => {
     expect(
-      SOURCES.filter(isScreen).some((file) => file.path === "components/thread/ThreadScreen.tsx"),
+      SOURCES.filter(isScreen).some(
+        (file) => file.path === "renderer/components/thread/ThreadScreen.tsx",
+      ),
     ).toBe(true);
   });
 
   it("the checks catch each one in a screen, and leave a store alone", () => {
     const screen = fakeFile(
-      "components/evil.tsx",
+      "renderer/components/evil.tsx",
       'import { x } from "../providers/vault";\nconst a = record.state.tag === "sent";\nconst b = "Send to Canvas";',
     );
-    expect(screensMatching([screen], VENDOR_WORD)).toEqual(["components/evil.tsx"]);
-    expect(screensMatching([screen], STATE_BRANCH)).toEqual(["components/evil.tsx"]);
-    expect(providerImplementationImporters([screen])).toEqual(["components/evil.tsx"]);
+    expect(screensMatching([screen], VENDOR_WORD)).toEqual(["renderer/components/evil.tsx"]);
+    expect(screensMatching([screen], STATE_BRANCH)).toEqual(["renderer/components/evil.tsx"]);
+    expect(providerImplementationImporters([screen])).toEqual(["renderer/components/evil.tsx"]);
     expect(
       screensMatching(
-        [fakeFile("stores/fine.ts", 'const a = record.state.tag === "sent";')],
+        [fakeFile("renderer/stores/fine.ts", 'const a = record.state.tag === "sent";')],
         STATE_BRANCH,
       ),
     ).toEqual([]);
     expect(
-      aiSourceReaders([fakeFile("components/evil.tsx", 'const on = state.aiSource !== "none";')]),
-    ).toEqual(["components/evil.tsx"]);
+      aiSourceReaders([
+        fakeFile("renderer/components/evil.tsx", 'const on = state.aiSource !== "none";'),
+      ]),
+    ).toEqual(["renderer/components/evil.tsx"]);
     expect(
       screensMatching(
-        [fakeFile("components/evil.tsx", 'const on = import.meta.env.MODE === "production";')],
+        [
+          fakeFile(
+            "renderer/components/evil.tsx",
+            'const on = import.meta.env.MODE === "production";',
+          ),
+        ],
         BUILD_MODE,
       ),
-    ).toEqual(["components/evil.tsx"]);
+    ).toEqual(["renderer/components/evil.tsx"]);
   });
 });

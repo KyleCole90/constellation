@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { DatedItem } from "~/domain/content";
-import type { IsoDate, IsoTime, LmsRef } from "~/domain/ids";
+import type { DatedItem } from "~/shared/domain/content";
+import type { IsoDate, IsoTime, LmsRef } from "~/shared/domain/ids";
 import {
   findDateMentions,
   isoDate,
@@ -17,7 +17,7 @@ import {
   type DateShiftOptions,
   type TermPlan,
   type Weekday,
-} from "~/domain/term";
+} from "~/shared/domain/term";
 
 const d = (text: string): IsoDate => text as IsoDate;
 const SPRING_BREAK = { name: "Spring break", start: d("2027-03-08"), end: d("2027-03-12") };

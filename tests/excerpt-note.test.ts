@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { excerptNote, type SubmissionBody } from "~/domain/lms";
+import { excerptNote, type SubmissionBody } from "~/shared/domain/lms";
 
 const text = (wordCount: number, paragraphs: readonly string[]): SubmissionBody => ({
   kind: "text",

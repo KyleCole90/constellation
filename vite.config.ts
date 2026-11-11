@@ -10,14 +10,17 @@ const IGNORED = [
   "out",
   "node_modules",
   "package-lock.json",
-  "src/routeTree.gen.ts",
+  "src/renderer/routeTree.gen.ts",
   ".audit",
   ".claude",
 ];
 
 export default defineConfig({
   plugins: [
-    tanstackRouter({ routesDirectory: "src/routes", generatedRouteTree: "src/routeTree.gen.ts" }),
+    tanstackRouter({
+      routesDirectory: "src/renderer/routes",
+      generatedRouteTree: "src/renderer/routeTree.gen.ts",
+    }),
     react(),
     tailwindcss(),
   ],
@@ -46,7 +49,7 @@ export default defineConfig({
     plugins: ["eslint", "oxc", "react", "unicorn", "typescript"],
     jsPlugins: ["@shadcn/lint", "./scripts/lint-plugin.mjs"],
     settings: {
-      shadcn: { ui: "~/components/ui" },
+      shadcn: { ui: "~/renderer/components/ui" },
     },
     categories: {
       correctness: "warn",
@@ -143,7 +146,7 @@ export default defineConfig({
       },
       {
         files: ["src/**"],
-        excludeFiles: ["src/components/ui/**"],
+        excludeFiles: ["src/renderer/components/ui/**"],
         rules: {
           "shadcn/require-static-classes": "error",
           "shadcn/no-arbitrary-values": [

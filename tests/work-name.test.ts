@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { ANNOUNCEMENT_DRAFTS } from "~/agent/rules/drafts";
-import type { ChangeContent } from "~/domain/change";
-import type { ThreadId } from "~/domain/ids";
-import { workLine } from "~/domain/workName";
-import { SEED } from "~/providers/fake-canvas/seed";
-import { selectInboxRows, selectThreadName } from "~/stores/selectors";
+import { ANNOUNCEMENT_DRAFTS } from "~/shared/agent/rules/drafts";
+import type { ChangeContent } from "~/shared/domain/change";
+import type { ThreadId } from "~/shared/domain/ids";
+import { workLine } from "~/shared/domain/workName";
+import { SEED } from "~/shared/providers/fake-canvas/seed";
+import { selectInboxRows, selectThreadName } from "~/renderer/stores/selectors";
 
 import { makeStoreRig } from "./fixtures/store-rig";
 

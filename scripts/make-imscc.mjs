@@ -1,6 +1,6 @@
 // Writes the sample .imscc packages the fake LMS offers. Each is a real zip holding an imsmanifest.xml, so a
 // person can open one and see what a Common Cartridge looks like. Content is invented, and the names must
-// match samplePackages() in src/providers/fake-canvas/seed-term.ts. Run: node scripts/make-imscc.mjs
+// match samplePackages() in src/shared/providers/fake-canvas/seed-term.ts. Run: node scripts/make-imscc.mjs
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";

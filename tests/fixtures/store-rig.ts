@@ -1,11 +1,15 @@
-import type { Agent, AgentScope } from "~/agent/agent";
-import type { ChangeId, SchoolId } from "~/domain/ids";
-import { QUIET_NOISE, type NoiseConfig } from "~/providers/fake-canvas/faults";
-import { FAKE_SCHOOLS } from "~/providers/fake-canvas/provider";
-import type { FakeCanvasServer } from "~/providers/fake-canvas/server";
-import { Secret, type Capabilities, type Vault } from "~/providers/provider";
-import { createMemoryVault } from "~/providers/vault";
-import { createWorkspaceStore, fakeCanvasBackend, type WorkspaceStore } from "~/stores/workspace";
+import type { Agent, AgentScope } from "~/shared/agent/agent";
+import type { ChangeId, SchoolId } from "~/shared/domain/ids";
+import { QUIET_NOISE, type NoiseConfig } from "~/shared/providers/fake-canvas/faults";
+import { FAKE_SCHOOLS } from "~/shared/providers/fake-canvas/provider";
+import type { FakeCanvasServer } from "~/shared/providers/fake-canvas/server";
+import { Secret, type Capabilities, type Vault } from "~/shared/providers/provider";
+import { createMemoryVault } from "~/renderer/providers/vault";
+import {
+  createWorkspaceStore,
+  fakeCanvasBackend,
+  type WorkspaceStore,
+} from "~/renderer/stores/workspace";
 
 import { VirtualClock } from "./clock";
 import { memoryStorage, type MemoryStorage } from "./storage";

@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { GRADE_DRAFTS, type GradeDraft } from "~/agent/rules/drafts";
-import { FINDING_TYPES } from "~/domain/scan";
-import { SEED, type SeedPiece } from "~/providers/fake-canvas/seed";
-import { HOSTS, PACKAGES, SOURCES } from "~/providers/fake-canvas/seed-term";
+import { GRADE_DRAFTS, type GradeDraft } from "~/shared/agent/rules/drafts";
+import { FINDING_TYPES } from "~/shared/domain/scan";
+import { SEED, type SeedPiece } from "~/shared/providers/fake-canvas/seed";
+import { HOSTS, PACKAGES, SOURCES } from "~/shared/providers/fake-canvas/seed-term";
 
 import { permitFor } from "./fixtures/provider-contract";
 import { LCC, RSU } from "./fixtures/rig";

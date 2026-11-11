@@ -57,7 +57,7 @@ const noJsonParseCast = {
     messages: {
       cast:
         "Don't cast `JSON.parse` output. Type it `unknown` and parse it into the domain type, " +
-        "returning null on a bad shape (see `readDraftHosts` in src/components/settings/drafts.logic.ts).",
+        "returning null on a bad shape (see `readDraftHosts` in src/renderer/components/settings/drafts.logic.ts).",
     },
   },
   create(context) {

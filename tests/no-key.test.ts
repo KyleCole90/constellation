@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { Agent } from "~/agent/agent";
-import { createRuleAgent } from "~/agent/rules";
-import { fingerprintOf } from "~/domain/approval";
+import type { Agent } from "~/shared/agent/agent";
+import { createRuleAgent } from "~/shared/agent/rules";
+import { fingerprintOf } from "~/shared/domain/approval";
 import {
   finalGrade,
   summarize,
@@ -10,19 +10,19 @@ import {
   type ChangeContent,
   type ChangePatch,
   type ChangeRecord,
-} from "~/domain/change";
-import type { ChangeId, IsoTime, LmsRef, ThreadId } from "~/domain/ids";
-import type { Assignment, Submission } from "~/domain/lms";
-import { visibleMessages } from "~/components/thread/timeline.logic";
-import { Secret } from "~/providers/provider";
+} from "~/shared/domain/change";
+import type { ChangeId, IsoTime, LmsRef, ThreadId } from "~/shared/domain/ids";
+import type { Assignment, Submission } from "~/shared/domain/lms";
+import { visibleMessages } from "~/renderer/components/thread/timeline.logic";
+import { Secret } from "~/shared/providers/provider";
 import {
   selectCourseOverview,
   selectGradebook,
   selectQueueRows,
   selectThreadChanges,
   selectThreadStatus,
-} from "~/stores/selectors";
-import { WORKSPACE_STORAGE_KEY } from "~/stores/workspace";
+} from "~/renderer/stores/selectors";
+import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseAgentEffect, type Agent, type AgentScope } from "~/agent/agent";
-import { createRuleAgent } from "~/agent/rules";
-import { northStarStream } from "~/agent/rules/northStar";
-import { planWork, sittingsOf } from "~/components/screens/due.logic";
-import { composerHints } from "~/components/thread/composer.logic";
-import { buildTimeline, liveReplies } from "~/components/thread/timeline.logic";
-import type { ChangeId, IsoTime, LmsRef, SchoolId, ThreadId } from "~/domain/ids";
-import type { Assignment } from "~/domain/lms";
+import { parseAgentEffect, type Agent, type AgentScope } from "~/shared/agent/agent";
+import { createRuleAgent } from "~/shared/agent/rules";
+import { northStarStream } from "~/shared/agent/rules/northStar";
+import { planWork, sittingsOf } from "~/renderer/components/screens/due.logic";
+import { composerHints } from "~/renderer/components/thread/composer.logic";
+import { buildTimeline, liveReplies } from "~/renderer/components/thread/timeline.logic";
+import type { ChangeId, IsoTime, LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
+import type { Assignment } from "~/shared/domain/lms";
 import {
   NORTH_STAR_THREAD,
   isChatThread,
@@ -20,10 +20,10 @@ import {
   selectWhatsDue,
   selectWorkStages,
   withoutChatThreads,
-} from "~/stores/selectors";
-import { seedThreads } from "~/stores/seedThreads";
-import type { Thread, ThreadMessage } from "~/stores/types";
-import { WORKSPACE_STORAGE_KEY } from "~/stores/workspace";
+} from "~/renderer/stores/selectors";
+import { seedThreads } from "~/renderer/stores/seedThreads";
+import type { Thread, ThreadMessage } from "~/renderer/stores/types";
+import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { fingerprintOf } from "~/domain/approval";
-import { blankAnnouncement, blankGrade, blankReply } from "~/domain/blank";
+import { fingerprintOf } from "~/shared/domain/approval";
+import { blankAnnouncement, blankGrade, blankReply } from "~/shared/domain/blank";
 import {
   fieldText,
   fieldsOf,
@@ -16,10 +16,10 @@ import {
   type ChangeRecord,
   type GradeContent,
   type RemoteState,
-} from "~/domain/change";
-import type { LmsRef } from "~/domain/ids";
-import type { Assignment, Conversation, Course, Submission } from "~/domain/lms";
-import { previewOf } from "~/domain/preview";
+} from "~/shared/domain/change";
+import type { LmsRef } from "~/shared/domain/ids";
+import type { Assignment, Conversation, Course, Submission } from "~/shared/domain/lms";
+import { previewOf } from "~/shared/domain/preview";
 
 import {
   AT,

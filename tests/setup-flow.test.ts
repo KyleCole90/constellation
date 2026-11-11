@@ -1,19 +1,19 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type Agent } from "~/agent/agent";
-import { ApprovalWitness, fingerprintOf } from "~/domain/approval";
-import { riskOf, summarize, type ChangeRecord } from "~/domain/change";
-import type { CopySource, CourseShell } from "~/domain/content";
-import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/domain/ids";
-import { reviewRows, stageOf, type CourseSetup, type SetupStage } from "~/domain/setup";
-import type { TermDates, TermPlan } from "~/domain/term";
+import { type Agent } from "~/shared/agent/agent";
+import { ApprovalWitness, fingerprintOf } from "~/shared/domain/approval";
+import { riskOf, summarize, type ChangeRecord } from "~/shared/domain/change";
+import type { CopySource, CourseShell } from "~/shared/domain/content";
+import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
+import { reviewRows, stageOf, type CourseSetup, type SetupStage } from "~/shared/domain/setup";
+import type { TermDates, TermPlan } from "~/shared/domain/term";
 import {
   selectChangesShown,
   selectCourse,
   selectSetupOffers,
   selectSetupView,
-} from "~/stores/selectors";
-import { WORKSPACE_STORAGE_KEY } from "~/stores/workspace";
+} from "~/renderer/stores/selectors";
+import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";

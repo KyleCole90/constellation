@@ -1,4 +1,4 @@
-import { ApprovalWitness, fingerprintOf } from "~/domain/approval";
+import { ApprovalWitness, fingerprintOf } from "~/shared/domain/approval";
 import {
   newChangeRecord,
   transition,
@@ -7,8 +7,8 @@ import {
   type ChangeContent,
   type GradeContent,
   type RemoteState,
-} from "~/domain/change";
-import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/domain/ids";
+} from "~/shared/domain/change";
+import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
 
 export const AT = "2026-10-30T12:00:00.000Z" as IsoTime;
 export const SCHOOL = "lcc" as SchoolId;

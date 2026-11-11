@@ -10,10 +10,10 @@ import {
   type AgentInput,
   type AgentScope,
   type AgentViolation,
-} from "~/agent/agent";
-import { createRuleAgent } from "~/agent/rules";
-import type { GradeContent } from "~/domain/change";
-import type { ThreadId } from "~/domain/ids";
+} from "~/shared/agent/agent";
+import { createRuleAgent } from "~/shared/agent/rules";
+import type { GradeContent } from "~/shared/domain/change";
+import type { ThreadId } from "~/shared/domain/ids";
 
 import { AT, clickWitness } from "./fixtures/changes";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";

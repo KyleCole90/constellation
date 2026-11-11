@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { TextFixContent } from "~/domain/change";
-import type { LmsRef } from "~/domain/ids";
-import { Secret, type LmsProvider } from "~/providers/provider";
-import { createMemoryVault } from "~/providers/vault";
-import { DEFAULT_RETRY_POLICY, createWriteback } from "~/writeback/writeback";
+import type { TextFixContent } from "~/shared/domain/change";
+import type { LmsRef } from "~/shared/domain/ids";
+import { Secret, type LmsProvider } from "~/shared/providers/provider";
+import { createMemoryVault } from "~/renderer/providers/vault";
+import { DEFAULT_RETRY_POLICY, createWriteback } from "~/renderer/writeback/writeback";
 
 import { SecondLmsStub } from "./fixtures/second-lms-stub";
 import { clickWitness, newDraft } from "./fixtures/changes";

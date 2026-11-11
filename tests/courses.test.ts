@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { filterInbox } from "~/components/screens/inbox.logic";
-import { fromInboxRows } from "~/components/thread/queue.logic";
-import type { ChangeId, LmsRef, ThreadId } from "~/domain/ids";
-import { LMS_STORAGE_KEY } from "~/providers/fake-canvas/server";
-import { INBOX_THREAD, selectInboxRows, selectQueueRows } from "~/stores/selectors";
+import { filterInbox } from "~/renderer/components/screens/inbox.logic";
+import { fromInboxRows } from "~/renderer/components/thread/queue.logic";
+import type { ChangeId, LmsRef, ThreadId } from "~/shared/domain/ids";
+import { LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
+import { INBOX_THREAD, selectInboxRows, selectQueueRows } from "~/renderer/stores/selectors";
 
 import { clickWitness } from "./fixtures/changes";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
