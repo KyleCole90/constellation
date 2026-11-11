@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "node_modules/.tmp/test.tsbuildinfo",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "jsx": "react-jsx",
+    "paths": { "~/*": ["./src/*"] }
+  },
+  "include": ["tests", "src/env.d.ts", "src/css-properties.d.ts", "src/router.ts"]
+}

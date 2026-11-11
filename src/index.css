@@ -1,0 +1,659 @@
+@import "tailwindcss";
+
+/* Inside the sidebar while it is an icon rail: below 1280px, and not expanded over the page. */
+@custom-variant rail {
+  @media (width < 80rem) {
+    &:where([data-rail] *) {
+      @slot;
+    }
+  }
+}
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* Type scale. Nothing renders below text-meta. The reading pane keeps its serif in .paper. */
+  --text-meta: 12px;
+  --text-meta--line-height: 16px;
+  --text-body: 13px;
+  --text-body--line-height: 20px;
+  --text-chat: 14px;
+  --text-chat--line-height: 22px;
+  --text-title: 14px;
+  --text-title--line-height: 20px;
+  --text-title--font-weight: 500;
+  --text-screen: 15px;
+  --text-screen--line-height: 20px;
+  --text-screen--font-weight: 600;
+  --text-page: 16px;
+  --text-page--line-height: 24px;
+  --text-page--font-weight: 600;
+  --text-hero: 20px;
+  --text-hero--line-height: 28px;
+  --text-hero--font-weight: 600;
+
+  /* Padding rules, as px-row-x, py-cell-y, p-card, and so on. */
+  --spacing-card: var(--space-4);
+  --spacing-card-gap: var(--space-3);
+  --spacing-card-head-x: var(--space-4);
+  --spacing-card-head-y: var(--space-3);
+  --spacing-row-x: var(--space-3);
+  --spacing-row-y: var(--space-2);
+  --spacing-row-end: var(--space-4);
+  --spacing-cell-x: var(--space-3);
+  --spacing-cell-y: 10px;
+  --spacing-cell-end: var(--space-4);
+  --spacing-banner-x: var(--space-4);
+  --spacing-banner-y: var(--space-3);
+  --spacing-pill-x: 6px;
+  --spacing-pill-y: 2px;
+  --spacing-field-x: var(--space-3);
+  --spacing-field-y: var(--space-2);
+  --spacing-field: 36px;
+  --spacing-label-gap: 6px;
+  --spacing-btn-sm: 28px;
+  --spacing-btn-md: 32px;
+  --spacing-btn-lg: 36px;
+  --spacing-btn-gap: var(--space-2);
+  --spacing-row-one: 32px;
+  --spacing-row-two: 40px;
+  --spacing-row-table: 36px;
+  --spacing-grade-total-end: calc(var(--spacing-row-x) + var(--spacing-btn-sm) + 1px);
+
+  --radius-control: 7px;
+  --radius-card: 10px;
+  --radius-bar: 1px;
+
+  --shadow-popover: 0 8px 24px light-dark(rgb(0 0 0 / 12%), rgb(0 0 0 / 45%));
+  --shadow-dialog: 0 16px 48px light-dark(rgb(0 0 0 / 18%), rgb(0 0 0 / 50%));
+  --shadow-drawer: 12px 0 32px light-dark(rgb(0 0 0 / 12%), rgb(0 0 0 / 45%));
+  --shadow-pinned-column-left: 8px 0 12px -2px light-dark(rgb(0 0 0 / 10%), rgb(0 0 0 / 90%));
+  --shadow-pinned-column-right: -8px 0 12px -2px light-dark(rgb(0 0 0 / 10%), rgb(0 0 0 / 90%));
+  --shadow-action-bar: 0 1px 0 var(--input);
+  --shadow-today: inset 0 2px 0 var(--primary);
+
+  /* Reading columns, as max-w-chat and so on. */
+  --container-chat: 720px;
+  --container-setup: 640px;
+  --container-settings: 960px;
+}
+
+@theme inline {
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-error-foreground: var(--error-foreground);
+  --color-error: var(--error);
+  --color-error-surface: var(--error-surface);
+  --color-success-foreground: var(--success-foreground);
+  --color-success: var(--success);
+  --color-info-foreground: var(--info-foreground);
+  --color-info: var(--info);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-selected: var(--selected);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-label: var(--secondary-label);
+  --color-tertiary-label: var(--tertiary-label);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-primary-ink: var(--primary-ink);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-row-highlight: color-mix(in srgb, var(--background) 96%, var(--foreground));
+  --color-surface-raised: var(--surface-raised);
+  --color-message: var(--message-surface);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted-foreground: var(--sidebar-muted-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-school-lcc: var(--school-lcc);
+  --color-school-rsu: var(--school-rsu);
+}
+
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --pane-min: 440px;
+  --pane-room: 512px;
+  --panel-min: 380px;
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  /* Every colour is light-dark(light, dark), so the OS setting, or the choice in Settings below, picks the theme. No component needs a dark: variant. */
+  color-scheme: light dark;
+  --background: light-dark(var(--color-neutral-50), var(--color-neutral-950));
+  --surface-raised: var(--secondary);
+  --foreground: light-dark(var(--color-neutral-900), var(--color-neutral-100));
+  --card: light-dark(
+    var(--color-white),
+    color-mix(in srgb, var(--background) 97%, var(--color-white))
+  );
+  --card-foreground: var(--foreground);
+  --popover: light-dark(
+    var(--color-white),
+    color-mix(in srgb, var(--background) 94%, var(--color-white))
+  );
+  --popover-foreground: var(--foreground);
+  /* The brand fill. Its white label reads the same in both themes. */
+  --primary: oklch(0.571 0.21 264);
+  --primary-foreground: var(--color-white);
+  /* The brand blue as text or a line on the page, a step darker on light and lighter on dark so it clears 4.5:1 on any surface. */
+  --primary-ink: light-dark(oklch(0.5 0.22 264), oklch(0.68 0.17 264));
+  /* The raised fill of a control you can press. */
+  --secondary: light-dark(rgb(0 0 0 / 4%), rgb(255 255 255 / 8%));
+  --secondary-foreground: var(--foreground);
+  --secondary-label: light-dark(#525252, #a8a8a8);
+  /* Quiet text that still clears 4.5:1 on a selected card row. */
+  --tertiary-label: light-dark(#666666, #9c9c9c);
+  --muted: light-dark(rgb(0 0 0 / 3%), rgb(255 255 255 / 4%));
+  --muted-foreground: var(--secondary-label);
+  /* The hover fill of a row or a quiet control. */
+  --accent: light-dark(rgb(0 0 0 / 4%), rgb(255 255 255 / 5%));
+  /* Well above the hover surface, so the open item never reads as a hovered one. */
+  --selected: light-dark(rgb(0 0 0 / 7%), rgb(255 255 255 / 14%));
+  --accent-foreground: var(--foreground);
+  --error: light-dark(
+    var(--color-red-600),
+    color-mix(in srgb, var(--color-red-500) 90%, var(--color-white))
+  );
+  --error-foreground: light-dark(
+    var(--color-red-700),
+    color-mix(in oklab, var(--color-red-400) 75%, var(--color-red-300))
+  );
+  --error-surface: color-mix(in srgb, var(--error) 16%, transparent);
+  --border: light-dark(rgb(0 0 0 / 9%), rgb(255 255 255 / 6%));
+  --input: light-dark(rgb(0 0 0 / 13%), rgb(255 255 255 / 8%));
+  --ring: var(--primary-ink);
+  --info: light-dark(var(--color-blue-600), var(--color-blue-500));
+  --info-foreground: light-dark(var(--color-blue-700), var(--color-blue-400));
+  --success: light-dark(var(--color-emerald-600), var(--color-emerald-500));
+  --success-foreground: light-dark(var(--color-emerald-700), var(--color-emerald-400));
+  --warning: light-dark(var(--color-amber-600), var(--color-amber-500));
+  --warning-foreground: light-dark(var(--color-amber-800), var(--color-amber-400));
+  --warning-surface: color-mix(in srgb, var(--warning) 16%, transparent);
+  --message-surface: light-dark(rgb(0 0 0 / 4%), rgb(255 255 255 / 6%));
+  --paper-foreground: color-mix(in srgb, var(--foreground) 93%, var(--background));
+  --sidebar: light-dark(var(--color-neutral-100), var(--card));
+  --sidebar-foreground: var(--foreground);
+  --sidebar-muted-foreground: var(--muted-foreground);
+  --sidebar-border: var(--border);
+  --school-lcc: light-dark(var(--color-cyan-800), #22d3ee);
+  --school-rsu: light-dark(var(--color-fuchsia-700), #e879f9);
+  --app-scrollbar-thumb: light-dark(rgb(0 0 0 / 12%), rgb(255 255 255 / 8%));
+  --app-scrollbar-thumb-hover: light-dark(rgb(0 0 0 / 20%), rgb(255 255 255 / 12%));
+}
+/* A choice in Settings. A rule, not an inline style, because the build lowers light-dark() to variables that only a stylesheet's color-scheme sets. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Past the end of any pane, a trackpad would otherwise bounce the whole app off the top of the window. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  -webkit-font-smoothing: antialiased;
+  /* No paragraph ends on one stranded word. Inherited, so every block of text gets it. */
+  text-wrap: pretty;
+}
+/* Chrome's pretty only rescues a lone last word, so headings and centred text, which read as one shape, balance their lines instead. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  .text-center {
+    text-wrap: balance;
+  }
+}
+
+/* Unlayered, so they win over any utility. The open row in every list: a brighter surface and a short accent bar on its leading edge, which hover never shows. */
+.row-selected {
+  background-color: var(--selected);
+  background-image: linear-gradient(var(--primary), var(--primary));
+  background-size: 2px calc(100% - 12px);
+  background-position: left center;
+  background-repeat: no-repeat;
+  color: var(--foreground);
+}
+/* The rail hides the chats list, so while a chat is open its North Star icon takes the open look. From 1280px the chat's own row has it. */
+@media (width < 80rem) {
+  [data-rail] [data-rail-selected] {
+    background-color: var(--selected);
+    background-image: linear-gradient(var(--primary), var(--primary));
+    background-size: 2px calc(100% - 12px);
+    background-position: left center;
+    background-repeat: no-repeat;
+    color: var(--foreground);
+  }
+}
+
+/* A list of rows that are their own hover box: the same hairline between rows as a boxed list, dropped on both edges of any row showing its box, so a box is never outlined. */
+.row-dividers > li {
+  position: relative;
+}
+.row-dividers > li + li::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+.row-dividers > li:is(:hover, .row-selected, [data-cursor="true"], :has(:focus-visible))::before,
+.row-dividers
+  > li:is(:hover, .row-selected, [data-cursor="true"], :has(:focus-visible))
+  + li::before {
+  display: none;
+}
+
+/* The one in-page section title: a quiet eyebrow over the rows it groups, so it never reads as one of them. */
+@utility section-title {
+  font-size: var(--text-meta);
+  line-height: var(--text-meta--line-height);
+  font-weight: 500;
+  color: var(--secondary-label);
+}
+
+/* A text action that takes you somewhere: the one link colour, underlined on hover. Destructive text actions keep their own colour. */
+@utility link {
+  color: var(--color-info-foreground);
+  cursor: pointer;
+  &:hover {
+    text-decoration-line: underline;
+  }
+}
+
+/* One keyboard focus ring for every control. Text fields show focus with their caret and border instead. */
+:focus-visible:not(
+  input:not([type="checkbox"], [type="radio"], [type="range"]),
+  textarea,
+  [contenteditable],
+  [tabindex="-1"],
+  [role="dialog"],
+  [role^="menuitem"],
+  [role="option"],
+  .focus-inset,
+  .focus-inset *
+) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+/* A row or cell that is its own hover box. Keyboard focus on it, or on anything inside it such as its checkbox, draws one ring on the inside edge of that box, where a scroller can't clip it. An inset shadow, not an outline, so the ring traces the same box and radius as the hover and selected fill. */
+.focus-inset:is(:focus-visible, :has(:focus-visible)) {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--ring);
+}
+.focus-inset :focus-visible {
+  outline: none;
+}
+/* The focused row shows its hover fill too, so focus reads as a stronger hover. Zero specificity, so the open row keeps its brighter surface. */
+:where(.focus-inset:is(:focus-visible, :has(:focus-visible))) {
+  background-color: var(--accent);
+}
+
+/* A slider fills its track in the primary colour up to the thumb's centre, so the value reads without its number. --fill is the value as a fraction of the range. */
+input[type="range"] {
+  height: 4px;
+  cursor: pointer;
+  appearance: none;
+  border-radius: 9999px;
+  background:
+    linear-gradient(var(--primary), var(--primary)) left /
+      calc(6px + var(--fill, 0) * (100% - 12px)) 100% no-repeat,
+    color-mix(in srgb, var(--foreground) 15%, transparent);
+}
+input[type="range"]::-webkit-slider-thumb {
+  width: 12px;
+  height: 12px;
+  appearance: none;
+  border-radius: 9999px;
+  background: var(--primary);
+}
+
+/* An unticked box is an outline at tertiary strength, so it shows on any row fill. A ticked box keeps the native primary check. A disabled box keeps the same outline, so a row with nothing to act on never reads as broken. */
+input[type="checkbox"]:not(:checked) {
+  appearance: none;
+  border: 1px solid var(--tertiary-label);
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+/* The native date picker's button, drawn as lucide's calendar in the muted icon colour so it sits with the app's own icons. */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  cursor: pointer;
+  background: var(--muted-foreground);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4M16 2v4M3 10h18'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  background: var(--foreground);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--app-scrollbar-thumb);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--app-scrollbar-thumb-hover);
+}
+
+@keyframes pulse-dot {
+  50% {
+    opacity: 0.3;
+  }
+}
+.dot-pulse {
+  animation: pulse-dot 1.1s ease-in-out infinite;
+}
+
+/* The numbers only show while the modifier is held, and the pill they replace hides. */
+.jump-number {
+  display: none;
+}
+[data-mod-held] .jump-number {
+  display: inline;
+}
+[data-mod-held] .jump-hide {
+  display: none;
+}
+/* The icon rail has no room for a jump number. */
+@media (width < 80rem) {
+  [data-rail] .jump-number {
+    display: none;
+  }
+}
+
+@keyframes agent-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--primary) 34%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+[data-flash="true"] {
+  animation: agent-flash 1.4s ease-out;
+}
+
+/* One hue per criterion, set as --crit on its rubric badge, its reason badge and its passages, so a score finds its evidence by colour. The fifth wraps to the first. */
+:root {
+  --crit-1: light-dark(var(--color-violet-700), #a78bfa);
+  --crit-2: light-dark(var(--color-emerald-700), #34d399);
+  --crit-3: light-dark(var(--color-amber-700), #fbbf24);
+  --crit-4: light-dark(var(--color-sky-700), #38bdf8);
+}
+.passage {
+  color: inherit;
+  border-radius: 2px;
+  cursor: pointer;
+  background-color: color-mix(in srgb, var(--crit) 14%, transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--crit) 70%, transparent);
+  transition: background-color 0.12s;
+}
+.crit-number,
+.passage[data-number]::before {
+  display: inline-block;
+  min-width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background-color: var(--crit);
+  color: var(--background);
+  font: 500 var(--text-meta) / 16px var(--font-sans);
+  text-align: center;
+  text-indent: 0;
+  vertical-align: 1px;
+}
+.passage[data-number]::before {
+  content: attr(data-number);
+  background-color: var(--number);
+}
+.passage[data-overlap="true"] {
+  box-shadow: inset 0 -2px 0 var(--crit);
+}
+.passage[data-hovered="true"] {
+  background-color: color-mix(in srgb, var(--crit) 22%, transparent);
+}
+.passage[data-emphasized="true"] {
+  background-color: color-mix(in srgb, var(--crit) 30%, transparent);
+  outline: 1px solid var(--crit);
+  outline-offset: 1px;
+}
+
+.paper {
+  font:
+    14.5px/1.72 Charter,
+    Georgia,
+    "Times New Roman",
+    serif;
+  color: var(--paper-foreground);
+  /* About 70 characters of prose a line, however wide the pane gets. A ch is the width of "0", wider than this serif's average letter. */
+  max-width: 60ch;
+}
+.paper p + p {
+  margin-top: 12px;
+  text-indent: 1.4em;
+}
+.paper.transcript {
+  font: 13px/1.6 var(--font-sans);
+}
+.paper.transcript p + p {
+  text-indent: 0;
+}
+
+/* The middle pane never goes below --pane-min. When the panel can't fit beside it, the panel overlays it with a scrim. */
+.panel-host {
+  container-type: inline-size;
+}
+.thread-scrim {
+  display: none;
+}
+.thread-panel {
+  flex: none;
+  width: max(var(--panel-min), min(46vw, calc(100cqw - var(--pane-room)), 700px));
+  overflow: hidden;
+  animation: panel-open var(--motion-base) ease-out;
+}
+.thread-panel > * {
+  min-width: calc(var(--panel-min) - 1px);
+}
+.thread-panel[data-wide="true"] {
+  width: calc(100cqw - var(--pane-min));
+}
+.inbox-pane .thread-panel {
+  width: min(420px, calc(100cqw - var(--pane-min)));
+}
+/* Batch review needs the whole pane, so the conversation behind it stops painting. */
+.inbox-pane .thread-panel[data-wide="true"] {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  width: 100%;
+}
+.inbox-pane:has(> .thread-panel[data-wide="true"]) > main {
+  visibility: hidden;
+}
+/* Below 1280px the sidebar is a 48px rail, so an 852px pane is a 900px window, where the panel starts to overlay. From 1280px up the pane is never this narrow. */
+@media (max-width: 1279px) {
+  @container (max-width: 851px) {
+    .thread-scrim {
+      display: block;
+      position: absolute;
+      inset: 0;
+      z-index: 9;
+      background: rgb(0 0 0 / 50%);
+      animation: fade-in var(--motion-base) ease-out;
+    }
+    .thread-panel:not(.inbox-pane .thread-panel[data-wide="true"]) {
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 10;
+      width: min(560px, 88cqw);
+      box-shadow: -12px 0 32px light-dark(rgb(0 0 0 / 12%), rgb(0 0 0 / 45%));
+      animation: panel-slide var(--motion-base) ease-out;
+    }
+    .thread-panel[data-wide="true"]:not(.inbox-pane .thread-panel) {
+      width: 92cqw;
+    }
+  }
+}
+.inbox-pane:has(> .thread-panel[data-wide="true"]) > .thread-scrim {
+  display: none;
+}
+/* Below the list's 320px plus the pane's 820px, the list steps aside so the preview sits beside the conversation instead of over it, and the conversation's close control becomes a labelled way back to the list. Batch review keeps the list, which holds its selection. */
+.inbox-row {
+  container: inbox-row / inline-size;
+}
+[data-inbox-back] {
+  display: none;
+}
+@container inbox-row (max-width: 1139px) {
+  .inbox-row:has(.thread-panel:not([data-wide="true"])) > .inbox-list,
+  .inbox-row:has(.thread-panel:not([data-wide="true"])) [data-inbox-close] {
+    display: none;
+  }
+  .inbox-row:has(.thread-panel:not([data-wide="true"])) [data-inbox-back] {
+    display: inline-flex;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+/* Keyframes and not a transition, so only opening animates and a window resize doesn't drag the panel behind it. */
+@keyframes panel-open {
+  from {
+    width: 0;
+  }
+}
+@keyframes panel-slide {
+  from {
+    translate: 100% 0;
+  }
+}
+.fade-in {
+  animation: fade-in var(--motion-fast) ease-out;
+}
+
+/* Content scrolling under the composer fades out, with 16px clear above it. */
+.chat-scroll {
+  container: chat / size;
+}
+/* A message scrolled under the header fades out instead of showing a cut line. The fade spans only the timeline's top padding, so nothing fades at rest at the top. */
+.chat-scroll {
+  mask-image: linear-gradient(to bottom, transparent var(--space-2), #000 var(--space-4));
+}
+.focused-slot:last-child {
+  min-height: calc(100cqh - 36px);
+}
+[data-reason-key] {
+  display: none;
+}
+.panel-host[data-reasons-aside] [data-row-reason] {
+  display: none;
+}
+.panel-host[data-reasons-aside] [data-reason-key] {
+  display: flex;
+}
+@media (max-height: 860px) {
+  main:has([data-testid="pinned-queue"][data-open="true"]) [data-composer-examples] {
+    display: none;
+  }
+}
+
+.composer-fade {
+  position: relative;
+}
+.composer-fade::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--space-3) * -1) 0 100%;
+  background: linear-gradient(to top, var(--background), transparent);
+  pointer-events: none;
+}
+
+.composer-shell {
+  view-transition-name: composer-shell;
+}
+/* Chrome swallows clicks and ghosts the old page while the root is captured, so only the composer takes part in the glide. */
+:root {
+  view-transition-name: none;
+}
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-group(*),
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  .dot-pulse,
+  [data-flash="true"],
+  .thread-scrim,
+  .fade-in {
+    animation: none;
+  }
+  /* Stronger than the overlay rule inside the container query, which would otherwise keep the slide. */
+  .thread-panel {
+    animation: none !important;
+  }
+}
