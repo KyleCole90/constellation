@@ -35,6 +35,21 @@ export default defineConfig({
   resolve: { alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) } },
   server: { port: 4320, allowedHosts: [".ts.net"] },
   build: { outDir: "out/dist" },
+  // Main and preload, next to the renderer in `out/` so main finds both by relative path. A sandboxed preload must be CommonJS.
+  pack: [
+    {
+      entry: "src/main/index.ts",
+      outDir: "out/main",
+      format: "esm",
+      deps: { neverBundle: ["electron"] },
+    },
+    {
+      entry: "src/preload/index.ts",
+      outDir: "out/preload",
+      format: "cjs",
+      deps: { neverBundle: ["electron"] },
+    },
+  ],
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts", "src/**/*.test.ts"],

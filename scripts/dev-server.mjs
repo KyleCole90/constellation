@@ -21,6 +21,7 @@ export const startDevServer = async () => {
   await server.listen();
   return {
     origin: `http://${HOST}:${server.httpServer.address().port}`,
+    watcher: server.watcher,
     close: () => server.close(),
   };
 };

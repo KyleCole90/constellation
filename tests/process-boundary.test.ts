@@ -16,6 +16,9 @@ const FIXTURES = {
   "renderer/alias-into-shared.ts": "~/shared/domain/ids",
   "renderer/alias-dotdot-into-shared.ts": "~/renderer/../shared/domain/ids",
   "renderer/relative-into-shared.ts": "../shared/domain/ids",
+  "main/alias-cross.ts": "~/renderer/lib/utils",
+  "preload/relative-cross.ts": "../main/security",
+  "main/alias-into-shared.ts": "~/shared/domain/ids",
 } as const;
 
 type Fixture = keyof typeof FIXTURES;
@@ -74,6 +77,8 @@ describe("constellation/process-boundary", () => {
     "shared/alias-dotdot-cross.ts",
     "shared/relative-cross.ts",
     "shared/alias-case-cross.ts",
+    "main/alias-cross.ts",
+    "preload/relative-cross.ts",
   ])("reports %s", (fixture) => expect(flagged(fixture)).toBe(true));
 
   it.each<Fixture>([
@@ -82,5 +87,6 @@ describe("constellation/process-boundary", () => {
     "renderer/alias-into-shared.ts",
     "renderer/alias-dotdot-into-shared.ts",
     "renderer/relative-into-shared.ts",
+    "main/alias-into-shared.ts",
   ])("allows %s", (fixture) => expect(flagged(fixture)).toBe(false));
 });
