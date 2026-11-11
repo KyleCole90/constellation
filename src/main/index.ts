@@ -8,6 +8,8 @@ const RENDERER_DIR = fileURLToPath(new URL("../dist", import.meta.url));
 const PRELOAD = fileURLToPath(new URL("../preload/index.cjs", import.meta.url));
 /** Set by `npm run dev` to its vite server. A packaged app always loads its bundled files. */
 const DEV_URL = app.isPackaged ? undefined : process.env.CONSTELLATION_DEV_URL;
+/** Set by `npm run verify`, which drives the window over CDP. A window that is never shown still paints, and nothing can cover it. */
+const HIDDEN = !app.isPackaged && process.env.CONSTELLATION_WINDOW === "hidden";
 
 protocol.registerSchemesAsPrivileged([
   { scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -37,7 +39,7 @@ const start = async () => {
     ]),
   );
   protocol.handle(APP_SCHEME, serve);
-  const window = new BrowserWindow(windowOptions(PRELOAD));
+  const window = new BrowserWindow({ ...windowOptions(PRELOAD), show: !HIDDEN });
   lockNavigation(window.webContents, (url) => void shell.openExternal(url));
   app.on("second-instance", () => {
     if (window.isMinimized()) window.restore();

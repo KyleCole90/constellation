@@ -757,7 +757,7 @@ const calendar = async (t) => {
     );
   const popupOpen = (label) =>
     t.waitFor(
-      `(() => { const popup = document.querySelector(${JSON.stringify(MARKER_POPUP)}); return popup && popup.getAnimations().length === 0; })()`,
+      `(() => { const popup = document.querySelector(${JSON.stringify(MARKER_POPUP)}); return popup && !popup.hasAttribute("data-starting-style") && popup.getAnimations().length === 0; })()`,
       `${label}: the popup opens`,
     );
   const popupCovers = async (ref, label) => {

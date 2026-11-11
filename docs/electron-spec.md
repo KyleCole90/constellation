@@ -188,7 +188,7 @@ Each step is one PR that ends green on every check and is proven on the real app
 
 ## Open questions and risks
 
-- **Verify in Electron windows.** Hidden or background windows may throttle painting, or report `document.hasFocus()` as false. PR 4 must prove this before CI depends on it. The fallbacks are `paintWhenInitiallyHidden` with `backgroundThrottling: false`, or a visible window placed off-screen.
+- **Verify in Electron windows.** Hidden or background windows may throttle painting, or report `document.hasFocus()` as false. PR 4 must prove this before CI depends on it. The fallbacks are `paintWhenInitiallyHidden` with `backgroundThrottling: false`, or a visible window placed off-screen. _Settled in PR 4:_ a covered or minimised window got no frames at all, while a window that is never shown painted at 60 fps with the default `paintWhenInitiallyHidden` but reported no focus. Verify starts the window hidden (`CONSTELLATION_WINDOW=hidden`, unpackaged only) and turns on CDP focus emulation. Production keeps `backgroundThrottling`.
 - **Hosted-runner verify time and flakes.** Verify may take about 10 minutes instead of 5. Some of the known timing flakes may move or get worse. Measure in PR 1, and log flakes in the new repo's issues.
 - **The permit check in main.** `SendPermit` and approval are minted in the renderer today. With the renderer untrusted, main needs its own check before `apply`. The exact rule is designed in PR 12, and it must not add a second write path.
 - **PostHog delivery.** Send straight to PostHog, or through our own proxy (#3)? Recommendation: send direct for 0.0.1, since a proxy would be the only Constellation server.

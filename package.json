@@ -15,8 +15,9 @@
     "fmt:check": "vp fmt --check",
     "check": "vp check",
     "knip": "knip",
-    "verify": "node scripts/verify.mjs",
-    "dev:web": "vp dev"
+    "verify": "npm run build && node scripts/verify.mjs",
+    "dev:web": "vp dev",
+    "verify:web": "node scripts/verify.mjs --web"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

@@ -1,10 +1,13 @@
-// Drives the real app in real headless Chrome with trusted mouse and key events. Starts its own vite and Chrome, and stops only those two processes.
+// Drives the real app with trusted mouse and key events: the unpackaged Electron app against vite, or with `--web` the built demo in headless Chrome.
+// Starts its own server and app, and stops only those.
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import electron from "electron";
 
 import {
   AUDIT_PAGE,
@@ -14,10 +17,12 @@ import {
   TWIN_IMAGES,
   unnumbered,
 } from "./verify/layout-audit.mjs";
-import { startDevServer } from "./dev-server.mjs";
+import { startBuiltServer, startDevServer } from "./dev-server.mjs";
 
+const WEB = process.argv.includes("--web");
 const ONLY = process.argv.find((arg) => arg.startsWith("--only="))?.slice(7);
 const ALL_MODULES = [
+  "shell",
   "settings",
   "grading",
   "grading-list",
@@ -28,7 +33,7 @@ const ALL_MODULES = [
   "focus",
   "theme",
 ];
-const MODULES = ONLY ? [ONLY] : ALL_MODULES;
+const MODULES = WEB ? ["web"] : ONLY ? [ONLY] : ALL_MODULES;
 const strayTwins = Object.keys(TWIN_IMAGES).filter((name) => !ALL_MODULES.includes(name));
 if (strayTwins.length) throw new Error(`TWIN_IMAGES names no verify module: ${strayTwins}`);
 
@@ -74,15 +79,39 @@ const freePort = () =>
     });
   });
 
-const untilOk = async (url, what) => {
+const until = async (probe, failure) => {
   for (let i = 0; i < 200; i++) {
     try {
-      if ((await fetch(url)).ok) return;
+      const value = await probe();
+      if (value) return value;
     } catch {}
     await sleep(100);
   }
-  throw new Error(`${what} did not come up at ${url}`);
+  throw new Error(failure);
 };
+
+// The window is never shown, so it paints without stealing focus, and no other window can cover it: a covered or minimised window gets no frames.
+// ELECTRON_RUN_AS_NODE, set by some agent shells, would start Electron as plain Node.
+const { ELECTRON_RUN_AS_NODE: _, ...APP_ENV } = { ...process.env, CONSTELLATION_WINDOW: "hidden" };
+const launch = (port, profile) =>
+  WEB
+    ? spawn(
+        CHROME,
+        [
+          "--headless=new",
+          "--disable-gpu",
+          "--no-first-run",
+          "--hide-scrollbars",
+          `--remote-debugging-port=${port}`,
+          `--user-data-dir=${profile}`,
+          "about:blank",
+        ],
+        { stdio: "ignore" },
+      )
+    : spawn(electron, [`--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, ROOT], {
+        stdio: "ignore",
+        env: APP_ENV,
+      });
 
 const stop = (child) =>
   new Promise((resolve) => {
@@ -121,23 +150,12 @@ const main = async () => {
       (await readdir(SHOTS)).map((name) => rm(join(SHOTS, name), { recursive: true, force: true })),
     );
   await mkdir(SHOTS, { recursive: true });
-  const debugPort = await freePort();
-  const profile = await mkdtemp(join(tmpdir(), "lms-verify-"));
-  const vite = await startDevServer();
+  // The demo ships built. The app runs against vite, because the fault lab the modules drive exists only in dev.
+  const vite = WEB ? await startBuiltServer() : await startDevServer();
   const { origin } = vite;
-  const chrome = spawn(
-    CHROME,
-    [
-      "--headless=new",
-      "--disable-gpu",
-      "--no-first-run",
-      "--hide-scrollbars",
-      `--remote-debugging-port=${debugPort}`,
-      `--user-data-dir=${profile}`,
-      "about:blank",
-    ],
-    { stdio: "ignore" },
-  );
+  let app = null;
+  let profile = null;
+  let socket = null;
 
   const failures = [];
   let passes = 0;
@@ -149,27 +167,21 @@ const main = async () => {
   const auditStates = [];
 
   const cleanup = async () => {
-    await Promise.all([stop(chrome), vite.close()]);
-    await rm(profile, { recursive: true, force: true }).catch(() => {});
+    socket?.close();
+    await Promise.all([stop(app), vite.close()]);
+    if (profile) await rm(profile, { recursive: true, force: true }).catch(() => {});
   };
   for (const signal of ["SIGINT", "SIGTERM"]) {
     process.once(signal, () => void cleanup().then(() => process.exit(1)));
   }
 
   try {
-    await untilOk(`http://127.0.0.1:${debugPort}/json/version`, "Chrome");
-    const { webSocketDebuggerUrl } = await (
-      await fetch(`http://127.0.0.1:${debugPort}/json/version`)
-    ).json();
-    const socket = new WebSocket(webSocketDebuggerUrl);
-    await new Promise((resolve) => socket.addEventListener("open", resolve));
-
     let seq = 0;
     let session = null;
     const waiting = new Map();
     const loaded = [];
     const listeners = new Map();
-    socket.addEventListener("message", ({ data }) => {
+    const onMessage = ({ data }) => {
       const message = JSON.parse(data);
       if (!message.id && message.sessionId !== session) return;
       if (
@@ -194,7 +206,7 @@ const main = async () => {
         pageErrors.push(message.params.args.map((arg) => arg.value ?? arg.description).join(" "));
       else if (message.method === "Log.entryAdded" && message.params.entry.level === "error")
         pageErrors.push(`${message.params.entry.text} ${message.params.entry.url ?? ""}`);
-    });
+    };
     const send = (method, params = {}, sessionId = session) =>
       new Promise((resolve, reject) => {
         const id = ++seq;
@@ -214,25 +226,48 @@ const main = async () => {
       return result.result.value;
     };
 
-    // A page in its own browser context starts with no storage at all, and nothing an earlier page writes late can reach it.
-    let context = null;
+    const load = (method, params) => {
+      const done = new Promise((resolve) => loaded.push(resolve));
+      return send(method, params).then(() => done);
+    };
+
+    // A fresh launch on a fresh profile starts with no storage at all, and nothing an earlier page writes late can reach it.
+    // Electron can't open a browser context or a target over CDP, so a fresh page is a fresh app.
     const freshPage = async () => {
-      if (context) await send("Target.disposeBrowserContext", { browserContextId: context }, null);
-      ({ browserContextId: context } = await send("Target.createBrowserContext", {}, null));
-      const { targetId } = await send(
-        "Target.createTarget",
-        { url: "about:blank", browserContextId: context },
-        null,
+      socket?.close();
+      await stop(app);
+      if (profile) await rm(profile, { recursive: true, force: true });
+      const port = await freePort();
+      profile = await mkdtemp(join(tmpdir(), "lms-verify-"));
+      app = launch(port, profile);
+      const version = `http://127.0.0.1:${port}/json/version`;
+      const { webSocketDebuggerUrl } = await until(
+        async () => (await fetch(version)).json(),
+        `${WEB ? "Chrome" : "Electron"} did not come up at ${version}`,
       );
-      ({ sessionId: session } = await send(
-        "Target.attachToTarget",
-        { targetId, flatten: true },
-        null,
-      ));
+      socket = new WebSocket(webSocketDebuggerUrl);
+      socket.addEventListener("message", onMessage);
+      await new Promise((resolve) => socket.addEventListener("open", resolve));
+      session = null;
+      const { targetId } = await until(
+        async () =>
+          (await send("Target.getTargets")).targetInfos.find(({ type }) => type === "page"),
+        "no page opened",
+      );
+      ({ sessionId: session } = await send("Target.attachToTarget", { targetId, flatten: true }));
+      // Electron opens the app itself. Leaving before that load finishes would fail main's loadURL.
+      const first = WEB ? "about:" : "app:";
+      await until(
+        () => evaluate(`location.protocol === "${first}" && document.readyState === "complete"`),
+        "the first page never loaded",
+      );
       loaded.length = 0;
       await send("Page.enable");
       await send("Runtime.enable");
       await send("Log.enable");
+      await load("Page.navigate", { url: "about:blank" });
+      // A window that is never shown never has focus, and the app moves focus the way it would in a person's focused window.
+      await send("Emulation.setFocusEmulationEnabled", { enabled: true });
       await media({});
     };
     // Every module sees the dark theme and full motion, whatever the machine's own settings. A module overrides one by name, and the rest keep these.
@@ -335,16 +370,9 @@ const main = async () => {
       /** Evaluates `expression` until its value holds across painted frames with no animation running, and returns it. */
       steady: (expression, timeout = WAIT_MS) =>
         steady(expression, () => true, timeout, `never held still: ${expression.slice(0, 80)}`),
-      async goto(path) {
-        const load = new Promise((resolve) => loaded.push(resolve));
-        await send("Page.navigate", { url: `${origin}${path}` });
-        await load;
-      },
-      async reload() {
-        const load = new Promise((resolve) => loaded.push(resolve));
-        await send("Page.reload");
-        await load;
-      },
+      /** Loads a path on the app's server, or a whole URL. */
+      goto: (path) => load("Page.navigate", { url: new URL(path, origin).href }),
+      reload: () => load("Page.reload"),
       async viewport(width, height) {
         t.size = { width, height };
         await send("Emulation.setDeviceMetricsOverride", {
@@ -647,7 +675,6 @@ const main = async () => {
       for (const image of twinImages)
         t.assert(twinned.has(image), `${name}: twin image ${image} matches a shot`);
     }
-    socket.close();
   } finally {
     await cleanup();
   }
