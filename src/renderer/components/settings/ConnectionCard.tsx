@@ -1,3 +1,4 @@
+import { VAULT_PLACE } from "~/renderer/desktop";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -166,7 +167,9 @@ export function ConnectionCard({ school }: { school: School }) {
         confirmLabel="Disconnect"
         onConfirm={() => workspaceStore().getState().disconnect(school.id)}
       >
-        <p>This forgets the token in this browser and the course data read from {school.host}.</p>
+        <p>
+          This forgets the token in {VAULT_PLACE} and the course data read from {school.host}.
+        </p>
         <p>
           Your unsent work and approvals are kept, and nothing is deleted from the LMS. Connect
           again at any time to pick up where you left off.

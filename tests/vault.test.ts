@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -88,10 +88,53 @@ describe("main's vault", () => {
     expect(readFileSync(file, "utf8")).not.toContain(previous);
   });
 
-  it("refuses a file it didn't write", async () => {
+  it("restores a stand-in only under the key it was issued for", async () => {
+    const vault = createVault(vaultFile(), fakeCipher());
+    await vault.enroll(LCC, TOKEN);
+    await vault.enroll(RSU, "rsu-token");
+    const lccStandIn = await vault.standIn(LCC);
+    const rsuStandIn = await vault.standIn(RSU);
+    if (lccStandIn === null) throw new Error("no stand-in");
+    await expect(vault.enroll(RSU, lccStandIn)).rejects.toThrow("issued for");
+    expect(await vault.standIn(RSU)).toBe(rsuStandIn);
+    await expect(vault.enroll("ai-key", lccStandIn)).rejects.toThrow("issued for");
+    expect(vault.keys()).toEqual([LCC, RSU]);
+  });
+
+  it("forgetting a key voids the stand-ins it handed out", async () => {
     const file = vaultFile();
-    writeFileSync(file, JSON.stringify({ lcc: 7 }));
-    expect(() => createVault(file, fakeCipher()).keys()).toThrow();
+    const vault = createVault(file, fakeCipher());
+    await vault.enroll(LCC, TOKEN);
+    const previous = await vault.standIn(LCC);
+    if (previous === null) throw new Error("no stand-in");
+    vault.forget(LCC);
+    await expect(vault.enroll(LCC, previous)).rejects.toThrow("issued for");
+    expect(vault.keys()).toEqual([]);
+    expect(readFileSync(file, "utf8")).not.toContain(TOKEN);
+  });
+
+  it.each([
+    ["that something else wrote", JSON.stringify({ lcc: 7 })],
+    ["that is damaged", '{"lcc": "abc'],
+  ])("reads a file %s as empty, and keeps it aside as vault.json.bad", async (_, text) => {
+    const file = vaultFile();
+    writeFileSync(file, text);
+    const vault = createVault(file, fakeCipher());
+    expect(vault.keys()).toEqual([]);
+    expect(readFileSync(`${file}.bad`, "utf8")).toBe(text);
+    expect(await vault.standIn(LCC)).toBeNull();
+    vault.forget(LCC);
+    await vault.enroll(LCC, TOKEN);
+    expect(vault.keys()).toEqual([LCC]);
+  });
+
+  it("replaces a temp file left by a crash rather than writing through it", async () => {
+    const file = vaultFile();
+    writeFileSync(`${file}.tmp`, "stale", { mode: 0o644 });
+    const vault = createVault(file, fakeCipher());
+    await vault.enroll(LCC, TOKEN);
+    expect(vault.keys()).toEqual([LCC]);
+    expect(statSync(file).mode & 0o777).toBe(0o600);
   });
 });
 

@@ -869,6 +869,10 @@ const onboarding = async (t, shot) => {
   );
 
   await t.click(`[aria-label="Remove ${RSU}"]`);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(DIALOG)})?.innerText.includes("forgets the token in your Mac's Keychain")`,
+    "on the desktop, Remove says the token is forgotten from the Keychain, not a browser",
+  );
   await t.click("Remove", { within: DIALOG });
   await t.waitFor(
     `!document.querySelector(${JSON.stringify(ROW(RSU))})`,

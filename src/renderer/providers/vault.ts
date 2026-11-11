@@ -1,3 +1,4 @@
+import { desktopBridge } from "~/renderer/desktop";
 import { parseIsoTime } from "~/shared/domain/ids";
 import type { Bridge } from "~/shared/ipc";
 import {
@@ -140,7 +141,7 @@ const masterKey = async (db: IDBDatabase): Promise<CryptoKey> => {
   return created;
 };
 
-export const createBrowserVault = (): Vault => {
+const createBrowserVault = (): Vault => {
   let opened: Promise<IDBDatabase> | null = null;
   const db = () => (opened ??= openDb());
 
@@ -224,3 +225,7 @@ export const createBridgeVault = (bridge: Bridge): Vault => {
   };
   return vault;
 };
+
+/** The desktop app keeps tokens in main. The web demo has no main process, so it keeps them in IndexedDB. */
+export const createAppVault = (): Vault =>
+  desktopBridge ? createBridgeVault(desktopBridge) : createBrowserVault();
