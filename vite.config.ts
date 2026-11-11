@@ -15,6 +15,11 @@ const IGNORED = [
   ".claude",
 ];
 
+const ELECTRON_ONLY_IN_MAIN =
+  "`electron` belongs to src/main and src/preload. The renderer reaches main through `window.constellation` (docs/electron-spec.md, D16).";
+const RENDERER_IS_UNTRUSTED =
+  "The renderer is untrusted and gets no network or Node access. Ask main over IPC (docs/electron-spec.md, D5).";
+
 export default defineConfig({
   plugins: [
     tanstackRouter({
@@ -58,6 +63,7 @@ export default defineConfig({
     },
     rules: {
       "constellation/no-vp-server-spawn": "error",
+      "constellation/process-boundary": "error",
       "typescript/no-explicit-any": "error",
       "typescript/switch-exhaustiveness-check": "error",
       "typescript/no-unnecessary-type-assertion": "error",
@@ -115,6 +121,29 @@ export default defineConfig({
       "eslint/no-underscore-dangle": "off",
     },
     overrides: [
+      {
+        files: ["src/renderer/**", "src/shared/**"],
+        rules: {
+          "eslint/no-restricted-imports": [
+            "error",
+            {
+              paths: [{ name: "electron", message: ELECTRON_ONLY_IN_MAIN }],
+              patterns: [{ group: ["electron/*"], message: ELECTRON_ONLY_IN_MAIN }],
+            },
+          ],
+        },
+      },
+      {
+        files: ["src/renderer/**"],
+        rules: {
+          "eslint/no-restricted-globals": [
+            "error",
+            { name: "fetch", message: RENDERER_IS_UNTRUSTED },
+            { name: "process", message: RENDERER_IS_UNTRUSTED },
+            { name: "require", message: RENDERER_IS_UNTRUSTED },
+          ],
+        },
+      },
       {
         // Shipped code: src without its colocated tests.
         files: ["src/**"],
