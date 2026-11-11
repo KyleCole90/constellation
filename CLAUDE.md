@@ -9,7 +9,8 @@ Run these before you open a PR. CI runs the same commands, and `main` accepts a 
 - `npm run typecheck`: the renderer (DOM), shared (no DOM or Node), main (Node, no DOM), preload, Node and test TypeScript projects.
 - `npm test`: Vitest.
 - `npm run build`: writes the renderer to `out/dist` (`vp build`, also the web demo) and Electron's main and preload to `out/main` and `out/preload` (`vp pack`).
-- `npm run verify`: drives the real app in headless Chrome (about 5 minutes).
+- `npm run verify`: builds, then drives the real Electron app in a hidden window (about 9 minutes).
+- `npm run verify:web`: the web demo build loads in headless Chrome, and onboarding finishes.
 
 `npm run dev` runs the desktop app against vite and restarts it when `src/main`, `src/preload` or `src/shared` changes; `npm run dev:web` runs the web app alone. After `npm run build`, `npx electron .` runs the built app from `app://`.
 

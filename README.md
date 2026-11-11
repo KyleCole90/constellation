@@ -22,16 +22,17 @@ AI is optional. With no AI, the app runs no agent. Opening a submission, convers
 
 Other commands:
 
-| Command             | What it does                                                                                                                                                                                                 |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `npm run typecheck` | Runs `tsgo -b` over the renderer, Node and test projects.                                                                                                                                                    |
-| `npm run check`     | Checks formatting and lint with `vp check`.                                                                                                                                                                  |
-| `npm run knip`      | Reports unused files, exports and dependencies.                                                                                                                                                              |
-| `npm test`          | Runs the Vitest suite through Vite+.                                                                                                                                                                         |
-| `npm run verify`    | Starts the app, drives every screen in Chrome, and saves screenshots to `out/screenshots/`. Use `--only=settings`, `--only=grading`, `--only=courses`, `--only=term`, or `--only=followups` to run one part. |
-| `npm run build`     | Builds to `out/dist/`.                                                                                                                                                                                       |
+| Command              | What it does                                                                                                                                                                                                                           |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run typecheck`  | Runs `tsgo -b` over the renderer, Node and test projects.                                                                                                                                                                              |
+| `npm run check`      | Checks formatting and lint with `vp check`.                                                                                                                                                                                            |
+| `npm run knip`       | Reports unused files, exports and dependencies.                                                                                                                                                                                        |
+| `npm test`           | Runs the Vitest suite through Vite+.                                                                                                                                                                                                   |
+| `npm run verify`     | Builds, starts the Electron app in a hidden window, drives every screen, and saves screenshots to `out/screenshots/`. Use `--only=settings`, `--only=grading`, `--only=courses`, `--only=term`, or `--only=followups` to run one part. |
+| `npm run verify:web` | Builds the web demo and checks in headless Chrome that it loads and onboarding finishes.                                                                                                                                               |
+| `npm run build`      | Builds to `out/dist/`.                                                                                                                                                                                                                 |
 
-`npm run verify` needs Google Chrome. It looks in `/Applications`. To use a different binary, set `CHROME_BIN`.
+`npm run verify:web` needs Google Chrome. It looks in `/Applications`. To use a different binary, set `CHROME_BIN`.
 
 To restore the starting data, open **Settings**, go to the **Demo** section, and click **Reset demo data**. To make the fake LMS misbehave, use the failure lab in the same section. It can expire a token, change a grade behind your back, fail a write partway, lose a response, and throttle the next write.
 
