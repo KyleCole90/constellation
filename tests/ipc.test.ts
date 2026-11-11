@@ -1,31 +1,50 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import type { SchoolId } from "../src/shared/domain/ids";
 import { handle, invoker } from "../src/shared/ipc";
 
-type Listener = (event: unknown, input: unknown) => unknown;
+type Listener = (sender: string | null, input: unknown) => Promise<unknown>;
+
+const APP = "app://constellation/";
 
 /** Main's side: the listeners `handle` registers, by channel, and every input a handler was given. */
 const registered = () => {
   const listeners = new Map<string, Listener>();
   const reports: unknown[] = [];
-  handle((channel, listener) => listeners.set(channel, listener), {
-    "error.report": async (report) => {
-      reports.push(report);
+  const handled: unknown[] = [];
+  const record = async (input: unknown) => void handled.push(input);
+  handle(
+    (channel, listener) => listeners.set(channel, listener),
+    (sender) => sender === APP,
+    {
+      "error.report": async (report) => {
+        reports.push(report);
+      },
+      "vault.enroll": record,
+      "vault.keys": async () => [],
+      "vault.forget": record,
+      "vault.standIn": async () => null,
     },
-  });
-  const call = async (channel: string, input: unknown) => {
+  );
+  const call = async (channel: string, input: unknown, sender: string | null = APP) => {
     const listener = listeners.get(channel);
     if (!listener) throw new Error(`no listener for ${channel}`);
-    return listener({}, input);
+    return listener(sender, input);
   };
-  return { listeners, reports, call };
+  return { listeners, reports, handled, call };
 };
 
 const REPORT = { type: "TypeError", stack: "at render (app.tsx:12:3)" };
 
 describe("main's handlers", () => {
   it("register one listener per channel", () => {
-    expect([...registered().listeners.keys()]).toEqual(["error.report"]);
+    expect([...registered().listeners.keys()]).toEqual([
+      "error.report",
+      "vault.enroll",
+      "vault.keys",
+      "vault.forget",
+      "vault.standIn",
+    ]);
   });
 
   it("pass a well-formed input to the handler", async () => {
@@ -46,12 +65,39 @@ describe("main's handlers", () => {
     expect(main.reports).toEqual([]);
   });
 
+  it.each([
+    ["another origin", "https://example.com/"],
+    ["a file", "file:///etc/passwd"],
+    ["a frame that is gone", null],
+  ])("refuse a call from %s without running the handler", async (_name, sender) => {
+    const main = registered();
+    await expect(main.call("error.report", REPORT, sender)).rejects.toThrow("untrusted sender");
+    await expect(main.call("vault.forget", { key: "lcc" }, sender)).rejects.toThrow();
+    expect(main.reports).toEqual([]);
+    expect(main.handled).toEqual([]);
+  });
+
+  it.each([
+    ["vault.enroll", { key: "lcc", token: "" }],
+    ["vault.enroll", { key: "", token: "abc" }],
+    ["vault.enroll", { key: "lcc" }],
+    ["vault.enroll", { key: "lcc", token: "abc", extra: true }],
+    ["vault.forget", { key: 7 }],
+    ["vault.forget", "lcc"],
+    ["vault.standIn", {}],
+  ])("reject %s with a bad input %j", async (channel, input) => {
+    const main = registered();
+    await expect(main.call(channel, input)).rejects.toThrow();
+    expect(main.handled).toEqual([]);
+  });
+
   it("must cover every channel, spelled right", () => {
     const register = () => {};
+    const trusted = () => true;
     // @ts-expect-error: a missing handler fails to compile.
-    handle(register, {});
+    handle(register, trusted, {});
     // @ts-expect-error: a misspelled handler fails to compile.
-    handle(register, { "error.reprot": async () => {} });
+    handle(register, trusted, { "error.reprot": async () => {} });
   });
 });
 
@@ -64,6 +110,16 @@ describe("the renderer's invoke", () => {
   it("rejects an output that doesn't parse", async () => {
     const invoke = invoker(async () => ({ leaked: true }));
     await expect(invoke("error.report", REPORT)).rejects.toThrow();
+  });
+
+  it.each([["lcc", 7], "lcc", null])("rejects vault keys that don't parse: %j", async (output) => {
+    const invoke = invoker(async () => output);
+    await expect(invoke("vault.keys", undefined)).rejects.toThrow();
+  });
+
+  it("rejects a stand-in that isn't text", async () => {
+    const invoke = invoker(async () => 42);
+    await expect(invoke("vault.standIn", { key: "lcc" as SchoolId })).rejects.toThrow();
   });
 
   it("rejects a channel that isn't in the map without sending it", async () => {

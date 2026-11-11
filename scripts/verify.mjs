@@ -1,7 +1,7 @@
 // Drives the real app with trusted mouse and key events: the unpackaged Electron app against vite, or with `--web` the built demo in headless Chrome.
 // Starts its own server and app, and stops only those.
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -93,7 +93,7 @@ const until = async (probe, failure) => {
 // The window is never shown, so it paints without stealing focus, and no other window can cover it: a covered or minimised window gets no frames.
 // ELECTRON_RUN_AS_NODE, set by some agent shells, would start Electron as plain Node.
 const { ELECTRON_RUN_AS_NODE: _, ...APP_ENV } = { ...process.env, CONSTELLATION_WINDOW: "hidden" };
-const launch = (port, profile) =>
+const launch = (port, profile, origin) =>
   WEB
     ? spawn(
         CHROME,
@@ -108,10 +108,17 @@ const launch = (port, profile) =>
         ],
         { stdio: "ignore" },
       )
-    : spawn(electron, [`--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, ROOT], {
-        stdio: "ignore",
-        env: APP_ENV,
-      });
+    : // A mock Keychain: safeStorage still encrypts, but verify never writes to the login Keychain or waits on its prompt.
+      spawn(
+        electron,
+        [
+          `--remote-debugging-port=${port}`,
+          `--user-data-dir=${profile}`,
+          "--use-mock-keychain",
+          ROOT,
+        ],
+        { stdio: "ignore", env: { ...APP_ENV, CONSTELLATION_VERIFY_ORIGIN: origin } },
+      );
 
 const stop = (child) =>
   new Promise((resolve) => {
@@ -239,7 +246,7 @@ const main = async () => {
       if (profile) await rm(profile, { recursive: true, force: true });
       const port = await freePort();
       profile = await mkdtemp(join(tmpdir(), "lms-verify-"));
-      app = launch(port, profile);
+      app = launch(port, profile, origin);
       const version = `http://127.0.0.1:${port}/json/version`;
       const { webSocketDebuggerUrl } = await until(
         async () => (await fetch(version)).json(),
@@ -356,6 +363,11 @@ const main = async () => {
 
     const t = {
       origin,
+      /** The text of main's vault file in this launch's profile: `{}` when there is none, and in the web demo. */
+      vaultFile: () =>
+        WEB
+          ? Promise.resolve("{}")
+          : readFile(join(profile, "vault.json"), "utf8").catch(() => "{}"),
       shots: SHOTS,
       sleep,
       consoleEntries,

@@ -1,10 +1,20 @@
+import { join } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
-import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, net, protocol, safeStorage, shell } from "electron";
 
 import { handle } from "../shared/ipc";
 
-import { APP_SCHEME, APP_URL, CSP, appFile, lockNavigation, windowOptions } from "./security";
+import {
+  APP_SCHEME,
+  APP_URL,
+  CSP,
+  appFile,
+  lockNavigation,
+  trustedSender,
+  windowOptions,
+} from "./security";
+import { createVault } from "./vault";
 
 const RENDERER_DIR = fileURLToPath(new URL("../dist", import.meta.url));
 const PRELOAD = fileURLToPath(new URL("../preload/index.cjs", import.meta.url));
@@ -12,6 +22,10 @@ const PRELOAD = fileURLToPath(new URL("../preload/index.cjs", import.meta.url));
 const DEV_URL = app.isPackaged ? undefined : process.env.CONSTELLATION_DEV_URL;
 /** Set by `npm run verify`, which drives the window over CDP. A window that is never shown still paints, and nothing can cover it. */
 const HIDDEN = !app.isPackaged && process.env.CONSTELLATION_WINDOW === "hidden";
+/** The one origin besides `app://` that main answers IPC from: `npm run dev`'s server, or the vite server verify moves the window to after the app loads. */
+const DEV_ORIGIN = app.isPackaged
+  ? undefined
+  : (DEV_URL ?? process.env.CONSTELLATION_VERIFY_ORIGIN);
 
 protocol.registerSchemesAsPrivileged([
   { scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -41,10 +55,20 @@ const start = async () => {
     ]),
   );
   protocol.handle(APP_SCHEME, serve);
-  // Error tracking (step 9) sends these on; until then main accepts a well-formed report and drops it.
-  handle((channel, listener) => ipcMain.handle(channel, listener), {
-    "error.report": async () => {},
-  });
+  const vault = createVault(join(app.getPath("userData"), "vault.json"), safeStorage);
+  handle(
+    (channel, listener) =>
+      ipcMain.handle(channel, (event, input) => listener(event.senderFrame?.url ?? null, input)),
+    trustedSender(DEV_ORIGIN),
+    {
+      // Error tracking (step 9) sends these on; until then main accepts a well-formed report and drops it.
+      "error.report": async () => {},
+      "vault.enroll": ({ key, token }) => vault.enroll(key, token),
+      "vault.keys": async () => vault.keys(),
+      "vault.forget": async ({ key }) => vault.forget(key),
+      "vault.standIn": ({ key }) => vault.standIn(key),
+    },
+  );
   const window = new BrowserWindow({ ...windowOptions(PRELOAD), show: !HIDDEN });
   lockNavigation(window.webContents, (url) => void shell.openExternal(url));
   app.on("second-instance", () => {

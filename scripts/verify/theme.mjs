@@ -1,5 +1,5 @@
 // The light and dark themes: the first frame matches the OS or the stored choice, Settings switches it, text and focus rings clear WCAG AA, and the main screens pass the layout audit in both at 1440x900 and 1280x720.
-import { startBuiltServer } from "../dev-server.mjs";
+import { APP_URL } from "../../src/main/security.ts";
 import { addAiKey } from "./ai-key.mjs";
 
 const SIDEBAR = '[data-testid="sidebar"]';
@@ -214,31 +214,27 @@ const COMBOS = [
 ];
 
 const builtApp = async (t) => {
-  const built = await startBuiltServer();
-  try {
-    await t.cdp("Page.navigate", { url: `${built.origin}/` });
-    await t.waitFor(
-      `location.origin === ${JSON.stringify(built.origin)} && document.readyState === "complete"`,
-      "the built app loads",
+  // app:// serves the build, so this is the shipped app on its own origin.
+  await t.cdp("Page.navigate", { url: APP_URL });
+  await t.waitFor(
+    `location.href.startsWith(${JSON.stringify(APP_URL)}) && document.readyState === "complete"`,
+    "the built app loads",
+  );
+  for (const [scheme, choice, theme] of COMBOS) {
+    const label = `built app, OS ${scheme}, ${choice ?? "no"} choice`;
+    await os(t, scheme);
+    await t.eval(
+      choice
+        ? `localStorage.setItem("constellation.theme", ${JSON.stringify(choice)})`
+        : `localStorage.removeItem("constellation.theme")`,
     );
-    for (const [scheme, choice, theme] of COMBOS) {
-      const label = `built app, OS ${scheme}, ${choice ?? "no"} choice`;
-      await os(t, scheme);
-      await t.eval(
-        choice
-          ? `localStorage.setItem("constellation.theme", ${JSON.stringify(choice)})`
-          : `localStorage.removeItem("constellation.theme")`,
-      );
-      await firstFrames(t, label, theme);
-      const failures = await contrastFailures(t);
-      t.assert(
-        failures.length === 0,
-        `${label}: ${PAIRS.length} text and focus-ring pairs clear WCAG AA`,
-        failures.join("\n      "),
-      );
-    }
-  } finally {
-    await built.close();
+    await firstFrames(t, label, theme);
+    const failures = await contrastFailures(t);
+    t.assert(
+      failures.length === 0,
+      `${label}: ${PAIRS.length} text and focus-ring pairs clear WCAG AA`,
+      failures.join("\n      "),
+    );
   }
 };
 

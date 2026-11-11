@@ -82,7 +82,7 @@ import {
   type Secret,
   type Vault,
 } from "~/shared/providers/provider";
-import { createBrowserVault } from "~/renderer/providers/vault";
+import { createBridgeVault, createBrowserVault } from "~/renderer/providers/vault";
 import {
   DEFAULT_RETRY_POLICY,
   createWriteback,
@@ -1966,7 +1966,8 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
 
 const browserDeps = (): WorkspaceDeps => ({
   storage: localStorage,
-  vault: createBrowserVault(),
+  // The desktop app keeps tokens in main. The web demo has no main process, so it keeps them in IndexedDB.
+  vault: window.constellation ? createBridgeVault(window.constellation) : createBrowserVault(),
   backend: fakeCanvasBackend({}),
   realNow: () => Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),

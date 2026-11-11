@@ -3,7 +3,8 @@
   "compilerOptions": {
     "tsBuildInfoFile": "node_modules/.tmp/preload.tsbuildinfo",
     "lib": ["ES2023"],
-    "types": []
+    "types": [],
+    "paths": { "~/*": ["./src/*"] }
   },
   "include": ["src/preload"]
 }

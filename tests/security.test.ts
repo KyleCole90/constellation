@@ -5,7 +5,14 @@ import { join, resolve } from "node:path";
 import type { WebContents } from "electron";
 import { describe, expect, it } from "vite-plus/test";
 
-import { APP_URL, CSP, appFile, lockNavigation, windowOptions } from "../src/main/security";
+import {
+  APP_URL,
+  CSP,
+  appFile,
+  lockNavigation,
+  trustedSender,
+  windowOptions,
+} from "../src/main/security";
 
 const directives = new Map(
   CSP.split(";").map((part) => {
@@ -132,5 +139,32 @@ describe("app:// protocol", () => {
     "https://constellation/index.html",
   ])("refuses %s", (url) => {
     expect(appFile(ROOT, url)).toBeNull();
+  });
+});
+
+describe("IPC senders", () => {
+  const packaged = trustedSender(undefined);
+  const dev = trustedSender("http://127.0.0.1:4320/");
+
+  it("trust the app's own frames", () => {
+    expect(packaged(APP_URL)).toBe(true);
+    expect(packaged(`${APP_URL}settings/connections`)).toBe(true);
+  });
+
+  it("trust the dev server's origin only when one is set", () => {
+    expect(dev("http://127.0.0.1:4320/settings")).toBe(true);
+    expect(packaged("http://127.0.0.1:4320/settings")).toBe(false);
+  });
+
+  it.each([
+    "app://elsewhere/",
+    "http://127.0.0.1:4321/",
+    "https://example.com/",
+    "file:///Users/me/index.html",
+    "about:blank",
+    "data:text/html,hi",
+    "",
+  ])("refuse %j", (sender) => {
+    expect(dev(sender)).toBe(false);
   });
 });
