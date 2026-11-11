@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { LmsError } from "~/domain/change";
-import type { ChangeId } from "~/domain/ids";
-import type { Submission } from "~/domain/lms";
-import { DEFAULT_RETRY_POLICY, createWriteback } from "~/writeback/writeback";
+import type { LmsError } from "~/shared/domain/change";
+import type { ChangeId } from "~/shared/domain/ids";
+import type { Submission } from "~/shared/domain/lms";
+import { DEFAULT_RETRY_POLICY, createWriteback } from "~/renderer/writeback/writeback";
 
 import { clickWitness } from "./fixtures/changes";
 import { LCC, makeRig, type Rig } from "./fixtures/rig";

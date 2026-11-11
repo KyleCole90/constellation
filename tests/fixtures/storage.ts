@@ -1,4 +1,4 @@
-import type { StorageLike } from "~/providers/fake-canvas/server";
+import type { StorageLike } from "~/shared/providers/fake-canvas/server";
 
 export interface MemoryStorage extends StorageLike {
   keys(): readonly string[];

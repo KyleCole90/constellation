@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { ApprovalWitness, fingerprintOf } from "~/domain/approval";
+import { ApprovalWitness, fingerprintOf } from "~/shared/domain/approval";
 import {
   newChangeRecord,
   transition,
@@ -8,10 +8,10 @@ import {
   type FieldKey,
   type LmsError,
   type RemoteState,
-} from "~/domain/change";
-import type { ChangeId, IsoTime, SchoolId } from "~/domain/ids";
-import { mintSendPermit, type SendPermit } from "~/domain/permit";
-import type { LmsProvider } from "~/providers/provider";
+} from "~/shared/domain/change";
+import type { ChangeId, IsoTime, SchoolId } from "~/shared/domain/ids";
+import { mintSendPermit, type SendPermit } from "~/shared/domain/permit";
+import type { LmsProvider } from "~/shared/providers/provider";
 
 const AT = "2026-10-30T12:00:00.000Z" as IsoTime;
 

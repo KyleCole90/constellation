@@ -6,10 +6,10 @@ import {
   type SchoolHost,
   type SchoolId,
   type ThreadId,
-} from "~/domain/ids";
-import { Secret } from "~/providers/provider";
-import { createMemoryVault } from "~/providers/vault";
-import { WORKSPACE_STORAGE_KEY } from "~/stores/workspace";
+} from "~/shared/domain/ids";
+import { Secret } from "~/shared/providers/provider";
+import { createMemoryVault } from "~/renderer/providers/vault";
+import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 
 import { STORE_TOKEN, makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 

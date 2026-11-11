@@ -56,9 +56,9 @@ Enter or Space on the focused **Approve** button does approve. That press is sti
 
 The hard part of this app is the path from a draft to a grade in Canvas. The screens are comparatively simple, so most of the design effort went into that path.
 
-Before anything goes out, the preview panel shows what will be sent in plain text: the grade, the rubric scores, the feedback, and the announcement or reply text. `previewOf` in `src/domain/preview.ts` builds it from the same content the approval fingerprint covers, so the text you read is the text the send writes. **Approve** and **Send** sit below it. **Send** stays disabled until you press **Approve**.
+Before anything goes out, the preview panel shows what will be sent in plain text: the grade, the rubric scores, the feedback, and the announcement or reply text. `previewOf` in `src/shared/domain/preview.ts` builds it from the same content the approval fingerprint covers, so the text you read is the text the send writes. **Approve** and **Send** sit below it. **Send** stays disabled until you press **Approve**.
 
-Approval is a chain, and the agent has no way onto it. `AgentEffect` in `src/agent/agent.ts` has no approve or send member, and agent output passes through a parser before it does anything. A trusted click on `src/components/ApproveButton.tsx` creates an `ApprovalWitness`. `transition` in `src/domain/approval.ts` accepts that witness only if its fingerprint matches the current content. `src/writeback` mints a `SendPermit` only from the `sending` state, and `provider.apply` refuses anything else. `tests/structure.test.ts` fails if another file creates a witness. Editing moves the change back to `draft`, and the `draft` type has no approval field, so an edited change cannot read as approved.
+Approval is a chain, and the agent has no way onto it. `AgentEffect` in `src/shared/agent/agent.ts` has no approve or send member, and agent output passes through a parser before it does anything. A trusted click on `src/renderer/components/ApproveButton.tsx` creates an `ApprovalWitness`. `transition` in `src/shared/domain/approval.ts` accepts that witness only if its fingerprint matches the current content. `src/renderer/writeback` mints a `SendPermit` only from the `sending` state, and `provider.apply` refuses anything else. `tests/structure.test.ts` fails if another file creates a witness. Editing moves the change back to `draft`, and the `draft` type has no approval field, so an edited change cannot read as approved.
 
 There is one write path. It reads the LMS first, then `classify` decides each field. A conflict writes nothing. A value that is already there counts as landed. Everything else is written, and the provider reports an outcome per field, so a partial write retries only the part that failed.
 
@@ -66,24 +66,24 @@ The worst failure here is a double post, because a duplicate comment on a studen
 
 Three designs competed. I took the one whose providers report facts per field, and I took neutral `RemoteState`, the witness, and the first-send record from the others. I rejected a step-plan design because it doubled the Canvas requests and wrote the grade before the comment. I rejected event sourcing because it needed 18 event types for what `transition` does in one function. I rejected a fake REST server behind a transport layer because it tests the fake more than the app.
 
-Tokens stay out of the UI, logs, and localStorage. A `Secret` prints as `[secret]`. The vault keeps AES-GCM ciphertext and a non-extractable key in IndexedDB. `tests/structure.test.ts` limits `revealSecret` to `src/providers/` and `src/stores/workspace.ts`.
+Tokens stay out of the UI, logs, and localStorage. A `Secret` prints as `[secret]`. The vault keeps AES-GCM ciphertext and a non-extractable key in IndexedDB. `tests/structure.test.ts` limits `revealSecret` to `src/shared/providers/`, `src/renderer/providers/` and `src/renderer/stores/workspace.ts`.
 
 ## The provider interface in plain words
 
-`LmsProvider` in `src/providers/provider.ts` is everything the app knows about an LMS. Each school gets one instance. It does four things:
+`LmsProvider` in `src/shared/providers/provider.ts` is everything the app knows about an LMS. Each school gets one instance. It does four things:
 
 - It reads: `verify`, `courses`, `assignments`, `students`, `submissions`, `conversations`, and `announcements`. Each read returns a whole list, so paging stays inside the provider.
 - It reports what is on the LMS now for one change, through `observe`. It only reads, and it shows every write that landed, including one whose response was lost.
 - It writes, through `apply`. It accepts only a real `SendPermit`, writes the fields the permit names, and reports per field. A field it cannot vouch for comes back `unknown`. It never sleeps on a 429 and never throws.
 - It describes itself, through `describeScope` and `capabilities`. The UI turns off what `capabilities` says is missing. `capabilities.commentEffect` says whether a new comment adds to earlier feedback or replaces it, and the preview says so in a sentence.
 
-A provider holds no retry, backoff, conflict, or duplicate logic. The runner in `src/writeback/writeback.ts` and `classify` own those once, so every vendor gets the same rules.
+A provider holds no retry, backoff, conflict, or duplicate logic. The runner in `src/renderer/writeback/writeback.ts` and `classify` own those once, so every vendor gets the same rules.
 
 Constellation is Canvas-only for now. The interface stays so another LMS can be added later. To add one, write a `ProviderDescriptor`. It names the LMS, its enrollment (`paste-token` or `redirect`), and a `create` function. Onboarding renders from the descriptor and has no vendor branch. Canvas sends a grade and a comment in one `PUT`. An LMS that needs separate requests keeps that difference inside `apply`.
 
 `tests/fixtures/provider-contract.ts` holds `runProviderContract`. The suite runs it against the fake Canvas provider and against a made-up second LMS in `tests/fixtures/second-lms-stub.ts`. The stub replaces feedback rather than adding to it, and it has no messaging. It is a test fixture that proves the interface fits something other than Canvas.
 
-The agent has the same kind of boundary. `Agent` in `src/agent/agent.ts` yields `unknown`, and `parseAgentEffect` checks every effect against what the thread opened. The rule agent goes through that parser too, so a real model can replace it. North Star chats use the same seam. Its `handoff` effect names a course and the work, and the parser refuses a handoff from any other thread.
+The agent has the same kind of boundary. `Agent` in `src/shared/agent/agent.ts` yields `unknown`, and `parseAgentEffect` checks every effect against what the thread opened. The rule agent goes through that parser too, so a real model can replace it. North Star chats use the same seam. Its `handoff` effect names a course and the work, and the parser refuses a handoff from any other thread.
 
 ## Start of term
 
@@ -144,7 +144,7 @@ Code to clean up:
 - `faultLab` uses casts, and the **Demo** section assumes the fake provider.
 - The store is one closure of about 450 lines, and the store builds the fake backend itself.
 - `connect` keeps the previous credential in memory so it can restore it.
-- `src/stores/selectors.ts` has two copies of the check for a submission newer than the sent grade.
+- `src/renderer/stores/selectors.ts` has two copies of the check for a submission newer than the sent grade.
 - The **Edit** banner uses `document.querySelector` and does nothing if the card has unmounted.
 
 Things to find out before real providers:

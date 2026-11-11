@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ChangeRecord } from "~/domain/change";
-import type { CopySource, CourseShell, Migration, SetContent } from "~/domain/content";
-import type { ChangeId, IsoDate, IsoTime, LmsRef, SchoolId, ThreadId } from "~/domain/ids";
-import type { Finding, FindingKey, FindingType } from "~/domain/scan";
+import type { ChangeRecord } from "~/shared/domain/change";
+import type { CopySource, CourseShell, Migration, SetContent } from "~/shared/domain/content";
+import type { ChangeId, IsoDate, IsoTime, LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
+import type { Finding, FindingKey, FindingType } from "~/shared/domain/scan";
 import {
   STEPS,
   canDropFix,
@@ -18,8 +18,8 @@ import {
   type CourseSetup,
   type SetupLive,
   type SetupStage,
-} from "~/domain/setup";
-import type { TermPlan } from "~/domain/term";
+} from "~/shared/domain/setup";
+import type { TermPlan } from "~/shared/domain/term";
 
 import {
   AT,

@@ -1,10 +1,10 @@
-import type { ChangeRecord, CourseCopyContent, TextFixContent } from "~/domain/change";
-import type { CourseContent, CourseShell, Migration, SourceCourse } from "~/domain/content";
-import type { ChangeId, LmsRef, SchoolId } from "~/domain/ids";
-import { scanCourse, type Finding, type FindingType } from "~/domain/scan";
-import { shiftOptionsOf, type TermDates, type TermPlan } from "~/domain/term";
-import { SPRING_2027_BREAKS } from "~/providers/fake-canvas/seed-term";
-import type { TermSetup } from "~/providers/provider";
+import type { ChangeRecord, CourseCopyContent, TextFixContent } from "~/shared/domain/change";
+import type { CourseContent, CourseShell, Migration, SourceCourse } from "~/shared/domain/content";
+import type { ChangeId, LmsRef, SchoolId } from "~/shared/domain/ids";
+import { scanCourse, type Finding, type FindingType } from "~/shared/domain/scan";
+import { shiftOptionsOf, type TermDates, type TermPlan } from "~/shared/domain/term";
+import { SPRING_2027_BREAKS } from "~/shared/providers/fake-canvas/seed-term";
+import type { TermSetup } from "~/shared/providers/provider";
 
 import { unwrap } from "./provider-contract";
 import { makeRig } from "./rig";

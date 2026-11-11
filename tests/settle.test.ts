@@ -5,9 +5,9 @@ import {
   courseRows,
   settledNewestFirst,
   sidebarJumpOrder,
-} from "~/components/sidebar.logic";
-import type { LmsRef, SchoolId } from "~/domain/ids";
-import { GRADING_LIST_THREAD, NORTH_STAR_THREAD, isSettled } from "~/stores/selectors";
+} from "~/renderer/components/sidebar.logic";
+import type { LmsRef, SchoolId } from "~/shared/domain/ids";
+import { GRADING_LIST_THREAD, NORTH_STAR_THREAD, isSettled } from "~/renderer/stores/selectors";
 
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 

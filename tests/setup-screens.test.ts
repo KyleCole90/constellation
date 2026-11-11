@@ -2,17 +2,17 @@ import { createElement, type ReactNode } from "react";
 import { renderToString } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { SetupRail, SetupScreen } from "~/components/setup/SetupScreen";
-import { ReviewCard } from "~/components/setup/ReviewCard";
-import { DueOffers } from "~/components/screens/DueOffers";
-import { SidebarOffers } from "~/components/Sidebar";
-import { ThreadActionsContext, type ThreadActions } from "~/components/thread/context";
-import { summarize } from "~/domain/change";
-import type { Migration } from "~/domain/content";
-import type { ChangeId, IsoTime, LmsRef } from "~/domain/ids";
-import { isOpenRow, reviewRows } from "~/domain/setup";
-import { setupGroupKey } from "~/components/sidebar.logic";
-import type { WorkspaceStore } from "~/stores/workspace";
+import { SetupRail, SetupScreen } from "~/renderer/components/setup/SetupScreen";
+import { ReviewCard } from "~/renderer/components/setup/ReviewCard";
+import { DueOffers } from "~/renderer/components/screens/DueOffers";
+import { SidebarOffers } from "~/renderer/components/Sidebar";
+import { ThreadActionsContext, type ThreadActions } from "~/renderer/components/thread/context";
+import { summarize } from "~/shared/domain/change";
+import type { Migration } from "~/shared/domain/content";
+import type { ChangeId, IsoTime, LmsRef } from "~/shared/domain/ids";
+import { isOpenRow, reviewRows } from "~/shared/domain/setup";
+import { setupGroupKey } from "~/renderer/components/sidebar.logic";
+import type { WorkspaceStore } from "~/renderer/stores/workspace";
 
 import { clickWitness } from "./fixtures/changes";
 import { LCC, RSU } from "./fixtures/rig";
@@ -22,8 +22,8 @@ import { planFor, termOf } from "./fixtures/term";
 const holder = vi.hoisted(() => ({ store: null as unknown }));
 
 // A server render has no subscriptions, so the hook reads the rig's store directly. Each render below shows one moment of the flow.
-vi.mock("~/stores/workspace", async (actual) => {
-  const module = await actual<typeof import("~/stores/workspace")>();
+vi.mock("~/renderer/stores/workspace", async (actual) => {
+  const module = await actual<typeof import("~/renderer/stores/workspace")>();
   const store = () => holder.store as WorkspaceStore;
   return {
     ...module,

@@ -5,11 +5,11 @@ import {
   type CourseCopyContent,
   type SetContent,
   type TextFixContent,
-} from "~/domain/change";
-import type { CourseShell, SourceCourse } from "~/domain/content";
-import type { SchoolId } from "~/domain/ids";
-import { spliceAt } from "~/domain/splice";
-import type { LmsProvider, TermSetup } from "~/providers/provider";
+} from "~/shared/domain/change";
+import type { CourseShell, SourceCourse } from "~/shared/domain/content";
+import type { SchoolId } from "~/shared/domain/ids";
+import { spliceAt } from "~/shared/domain/splice";
+import type { LmsProvider, TermSetup } from "~/shared/providers/provider";
 
 import { permitFor, unwrap } from "./provider-contract";
 import { cartridgeContent, copyContent } from "./term";

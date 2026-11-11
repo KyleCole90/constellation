@@ -1,15 +1,21 @@
-import type { ChangeContent, FieldKey, GradeContent, LmsError, RemoteState } from "~/domain/change";
-import { finalGrade } from "~/domain/change";
-import type { IsoTime, LmsRef, SchoolId } from "~/domain/ids";
-import type { Submission } from "~/domain/lms";
-import { SendPermit } from "~/domain/permit";
+import type {
+  ChangeContent,
+  FieldKey,
+  GradeContent,
+  LmsError,
+  RemoteState,
+} from "~/shared/domain/change";
+import { finalGrade } from "~/shared/domain/change";
+import type { IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
+import type { Submission } from "~/shared/domain/lms";
+import { SendPermit } from "~/shared/domain/permit";
 import type {
   Capabilities,
   CredentialLease,
   FieldOutcomes,
   LmsProvider,
   Read,
-} from "~/providers/provider";
+} from "~/shared/providers/provider";
 
 const CAPABILITIES: Capabilities = {
   messaging: false,

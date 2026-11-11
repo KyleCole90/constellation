@@ -1,5 +1,7 @@
 /** Project lint rules, loaded by `lint.jsPlugins` in vite.config.ts. */
 
+import { dirname, normalize, resolve } from "node:path";
+
 const MESSAGE =
   "Don't spawn `vp {{command}}` as a child process: `vp` doesn't forward SIGTERM, so vite outlives it and keeps the port (#138, #142). " +
   "Serve in-process with vite's JS API: `createServer(...).listen()` (scripts/dev-server.mjs) or `preview(...)`.";
@@ -57,7 +59,7 @@ const noJsonParseCast = {
     messages: {
       cast:
         "Don't cast `JSON.parse` output. Type it `unknown` and parse it into the domain type, " +
-        "returning null on a bad shape (see `readDraftHosts` in src/components/settings/drafts.logic.ts).",
+        "returning null on a bad shape (see `readDraftHosts` in src/renderer/components/settings/drafts.logic.ts).",
     },
   },
   create(context) {
@@ -71,7 +73,48 @@ const noJsonParseCast = {
   },
 };
 
+const PROCESS_FOLDER = /(?:^|\/)src\/(main|preload|renderer|shared)\//i;
+const processOf = (path) => PROCESS_FOLDER.exec(path)?.[1]?.toLowerCase() ?? null;
+
+/** Each process folder imports only itself and `src/shared`, so main-only or renderer-only code can't leak across. */
+const processBoundary = {
+  meta: {
+    type: "problem",
+    messages: {
+      cross:
+        "`src/{{from}}` can't import from `src/{{to}}`. A process folder imports only itself and `src/shared` " +
+        "(docs/electron-spec.md, D15). Move what both sides need into `src/shared`.",
+    },
+  },
+  create(context) {
+    const from = processOf(context.filename);
+    if (!from) return {};
+    const check = (source) => {
+      const spec = source?.value;
+      if (typeof spec !== "string") return;
+      const to = spec.startsWith("~/")
+        ? processOf(normalize(`src/${spec.slice(2)}/`))
+        : spec.startsWith(".")
+          ? processOf(`${resolve(dirname(context.filename), spec)}/`)
+          : null;
+      if (to && to !== from && to !== "shared")
+        context.report({ node: source, messageId: "cross", data: { from, to } });
+    };
+    return {
+      ImportDeclaration: (node) => check(node.source),
+      ExportNamedDeclaration: (node) => check(node.source),
+      ExportAllDeclaration: (node) => check(node.source),
+      ImportExpression: (node) => check(node.source),
+      TSImportType: (node) => check(node.source ?? node.argument?.literal),
+    };
+  },
+};
+
 export default {
   meta: { name: "constellation" },
-  rules: { "no-vp-server-spawn": noVpServerSpawn, "no-json-parse-cast": noJsonParseCast },
+  rules: {
+    "no-vp-server-spawn": noVpServerSpawn,
+    "no-json-parse-cast": noJsonParseCast,
+    "process-boundary": processBoundary,
+  },
 };

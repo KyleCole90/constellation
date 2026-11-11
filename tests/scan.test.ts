@@ -8,11 +8,17 @@ import type {
   CourseShell,
   MigrationIssue,
   TextFixContent,
-} from "~/domain/content";
-import type { IsoDate, IsoTime, LmsRef } from "~/domain/ids";
-import { RULES, scanCourse, type Finding, type FindingType, type ScanContext } from "~/domain/scan";
-import { spliceState } from "~/domain/splice";
-import type { TermPlan } from "~/domain/term";
+} from "~/shared/domain/content";
+import type { IsoDate, IsoTime, LmsRef } from "~/shared/domain/ids";
+import {
+  RULES,
+  scanCourse,
+  type Finding,
+  type FindingType,
+  type ScanContext,
+} from "~/shared/domain/scan";
+import { spliceState } from "~/shared/domain/splice";
+import type { TermPlan } from "~/shared/domain/term";
 
 const d = (text: string): IsoDate => text as IsoDate;
 const PLAN: TermPlan = {

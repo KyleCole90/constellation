@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { ApprovalWitness, fingerprintOf } from "~/domain/approval";
+import { ApprovalWitness, fingerprintOf } from "~/shared/domain/approval";
 import {
   applyPatch,
   classify,
@@ -18,9 +18,9 @@ import {
   zeroPatch,
   type GradeContent,
   type RemoteState,
-} from "~/domain/change";
-import type { LmsRef } from "~/domain/ids";
-import { SendPermit, mintSendPermit } from "~/domain/permit";
+} from "~/shared/domain/change";
+import type { LmsRef } from "~/shared/domain/ids";
+import { SendPermit, mintSendPermit } from "~/shared/domain/permit";
 
 import {
   AT,

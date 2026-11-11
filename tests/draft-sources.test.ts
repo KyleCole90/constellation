@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { ANNOUNCEMENT_DRAFTS, REPLY_DRAFTS, REPLY_SOURCES } from "~/agent/rules/drafts";
-import { SEED } from "~/providers/fake-canvas/seed";
+import { ANNOUNCEMENT_DRAFTS, REPLY_DRAFTS, REPLY_SOURCES } from "~/shared/agent/rules/drafts";
+import { SEED } from "~/shared/providers/fake-canvas/seed";
 
 const course = (code: string) => {
   const found = SEED.courses.find((candidate) => candidate.code === code);

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { fieldsOf, summarize, type FieldKey, type LmsError } from "~/domain/change";
-import type { ChangeId, IsoTime } from "~/domain/ids";
-import type { Submission } from "~/domain/lms";
-import type { Result } from "~/domain/ids";
-import { LMS_STORAGE_KEY } from "~/providers/fake-canvas/server";
-import { DEFAULT_RETRY_POLICY, createWriteback } from "~/writeback/writeback";
+import { fieldsOf, summarize, type FieldKey, type LmsError } from "~/shared/domain/change";
+import type { ChangeId, IsoTime } from "~/shared/domain/ids";
+import type { Submission } from "~/shared/domain/lms";
+import type { Result } from "~/shared/domain/ids";
+import { LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
+import { DEFAULT_RETRY_POLICY, createWriteback } from "~/renderer/writeback/writeback";
 
 import { SimulatedCrash } from "./fixtures/ledger";
 import { LCC, RSU, makeRig, type Rig } from "./fixtures/rig";

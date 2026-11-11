@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ChangeContent } from "~/domain/change";
-import { previewOf, type PreviewField } from "~/domain/preview";
+import type { ChangeContent } from "~/shared/domain/change";
+import { previewOf, type PreviewField } from "~/shared/domain/preview";
 
 import { AT, gradeContent, gradeRemote, held, newDraft, sending, step } from "./fixtures/changes";
 
