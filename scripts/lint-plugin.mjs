@@ -73,8 +73,8 @@ const noJsonParseCast = {
   },
 };
 
-const PROCESS_FOLDER = /(?:^|\/)src\/(main|preload|renderer|shared)\//;
-const processOf = (path) => PROCESS_FOLDER.exec(path)?.[1] ?? null;
+const PROCESS_FOLDER = /(?:^|\/)src\/(main|preload|renderer|shared)\//i;
+const processOf = (path) => PROCESS_FOLDER.exec(path)?.[1]?.toLowerCase() ?? null;
 
 /** Each process folder imports only itself and `src/shared`, so main-only or renderer-only code can't leak across. */
 const processBoundary = {
