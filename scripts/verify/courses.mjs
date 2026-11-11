@@ -78,7 +78,7 @@ const clearOwnShots = async (t) => {
 
 const lms = (t, expression) =>
   t.eval(
-    `(() => { const lms = JSON.parse(localStorage.getItem("lms-app.fake-canvas.v1")); return ${expression}; })()`,
+    `(async () => { const lms = JSON.parse(await window.__faultLab.stored()); return ${expression}; })()`,
   );
 const stored = (t, expression) =>
   t.eval(

@@ -97,6 +97,17 @@ const permitImporters = (sources: readonly SourceFile[]): readonly string[] =>
     )
     .map((file) => file.path);
 
+/** Main rebuilds the renderer's permit from IPC data until step 12 checks it. Nothing else may. */
+const relayers = (sources: readonly SourceFile[]): readonly string[] =>
+  sources
+    .filter(
+      (file) =>
+        /\bSendPermit\.relayed\b/.test(file.text) &&
+        !startsWith(file, "main") &&
+        file.path !== "shared/domain/permit.ts",
+    )
+    .map((file) => file.path);
+
 const FORBIDDEN_FOR_AGENT = [
   "renderer/stores",
   "renderer/writeback",
@@ -227,6 +238,16 @@ describe("who may approve", () => {
 });
 
 describe("who may mint a permit", () => {
+  it("nothing outside src/main rebuilds a relayed permit", () => {
+    expect(relayers(SOURCES)).toEqual([]);
+  });
+
+  it("the check catches the renderer rebuilding one", () => {
+    expect(
+      relayers([fakeFile("renderer/stores/evil.ts", "SendPermit.relayed(id, content, fields);")]),
+    ).toEqual(["renderer/stores/evil.ts"]);
+  });
+
   it("nothing outside src/renderer/writeback imports mintSendPermit", () => {
     expect(permitImporters(SOURCES)).toEqual([]);
   });
@@ -301,15 +322,18 @@ describe("what the agent can name", () => {
 });
 
 describe("how the app finds a vendor", () => {
-  it("only the store's one wiring function and the provider folder name the fake LMS", () => {
+  it("only the provider folder, the store's one wiring function, and the fake's host in main and its channels name the fake LMS", () => {
     const named = SOURCES.filter(
       (file) =>
         !startsWith(file, "shared/providers/fake-canvas") &&
         file.imports.some((entry) => entry.spec.startsWith("shared/providers/fake-canvas")),
     ).map((file) => file.path);
     expect(named.sort()).toEqual([
+      "main/lms.ts",
+      "renderer/providers/lms.ts",
       "renderer/stores/seedThreads.ts",
       "renderer/stores/workspace.ts",
+      "shared/ipc.ts",
     ]);
   });
 });

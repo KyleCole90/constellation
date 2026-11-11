@@ -12,7 +12,7 @@ const TOKEN = "verify-reconnect-token-5f3a91c2e7";
 
 const lms = (t, expression) =>
   t.eval(
-    `(() => { const lms = JSON.parse(localStorage.getItem("lms-app.fake-canvas.v1")); return ${expression}; })()`,
+    `(async () => { const lms = JSON.parse(await window.__faultLab.stored()); return ${expression}; })()`,
   );
 const submissionIn = (student, short) =>
   `lms.submissions.find((s) => s.studentName === ${JSON.stringify(student)} && s.assignment === lms.assignments.find((a) => a.shortTitle === ${JSON.stringify(short)})?.ref)`;
@@ -26,7 +26,7 @@ const tagOf = (t, subject) =>
   );
 const lab = (t, call) => t.eval(`void window.__faultLab.${call}`);
 const refOf = (student, short) =>
-  `window.__faultLab.findSubmission(${JSON.stringify(student)}, ${JSON.stringify(short)})`;
+  `(await window.__faultLab.findSubmission(${JSON.stringify(student)}, ${JSON.stringify(short)}))`;
 
 const settled = (t, label) =>
   t.waitFor(`!document.querySelector('[data-testid="agent-working"]')`, label);
@@ -962,7 +962,7 @@ const conflict = async (t) => {
   await writeBackTab(t);
   await approve(t, subject);
   await t.eval(
-    `void window.__faultLab.changeGradeOutOfBand(${refOf("Aaliyah Brooks", "Essay 2")}, 65, "Jordan Pike (TA)")`,
+    `(async () => void window.__faultLab.changeGradeOutOfBand(${refOf("Aaliyah Brooks", "Essay 2")}, 65, "Jordan Pike (TA)"))()`,
   );
   await clickSend(t);
   await t.waitFor(
@@ -1161,7 +1161,7 @@ const inDoubt = async (t) => {
     20_000,
   );
   await t.waitFor(
-    `(() => { const lms = JSON.parse(localStorage.getItem("lms-app.fake-canvas.v1")); return ${submissionIn("Ian McCreedy", "Annotated Bibliography")}.comments.filter((c) => c.mine).length === ${before + 1}; })()`,
+    `(async () => { const lms = JSON.parse(await window.__faultLab.stored()); return ${submissionIn("Ian McCreedy", "Annotated Bibliography")}.comments.filter((c) => c.mine).length === ${before + 1}; })()`,
     "the late write lands by itself",
     10_000,
   );

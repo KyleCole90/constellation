@@ -63,6 +63,13 @@ const SCOPE_WORDS: Readonly<Record<string, string>> = {
   "url:DELETE|/api/v1/courses/:course_id/discussion_topics/:topic_id": "Delete an announcement",
 };
 const SCOPES = Object.keys(SCOPE_WORDS);
+
+/** What the app knows about the fake Canvas without asking it, wherever the fake itself runs. */
+export const FAKE_CANVAS_FACE = {
+  vendorLabel: "Canvas",
+  capabilities: CAPABILITIES,
+  describeScope: (scope: string) => SCOPE_WORDS[scope] ?? scope,
+} satisfies Pick<LmsProvider, "vendorLabel" | "capabilities" | "describeScope">;
 const MIN_TOKEN_LENGTH = 20;
 
 /** The Canvas path for one content item. The syllabus is a course field, so it goes through the course itself. */
@@ -298,8 +305,7 @@ const createFakeCanvasProvider = (
   };
 
   return {
-    vendorLabel: "Canvas",
-    capabilities: CAPABILITIES,
+    ...FAKE_CANVAS_FACE,
     verify: () =>
       read({ ...route("read", "GET /api/v1/users/self"), verify: true }, () => ({
         displayName: INSTRUCTOR,
@@ -352,15 +358,12 @@ const createFakeCanvasProvider = (
         });
       return allFields(fields, { status: "failed", error });
     },
-    describeScope: (scope) => SCOPE_WORDS[scope] ?? scope,
     termSetup,
   };
 };
 
-export const createFakeCanvasDescriptor = (
-  server: FakeCanvasServer,
-  now: () => number,
-): ProviderDescriptor => ({
+/** The fake Canvas as onboarding shows it. `create` is the one part that needs the fake itself. */
+export const FAKE_CANVAS: Omit<ProviderDescriptor, "create"> = {
   kind: "fake-canvas",
   label: "Canvas",
   enrollment: {
@@ -379,5 +382,12 @@ export const createFakeCanvasDescriptor = (
     addressPlaceholder: "school.instructure.com",
     tokenPageUrl: (host) => `https://${host}/profile/settings`,
   },
+};
+
+export const createFakeCanvasDescriptor = (
+  server: FakeCanvasServer,
+  now: () => number,
+): ProviderDescriptor => ({
+  ...FAKE_CANVAS,
   create: ({ school, lease }) => createFakeCanvasProvider(server, now, school, lease),
 });

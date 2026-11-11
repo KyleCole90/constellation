@@ -592,7 +592,7 @@ const lateWaiveAndOverride = async (t) => {
     20_000,
   );
   const lms = await t.eval(
-    `JSON.parse(localStorage.getItem("lms-app.fake-canvas.v1")).submissions.find((s) => s.studentName === ${JSON.stringify(name)} && s.ref.includes("310588"))?.grade ?? null`,
+    `(async () => JSON.parse(await window.__faultLab.stored()).submissions.find((s) => s.studentName === ${JSON.stringify(name)} && s.ref.includes("310588"))?.grade ?? null)()`,
   );
   t.assert(lms === 45, `the LMS holds the teacher's total for ${name}`, String(lms));
   await t.shot("grading-list-late-override-sent", null);

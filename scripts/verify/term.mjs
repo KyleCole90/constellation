@@ -21,7 +21,7 @@ const clearOwnShots = async (t) => {
 
 const lms = (t, expression) =>
   t.eval(
-    `(() => { const lms = JSON.parse(localStorage.getItem("lms-app.fake-canvas.v1")); return ${expression}; })()`,
+    `(async () => { const lms = JSON.parse(await window.__faultLab.stored()); return ${expression}; })()`,
   );
 const count = (t, selector) =>
   t.eval(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
@@ -503,7 +503,7 @@ const approveAndSendRightAfterTicking = async (t, code, approved, ticked) => {
   t.assert(
     await until(
       t,
-      `${writes} + 2 === JSON.parse(localStorage.getItem("lms-app.fake-canvas.v1")).writeLog.length`,
+      `(async () => ${writes} + 2 === JSON.parse(await window.__faultLab.stored()).writeLog.length)()`,
       8000,
     ),
     `${code}: Send right after ticking sends both ticked rows and no others`,
