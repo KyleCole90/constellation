@@ -1,6 +1,6 @@
 /** Project lint rules, loaded by `lint.jsPlugins` in vite.config.ts. */
 
-import { dirname, resolve } from "node:path";
+import { dirname, normalize, resolve } from "node:path";
 
 const MESSAGE =
   "Don't spawn `vp {{command}}` as a child process: `vp` doesn't forward SIGTERM, so vite outlives it and keeps the port (#138, #142). " +
@@ -93,7 +93,7 @@ const processBoundary = {
       const spec = source?.value;
       if (typeof spec !== "string") return;
       const to = spec.startsWith("~/")
-        ? processOf(`src/${spec.slice(2)}/`)
+        ? processOf(normalize(`src/${spec.slice(2)}/`))
         : spec.startsWith(".")
           ? processOf(`${resolve(dirname(context.filename), spec)}/`)
           : null;

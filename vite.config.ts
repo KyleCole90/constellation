@@ -1,3 +1,4 @@
+import { builtinModules } from "node:module";
 import { fileURLToPath, URL } from "node:url";
 
 import tailwindcss from "@tailwindcss/vite";
@@ -17,6 +18,8 @@ const IGNORED = [
 
 const ELECTRON_ONLY_IN_MAIN =
   "`electron` belongs to src/main and src/preload. The renderer reaches main through `window.constellation` (docs/electron-spec.md, D16).";
+const NODE_ONLY_IN_MAIN =
+  "Node builtins belong to src/main. src/shared is pure code both processes run, and the renderer gets no Node access (docs/electron-spec.md, D5, D15).";
 const RENDERER_IS_UNTRUSTED =
   "The renderer is untrusted and gets no network or Node access. Ask main over IPC (docs/electron-spec.md, D5).";
 
@@ -127,8 +130,14 @@ export default defineConfig({
           "eslint/no-restricted-imports": [
             "error",
             {
-              paths: [{ name: "electron", message: ELECTRON_ONLY_IN_MAIN }],
-              patterns: [{ group: ["electron/*"], message: ELECTRON_ONLY_IN_MAIN }],
+              paths: [
+                { name: "electron", message: ELECTRON_ONLY_IN_MAIN },
+                ...builtinModules.map((name) => ({ name, message: NODE_ONLY_IN_MAIN })),
+              ],
+              patterns: [
+                { group: ["electron/*"], message: ELECTRON_ONLY_IN_MAIN },
+                { group: ["node:*", "node:*/**"], message: NODE_ONLY_IN_MAIN },
+              ],
             },
           ],
         },
