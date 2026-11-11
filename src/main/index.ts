@@ -1,6 +1,8 @@
 import { pathToFileURL, fileURLToPath } from "node:url";
 
-import { app, BrowserWindow, Menu, net, protocol, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from "electron";
+
+import { handle } from "../shared/ipc";
 
 import { APP_SCHEME, APP_URL, CSP, appFile, lockNavigation, windowOptions } from "./security";
 
@@ -39,6 +41,10 @@ const start = async () => {
     ]),
   );
   protocol.handle(APP_SCHEME, serve);
+  // Error tracking (step 9) sends these on; until then main accepts a well-formed report and drops it.
+  handle((channel, listener) => ipcMain.handle(channel, listener), {
+    "error.report": async () => {},
+  });
   const window = new BrowserWindow({ ...windowOptions(PRELOAD), show: !HIDDEN });
   lockNavigation(window.webContents, (url) => void shell.openExternal(url));
   app.on("second-instance", () => {

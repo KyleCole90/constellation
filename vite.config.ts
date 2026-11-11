@@ -20,6 +20,8 @@ const ELECTRON_ONLY_IN_MAIN =
   "`electron` belongs to src/main and src/preload. The renderer reaches main through `window.constellation` (docs/electron-spec.md, D16).";
 const NODE_ONLY_IN_MAIN =
   "Node builtins belong to src/main. src/shared is pure code both processes run, and the renderer gets no Node access (docs/electron-spec.md, D5, D15).";
+const IPC_THROUGH_THE_MAP =
+  "`ipcMain` belongs to src/main/index.ts and `ipcRenderer` to src/preload/index.ts. Add a channel to src/shared/ipc.ts instead (docs/electron-spec.md, D16).";
 const RENDERER_IS_UNTRUSTED =
   "The renderer is untrusted and gets no network or Node access. Ask main over IPC (docs/electron-spec.md, D5).";
 
@@ -47,7 +49,8 @@ export default defineConfig({
       entry: "src/preload/index.ts",
       outDir: "out/preload",
       format: "cjs",
-      deps: { neverBundle: ["electron"] },
+      // A sandboxed preload can require only `electron`, so everything else it imports goes in its bundle.
+      deps: { neverBundle: ["electron"], alwaysBundle: ["valibot"] },
     },
   ],
   test: {
@@ -152,6 +155,24 @@ export default defineConfig({
               patterns: [
                 { group: ["electron/*"], message: ELECTRON_ONLY_IN_MAIN },
                 { group: ["node:*", "node:*/**"], message: NODE_ONLY_IN_MAIN },
+              ],
+            },
+          ],
+        },
+      },
+      {
+        files: ["src/main/**", "src/preload/**"],
+        excludeFiles: ["src/main/index.ts", "src/preload/index.ts"],
+        rules: {
+          "eslint/no-restricted-imports": [
+            "error",
+            {
+              paths: [
+                {
+                  name: "electron",
+                  importNames: ["ipcMain", "ipcRenderer"],
+                  message: IPC_THROUGH_THE_MAP,
+                },
               ],
             },
           ],

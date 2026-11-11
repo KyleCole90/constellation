@@ -1,4 +1,8 @@
-import { contextBridge } from "electron";
+import { contextBridge, ipcRenderer } from "electron";
 
-/** The renderer's only door to main. It has no channels yet; the typed IPC map adds them (docs/electron-spec.md, D16). */
-contextBridge.exposeInMainWorld("constellation", {});
+import { invoker, type Bridge } from "../shared/ipc";
+
+/** The renderer's only door to main. It never sees `ipcRenderer` (docs/electron-spec.md, D16). */
+contextBridge.exposeInMainWorld("constellation", {
+  invoke: invoker((channel, input) => ipcRenderer.invoke(channel, input)),
+} satisfies Bridge);
