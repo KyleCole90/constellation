@@ -294,7 +294,8 @@ const main = async () => {
 
     const waitPoint = async (query, within, nth, timeout) => {
       const end = Date.now() + timeout;
-      // A point only counts once it holds still. A click aimed at something still sliding or reflowing lands beside it.
+      // A point only counts once it holds still across a painted frame. A click aimed at something still sliding or reflowing lands beside it.
+      // Time between samples is not enough. Headless Chrome on a hosted runner can go 100ms without a frame, and reflows from a ResizeObserver or an animation start only on the next one.
       let last = null;
       for (;;) {
         const point = await hitPoint(query, within, nth);
@@ -304,7 +305,9 @@ const main = async () => {
           throw new Error(
             `nothing clickable for ${JSON.stringify(query)}${within ? ` within ${within}` : ""}`,
           );
-        await sleep(POLL_MS);
+        await evaluate(
+          `new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))`,
+        );
       }
     };
 
