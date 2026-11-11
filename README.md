@@ -2,6 +2,8 @@
 
 Each school is a star in your academic journey.
 
+Licensed under AGPL-3.0. See [LICENSE](LICENSE).
+
 Constellation is a prototype. An adjunct who teaches at two schools runs their week from one workspace. A course is a project, a task is a thread, and a proposed Canvas change is a plain preview that a person reads and approves. North Star is home, above every course. Each ask starts a chat that stays in the sidebar, and every return home is clean. A chat answers questions, finds things, and hands work to the right course thread or threads. The grading list opens from What's due. The data is invented and the only LMS is a fake one in the browser. The app makes no real LMS calls.
 
 **Calendar** shows every assignment at every school by the day it is due, with one row per course. Select a day to list what is due that day beside the grid.

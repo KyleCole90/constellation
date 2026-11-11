@@ -284,6 +284,19 @@ const useChatScroll = (thread: Thread, ui: ThreadUi, stickOn: string | undefined
     return () => observer.disconnect();
   }, [screen]);
 
+  // The open card can change height without a render here, as when the agent finishes inside it, which moves where it rests.
+  const refit = useEffectEvent((el: HTMLElement) => {
+    if (anchor.current === "card") place(el);
+  });
+  useEffect(() => {
+    const el = scroller.current;
+    const slot = el?.querySelector(`[data-change="${thread.focus}"]`)?.closest(".focused-slot");
+    if (!el || !slot) return;
+    const observer = new ResizeObserver(() => refit(el));
+    observer.observe(slot);
+    return () => observer.disconnect();
+  }, [thread.focus]);
+
   useEffect(
     () => () => {
       window.clearTimeout(saveTimer.current);

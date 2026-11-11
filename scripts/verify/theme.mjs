@@ -12,10 +12,7 @@ const SIZES = [
 ];
 const THEMES = ["light", "dark"];
 
-const os = (t, scheme) =>
-  t.cdp("Emulation.setEmulatedMedia", {
-    features: [{ name: "prefers-color-scheme", value: scheme }],
-  });
+const os = (t, scheme) => t.media({ "prefers-color-scheme": scheme });
 
 // The mean brightness of each painted frame, so a frame shown in the other theme before the stylesheet or the app loads shows up.
 const SIDE_OF_FRAMES = `async (frames) => {

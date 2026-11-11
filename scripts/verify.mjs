@@ -233,11 +233,17 @@ const main = async () => {
       await send("Page.enable");
       await send("Runtime.enable");
       await send("Log.enable");
-      // Every module but theme sees the dark theme, whatever the machine's own setting.
-      await send("Emulation.setEmulatedMedia", {
-        features: [{ name: "prefers-color-scheme", value: "dark" }],
-      });
+      await media({});
     };
+    // Every module sees the dark theme and full motion, whatever the machine's own settings. A module overrides one by name, and the rest keep these.
+    const media = (features) =>
+      send("Emulation.setEmulatedMedia", {
+        features: Object.entries({
+          "prefers-color-scheme": "dark",
+          "prefers-reduced-motion": "no-preference",
+          ...features,
+        }).map(([name, value]) => ({ name, value })),
+      });
     await freshPage();
 
     const locate = (query, within, nth) =>
@@ -288,7 +294,8 @@ const main = async () => {
 
     const waitPoint = async (query, within, nth, timeout) => {
       const end = Date.now() + timeout;
-      // A point only counts once it holds still. A click aimed at something still sliding or reflowing lands beside it.
+      // A point only counts once it holds still across a painted frame. A click aimed at something still sliding or reflowing lands beside it.
+      // Time between samples is not enough. Headless Chrome on a hosted runner can go 100ms without a frame, and reflows from a ResizeObserver or an animation start only on the next one.
       let last = null;
       for (;;) {
         const point = await hitPoint(query, within, nth);
@@ -298,7 +305,9 @@ const main = async () => {
           throw new Error(
             `nothing clickable for ${JSON.stringify(query)}${within ? ` within ${within}` : ""}`,
           );
-        await sleep(POLL_MS);
+        await evaluate(
+          `new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))`,
+        );
       }
     };
 
@@ -308,6 +317,7 @@ const main = async () => {
       sleep,
       consoleEntries,
       cdp: send,
+      media,
       /** Calls `handler` with each CDP event named `method` until the returned function stops it. */
       on(method, handler) {
         listeners.set(method, handler);

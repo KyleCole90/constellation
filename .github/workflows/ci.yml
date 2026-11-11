@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Every job runs on a GitHub-hosted runner. The repo is public, so a fork PR must never reach a self-hosted
+# machine. `vp` comes from the vite-plus devDependency in node_modules/.bin, which npm scripts put on PATH.
+jobs:
+  lint:
+    name: Lint
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run knip
+
+  build:
+    name: Build
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+  test:
+    name: Test
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  # `npm run verify` drives the real app in headless Chrome. It takes about 5 minutes.
+  verify:
+    name: Verify
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      # Same lookup as scripts/verify.mjs. The macos-15 image ships Google Chrome in /Applications.
+      - name: Require Google Chrome
+        run: |
+          chrome="${CHROME_BIN:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
+          test -x "$chrome" || { echo "::error::Chrome not found at $chrome. Set CHROME_BIN."; exit 1; }
+          "$chrome" --version
+      - run: npm ci
+      - run: npm run verify
+      - name: Upload screenshots
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: verify-screenshots
+          path: out/screenshots/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  # Branch protection on main requires this job by its name, `Check`. Add every new job to `needs`.
+  # `always()` so a failed or cancelled dependency still produces a failing Check instead of a skip.
+  check:
+    name: Check
+    if: ${{ always() }}
+    needs: [lint, build, test, verify]
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to pass
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' > /dev/null
+
+  deploy-demo:
+    name: Deploy demo
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [check]
+    runs-on: macos-15
+    # Holds CLOUDFLARE_API_TOKEN. Its branch policy allows only main.
+    environment:
+      name: production
+      url: https://constellation-demo.pages.dev
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-demo
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: test -s out/dist/index.html
+      - name: Publish to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: e26e86699020e0fcab99fe4d68a10a87
+        run: npx wrangler pages deploy out/dist --project-name constellation-demo --branch main --commit-hash "$GITHUB_SHA" --commit-dirty=false
