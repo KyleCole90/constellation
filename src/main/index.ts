@@ -14,7 +14,9 @@ import {
 } from "electron";
 import electronUpdater from "electron-updater";
 
-import { RULES_AGENT_SWITCH, handle } from "../shared/ipc";
+import * as v from "valibot";
+
+import { RULES_AGENT_SWITCH, errorReport, handle } from "../shared/ipc";
 
 import {
   APP_SCHEME,
@@ -27,6 +29,8 @@ import {
 } from "./security";
 import { createFileStorage, fakeServer, lmsHandlers } from "./lms";
 import { anthropicAgent } from "./providers/anthropic";
+import { jsonFile } from "./json-file";
+import { createTelemetry } from "./telemetry";
 import { startUpdates } from "./updates";
 import { createVault } from "./vault";
 
@@ -83,6 +87,31 @@ const start = async () => {
   );
   protocol.handle(APP_SCHEME, serve);
   const userData = app.getPath("userData");
+  const choice = jsonFile(
+    join(userData, "telemetry.json"),
+    v.strictObject({ enabled: v.boolean() }),
+    { enabled: true },
+  );
+  const telemetry = createTelemetry({
+    // Both are baked in by `vp pack` from the build's environment (vite.config.ts). A build without a key sends nothing.
+    key: process.env.CONSTELLATION_POSTHOG_KEY ?? "",
+    host: process.env.CONSTELLATION_POSTHOG_HOST || "https://us.i.posthog.com",
+    env: process.env.CONSTELLATION_TELEMETRY_ENABLED,
+    offline: FAKE_ONLY,
+    choice: { read: () => choice.read().enabled, write: (enabled) => choice.write({ enabled }) },
+    appVersion: app.getVersion(),
+    os: `${process.platform} ${process.arch}`,
+    osVersion: process.getSystemVersion(),
+    send: (url, body) =>
+      net.fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body }),
+  });
+  const reportMain = (error: unknown) => {
+    const { type, stack } = errorReport(error);
+    void telemetry.report(type, stack, "main");
+  };
+  // Both only watch: a monitor leaves an uncaught error's crash as it was, and Electron's main still warns on a rejection.
+  process.on("uncaughtExceptionMonitor", reportMain);
+  process.on("unhandledRejection", reportMain);
   const vault = createVault(join(userData, "vault.json"), safeStorage);
   const lms = lmsHandlers({
     makeServer: fakeServer(createFileStorage(join(userData, "lms.json"))),
@@ -117,8 +146,9 @@ const start = async () => {
       ipcMain.handle(channel, (event, input) => listener(event.senderFrame?.url ?? null, input)),
     trustedSender(DEV_ORIGIN),
     {
-      // Error tracking (step 9) sends these on; until then main accepts a well-formed report and drops it.
-      "error.report": async () => {},
+      "error.report": ({ type, stack }) => telemetry.report(type, stack, "renderer"),
+      "telemetry.status": async () => telemetry.status(),
+      "telemetry.choose": async ({ enabled }) => telemetry.choose(enabled),
       "vault.enroll": ({ key, token }) => vault.enroll(key, token),
       "vault.keys": async () => vault.keys(),
       "vault.forget": async ({ key }) => vault.forget(key),

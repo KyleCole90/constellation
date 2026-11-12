@@ -281,6 +281,8 @@ describe("an AI-drafted grade, end to end", () => {
       (sender) => sender === APP,
       {
         "error.report": async () => {},
+        "telemetry.status": async () => ({ enabled: true, available: false }),
+        "telemetry.choose": async () => {},
         "vault.enroll": async () => {},
         "vault.keys": async () => [],
         "vault.forget": async () => {},

@@ -1,4 +1,4 @@
-import { REAL_AI, VAULT_PLACE } from "~/renderer/desktop";
+import { REAL_AI, VAULT_PLACE, desktopBridge } from "~/renderer/desktop";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { Check, Lock } from "lucide-react";
 import { useState } from "react";
@@ -12,6 +12,7 @@ import { useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 import { Brand, PRODUCT_NAME } from "../Brand";
 import { isMacDevice } from "../device";
 import { AiKeyForm } from "../settings/AiKeyForm";
+import { CrashReportsToggle, PrivacyNotice } from "../settings/Privacy";
 import {
   AddressField,
   Dot,
@@ -301,6 +302,22 @@ export function SetupScreen() {
           </section>
 
           <AiChoices choice={choice} onChoose={setChoice} disabled={connected === 0} />
+
+          <section data-testid="setup-privacy" className="flex flex-col gap-3">
+            <SectionTitle number={3}>Privacy</SectionTitle>
+            <p className="text-meta text-muted-foreground">
+              {desktopBridge
+                ? "There is no Constellation server. Only your school, Anthropic with your key, and scrubbed crash reports hear from this Mac."
+                : "This web demo sends nothing anywhere."}
+            </p>
+            <CrashReportsToggle />
+            <details className="rounded-xl border border-border bg-card px-card py-3">
+              <summary className="cursor-pointer text-body">Read the privacy notice</summary>
+              <div className="pt-3">
+                <PrivacyNotice />
+              </div>
+            </details>
+          </section>
         </div>
 
         <aside

@@ -4,11 +4,14 @@ import ReactDOM from "react-dom/client";
 
 import "./index.css";
 
+import { reportError } from "./desktop";
 import { keepFocusOnThePage } from "./lib/lostFocus";
 import { router } from "./router";
 import { faultLab, workspaceStore } from "./stores/workspace";
 
 const start = async () => {
+  window.addEventListener("error", (event) => reportError(event.error));
+  window.addEventListener("unhandledrejection", (event) => reportError(event.reason));
   if (import.meta.env.DEV) {
     const lab = faultLab();
     Object.assign(window, { __faultLab: lab });

@@ -33,6 +33,20 @@ import {
  */
 const RendererError = v.strictObject({ type: v.string(), stack: v.string() });
 
+/**
+ * An error's type and its stack frames, without its message. V8 starts a stack with `name: message`, and a message can
+ * span lines that read like frames, so that header goes before the stack leaves its process. Main scrubs what's left.
+ */
+export const errorReport = (error: unknown): v.InferOutput<typeof RendererError> => {
+  if (!(error instanceof Error)) return { type: "NonError", stack: "" };
+  const stack = error.stack ?? "";
+  const header = String(error);
+  return {
+    type: error.name,
+    stack: stack.startsWith(header) ? stack.slice(header.length) : "",
+  };
+};
+
 /** A school's id or `ai-key`. Main can't check a school id against anything yet, so any non-empty string passes. */
 export const VaultKeySchema = v.custom<VaultKey>(
   (input) => typeof input === "string" && input !== "",
@@ -71,6 +85,12 @@ interface Channel {
 /** Every channel between the renderer and main, declared once (docs/electron-spec.md, D16). */
 const ipc = {
   "error.report": { input: RendererError, output: v.void() },
+  /** Whether crash reports are on (the teacher's choice), and whether this build and launch can send any. */
+  "telemetry.status": {
+    input: v.void(),
+    output: v.strictObject({ enabled: v.boolean(), available: v.boolean() }),
+  },
+  "telemetry.choose": { input: v.strictObject({ enabled: v.boolean() }), output: v.void() },
   "vault.enroll": {
     input: v.strictObject({ key: VaultKeySchema, token: v.pipe(v.string(), v.minLength(1)) }),
     output: v.void(),

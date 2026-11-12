@@ -83,6 +83,8 @@ export const bridgedLms = (
     (sender) => sender === APP,
     {
       "error.report": record,
+      "telemetry.status": async () => ({ enabled: true, available: false }),
+      "telemetry.choose": async () => {},
       "vault.enroll": record,
       "vault.keys": async () => [],
       "vault.forget": record,

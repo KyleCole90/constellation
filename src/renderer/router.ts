@@ -1,9 +1,10 @@
 import { createRouter } from "@tanstack/react-router";
 
 import type { ThreadId } from "~/shared/domain/ids";
+import { reportError } from "./desktop";
 import { routeTree } from "./routeTree.gen";
 
-export const router = createRouter({ routeTree });
+export const router = createRouter({ routeTree, defaultOnCatch: reportError });
 
 declare module "@tanstack/react-router" {
   interface Register {

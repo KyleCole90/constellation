@@ -149,6 +149,8 @@ const bridged = () => {
     (sender) => sender === APP,
     {
       "error.report": async () => {},
+      "telemetry.status": async () => ({ enabled: true, available: false }),
+      "telemetry.choose": async () => {},
       "vault.enroll": ({ key, token }) => main.enroll(key, token),
       "vault.keys": async () => main.keys(),
       "vault.forget": async ({ key }) => main.forget(key),

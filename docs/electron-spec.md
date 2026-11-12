@@ -37,12 +37,12 @@ Electron was chosen on 2026-11-10 and isn't reopened here. GPUI was dropped beca
 
 ### Processes and folders (D5, D15)
 
-| Folder          | Runs in                                        | May use                                                                                                | Must not use                                    |
-| --------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| `src/main/`     | Electron main (Node)                           | `electron`, Node, `fetch`, `safeStorage`, the Anthropic SDK, `posthog-node` (in `main/telemetry` only) | DOM                                             |
-| `src/preload/`  | Sandboxed preload                              | `contextBridge` and `ipcRenderer`, in one file                                                         | Anything else                                   |
-| `src/renderer/` | Renderer: today's app, also the web demo build | DOM, React, `shared`                                                                                   | `electron`, Node, `fetch`, `process`, `require` |
-| `src/shared/`   | Both sides                                     | Pure TypeScript: domain types, valibot schemas, parsers, the IPC map, and the fake Canvas              | DOM, Node, `electron`                           |
+| Folder          | Runs in                                        | May use                                                                                                       | Must not use                                    |
+| --------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `src/main/`     | Electron main (Node)                           | `electron`, Node, `fetch`, `safeStorage`, the Anthropic SDK, PostHog's capture API (in `main/telemetry` only) | DOM                                             |
+| `src/preload/`  | Sandboxed preload                              | `contextBridge` and `ipcRenderer`, in one file                                                                | Anything else                                   |
+| `src/renderer/` | Renderer: today's app, also the web demo build | DOM, React, `shared`                                                                                          | `electron`, Node, `fetch`, `process`, `require` |
+| `src/shared/`   | Both sides                                     | Pure TypeScript: domain types, valibot schemas, parsers, the IPC map, and the fake Canvas                     | DOM, Node, `electron`                           |
 
 Each folder has its own tsconfig: the renderer gets DOM types and no Node types, main gets Node types and no DOM. A lint rule fails any cross-folder import except one into `shared`.
 
@@ -159,8 +159,7 @@ Every rule here has an enforcer. The CLAUDE.md table lists only enforced rules, 
 | `webPreferences`, CSP, navigation lock and fuses stay set    | `tests/security.test.ts` on the window options and fuse config, plus a verify step that reads the live CSP          | 3      |
 | A packaged build refuses `--remote-debugging-port`           | `smoke:packaged`                                                                                                    | 7      |
 | `revealSecret` stays in main's providers and vault           | `tests/structure.test.ts`                                                                                           | 6      |
-| `posthog-*` imports only in `main/telemetry`                 | `no-restricted-imports`                                                                                             | 9      |
-| No student data in error reports                             | A payload test seeds a student name, an email and a course URL into errors, and fails if any appears                | 9      |
+| Error reports carry no message text and no student data      | `tests/telemetry.test.ts` plants student data in a main error and a renderer stack, and fails if any appears        | 9      |
 | Canvas paging and throttling behave                          | Provider unit tests over recorded real responses                                                                    | 10     |
 | The Canvas provider honours the contract                     | `runProviderContract` in CI against the fake; `contract:live` by hand before writeback ships                        | 10, 11 |
 | Electron stays current                                       | Dependabot plus the pin                                                                                             | 7      |
