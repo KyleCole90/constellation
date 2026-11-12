@@ -15,9 +15,13 @@ export const startUpdates = (updater: Updater, ready: (version: string) => Promi
   // Offline, or no release yet: the next launch checks again. Error tracking (step 9) will report these.
   updater.on("error", () => {});
   updater.on("update-downloaded", ({ version }) => {
-    void ready(version).then((restart) => {
-      if (restart) updater.quitAndInstall();
-    });
+    ready(version).then(
+      (restart) => {
+        if (restart) updater.quitAndInstall();
+      },
+      // The sheet failed to show: the update still installs on quit.
+      () => {},
+    );
   });
   updater.checkForUpdates().catch(() => {});
 };

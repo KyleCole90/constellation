@@ -44,8 +44,8 @@ const DEV_ORIGIN = app.isPackaged
 const FAKE_ONLY = !app.isPackaged && process.env.CONSTELLATION_LMS === "fake";
 /** Only the unpackaged app takes CDP. A packaged app quits before it opens a window (`npm run smoke:packaged`). */
 /**
- * Baked in by `CONSTELLATION_UPDATES=on npm run build`, which only the release workflow runs. Squirrel.Mac installs an
- * update only over a Developer ID build, so an unsigned build (`npm run smoke:packaged`, a local package) never checks.
+ * Baked in by `CONSTELLATION_UPDATES=on npm run build`, which only the release workflow runs. Every other build bakes
+ * in `false`, so an unsigned build (`npm run smoke:packaged`, a local package) never checks.
  */
 const UPDATES = app.isPackaged && process.env.CONSTELLATION_UPDATES === "on";
 const DEBUGGER_ASKED =
