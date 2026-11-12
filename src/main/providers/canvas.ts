@@ -219,6 +219,8 @@ const bodyOf = (html: string | null): SubmissionBody => {
 };
 
 const PER_PAGE = 100;
+/** A list longer than this many pages is a Canvas fault (a looping or endless `next`), not a course. */
+const MAX_PAGES = 100;
 
 /** `fetch` as the provider calls it. Main passes Electron's `net.fetch`, which uses the system's proxy and certificates. */
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
@@ -270,12 +272,11 @@ export const createCanvasProvider = (deps: {
       const first = new URL(`${origin}/api/v1${path}`);
       first.searchParams.set("per_page", String(PER_PAGE));
       const rows: v.InferOutput<T>[] = [];
-      const visited = new Set<string>();
+      let pages = 0;
       for (let next: string | null = first.toString(); next !== null;) {
         const url: string = next;
-        if (visited.has(url) || !URL.canParse(url) || new URL(url).origin !== origin)
+        if (++pages > MAX_PAGES || !URL.canParse(url) || new URL(url).origin !== origin)
           return unreadable("a page link");
-        visited.add(url);
         const result = await revealSecret(secret, (token) => page(url, token));
         if (!result.ok) return result;
         const parsed = v.safeParse(v.array(row), result.value.body);

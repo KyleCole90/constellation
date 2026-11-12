@@ -176,6 +176,25 @@ describe("Canvas reads", () => {
     expect(courses.ok || courses.error.kind).toBe("rejected");
   });
 
+  it("stops on a page chain that never ends", async () => {
+    const requests: string[] = [];
+    const endless: Fetch = async (url) => {
+      requests.push(url);
+      const page = Number(new URL(url).searchParams.get("page") ?? "1");
+      return new Response("[]", {
+        headers: { link: `<${ORIGIN}/api/v1/courses?page=${page + 1}>; rel="next"` },
+      });
+    };
+    const provider = createCanvasProvider({
+      school: SCHOOL,
+      lease: leaseOf(TOKEN),
+      fetch: endless,
+    });
+    const courses = await provider.courses();
+    expect(courses.ok || courses.error.kind).toBe("rejected");
+    expect(requests).toHaveLength(100);
+  });
+
   it("reads assignments with their rubrics, and a missing point value as zero", async () => {
     const canvas = canvasWith({
       "/api/v1/courses/2201/assignments": ok("assignments.json"),
