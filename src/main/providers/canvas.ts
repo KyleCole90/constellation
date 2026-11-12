@@ -191,9 +191,13 @@ const paragraphsOf = (html: string): string[] =>
     .replace(/<\s*(br|\/p|\/div|\/li|\/h\d)\b[^>]*>/gi, "\n")
     .replace(/<[^>]*>/g, "")
     .replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (entity: string, name: string) => {
-      if (name.startsWith("#x")) return String.fromCodePoint(Number.parseInt(name.slice(2), 16));
-      if (name.startsWith("#")) return String.fromCodePoint(Number(name.slice(1)));
-      return ENTITIES[name.toLowerCase()] ?? entity;
+      if (!name.startsWith("#")) return ENTITIES[name.toLowerCase()] ?? entity;
+      const point = name.startsWith("#x")
+        ? Number.parseInt(name.slice(2), 16)
+        : Number(name.slice(1));
+      // Student-written HTML can name any number, and one past Unicode must not throw out of the whole read.
+      const valid = point <= 0x10ffff && (point < 0xd800 || point > 0xdfff);
+      return valid ? String.fromCodePoint(point) : "\uFFFD";
     })
     .split("\n")
     .map((line) => line.replace(/\s+/g, " ").trim())
@@ -303,7 +307,20 @@ export const createCanvasProvider = (deps: {
     return selfId;
   };
 
-  const courseId = (course: LmsRef<"course">): string => refParts(course)[2] ?? "";
+  /**
+   * The Canvas id in a course ref this provider minted: `<school>:course:<digits>`. The ref comes from the untrusted
+   * renderer, so anything else goes nowhere near a request path.
+   */
+  const courseId = (course: LmsRef<"course">): number | null => {
+    const [owner, kind, id, ...rest] = refParts(course);
+    return owner === school.id && kind === "course" && /^\d+$/.test(id ?? "") && rest.length === 0
+      ? Number(id)
+      : null;
+  };
+  const inCourse = async <T>(course: LmsRef<"course">, read: (id: number) => Read<T>): Read<T> => {
+    const id = courseId(course);
+    return id === null ? { ok: false, error: { kind: "not_found" } } : read(id);
+  };
   const notYet = (fields: readonly FieldKey[]): FieldOutcomes =>
     Object.fromEntries(fields.map((field) => [field, { status: "failed", error: NOT_YET }]));
 
@@ -371,87 +388,86 @@ export const createCanvasProvider = (deps: {
         ),
       };
     },
-    assignments: async (course) => {
-      const rows = await list(`/courses/${courseId(course)}/assignments`, AssignmentRow);
-      if (!rows.ok) return rows;
-      return {
-        ok: true,
-        value: rows.value.map((row): Assignment => ({
-          ref: refs.assignment(school.id, Number(courseId(course)), row.id),
-          school: school.id,
-          course,
-          title: row.name,
-          shortTitle: row.name,
-          dueAt: row.due_at,
-          pointsPossible: row.points_possible,
-          rubric:
-            row.rubric?.map((criterion) => ({
-              ref: refs.criterion(school.id, row.id, criterion.id),
-              name: criterion.description,
-              maxPoints: criterion.points,
-            })) ?? null,
-          latePointsPerDay: null,
-        })),
-      };
-    },
-    students: async (course) => {
-      const rows = await list(
-        `/courses/${courseId(course)}/users?enrollment_type[]=student`,
-        StudentRow,
-      );
-      if (!rows.ok) return rows;
-      return {
-        ok: true,
-        value: rows.value.map((row): Student => ({
-          ref: refs.student(school.id, row.id),
-          school: school.id,
-          course,
-          name: row.name,
-        })),
-      };
-    },
-    submissions: async (course) => {
-      const mine = await me();
-      if (!mine.ok) return mine;
-      const id = Number(courseId(course));
-      const rows = await list(
-        `/courses/${id}/students/submissions?student_ids[]=all&include[]=submission_comments&include[]=rubric_assessment&include[]=user`,
-        SubmissionRow,
-      );
-      if (!rows.ok) return rows;
-      return {
-        ok: true,
-        value: rows.value.map((row): Submission => ({
-          ref: refs.submission(school.id, id, row.assignment_id, row.user_id),
-          school: school.id,
-          course,
-          assignment: refs.assignment(school.id, id, row.assignment_id),
-          student: refs.student(school.id, row.user_id),
-          studentName: row.user?.name ?? "",
-          workflow: workflowOf(row),
-          attempt: row.attempt,
-          lateDays: row.late ? Math.ceil(row.seconds_late / 86_400) : 0,
-          submittedAt: row.submitted_at,
-          grade: row.score,
-          rubricScores: row.rubric_assessment
-            ? Object.fromEntries(
-                Object.entries(row.rubric_assessment).flatMap(([criterion, { points }]) =>
-                  points === null
-                    ? []
-                    : [[refs.criterion(school.id, row.assignment_id, criterion), points]],
-                ),
-              )
-            : null,
-          comments: row.submission_comments.map((comment) => ({
-            id: String(comment.id),
-            mine: comment.author_id === mine.value,
-            text: comment.comment,
-            at: comment.created_at,
+    assignments: (course) =>
+      inCourse(course, async (id) => {
+        const rows = await list(`/courses/${id}/assignments`, AssignmentRow);
+        if (!rows.ok) return rows;
+        return {
+          ok: true,
+          value: rows.value.map((row): Assignment => ({
+            ref: refs.assignment(school.id, id, row.id),
+            school: school.id,
+            course,
+            title: row.name,
+            shortTitle: row.name,
+            dueAt: row.due_at,
+            pointsPossible: row.points_possible,
+            rubric:
+              row.rubric?.map((criterion) => ({
+                ref: refs.criterion(school.id, row.id, criterion.id),
+                name: criterion.description,
+                maxPoints: criterion.points,
+              })) ?? null,
+            latePointsPerDay: null,
           })),
-          body: bodyOf(row.body),
-        })),
-      };
-    },
+        };
+      }),
+    students: (course) =>
+      inCourse(course, async (id) => {
+        const rows = await list(`/courses/${id}/users?enrollment_type[]=student`, StudentRow);
+        if (!rows.ok) return rows;
+        return {
+          ok: true,
+          value: rows.value.map((row): Student => ({
+            ref: refs.student(school.id, row.id),
+            school: school.id,
+            course,
+            name: row.name,
+          })),
+        };
+      }),
+    submissions: (course) =>
+      inCourse(course, async (id) => {
+        const mine = await me();
+        if (!mine.ok) return mine;
+        const rows = await list(
+          `/courses/${id}/students/submissions?student_ids[]=all&include[]=submission_comments&include[]=rubric_assessment&include[]=user`,
+          SubmissionRow,
+        );
+        if (!rows.ok) return rows;
+        return {
+          ok: true,
+          value: rows.value.map((row): Submission => ({
+            ref: refs.submission(school.id, id, row.assignment_id, row.user_id),
+            school: school.id,
+            course,
+            assignment: refs.assignment(school.id, id, row.assignment_id),
+            student: refs.student(school.id, row.user_id),
+            studentName: row.user?.name ?? "",
+            workflow: workflowOf(row),
+            attempt: row.attempt,
+            lateDays: row.late ? Math.ceil(row.seconds_late / 86_400) : 0,
+            submittedAt: row.submitted_at,
+            grade: row.score,
+            rubricScores: row.rubric_assessment
+              ? Object.fromEntries(
+                  Object.entries(row.rubric_assessment).flatMap(([criterion, { points }]) =>
+                    points === null
+                      ? []
+                      : [[refs.criterion(school.id, row.assignment_id, criterion), points]],
+                  ),
+                )
+              : null,
+            comments: row.submission_comments.map((comment) => ({
+              id: String(comment.id),
+              mine: comment.author_id === mine.value,
+              text: comment.comment,
+              at: comment.created_at,
+            })),
+            body: bodyOf(row.body),
+          })),
+        };
+      }),
     conversations: async () => {
       const mine = await me();
       if (!mine.ok) return mine;
@@ -465,31 +481,32 @@ export const createCanvasProvider = (deps: {
       }
       return { ok: true, value: out };
     },
-    announcements: async (course) => {
-      const rows = await list(
-        `/courses/${courseId(course)}/discussion_topics?only_announcements=true`,
-        AnnouncementRow,
-      );
-      if (!rows.ok) return rows;
-      return {
-        ok: true,
-        value: rows.value.flatMap((row): Announcement[] =>
-          // An announcement with no post time is a draft or delayed, and not posted yet.
-          row.posted_at === null
-            ? []
-            : [
-                {
-                  ref: refs.announcement(school.id, row.id),
-                  school: school.id,
-                  course,
-                  title: row.title,
-                  body: paragraphsOf(row.message).join("\n\n"),
-                  postedAt: row.posted_at,
-                },
-              ],
-        ),
-      };
-    },
+    announcements: (course) =>
+      inCourse(course, async (id) => {
+        const rows = await list(
+          `/courses/${id}/discussion_topics?only_announcements=true`,
+          AnnouncementRow,
+        );
+        if (!rows.ok) return rows;
+        return {
+          ok: true,
+          value: rows.value.flatMap((row): Announcement[] =>
+            // An announcement with no post time is a draft or delayed, and not posted yet.
+            row.posted_at === null
+              ? []
+              : [
+                  {
+                    ref: refs.announcement(school.id, row.id),
+                    school: school.id,
+                    course,
+                    title: row.title,
+                    body: paragraphsOf(row.message).join("\n\n"),
+                    postedAt: row.posted_at,
+                  },
+                ],
+          ),
+        };
+      }),
     observe: async () => ({ ok: false, error: NOT_YET }),
     apply: async (permit) => (SendPermit.isGenuine(permit) ? notYet(permit.fields) : {}),
   };

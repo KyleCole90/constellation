@@ -406,6 +406,45 @@ describe("Canvas failures", () => {
   });
 });
 
+describe("what the renderer can make Canvas fetch", () => {
+  it.each([
+    ["another school's course", "other.example.edu:course:2201"],
+    ["a path in the id", `${HOST}:course:2201/../../users/self`],
+    ["a query in the id", `${HOST}:course:2201?as_user_id=1`],
+    ["a ref of another kind", `${HOST}:student:2201`],
+    ["extra parts", `${HOST}:course:2201:9`],
+  ])("refuses %s, and asks Canvas nothing", async (_, ref) => {
+    const canvas = canvasWith({});
+    const course = ref as LmsRef<"course">;
+    for (const read of [
+      canvas.provider.assignments(course),
+      canvas.provider.students(course),
+      canvas.provider.submissions(course),
+      canvas.provider.announcements(course),
+    ])
+      expect(await read).toEqual({ ok: false, error: { kind: "not_found" } });
+    expect(canvas.requests).toEqual([]);
+  });
+});
+
+describe("student-written HTML", () => {
+  it("reads an entity past Unicode as a replacement character, not a failed read", async () => {
+    const body = JSON.stringify([
+      {
+        id: 1,
+        title: "Odd",
+        message: "<p>a &#99999999; b &#xD800; c &#x41;</p>",
+        posted_at: "2027-01-12T14:00:00Z",
+      },
+    ]);
+    const canvas = canvasWith({
+      "/api/v1/courses/2201/discussion_topics?only_announcements=true": { body },
+    });
+    const announcements = await canvas.provider.announcements(COURSE);
+    expect(announcements.ok && announcements.value[0]?.body).toBe("a \uFFFD b \uFFFD c A");
+  });
+});
+
 describe("Canvas writes before step 12", () => {
   it("observe refuses with a typed not-yet, and asks Canvas nothing", async () => {
     const canvas = canvasWith({});
