@@ -6,9 +6,15 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { SendConfirmation } from "~/main/lms";
 import { canvasSchoolAt, createCanvasProvider } from "~/main/providers/canvas";
-import type { CourseCopyContent, RemoteState, SetContent } from "~/shared/domain/change";
+import {
+  copySignature,
+  type CourseCopyContent,
+  type RemoteState,
+  type SetContent,
+} from "~/shared/domain/change";
 import type { LmsRef } from "~/shared/domain/ids";
 import { mintSendPermit } from "~/shared/domain/permit";
+import { copyMigration } from "~/shared/domain/setup";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
 import { FAKE_SCHOOLS } from "~/shared/providers/fake-canvas/provider";
 import { Secret, type LmsProvider, type TermSetup } from "~/shared/providers/provider";
@@ -438,6 +444,36 @@ describe("Canvas .imscc upload", () => {
     expect(http.uploads).toEqual([]);
     const jobs = await unwrap(setupOf(provider).migrations(shell.ref));
     expect(jobs.map((job) => job.state)).toEqual(["preparing"]);
+
+    // Past the bound it reads as failed, with the reason, so the setup offers Copy again.
+    http.advance(11 * 60_000);
+    const stranded = await unwrap(setupOf(provider).migrations(shell.ref));
+    expect(stranded.map((job) => [job.state, job.message])).toEqual([
+      ["failed", expect.stringContaining("never received the package file")],
+    ]);
+
+    // Copying again is a new change. Its send passes over the stranded job, so exactly one import runs.
+    const again = {
+      ...newDraft("ch-imscc-again", content, await unwrap(provider.observe(content))),
+      school: SCHOOL.id,
+    };
+    ledger.add(again);
+    const reapproved = ledger.commit(again.id, {
+      type: "approve",
+      witness: clickWitness(again),
+      at: again.basis.readAt,
+    });
+    if (!reapproved.ok) throw new Error(reapproved.error);
+    await clock.run(writeback.send([again.id]));
+    expect(ledger.get(again.id)?.state.tag).toBe("sent");
+    expect(http.jobs).toHaveLength(2);
+    expect(http.uploads).toHaveLength(1);
+    http.advance(60_000);
+    const after = await unwrap(setupOf(provider).migrations(shell.ref));
+    const record = ledger.get(again.id);
+    if (!record) throw new Error("no change");
+    expect(copyMigration(record, copySignature(content), after)?.state).toBe("completed");
+    expect(after.map((job) => job.state)).toEqual(["failed", "completed"]);
   });
 });
 

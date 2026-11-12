@@ -148,6 +148,7 @@ const MigrationRow = v.object({
   migration_type: v.nullish(v.string(), ""),
   workflow_state: v.string(),
   user_id: v.nullish(Id, null),
+  created_at: OptionalTime,
   started_at: OptionalTime,
   finished_at: OptionalTime,
   progress_url: v.nullish(v.string(), null),
@@ -175,6 +176,20 @@ const stateOf = (row: MigrationRow, progress: string | null): Migration["state"]
   if (row.workflow_state === "running") return progress === "queued" ? "queued" : "running";
   return "preparing";
 };
+
+/**
+ * Canvas says `pre_processing` while a package migration waits for its file. The app uploads it right after the create,
+ * so a job still waiting this long never got it: the create's answer, and the upload address in it, was lost. It will
+ * never import, so it reads as failed, and copying again can't import twice.
+ */
+const STRANDED_MS = 10 * 60_000;
+const STRANDED =
+  "Canvas never received the package file, so nothing was imported. Copy again to send it.";
+const strandedAt = (row: MigrationRow, now: number): boolean =>
+  row.migration_type === "common_cartridge_importer" &&
+  row.workflow_state === "pre_processing" &&
+  row.created_at !== null &&
+  now - Date.parse(row.created_at) > STRANDED_MS;
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const dayName = (day: Weekday): string => DAY_NAMES[day];
@@ -343,7 +358,8 @@ export const canvasTermSetup = (client: CanvasClient) => {
       for (const row of rows.value) {
         const progress = row.workflow_state === "completed" ? null : await progressOf(row);
         if (progress && !progress.ok) return progress;
-        const state = stateOf(row, progress?.value.workflow_state ?? null);
+        const stranded = strandedAt(row, client.now());
+        const state = stranded ? "failed" : stateOf(row, progress?.value.workflow_state ?? null);
         let issues: Migration["issues"] = [];
         if (!ACTIVE.has(row.workflow_state)) {
           const read = await list(
@@ -363,7 +379,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
           signature: signatureOf(row),
           state,
           completion: state === "completed" ? 100 : (progress?.value.completion ?? 0),
-          message: progress?.value.message ?? null,
+          message: stranded ? STRANDED : (progress?.value.message ?? null),
           issues,
         });
       }

@@ -303,6 +303,7 @@ export class CanvasTermHttp {
         migration_type_title: "Common Cartridge 1.x Package",
         workflow_state,
         user_id: SELF_ID,
+        created_at: at(job.startedMs),
         started_at: waiting ? null : at(job.startedMs),
         finished_at:
           workflow_state === "completed" || workflow_state === "failed"
