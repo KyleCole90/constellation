@@ -109,6 +109,7 @@ export const stageWords = (stage: SetupStage): string => STAGE_WORDS[stage.tag];
 const MIGRATION_LABEL: Readonly<Record<Migration["state"], string>> = {
   queued: "Waiting to start",
   preparing: "Reading the package",
+  stalled: "Still waiting on the LMS",
   running: "Copying the course",
   completed: "Copied",
   failed: "The copy failed",

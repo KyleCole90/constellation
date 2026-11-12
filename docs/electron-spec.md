@@ -93,7 +93,7 @@ export const ipc = {
 - Paging follows `Link: rel="next"` inside the provider, so every read still returns a whole list.
 - Canvas throttles with a **403 "Rate Limit Exceeded"**, not a 429. The provider maps it, and any 429, to the existing throttled error, so the runner pauses that school's lane without spending a retry. The provider never sleeps.
 - Writes go through the existing single write path: observe, then classify, then apply, with per-field outcomes and the first-send record. The README's design is unchanged, and the Canvas provider must pass `runProviderContract`.
-- Term setup does course copy and `.imscc` upload. The upload uses `pre_attachment`, then the upload URL. The file picker and the file read run in main. A package job that still waits for its file 10 minutes after it was made never got it, so it reads as failed and Copy again starts a new one.
+- Term setup does course copy and `.imscc` upload. The upload uses `pre_attachment`, then the upload URL. The file picker and the file read run in main. A package job still `pre_processing` 10 minutes after it was made reads as stalled, never failed, since Canvas can't say whether its file arrived. The setup offers Copy again and warns that, if the first import still runs, the content lands twice.
 - Writeback ships only after `npm run contract:live` passes against Kyle's sandbox courses.
 
 ### AI (D26, D27, D28, D41)

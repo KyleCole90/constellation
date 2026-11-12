@@ -185,7 +185,7 @@ const toCourseContent = (raw: RawCourseContent): CourseContent => {
 };
 
 const isActive = ({ state }: Migration): boolean =>
-  state === "queued" || state === "preparing" || state === "running";
+  state === "queued" || state === "preparing" || state === "stalled" || state === "running";
 
 const createFakeCanvasProvider = (
   server: FakeCanvasServer,

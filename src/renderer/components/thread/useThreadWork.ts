@@ -201,7 +201,7 @@ export const useThreadWork = (
         busy: working || (record ? busy.has(record.id) : false),
         summary,
         panel: ui.panel,
-        chordSends: record ? sendsOnChord(record) : false,
+        chordSends: record ? sendsOnChord(record) && state.online : false,
       })
     ) {
       case "open-next":

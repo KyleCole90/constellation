@@ -445,14 +445,13 @@ describe("Canvas .imscc upload", () => {
     const jobs = await unwrap(setupOf(provider).migrations(shell.ref));
     expect(jobs.map((job) => job.state)).toEqual(["preparing"]);
 
-    // Past the bound it reads as failed, with the reason, so the setup offers Copy again.
+    // Past the bound it reads as stalled, never failed: Canvas can't say the file didn't arrive, so the setup offers
+    // Copy again with a warning rather than declaring the import gone.
     http.advance(11 * 60_000);
-    const stranded = await unwrap(setupOf(provider).migrations(shell.ref));
-    expect(stranded.map((job) => [job.state, job.message])).toEqual([
-      ["failed", expect.stringContaining("never received the package file")],
-    ]);
+    const stalled = await unwrap(setupOf(provider).migrations(shell.ref));
+    expect(stalled.map((job) => job.state)).toEqual(["stalled"]);
 
-    // Copying again is a new change. Its send passes over the stranded job, so exactly one import runs.
+    // Copying again is a new change. Its send passes over the stalled job, so this send imports once.
     const again = {
       ...newDraft("ch-imscc-again", content, await unwrap(provider.observe(content))),
       school: SCHOOL.id,
@@ -473,7 +472,32 @@ describe("Canvas .imscc upload", () => {
     const record = ledger.get(again.id);
     if (!record) throw new Error("no change");
     expect(copyMigration(record, copySignature(content), after)?.state).toBe("completed");
-    expect(after.map((job) => job.state)).toEqual(["failed", "completed"]);
+    expect(after.map((job) => job.state)).toEqual(["stalled", "completed"]);
+  });
+
+  it("a package Canvas prepares past the bound reads as stalled, then completes, and never as failed", async () => {
+    const http = new CanvasTermHttp();
+    http.prepareMs = 30 * 60_000;
+    const provider = canvasOver(http, { [PACKAGE]: packageBlob() });
+    const { shell, content } = await importOf(provider);
+    const sent = await provider.apply(await permitFor(provider, content, ["copy"], SCHOOL.id));
+    expect(sent.copy?.status).toBe("landed");
+    expect(http.uploads).toHaveLength(1);
+
+    const seen: [string, string | null][] = [];
+    for (let minute = 0; minute <= 32; minute += 1) {
+      const jobs = await unwrap(setupOf(provider).migrations(shell.ref));
+      seen.push(...jobs.map((job): [string, string | null] => [job.state, job.message]));
+      http.advance(60_000);
+    }
+    const states = seen.map(([state]) => state);
+    expect(states[0]).toBe("preparing");
+    expect(states).toContain("stalled");
+    expect(states.at(-1)).toBe("completed");
+    expect(seen.some(([state]) => state === "failed")).toBe(false);
+    expect(JSON.stringify(seen)).not.toMatch(/nothing was imported/i);
+    const imported = await unwrap(setupOf(provider).courseContent(shell.ref));
+    expect(imported.items.map((item) => item.title)).toContain(`From ${PACKAGE}`);
   });
 });
 

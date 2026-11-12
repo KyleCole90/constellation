@@ -41,6 +41,27 @@ export function CopyProgress({
         </div>
       )}
       {job.message && <Note>{job.message}</Note>}
+      {live?.migration?.state === "stalled" && (
+        <div className="flex items-center gap-2">
+          <p
+            role="alert"
+            data-testid="copy-stalled"
+            className="min-w-0 flex-1 text-meta text-warning-foreground"
+          >
+            The LMS is still preparing the package, and hasn't said why. If the upload never
+            finished, copy again. If it did reach the LMS, the first import may still run, and the
+            course would get its content twice.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="copy-again"
+            onClick={() => void workspaceStore().getState().retryCopy(course).then(setRefused)}
+          >
+            Copy again
+          </Button>
+        </div>
+      )}
       {stuck && (
         <div className="flex items-center gap-2">
           <p role="alert" className="min-w-0 flex-1 text-meta text-warning-foreground">

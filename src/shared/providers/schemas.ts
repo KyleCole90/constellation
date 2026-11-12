@@ -303,7 +303,7 @@ export const CourseContentSchema: v.GenericSchema<CourseContent> = v.object({
 export const MigrationSchema: v.GenericSchema<Migration> = v.object({
   ref: lmsRef<"migration">(),
   signature: text,
-  state: v.picklist(["queued", "preparing", "running", "completed", "failed"]),
+  state: v.picklist(["queued", "preparing", "stalled", "running", "completed", "failed"]),
   completion: count,
   message: nullable(text),
   issues: v.array(
