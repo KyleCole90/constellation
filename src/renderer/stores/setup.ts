@@ -85,6 +85,10 @@ export interface SetupActions {
   loadSetupOptions(school: SchoolId): Promise<void>;
   chooseSource(course: CourseRef, source: CopySource | null): string | null;
   chooseCartridgeFile(course: CourseRef, file: { name: string; size: number }): string | null;
+  /** True where main's own file picker chooses the package, so the page shows a button rather than a file input. */
+  picksPackage(school: SchoolId): boolean;
+  /** Opens main's file picker and chooses the package it answers. Null when chosen or cancelled, else the refusal. */
+  pickCartridge(course: CourseRef): Promise<string | null>;
   editDates(course: CourseRef, plan: PlanDraft): void;
   confirmDates(course: CourseRef, plan: TermPlan): Promise<string | null>;
   retryCopy(course: CourseRef): Promise<string | null>;
@@ -642,6 +646,22 @@ export const createSetupActions = (host: SetupHost) => {
         kb: Math.ceil(file.size / 1024),
         hint: known?.hint ?? null,
       });
+    },
+
+    picksPackage: (school) => termOf(school)?.pickPackage !== undefined,
+
+    pickCartridge: async (course) => {
+      const school = setupOf(course)?.school;
+      const term = school && termOf(school);
+      if (!term?.pickPackage) return null;
+      const picked = await term.pickPackage();
+      if (!picked.ok) return errorWords(picked.error);
+      return picked.value
+        ? actions.chooseCartridgeFile(course, {
+            name: picked.value.name,
+            size: picked.value.kb * 1024,
+          })
+        : null;
     },
 
     editDates: (course, plan) => patchSetup(course, { draft: plan }),

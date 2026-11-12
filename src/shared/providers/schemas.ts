@@ -14,6 +14,7 @@ import {
   type CourseContent,
   type CourseShell,
   type Migration,
+  type PickedPackage,
   type SamplePackage,
   type SourceCourse,
 } from "../domain/content";
@@ -313,6 +314,11 @@ export const MigrationSchema: v.GenericSchema<Migration> = v.object({
       fixUrl: nullable(text),
     }),
   ),
+});
+
+export const PickedPackageSchema: v.GenericSchema<PickedPackage> = v.object({
+  name: text,
+  kb: count,
 });
 
 export const SamplePackageSchema: v.GenericSchema<SamplePackage> = v.object({

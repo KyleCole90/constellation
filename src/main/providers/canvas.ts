@@ -280,6 +280,18 @@ const bodyOf = (html: string | null): SubmissionBody => {
   return { kind: "text", title: "", wordCount, paragraphs };
 };
 
+/** What Canvas answers a migration created with a `pre_attachment`: where, and with which fields, to post the file. */
+const PreAttachment = v.object({
+  pre_attachment: v.object({
+    upload_url: v.pipe(v.string(), v.url()),
+    upload_params: v.nullish(
+      v.record(v.string(), v.union([v.string(), v.number(), v.boolean()])),
+      {},
+    ),
+    file_param: v.nullish(v.string(), "file"),
+  }),
+});
+
 const PER_PAGE = 100;
 /** A list longer than this many pages is a Canvas fault (a looping or endless `next`), not a course. */
 const MAX_PAGES = 100;
@@ -304,6 +316,8 @@ export const createCanvasProvider = (deps: {
   lease: CredentialLease;
   fetch: Fetch;
   now(): number;
+  /** The `.imscc` file main's picker chose under `name` for this school, or null when none was. */
+  packageFile(name: string): Promise<Blob | null>;
 }): CanvasProvider => {
   const { school, lease } = deps;
   const origin = `https://${school.host}`;
@@ -463,12 +477,110 @@ export const createCanvasProvider = (deps: {
   const refused = (reason: string): Promise<Outcome> =>
     Promise.resolve({ status: "failed", error: { kind: "rejected", reason } });
 
+  /**
+   * A package import, as Canvas documents a file upload: create the migration with a `pre_attachment`, post the file
+   * to the upload address it returns, then confirm back at the school if the upload redirects. The upload address is
+   * often file storage on another host, so that request carries only Canvas's upload params and never the token.
+   */
+  const importPackage = (path: string, form: URLSearchParams, file: Blob, name: string) =>
+    lease.use(async (credential): Promise<Outcome> => {
+      if (!credential) return { status: "failed", error: { kind: "auth_expired" } };
+      const secret = credential.kind === "bearer" ? credential.token : credential.access;
+      const lost: Outcome = { status: "unknown", since: isoTime(deps.now()) };
+      const rejected = (reason: string): Outcome => ({
+        status: "failed",
+        error: { kind: "rejected", reason },
+      });
+      const withToken = (
+        url: string,
+        init: { method: "GET" | "POST"; headers?: Record<string, string>; body?: string },
+      ) =>
+        revealSecret(secret, (token) =>
+          deps.fetch(url, {
+            ...init,
+            headers: {
+              ...init.headers,
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+            redirect: "manual",
+          }),
+        );
+
+      let text: string;
+      try {
+        const created = await withToken(`${origin}/api/v1${path}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: form.toString(),
+        });
+        if (!created.ok) return { status: "failed", error: await errorOf(created) };
+        text = await created.text();
+      } catch {
+        return lost;
+      }
+      let body: unknown;
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = null;
+      }
+      const parsed = v.safeParse(PreAttachment, body);
+      const upload = parsed.success ? parsed.output.pre_attachment : null;
+      if (!upload || new URL(upload.upload_url).protocol !== "https:")
+        return rejected("Canvas started the import but gave no address to upload the package to.");
+
+      const files = new FormData();
+      for (const [key, value] of Object.entries(upload.upload_params))
+        files.append(key, String(value));
+      // Last, as the storage behind the upload address requires.
+      files.append(upload.file_param, file, name);
+      let uploaded: Response;
+      try {
+        uploaded = await deps.fetch(upload.upload_url, {
+          method: "POST",
+          body: files,
+          redirect: "manual",
+        });
+      } catch {
+        return lost;
+      }
+      const landed: Outcome = { status: "landed", at: isoTime(deps.now()), via: "response" };
+      if (uploaded.ok) return landed;
+      if (uploaded.type === "opaqueredirect")
+        return rejected("Canvas's file storage redirected the upload where the app can't follow.");
+      if (uploaded.status < 300 || uploaded.status >= 400)
+        return rejected(`The package upload was refused (status ${uploaded.status}).`);
+      // A redirect is Canvas's confirm step: a GET back at the school, with the token, marks the file uploaded. Storage
+      // chose this address, so the token goes only to the one path Canvas documents for it.
+      const location = uploaded.headers.get("location");
+      const confirm =
+        location !== null && URL.canParse(location, upload.upload_url)
+          ? new URL(location, upload.upload_url)
+          : null;
+      if (
+        confirm?.origin !== origin ||
+        !/^\/api\/v1\/files\/\d+\/create_success$/.test(confirm.pathname)
+      )
+        return rejected(
+          "Canvas asked to finish the upload at another address, so the app didn't send your token there.",
+        );
+      try {
+        const confirmed = await withToken(confirm.toString(), { method: "GET" });
+        return confirmed.ok ? landed : { status: "failed", error: await errorOf(confirmed) };
+      } catch {
+        return lost;
+      }
+    });
+
   const term = canvasTermSetup({
     school,
     now: deps.now,
     list,
     one,
     write,
+    importPackage,
+    packageFile: deps.packageFile,
     me,
     idsIn,
     oneLine,

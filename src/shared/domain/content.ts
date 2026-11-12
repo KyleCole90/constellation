@@ -36,6 +36,9 @@ export type CopySource =
   | { kind: "course"; ref: LmsRef<"course">; label: string; termName: string }
   | { kind: "cartridge"; name: string; kb: number; hint: TermDates | null };
 
+/** A package main's file picker chose: only its name and size cross to the renderer, never its path or bytes. */
+export type PickedPackage = Pick<SamplePackage, "name" | "kb">;
+
 export interface SamplePackage {
   name: string;
   kb: number;

@@ -44,6 +44,10 @@ export interface CanvasClient {
   list<T extends v.GenericSchema>(path: string, row: T): Read<v.InferOutput<T>[]>;
   one<T extends v.GenericSchema>(path: string, schema: T): Read<v.InferOutput<T>>;
   write(method: "PUT" | "POST" | "DELETE", path: string, form: URLSearchParams): Promise<Outcome>;
+  /** Creates a package migration at `path` and uploads `file` to where Canvas says, without the token. */
+  importPackage(path: string, form: URLSearchParams, file: Blob, name: string): Promise<Outcome>;
+  /** The package main's picker chose under `name`, or null. */
+  packageFile(name: string): Promise<Blob | null>;
   me(): Promise<Result<number, LmsError>>;
   /** The Canvas ids in a ref this school minted, or null. */
   idsIn(ref: string, kind: string, count: number): number[] | null;
@@ -148,6 +152,8 @@ const MigrationRow = v.object({
   finished_at: OptionalTime,
   progress_url: v.nullish(v.string(), null),
   settings: v.nullish(v.object({ source_course_id: v.nullish(SourceId, null) }), null),
+  /** A package import's file, as it was named when uploaded. */
+  attachment: v.nullish(v.object({ display_name: v.nullish(v.string(), null) }), null),
 });
 type MigrationRow = v.InferOutput<typeof MigrationRow>;
 const ProgressRow = v.object({
@@ -303,14 +309,17 @@ export const canvasTermSetup = (client: CanvasClient) => {
     const rows = await list(`/courses/${id}/content_migrations`, MigrationRow);
     return rows.ok ? { ok: true, value: rows.value.toSorted((a, b) => a.id - b.id) } : rows;
   };
-  /** A job by the words a copy change carries: the course it copied from. Any other job matches no change. */
+  /** A job by the words a copy change carries: the course it copied from, or the package's name. Any other job matches no change. */
   const signatureOf = (row: MigrationRow): string => {
     const source = row.settings?.source_course_id ?? null;
-    return row.migration_type === "course_copy_importer" && source !== null
-      ? copySignature({
-          source: { kind: "course", ref: refs.course(school.id, source), label: "", termName: "" },
-        })
-      : `migration:${row.id}`;
+    const file = row.attachment?.display_name ?? null;
+    if (row.migration_type === "course_copy_importer" && source !== null)
+      return copySignature({
+        source: { kind: "course", ref: refs.course(school.id, source), label: "", termName: "" },
+      });
+    if (row.migration_type === "common_cartridge_importer" && file !== null)
+      return copySignature({ source: { kind: "cartridge", name: file, kb: 0, hint: null } });
+    return `migration:${row.id}`;
   };
   const progressOf = async (row: MigrationRow) => {
     const id = /^\/api\/v1\/progress\/(\d+)$/.exec(
@@ -541,7 +550,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
     copySources,
     courseContent,
     migrations,
-    // Uploading a package comes with step 14, so there is none to offer yet.
+    // A real school's packages come from the teacher's own disk, through main's picker, so none are offered here.
     samplePackages: () => Promise.resolve({ ok: true, value: [] }),
   };
 
@@ -671,19 +680,38 @@ export const canvasTermSetup = (client: CanvasClient) => {
       form.set(`date_shift_options[day_substitutions][${day}]`, String(to));
     return form;
   };
+  const NOT_PICKED =
+    "Choose the .imscc file again. The app forgets a chosen file when it quits, and sends only a file you chose.";
+  const kbOf = (file: Blob) => Math.ceil(file.size / 1024);
   const copyIds = (content: CourseCopyContent) => {
     const [target] = idsIn(content.target, "migrations", 1) ?? [];
     const [source] =
       content.source.kind === "course" ? (idsIn(content.source.ref, "course", 1) ?? []) : [];
     return target === undefined || source === undefined ? null : { target, source };
   };
-  const CARTRIDGE = "Uploading a course package to Canvas comes in a later version.";
 
   const writeOf = async (content: SetupContent, field: FieldKey): Promise<Outcome> => {
     switch (content.kind) {
       case "course-copy": {
         if (field !== "copy") break;
-        if (content.source.kind === "cartridge") return refused(CARTRIDGE);
+        if (content.source.kind === "cartridge") {
+          const [target] = idsIn(content.target, "migrations", 1) ?? [];
+          if (target === undefined) return refused("That course isn't at this school.");
+          const { name } = content.source;
+          const file = await client.packageFile(name);
+          if (!file) return refused(NOT_PICKED);
+          const form = new URLSearchParams({
+            migration_type: "common_cartridge_importer",
+            "pre_attachment[name]": name,
+            "pre_attachment[size]": String(file.size),
+          });
+          return client.importPackage(
+            `/courses/${target}/content_migrations`,
+            shiftForm(content, form),
+            file,
+            name,
+          );
+        }
         const ids = copyIds(content);
         if (!ids) return refused("That course isn't at this school.");
         const form = new URLSearchParams({
@@ -850,23 +878,32 @@ export const canvasTermSetup = (client: CanvasClient) => {
     };
     switch (content.kind) {
       case "course-copy": {
-        if (content.source.kind === "cartridge")
-          return { ok: false, error: { kind: "rejected", reason: CARTRIDGE } };
-        const ids = copyIds(content);
-        if (!ids) return NOT_FOUND;
-        const into = await courseName(ids.target);
+        const { shift, source } = content;
+        const [target] = idsIn(content.target, "migrations", 1) ?? [];
+        if (target === undefined) return NOT_FOUND;
+        let from: string;
+        if (source.kind === "cartridge") {
+          // Main's own record of the file, so the dialog names what goes out, not what the renderer says.
+          const file = await client.packageFile(source.name);
+          if (!file) return { ok: false, error: { kind: "rejected", reason: NOT_PICKED } };
+          from = `Package: ${client.named(source.name)}, ${kbOf(file)} KB`;
+        } else {
+          const ids = copyIds(content);
+          if (!ids) return NOT_FOUND;
+          const named = await courseName(ids.source);
+          if (!named.ok) return named;
+          from = `Copy from: ${client.named(named.value)}`;
+        }
+        const into = await courseName(target);
         if (!into.ok) return into;
-        const from = await courseName(ids.source);
-        if (!from.ok) return from;
-        const { shift } = content;
         const days = Object.entries(shift.substitutions).flatMap(([day, to]) =>
           // Every weekday is named, and only the ones that move are worth a line.
           to === undefined || String(to) === day
             ? []
             : [`${DAY_NAMES[Number(day)] ?? day} to ${dayName(to)}`],
         );
-        return described(`Copy into ${into.value}`, [
-          `Copy from: ${client.named(from.value)}`,
+        return described(`${source.kind === "cartridge" ? "Import" : "Copy"} into ${into.value}`, [
+          from,
           `Dates: ${shift.oldStart} to ${shift.oldEnd} move to ${shift.newStart} to ${shift.newEnd}`,
           ...(days.length === 0 ? [] : [`Days: ${days.join(", ")}`]),
         ]);

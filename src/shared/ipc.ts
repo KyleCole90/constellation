@@ -15,6 +15,7 @@ import {
   FieldKeysSchema,
   FieldOutcomesSchema,
   MigrationSchema,
+  PickedPackageSchema,
   RemoteStateSchema,
   SamplePackageSchema,
   SchoolSchema,
@@ -90,6 +91,8 @@ const ipc = {
   "lms.courseContent": { input: ByCourse, output: readOf(CourseContentSchema) },
   "lms.migrations": { input: ByCourse, output: readOf(listOf(MigrationSchema)) },
   "lms.samplePackages": { input: BySchool, output: readOf(listOf(SamplePackageSchema)) },
+  /** Main's native file picker, for a real school. Null when the teacher cancels. */
+  "lms.pickPackage": { input: BySchool, output: readOf(v.nullable(PickedPackageSchema)) },
   /** The fake LMS's failure lab, which the Settings screen drives. */
   "lms.lab": { input: LabCommandSchema, output: v.void() },
   /**

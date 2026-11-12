@@ -58,6 +58,7 @@ const canvasOver = (http: CanvasHttp) =>
     },
     fetch: http.fetch,
     now: () => Date.now(),
+    packageFile: async () => null,
   });
 
 const writesOf = (http: CanvasHttp) =>

@@ -30,6 +30,8 @@ export const fakeLmsHandlers = (
     fetch?: Fetch;
     /** The teacher's answer in main's send dialog. Says yes unless a test says otherwise. */
     confirmSend?: (ask: SendConfirmation) => Promise<boolean>;
+    /** The path main's file picker answers. Cancels unless a test says otherwise. */
+    choosePackage?: () => Promise<string | null>;
     onServer?: (server: FakeCanvasServer) => void;
   } = {},
 ) => {
@@ -54,6 +56,7 @@ export const fakeLmsHandlers = (
     packaged: options.packaged ?? false,
     fetch: options.fetch ?? null,
     confirmSend: options.confirmSend ?? (async () => true),
+    choosePackage: options.choosePackage ?? (async () => null),
   });
 };
 
@@ -66,6 +69,7 @@ export const bridgedLms = (
     packaged?: boolean;
     fetch?: Fetch;
     confirmSend?: (ask: SendConfirmation) => Promise<boolean>;
+    choosePackage?: () => Promise<string | null>;
   } = {},
 ) => {
   const clock = new VirtualClock();
@@ -89,6 +93,7 @@ export const bridgedLms = (
         ...(options.packaged === undefined ? {} : { packaged: options.packaged }),
         ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
         ...(options.confirmSend === undefined ? {} : { confirmSend: options.confirmSend }),
+        ...(options.choosePackage === undefined ? {} : { choosePackage: options.choosePackage }),
         onServer: (server) => servers.push(server),
       }),
     },

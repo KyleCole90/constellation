@@ -1,3 +1,7 @@
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vite-plus/test";
 
 import type { SendConfirmation } from "~/main/lms";
@@ -6,6 +10,7 @@ import type { CourseCopyContent, RemoteState, SetContent } from "~/shared/domain
 import type { LmsRef } from "~/shared/domain/ids";
 import { mintSendPermit } from "~/shared/domain/permit";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
+import { FAKE_SCHOOLS } from "~/shared/providers/fake-canvas/provider";
 import { Secret, type LmsProvider, type TermSetup } from "~/shared/providers/provider";
 import { bridgeCanvas } from "~/renderer/providers/lms";
 import { createMemoryVault } from "~/renderer/providers/vault";
@@ -14,6 +19,7 @@ import { DEFAULT_RETRY_POLICY, createWriteback } from "~/renderer/writeback/writ
 import { bridgedLms } from "./fixtures/bridge";
 import {
   CanvasTermHttp,
+  STORAGE_ORIGIN,
   SHELL_ID,
   SOURCE_ID,
   TERM_HOST,
@@ -24,7 +30,7 @@ import { VirtualClock } from "./fixtures/clock";
 import { DurableLedger } from "./fixtures/ledger";
 import { permitFor, unwrap } from "./fixtures/provider-contract";
 import { runTermSetupContract } from "./fixtures/term-contract";
-import { copyContent } from "./fixtures/term";
+import { cartridgeContent, copyContent } from "./fixtures/term";
 
 const SCHOOL = (() => {
   const school = canvasSchoolAt(TERM_HOST);
@@ -41,7 +47,7 @@ const copyRemote: RemoteState = {
   migrations: [],
 };
 
-const canvasOver = (http: CanvasTermHttp) =>
+const canvasOver = (http: CanvasTermHttp, packages: Record<string, Blob> = {}) =>
   createCanvasProvider({
     school: SCHOOL,
     lease: {
@@ -50,6 +56,7 @@ const canvasOver = (http: CanvasTermHttp) =>
     },
     fetch: http.fetch,
     now: http.now,
+    packageFile: async (name) => packages[name] ?? null,
   });
 const setupOf = (provider: LmsProvider): TermSetup => {
   if (!provider.termSetup) throw new Error("Canvas offers no term setup");
@@ -302,5 +309,205 @@ describe("a sandbox course from copy to published, through main's confirm dialog
     });
     expect(http.requests).toContain(`PUT /courses/${SHELL_ID}`);
     expect((await unwrap(provider.courses())).map((course) => course.ref)).toContain(shell.ref);
+  });
+});
+
+const PACKAGE = "eng210-northgate-spring2026-export.imscc";
+const PACKAGE_BYTES = readFileSync(new URL(`../fixtures/imscc/${PACKAGE}`, import.meta.url));
+const packageBlob = () => new Blob([PACKAGE_BYTES]);
+const importOf = async (provider: LmsProvider) => {
+  const { shell, source } = await shellAndSource(provider);
+  const hint = { name: "Spring 2026", start: source.startAt, end: source.endAt, days: [] };
+  return { shell, content: cartridgeContent(shell, PACKAGE, hint, 1) };
+};
+
+describe("Canvas .imscc upload", () => {
+  it("creates one package migration, uploads to storage without the token, and confirms at the school", async () => {
+    const http = new CanvasTermHttp();
+    const provider = canvasOver(http, { [PACKAGE]: packageBlob() });
+    const { shell, content } = await importOf(provider);
+    const sent = await provider.apply(await permitFor(provider, content, ["copy"], SCHOOL.id));
+    expect(sent.copy?.status).toBe("landed");
+    expect(http.requests.filter((line) => !line.startsWith("GET /courses"))).toEqual(
+      expect.arrayContaining([
+        `POST /courses/${SHELL_ID}/content_migrations`,
+        expect.stringMatching(/^GET \/files\/\d+\/create_success\?uuid=u\d+$/),
+      ]),
+    );
+    expect(http.uploads).toHaveLength(1);
+    const [upload] = http.uploads;
+    expect(upload?.url.startsWith(STORAGE_ORIGIN)).toBe(true);
+    expect(upload?.authorization).toBeNull();
+    expect(upload?.file).toEqual({
+      field: "file",
+      name: PACKAGE,
+      size: PACKAGE_BYTES.byteLength,
+      last: true,
+    });
+    expect(JSON.stringify(upload)).not.toContain(TERM_TOKEN);
+    expect(http.jobs[0]?.shift).toEqual(content.shift);
+
+    http.advance(60_000);
+    const jobs = await unwrap(setupOf(provider).migrations(shell.ref));
+    expect(jobs.map((job) => [job.state, job.signature])).toEqual([
+      ["completed", `cartridge:${PACKAGE}`],
+    ]);
+    const imported = await unwrap(setupOf(provider).courseContent(shell.ref));
+    expect(imported.items.map((item) => item.title)).toContain(`From ${PACKAGE}`);
+  });
+
+  it("storage that answers 201 is done, with no confirm request", async () => {
+    const http = new CanvasTermHttp();
+    http.storageCreates = true;
+    const provider = canvasOver(http, { [PACKAGE]: packageBlob() });
+    const { content } = await importOf(provider);
+    const sent = await provider.apply(await permitFor(provider, content, ["copy"], SCHOOL.id));
+    expect(sent.copy?.status).toBe("landed");
+    expect(http.requests.some((line) => line.includes("create_success"))).toBe(false);
+    expect(http.jobs[0]?.cartridge?.confirmed).toBe(true);
+  });
+
+  it("a confirm step at another host is refused, so the token goes only to the school", async () => {
+    const http = new CanvasTermHttp();
+    http.confirmOrigin = "https://evil.example";
+    const provider = canvasOver(http, { [PACKAGE]: packageBlob() });
+    const { content } = await importOf(provider);
+    const sent = await provider.apply(await permitFor(provider, content, ["copy"], SCHOOL.id));
+    expect(sent.copy).toMatchObject({ status: "failed", error: { kind: "rejected" } });
+    // The fake throws on any request that leaves the school, so getting here means none did.
+    expect(http.requests.some((line) => line.includes("create_success"))).toBe(false);
+  });
+
+  it("a confirm step at another school path is refused, so storage can't aim the token", async () => {
+    const http = new CanvasTermHttp();
+    http.confirmPath = () => "/api/v1/users/self";
+    const provider = canvasOver(http, { [PACKAGE]: packageBlob() });
+    const { content } = await importOf(provider);
+    const permit = await permitFor(provider, content, ["copy"], SCHOOL.id);
+    const before = http.requests.length;
+    const sent = await provider.apply(permit);
+    expect(sent.copy).toMatchObject({ status: "failed", error: { kind: "rejected" } });
+    expect(http.requests.slice(before).some((line) => line.startsWith("GET /users/self"))).toBe(
+      false,
+    );
+  });
+
+  it("a package main's picker didn't choose is refused before any request", async () => {
+    const http = new CanvasTermHttp();
+    const provider = canvasOver(http);
+    const { content } = await importOf(provider);
+    const writes = http.writeCount();
+    const sent = await provider.apply(await permitFor(provider, content, ["copy"], SCHOOL.id));
+    expect(sent.copy).toMatchObject({ status: "failed", error: { kind: "rejected" } });
+    expect(http.writeCount()).toBe(writes);
+    expect(http.uploads).toEqual([]);
+  });
+
+  it("a create whose response was lost starts no second import: the retry finds the job by its package", async () => {
+    const http = new CanvasTermHttp();
+    const provider = canvasOver(http, { [PACKAGE]: packageBlob() });
+    const { shell, content } = await importOf(provider);
+    const clock = new VirtualClock();
+    const ledger = new DurableLedger();
+    const draft = {
+      ...newDraft("ch-imscc", content, await unwrap(provider.observe(content))),
+      school: SCHOOL.id,
+    };
+    ledger.add(draft);
+    const committed = ledger.commit(draft.id, {
+      type: "approve",
+      witness: clickWitness(draft),
+      at: draft.basis.readAt,
+    });
+    if (!committed.ok) throw new Error(committed.error);
+    const writeback = createWriteback({
+      ledger,
+      providerFor: () => provider,
+      markExpired: () => undefined,
+      now: clock.now,
+      sleep: clock.sleep,
+      random: () => 0.5,
+      policy: DEFAULT_RETRY_POLICY,
+      locks: null,
+    });
+    http.loseNext();
+    await clock.run(writeback.send([draft.id]));
+    expect(ledger.get(draft.id)?.state.tag).toBe("sent");
+    expect(http.jobs).toHaveLength(1);
+    // Its upload address went with the lost answer, so the job waits for a file: one job, never two imports.
+    expect(http.uploads).toEqual([]);
+    const jobs = await unwrap(setupOf(provider).migrations(shell.ref));
+    expect(jobs.map((job) => job.state)).toEqual(["preparing"]);
+  });
+});
+
+describe("main's .imscc picker", () => {
+  const setUp = (path: string | null) => {
+    const http = new CanvasTermHttp();
+    const asks: SendConfirmation[] = [];
+    const lms = bridgedLms({
+      fetch: http.fetch,
+      confirmSend: async (ask) => {
+        asks.push(ask);
+        return true;
+      },
+      choosePackage: async () => path,
+    });
+    const provider = bridgeCanvas(lms.bridge, CANVAS, CANVAS_FACE, lms.clock.now).create({
+      school: SCHOOL,
+      lease: createMemoryVault().leaseFor(SCHOOL.id),
+    });
+    return { http, asks, lms, provider };
+  };
+  const onDisk = (name: string, bytes: Uint8Array) => {
+    const path = join(mkdtempSync(join(tmpdir(), "imscc-")), name);
+    writeFileSync(path, bytes);
+    return path;
+  };
+
+  it("hands the renderer a name and size only, and the confirm dialog names main's own file", async () => {
+    const path = onDisk(PACKAGE, PACKAGE_BYTES);
+    const { http, asks, lms, provider } = setUp(path);
+    await lms.vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TERM_TOKEN) });
+    const picked = await unwrap(
+      setupOf(provider).pickPackage?.() ?? Promise.reject(new Error("no picker")),
+    );
+    if (!picked) throw new Error("the picker chose nothing");
+    expect(picked).toEqual({ name: PACKAGE, kb: Math.ceil(PACKAGE_BYTES.byteLength / 1024) });
+    expect(JSON.stringify(picked)).not.toContain(path);
+
+    const { shell, content } = await importOf(provider);
+    // The renderer's size is only a request; the dialog and the upload use main's file.
+    const lying = { ...content, source: { ...content.source, kb: 999_999 } };
+    const sent = await provider.apply(await permitFor(provider, lying, ["copy"], SCHOOL.id));
+    expect(sent.copy?.status).toBe("landed");
+    expect(asks[0]).toEqual({
+      host: TERM_HOST,
+      target: "Import into ENG-101, ENG-101 Composition",
+      lines: [
+        `Package: ${PACKAGE}, ${picked.kb} KB`,
+        `Dates: ${content.shift.oldStart} to ${content.shift.oldEnd} move to ${content.shift.newStart} to ${content.shift.newEnd}`,
+      ],
+    });
+    expect(http.uploads[0]?.file?.size).toBe(PACKAGE_BYTES.byteLength);
+    expect(shell.ref).toBe(SHELL);
+  });
+
+  it("refuses a file that isn't a package, and a cancel picks nothing", async () => {
+    const wrong = setUp(onDisk("grades.csv", new Uint8Array([1, 2, 3])));
+    expect(await setupOf(wrong.provider).pickPackage?.()).toMatchObject({
+      ok: false,
+      error: { kind: "rejected" },
+    });
+    const empty = setUp(onDisk("empty.imscc", new Uint8Array()));
+    expect(await setupOf(empty.provider).pickPackage?.()).toMatchObject({ ok: false });
+    const cancelled = setUp(null);
+    expect(await setupOf(cancelled.provider).pickPackage?.()).toEqual({ ok: true, value: null });
+  });
+
+  it("a demo school has no picker: the page's file input names its package", () => {
+    const lms = bridgedLms();
+    for (const school of FAKE_SCHOOLS)
+      expect(lms.provider(school.id).termSetup?.pickPackage).toBeUndefined();
   });
 });

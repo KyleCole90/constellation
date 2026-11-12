@@ -10,6 +10,7 @@ import type {
   CourseContent,
   CourseShell,
   Migration,
+  PickedPackage,
   SamplePackage,
   SourceCourse,
 } from "~/shared/domain/content";
@@ -89,6 +90,11 @@ export interface TermSetup {
   courseContent(course: LmsRef<"course">): Read<CourseContent>;
   migrations(course: LmsRef<"course">): Read<readonly Migration[]>;
   samplePackages(): Read<readonly SamplePackage[]>;
+  /**
+   * Opens main's file picker for a package. Present only where main reads the file itself, a real school in the
+   * desktop app; elsewhere the page's own file input names the package.
+   */
+  pickPackage?(): Read<PickedPackage | null>;
 }
 
 // A WeakMap rather than a # field, because devtools prints # fields when an object is logged.

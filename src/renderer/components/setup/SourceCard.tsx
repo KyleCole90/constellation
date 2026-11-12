@@ -62,6 +62,7 @@ export function SourceCard({ setup }: { setup: CourseSetup }) {
   const { course, school } = setup;
   const options = useWorkspace((state) => state.setupOptions[school]);
   const vendor = useWorkspace((state) => state.vendorLabelFor(school) ?? "LMS");
+  const picker = useWorkspace((state) => state.picksPackage(school));
   const [loading, setLoading] = useState(true);
   const [refused, setRefused] = useState<string | null>(null);
   useEffect(() => {
@@ -120,14 +121,26 @@ export function SourceCard({ setup }: { setup: CourseSetup }) {
       </section>
       <section className="flex flex-col gap-2">
         <h4 className="text-title text-foreground">Upload a Common Cartridge file (.imscc)</h4>
-        <input
-          type="file"
-          accept=".imscc"
-          data-testid="cartridge-input"
-          aria-label="Upload a Common Cartridge file"
-          onChange={onFile}
-          className="text-meta text-muted-foreground file:mr-2 file:h-7 file:cursor-pointer file:rounded-control file:border file:border-input file:bg-transparent file:px-2 file:text-meta file:text-foreground"
-        />
+        {picker ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="self-start"
+            data-testid="cartridge-pick"
+            onClick={() => void workspaceStore().getState().pickCartridge(course).then(setRefused)}
+          >
+            Choose a .imscc file
+          </Button>
+        ) : (
+          <input
+            type="file"
+            accept=".imscc"
+            data-testid="cartridge-input"
+            aria-label="Upload a Common Cartridge file"
+            onChange={onFile}
+            className="text-meta text-muted-foreground file:mr-2 file:h-7 file:cursor-pointer file:rounded-control file:border file:border-input file:bg-transparent file:px-2 file:text-meta file:text-foreground"
+          />
+        )}
         {refused ? (
           <Refusal text={refused} />
         ) : (
