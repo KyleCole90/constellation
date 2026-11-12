@@ -176,6 +176,38 @@ describe("Canvas term setup writes", () => {
     expect(http.writeCount()).toBe(writes);
   });
 
+  it("publishes a file only once its own course says it holds it", async () => {
+    const http = new CanvasTermHttp();
+    const provider = canvasOver(http);
+    const content: SetContent = {
+      kind: "item-set",
+      target: `${TERM_HOST}:item:${SHELL_ID}:file:9999` as LmsRef<"item">,
+      where: "Handout",
+      intent: { set: "item-published" },
+    };
+    const remote: RemoteState = {
+      kind: "item-set",
+      targetVersion: "present",
+      value: "unpublished",
+    };
+    const permit = mintSendPermit(sending(approved(newDraft("ch-file", content, remote))), [
+      "value",
+    ]);
+    if (!permit) throw new Error("no permit");
+    expect(await provider.apply(permit)).toMatchObject({
+      value: { status: "failed", error: { kind: "not_found" } },
+    });
+    expect(await provider.describeSend(content)).toEqual({
+      ok: false,
+      error: { kind: "not_found" },
+    });
+    expect(http.requests.filter((line) => line.includes("/files/"))).toEqual([
+      `GET /courses/${SHELL_ID}/files/9999`,
+      `GET /courses/${SHELL_ID}/files/9999`,
+    ]);
+    expect(http.writeCount()).toBe(0);
+  });
+
   it("a copy whose response was lost goes out once: the retry finds its job and sends nothing", async () => {
     const http = new CanvasTermHttp();
     const provider = canvasOver(http);

@@ -621,7 +621,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
       }
       // A file has no text to fix, but has a name for the send dialog.
       case "file": {
-        const read = await one(`/files/${at.id}`, FileItem);
+        const read = await one(`${at.base}/files/${at.id}`, FileItem);
         return read.ok
           ? { ok: true, value: { body: "", title: read.value.display_name, path: "", key: "" } }
           : read;
@@ -630,7 +630,9 @@ export const canvasTermSetup = (client: CanvasClient) => {
   };
 
   /** Where an item's published state is read and written, and the form that publishes it. Null for the syllabus. */
-  const publishOf = (at: ItemAt): { path: string; form: Record<string, string> } | null => {
+  const publishOf = (
+    at: ItemAt,
+  ): { read?: string; path: string; form: Record<string, string> } | null => {
     switch (at.type) {
       case "page":
         return { path: `${at.base}/pages/${at.id}`, form: { "wiki_page[published]": "true" } };
@@ -642,7 +644,12 @@ export const canvasTermSetup = (client: CanvasClient) => {
       case "announcement":
         return { path: `${at.base}/discussion_topics/${at.id}`, form: { published: "true" } };
       case "file":
-        return { path: `/files/${at.id}`, form: { locked: "false", hidden: "false" } };
+        // Canvas writes a file at `/files/:id` only, which names no course, so the read goes through the course.
+        return {
+          read: `${at.base}/files/${at.id}`,
+          path: `/files/${at.id}`,
+          form: { locked: "false", hidden: "false" },
+        };
       case "syllabus":
         return null;
     }
@@ -732,6 +739,11 @@ export const canvasTermSetup = (client: CanvasClient) => {
             const at = itemAt(content.target);
             const publish = at && publishOf(at);
             if (!publish) return refused("That item can't be published from here.");
+            // A file id is global in Canvas, so it is written only once its own course says it holds it.
+            if (publish.read !== undefined) {
+              const held = await one(publish.read, FileItem);
+              if (!held.ok) return { status: "failed", error: held.error };
+            }
             return write("PUT", publish.path, new URLSearchParams(publish.form));
           }
           case "item-deleted": {
@@ -805,8 +817,9 @@ export const canvasTermSetup = (client: CanvasClient) => {
         }
         const at = itemAt(content.target);
         if (!at) return NOT_FOUND;
-        const path = publishOf(at)?.path;
-        if (path === undefined)
+        const publish = publishOf(at);
+        const path = publish && (publish.read ?? publish.path);
+        if (path === null)
           return valueOf("present", intent.set === "item-deleted" ? "present" : null);
         const read = await one(path, v.object({ ...Published.entries, due_at: OptionalTime }));
         // A deleted item still observes, as `deleted`, so a delete whose response was lost reads as done.
