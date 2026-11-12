@@ -589,6 +589,8 @@ export const parseAgentEffect = (
       return isText(raw["line"])
         ? { ok: true, value: { type: "work", line: raw["line"] } }
         : fail({ kind: "malformed", detail: "work line" });
+    // Only the bridge agent yields this, from main's count. Claude can't: main forwards only its own tool names, none is
+    // "spend", and it sets each effect's type after the tool's input. A spend moves nothing but the thread's cost line.
     case "spend":
       return isNumber(raw["tokens"]) &&
         Number.isInteger(raw["tokens"]) &&

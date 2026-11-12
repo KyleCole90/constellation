@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from "react";
+
 import type { Bridge } from "~/shared/ipc";
 
 /** The preload's bridge. The desktop app has one; the web demo, and tests in Node, don't. */
@@ -12,3 +14,24 @@ export const SPEND_LIMITS_URL = "https://platform.claude.com/settings/limits";
 
 /** Where saved tokens and keys live, as the UI names it. */
 export const VAULT_PLACE = desktopBridge ? "your Mac's Keychain" : "this browser's vault";
+
+/** Claude needs the network; the rules agent doesn't. Offline, AI is disabled up front rather than queued (D28). */
+export const OFFLINE_REASON =
+  "You're offline, so Claude can't draft or chat. Nothing is queued. Ask again once you're back online.";
+
+// Only a browser's explicit `false` is offline: Node, in tests, has a navigator with no `onLine`.
+export const isOnline = (): boolean =>
+  (globalThis.navigator as { onLine?: boolean } | undefined)?.onLine !== false;
+
+const onConnectivity = (change: () => void) => {
+  window.addEventListener("online", change);
+  window.addEventListener("offline", change);
+  return () => {
+    window.removeEventListener("online", change);
+    window.removeEventListener("offline", change);
+  };
+};
+
+/** False only when Claude would be asked and the Mac is offline. */
+export const useAiReachable = (): boolean =>
+  useSyncExternalStore(onConnectivity, () => !REAL_AI || isOnline());

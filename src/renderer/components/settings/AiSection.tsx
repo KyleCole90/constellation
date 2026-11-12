@@ -54,7 +54,7 @@ export function AiSection() {
           ? REAL_AI
             ? "AI is on. Drafts and chat come from Claude, billed to your Anthropic key. Each thread shows what it has cost."
             : "AI is on. Drafts come from built-in rules for now, because no model is wired up in this prototype."
-          : `AI is off, so you fill in grades and replies by hand. Add a key or use the on-device model to turn on AI drafts and chat.${hasChats ? ` ${CHATS_KEPT}` : ""}`
+          : `AI is off, so you fill in grades and replies by hand. ${REAL_AI ? "Add a key" : "Add a key or use the on-device model"} to turn on AI drafts and chat.${hasChats ? ` ${CHATS_KEPT}` : ""}`
       }
     >
       <SettingsCard data-testid="ai-card">
@@ -75,7 +75,7 @@ export function AiSection() {
               >
                 {source === "key" ? "Replace key" : "Use a key"}
               </Button>
-              {source !== "on-device" && (
+              {!REAL_AI && source !== "on-device" && (
                 <Button
                   disabled={!mac}
                   title={mac ? undefined : "Only on a Mac with Apple Intelligence."}
@@ -121,7 +121,7 @@ export function AiSection() {
           />
         )}
       </SettingsCard>
-      {!mac && (
+      {!REAL_AI && !mac && (
         <p className="text-meta text-muted-foreground">
           The on-device model is only on a Mac with Apple Intelligence.
         </p>

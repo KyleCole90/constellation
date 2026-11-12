@@ -3,6 +3,7 @@ import { ArrowUp } from "lucide-react";
 import { useState } from "react";
 
 import type { LmsRef } from "~/shared/domain/ids";
+import { OFFLINE_REASON, useAiReachable } from "~/renderer/desktop";
 import { selectConversation, selectThreadUi } from "~/renderer/stores/selectors";
 import type { Thread } from "~/renderer/stores/types";
 import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
@@ -24,7 +25,10 @@ export function Composer({
   hero?: boolean;
 }) {
   const ai = useAiOn();
-  const working = useWorkspace((state) => state.working[thread.id] ?? false);
+  const reachable = useAiReachable();
+  const busy = useWorkspace((state) => state.working[thread.id] ?? false);
+  // Busy with a run, or offline with nobody to ask.
+  const held = busy || !reachable;
   const focused = useChange(thread.focus);
   const setupStep = useSetupStep(thread);
   const conversation = useWorkspace((state) => {
@@ -51,7 +55,7 @@ export function Composer({
   const correcting = !batching && setupStep === undefined && (focused?.summary.canEdit ?? false);
 
   const submit = (value: string) => {
-    if (!value.trim() || working) return;
+    if (!value.trim() || held) return;
     setText("");
     if (!hero) return void workspaceStore().getState().sendToAgent(thread.id, value.trim());
     const started = workspaceStore().getState().startChat(value.trim());
@@ -72,7 +76,7 @@ export function Composer({
             <button
               key={example}
               type="button"
-              disabled={working}
+              disabled={held}
               onClick={() => submit(example)}
               className="inline-flex h-btn-sm cursor-pointer items-center rounded-full border border-border px-2.5 text-meta text-secondary-label hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:text-tertiary-label"
             >
@@ -89,6 +93,7 @@ export function Composer({
           rows={1}
           placeholder={hints.placeholder}
           aria-label="Message the agent"
+          disabled={!reachable}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== "Enter" || event.shiftKey) return;
@@ -102,14 +107,17 @@ export function Composer({
           className="block max-h-32 min-h-[22px] w-full resize-none bg-transparent text-chat outline-none [field-sizing:content] placeholder:text-muted-foreground"
         />
         <div className="mt-1 flex items-center gap-2">
-          <span className="min-w-0 flex-1 text-meta text-muted-foreground">
-            You approve every write.
+          <span
+            data-testid="composer-note"
+            className="min-w-0 flex-1 text-meta text-muted-foreground"
+          >
+            {reachable ? "You approve every write." : OFFLINE_REASON}
           </span>
           <Button
             variant="default"
             size="icon-round"
             aria-label="Send to agent"
-            disabled={!text.trim() || working}
+            disabled={!text.trim() || held}
             onClick={() => submit(text)}
           >
             <ArrowUp />

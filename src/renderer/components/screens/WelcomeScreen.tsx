@@ -39,15 +39,20 @@ const AI_OPTIONS: readonly AiOption[] = [
     title: "Claude, with your Anthropic API key",
     body: () => `The key stays in ${VAULT_PLACE} and is never shown again.`,
   },
-  {
-    source: "on-device",
-    title: "On-device model",
-    body: (mac) =>
-      mac
-        ? "The model built into macOS. Nothing leaves this Mac."
-        : "Only on a Mac with Apple Intelligence.",
-    needsMac: true,
-  },
+  // The desktop app drafts with Claude alone (D27), so it offers no on-device model.
+  ...(REAL_AI
+    ? []
+    : [
+        {
+          source: "on-device",
+          title: "On-device model",
+          body: (mac: boolean) =>
+            mac
+              ? "The model built into macOS. Nothing leaves this Mac."
+              : "Only on a Mac with Apple Intelligence.",
+          needsMac: true,
+        } satisfies AiOption,
+      ]),
   {
     source: "none",
     title: "No AI",
