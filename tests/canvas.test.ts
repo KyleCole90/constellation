@@ -192,6 +192,7 @@ describe("Canvas reads", () => {
       school: SCHOOL,
       lease: leaseOf(TOKEN),
       fetch: endless,
+      now: () => Date.now(),
     });
     const courses = await provider.courses();
     expect(courses.ok || courses.error.kind).toBe("rejected");
