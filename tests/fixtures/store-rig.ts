@@ -29,6 +29,7 @@ export interface StoreRigOptions {
   clock?: VirtualClock;
   subscribeStorage?: (onChange: () => void) => void;
   locks?: Pick<LockManager, "request">;
+  connectivity?: { online(): boolean; subscribe(onChange: () => void): void };
 }
 
 export const makeStoreRig = async (options: StoreRigOptions = {}) => {
@@ -64,6 +65,7 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
     aiAlways: !options.noKey,
     ...(options.agent ? { agent: options.agent } : {}),
     ...(options.subscribeStorage ? { subscribeStorage: options.subscribeStorage } : {}),
+    ...(options.connectivity ? { connectivity: options.connectivity } : {}),
   });
 
   const state = () => store.getState();

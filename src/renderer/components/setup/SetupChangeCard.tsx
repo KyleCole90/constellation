@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { ChangeId } from "~/shared/domain/ids";
+import { OFFLINE_SEND_REASON } from "~/renderer/desktop";
 import { formatTime } from "~/renderer/lib/utils";
 import { useWorkspace } from "~/renderer/stores/workspace";
 
@@ -29,6 +30,7 @@ function Footer({
   const { busy, send } = useThreadActions();
   const { record, summary } = view;
   const vendor = useWorkspace((state) => state.vendorLabelFor(record.school) ?? "the LMS");
+  const online = useWorkspace((state) => state.online);
   if (summary.sentAt)
     return (
       <div data-action-bar className={FOOTER_CLASS}>
@@ -56,9 +58,11 @@ function Footer({
   return (
     <div data-action-bar className={FOOTER_CLASS}>
       <span className="min-w-0 flex-1 text-meta text-muted-foreground">
-        {summary.canSend
-          ? "Approved. Nothing has gone yet."
-          : `Nothing goes to ${vendor} until you approve it.`}
+        {!online
+          ? OFFLINE_SEND_REASON
+          : summary.canSend
+            ? "Approved. Nothing has gone yet."
+            : `Nothing goes to ${vendor} until you approve it.`}
       </span>
       {summary.canApprove && (
         <ApproveButton targets={[record]} label="Approve" testId={`${name}-approve`} size="lg" />

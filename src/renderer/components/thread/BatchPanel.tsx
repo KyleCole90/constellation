@@ -122,6 +122,7 @@ export function BatchPanel({ selected }: { selected: readonly RowKey[] }) {
     useShallow((state) => batch.flatMap((id) => state.changes[id] ?? [])),
   );
   const connections = useWorkspace((state) => state.connections);
+  const online = useWorkspace((state) => state.online);
   const students = useWorkspace(
     useShallow((state) =>
       records.map((record) =>
@@ -146,9 +147,9 @@ export function BatchPanel({ selected }: { selected: readonly RowKey[] }) {
       records.map((record) => ({
         id: record.id,
         record,
-        summary: summarizeFor(record, connections[record.school]?.status),
+        summary: summarizeFor(record, connections[record.school]?.status, online),
       })),
-    [records, connections],
+    [records, connections, online],
   );
   const summaries = items.map((item) => item.summary);
   const phase = batchPhase(items.map((item) => ({ ...item, busy: busy.has(item.id) })));

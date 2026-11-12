@@ -1,5 +1,6 @@
 import { CheckCircle2, ChevronRight } from "lucide-react";
 
+import { OFFLINE_SEND_REASON } from "~/renderer/desktop";
 import { cn, formatTime } from "~/renderer/lib/utils";
 import { selectCourse } from "~/renderer/stores/selectors";
 import { useWorkspace } from "~/renderer/stores/workspace";
@@ -59,6 +60,7 @@ function Footer({ view }: { view: ChangeView }) {
   const { record, summary } = view;
   const vendor = useWorkspace((state) => state.vendorLabelFor(record.school) ?? "the LMS");
   const host = useWorkspace((state) => state.schools.find((s) => s.id === record.school)?.host);
+  const online = useWorkspace((state) => state.online);
   const sending = busy.has(record.id) || summary.tone === "working";
   const base =
     "flex flex-none flex-wrap items-center justify-end gap-x-btn-gap gap-y-2 border-t border-border bg-card px-card py-3";
@@ -130,8 +132,10 @@ function Footer({ view }: { view: ChangeView }) {
   }
   return (
     <div className={base}>
-      <span className={FOOTER_TEXT}>
-        {summary.approvedAt && `Approved by you at ${formatTime(summary.approvedAt)}.`}
+      <span data-testid="send-state" className={FOOTER_TEXT}>
+        {!online
+          ? OFFLINE_SEND_REASON
+          : summary.approvedAt && `Approved by you at ${formatTime(summary.approvedAt)}.`}
       </span>
       <div className={FOOTER_BUTTONS}>
         {discard}

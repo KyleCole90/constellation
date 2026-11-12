@@ -320,7 +320,11 @@ function InstitutionRowView({
 }) {
   const status = useWorkspace((state) =>
     row.school
-      ? connectionStatus(state.connections[row.school.id], Boolean(state.syncing[row.school.id]))
+      ? connectionStatus(
+          state.connections[row.school.id],
+          Boolean(state.syncing[row.school.id]),
+          state.online,
+        )
       : null,
   );
   const connected = status !== null && !STATUS_VIEW[status].needsToken;

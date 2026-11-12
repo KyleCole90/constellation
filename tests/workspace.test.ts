@@ -23,6 +23,8 @@ import {
   selectWhatsDue,
   summarizeFor,
 } from "~/renderer/stores/selectors";
+import { connectionStatus } from "~/renderer/components/settings/connection.logic";
+import { OFFLINE_SEND_REASON } from "~/renderer/desktop";
 import type { ConnectionRecord } from "~/renderer/stores/types";
 import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 
@@ -525,6 +527,39 @@ describe("sendChanges", () => {
       { id, refused: "not-sendable" },
     ]);
     expect(rig.server.log.filter((entry) => entry.kind === "write")).toEqual([]);
+  });
+
+  it("offline, Send is disabled with the reason, nothing is tried, and it sends once back online", async () => {
+    let online = true;
+    let change = () => {};
+    const rig = await connected({
+      connectivity: { online: () => online, subscribe: (onChange) => (change = onChange) },
+    });
+    const id = await openFor(rig, "Maya Ortiz");
+    approve(rig, id);
+    online = false;
+    change();
+    const row = selectQueueRows(rig.state()).find((entry) => entry.change?.id === id);
+    expect(row?.summary?.canSend).toBe(false);
+    expect(connectionStatus(rig.state().connections[LCC], false, rig.state().online)).toBe(
+      "offline",
+    );
+    rig.server.log.length = 0;
+
+    expect(await rig.clock.run(rig.state().sendChanges([id]))).toEqual([
+      { id, refused: "no-connection" },
+    ]);
+    expect(rig.state().notice).toBe(OFFLINE_SEND_REASON);
+    expect(rig.server.log).toEqual([]);
+    expect(stateTag(rig, id)).toBe("approved");
+
+    online = true;
+    change();
+    expect(
+      selectQueueRows(rig.state()).find((entry) => entry.change?.id === id)?.summary?.canSend,
+    ).toBe(true);
+    await rig.clock.run(rig.state().sendChanges([id]));
+    expect(stateTag(rig, id)).toBe("sent");
   });
 
   it("a storage failure mid-send stops it, goes back to what is durable, and says so", async () => {

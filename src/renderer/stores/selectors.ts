@@ -91,12 +91,20 @@ const changesByTarget = (state: WorkspaceData): ReadonlyMap<string, ChangeRecord
   return byTarget;
 };
 
-/** A summary with what the change alone can't know: its school's token expired, or came back. */
+/** A summary with what the change alone can't know: its school's token expired or came back, or the Mac is offline. */
 export const summarizeFor = (
   change: ChangeRecord,
   connection: ConnectionRecord["status"] | undefined,
+  online = true,
 ): ChangeSummary => {
-  const summary = summarize(change);
+  const summary = withConnection(summarize(change), connection);
+  // Offline, Send is disabled up front rather than tried and held, and nothing queues (D28).
+  return online ? summary : { ...summary, canSend: false };
+};
+const withConnection = (
+  summary: ChangeSummary,
+  connection: ConnectionRecord["status"] | undefined,
+): ChangeSummary => {
   const expired = connection === "expired" || connection === "disconnected";
   if (summary.banner === "reconnect" && !expired)
     return { ...summary, label: "Ready to retry", recovery: "retry" };
@@ -112,8 +120,11 @@ export const summarizeFor = (
     };
   return summary;
 };
-const summarizeIn = (state: WorkspaceData, change: ChangeRecord): ChangeSummary =>
-  summarizeFor(change, state.connections[change.school]?.status);
+// Selectors take the persisted data; the live store also carries `online`, which isn't persisted.
+const summarizeIn = (
+  state: WorkspaceData & { online?: boolean },
+  change: ChangeRecord,
+): ChangeSummary => summarizeFor(change, state.connections[change.school]?.status, state.online);
 
 export interface QueueRow {
   submission: Submission;

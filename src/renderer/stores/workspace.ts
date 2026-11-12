@@ -88,7 +88,7 @@ import {
   type Secret,
   type Vault,
 } from "~/shared/providers/provider";
-import { desktopBridge } from "~/renderer/desktop";
+import { OFFLINE_SEND_REASON, desktopBridge, isOnline, onConnectivity } from "~/renderer/desktop";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 import { bridgeCanvas, bridgeFakeLms } from "~/renderer/providers/lms";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
@@ -238,6 +238,8 @@ export type WorkspaceState = WorkspaceData &
     working: Readonly<Record<ThreadId, boolean>>;
     /** Schools with a sync in progress. Not persisted. */
     syncing: Readonly<Record<SchoolId, boolean>>;
+    /** False only on desktop with the Mac offline. Send is disabled then, and nothing queues (D28). Not persisted. */
+    online: boolean;
     /** By course ref. Not persisted: the next read of the job restores it. */
     setupLive: Readonly<Record<string, SetupLive>>;
     /** What a school offers to copy from. Not persisted. */
@@ -273,6 +275,8 @@ export interface WorkspaceDeps {
   locks?: Pick<LockManager, "request"> | null;
   /** Calls back when another tab wrote the workspace key. */
   subscribeStorage?(onChange: () => void): void;
+  /** The desktop app's network. Without one, as in the web demo, whose LMS is in the page, the app is always online. */
+  connectivity?: { online(): boolean; subscribe(onChange: () => void): void };
 }
 
 export type WorkspaceStore = StoreApi<WorkspaceState> & { syncFromStorage(): void };
@@ -1399,6 +1403,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           blanks: {},
           working: {},
           syncing: {},
+          online: deps.connectivity?.online() ?? true,
           setupLive: {},
           setupOptions: {},
           notice: null,
@@ -1798,6 +1803,10 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           },
 
           sendChanges: async (ids, onItem) => {
+            if (!get().online) {
+              set({ notice: OFFLINE_SEND_REASON });
+              return ids.map((id) => ({ id, refused: "no-connection" }));
+            }
             let results: readonly RunResult[];
             try {
               results = await writeback.send(ids, onItem);
@@ -1974,6 +1983,10 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
   };
   applyLoadNotice();
 
+  deps.connectivity?.subscribe(() =>
+    store.setState({ online: deps.connectivity?.online() ?? true }),
+  );
+
   deps.subscribeStorage?.(() => {
     syncFromStorage();
     const { blanks, aiOn } = store.getState();
@@ -1995,6 +2008,7 @@ const browserDeps = (): WorkspaceDeps => ({
   vault: createAppVault(),
   backend: desktopBridge ? bridgeBackend(desktopBridge) : fakeCanvasBackend({}),
   ...(desktopBridge?.agent === "claude" ? { agent: createBridgeAgent(desktopBridge) } : {}),
+  ...(desktopBridge ? { connectivity: { online: isOnline, subscribe: onConnectivity } } : {}),
   realNow: () => Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   random: () => Math.random(),
