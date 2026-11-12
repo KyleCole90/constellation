@@ -50,8 +50,13 @@ export default defineConfig({
         neverBundle: ["electron"],
         alwaysBundle: ["valibot", "@anthropic-ai/sdk", "electron-updater"],
       },
-      // Fixed at build time, so a packaged app's environment can't turn updates on (src/main/index.ts).
-      env: { CONSTELLATION_UPDATES: process.env.CONSTELLATION_UPDATES === "on" ? "on" : "off" },
+      // Fixed at build time, so a packaged app's environment can't turn updates on (src/main/index.ts), and crash
+      // reports go only to the PostHog project named at build time. Unset, as in CI and verify, the build sends nothing.
+      env: {
+        CONSTELLATION_UPDATES: process.env.CONSTELLATION_UPDATES === "on" ? "on" : "off",
+        CONSTELLATION_POSTHOG_KEY: process.env.CONSTELLATION_POSTHOG_KEY ?? "",
+        CONSTELLATION_POSTHOG_HOST: process.env.CONSTELLATION_POSTHOG_HOST ?? "",
+      },
     },
     {
       entry: "src/preload/index.ts",

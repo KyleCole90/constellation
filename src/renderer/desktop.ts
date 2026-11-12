@@ -1,10 +1,18 @@
 import { useSyncExternalStore } from "react";
 
-import type { Bridge } from "~/shared/ipc";
+import { errorReport, type Bridge } from "~/shared/ipc";
 
 /** The preload's bridge. The desktop app has one; the web demo, and tests in Node, don't. */
 export const desktopBridge: Bridge | undefined =
   typeof window === "undefined" ? undefined : window.constellation;
+
+/**
+ * Hands an error's type and stack to main, which scrubs them and decides whether a report leaves (docs/electron-spec.md,
+ * D23). The web demo has no main, so it sends nothing.
+ */
+export const reportError = (error: unknown) => {
+  void desktopBridge?.invoke("error.report", errorReport(error)).catch(() => {});
+};
 
 /** Drafts and chat come from Claude in main. Otherwise, in the web demo and in verify, from the rules agent. */
 export const REAL_AI = desktopBridge?.agent === "claude";

@@ -36,6 +36,10 @@ Other commands:
 
 To restore the starting data, open **Settings**, go to the **Demo** section, and click **Reset demo data**. To make the fake LMS misbehave, use the failure lab in the same section. It can expire a token, change a grade behind your back, fail a write partway, lose a response, and throttle the next write.
 
+## Privacy
+
+[PRIVACY.md](PRIVACY.md) lists everything the desktop app sends, and the setup page shows it. Crash reports go to the PostHog project whose key is in `CONSTELLATION_POSTHOG_KEY` when `npm run build` runs. `CONSTELLATION_POSTHOG_HOST` names another PostHog host; the default is `https://us.i.posthog.com`. A build without a key, as in CI, sends nothing, and verify never sends.
+
 ## Keyboard
 
 | Keys            | Action                                                                                                                                                                                                                             |

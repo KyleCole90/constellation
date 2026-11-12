@@ -31,7 +31,33 @@ import {
  * A renderer error as it crosses to main: its type and its stack, never its message (docs/electron-spec.md, D23).
  * Strict, so a payload carrying anything more is rejected rather than trimmed.
  */
-const RendererError = v.strictObject({ type: v.string(), stack: v.string() });
+/** A report keeps at most this many frames, and its stack at most this many characters. */
+export const MAX_FRAMES = 50;
+const MAX_STACK = 16_000;
+
+const RendererError = v.strictObject({
+  type: v.pipe(v.string(), v.maxLength(64)),
+  stack: v.pipe(v.string(), v.maxLength(MAX_STACK)),
+});
+
+/**
+ * An error's type and its stack frames, without its message. V8 starts a stack with `name: message`, and a message can
+ * span lines that read like frames, so that header goes before the stack leaves its process. Main scrubs what's left.
+ */
+export const errorReport = (error: unknown): v.InferOutput<typeof RendererError> => {
+  if (!(error instanceof Error)) return { type: "NonError", stack: "" };
+  const stack = error.stack ?? "";
+  const header = String(error);
+  const frames = stack.startsWith(header) ? stack.slice(header.length) : "";
+  return {
+    type: error.name.slice(0, 64),
+    stack: frames
+      .split("\n")
+      .slice(0, MAX_FRAMES + 1)
+      .join("\n")
+      .slice(0, MAX_STACK),
+  };
+};
 
 /** A school's id or `ai-key`. Main can't check a school id against anything yet, so any non-empty string passes. */
 export const VaultKeySchema = v.custom<VaultKey>(
@@ -71,6 +97,12 @@ interface Channel {
 /** Every channel between the renderer and main, declared once (docs/electron-spec.md, D16). */
 const ipc = {
   "error.report": { input: RendererError, output: v.void() },
+  /** Whether crash reports are on (the teacher's choice), and whether this build and launch can send any. */
+  "telemetry.status": {
+    input: v.void(),
+    output: v.strictObject({ enabled: v.boolean(), available: v.boolean() }),
+  },
+  "telemetry.choose": { input: v.strictObject({ enabled: v.boolean() }), output: v.void() },
   "vault.enroll": {
     input: v.strictObject({ key: VaultKeySchema, token: v.pipe(v.string(), v.minLength(1)) }),
     output: v.void(),

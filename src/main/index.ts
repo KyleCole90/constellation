@@ -14,7 +14,9 @@ import {
 } from "electron";
 import electronUpdater from "electron-updater";
 
-import { RULES_AGENT_SWITCH, handle } from "../shared/ipc";
+import * as v from "valibot";
+
+import { RULES_AGENT_SWITCH, errorReport, handle } from "../shared/ipc";
 
 import {
   APP_SCHEME,
@@ -27,10 +29,14 @@ import {
 } from "./security";
 import { createFileStorage, fakeServer, lmsHandlers } from "./lms";
 import { anthropicAgent } from "./providers/anthropic";
+import { jsonFile } from "./json-file";
+import { createTelemetry } from "./telemetry";
 import { startUpdates } from "./updates";
 import { createVault } from "./vault";
 
 const RENDERER_DIR = fileURLToPath(new URL("../dist", import.meta.url));
+/** The folder holding `out/`: the repo, or the packaged app's `app.asar`. */
+const APP_ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 const PRELOAD = fileURLToPath(new URL("../preload/index.cjs", import.meta.url));
 /** Set by `npm run dev` to its vite server. A packaged app always loads its bundled files. */
 const DEV_URL = app.isPackaged ? undefined : process.env.CONSTELLATION_DEV_URL;
@@ -83,6 +89,38 @@ const start = async () => {
   );
   protocol.handle(APP_SCHEME, serve);
   const userData = app.getPath("userData");
+  const choice = jsonFile(
+    join(userData, "telemetry.json"),
+    v.strictObject({ enabled: v.boolean() }),
+    { enabled: true },
+  );
+  const telemetry = createTelemetry({
+    // Both are baked in by `vp pack` from the build's environment (vite.config.ts). A build without a key sends nothing.
+    key: process.env.CONSTELLATION_POSTHOG_KEY ?? "",
+    appRoot: APP_ROOT,
+    host: process.env.CONSTELLATION_POSTHOG_HOST || "https://us.i.posthog.com",
+    env: process.env.CONSTELLATION_TELEMETRY_ENABLED,
+    offline: FAKE_ONLY,
+    choice: { read: () => choice.read().enabled, write: (enabled) => choice.write({ enabled }) },
+    appVersion: app.getVersion(),
+    os: `${process.platform} ${process.arch}`,
+    osVersion: process.getSystemVersion(),
+    send: (url, body) =>
+      net.fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body }),
+  });
+  const reportMain = (error: unknown) => {
+    const { type, stack } = errorReport(error);
+    void telemetry.report(type, stack, "main");
+  };
+  // A monitor leaves an uncaught error's crash as it was. A rejection listener silences Electron's warning, so it warns.
+  process.on("uncaughtExceptionMonitor", reportMain);
+  process.on("unhandledRejection", (reason) => {
+    process.emitWarning(
+      reason instanceof Error ? (reason.stack ?? String(reason)) : String(reason),
+      "UnhandledPromiseRejectionWarning",
+    );
+    reportMain(reason);
+  });
   const vault = createVault(join(userData, "vault.json"), safeStorage);
   const lms = lmsHandlers({
     makeServer: fakeServer(createFileStorage(join(userData, "lms.json"))),
@@ -117,8 +155,9 @@ const start = async () => {
       ipcMain.handle(channel, (event, input) => listener(event.senderFrame?.url ?? null, input)),
     trustedSender(DEV_ORIGIN),
     {
-      // Error tracking (step 9) sends these on; until then main accepts a well-formed report and drops it.
-      "error.report": async () => {},
+      "error.report": ({ type, stack }) => telemetry.report(type, stack, "renderer"),
+      "telemetry.status": async () => telemetry.status(),
+      "telemetry.choose": async ({ enabled }) => telemetry.choose(enabled),
       "vault.enroll": ({ key, token }) => vault.enroll(key, token),
       "vault.keys": async () => vault.keys(),
       "vault.forget": async ({ key }) => vault.forget(key),

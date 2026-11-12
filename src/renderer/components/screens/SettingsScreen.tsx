@@ -1,6 +1,6 @@
 import { VAULT_PLACE } from "~/renderer/desktop";
 import { Link, useSearch } from "@tanstack/react-router";
-import { FlaskConical, Plug, Sparkles, SunMoon } from "lucide-react";
+import { FlaskConical, Plug, Shield, Sparkles, SunMoon } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { cn } from "~/renderer/lib/utils";
@@ -14,13 +14,20 @@ import { ConnectionCard } from "../settings/ConnectionCard";
 import { DemoSection } from "../settings/DemoSection";
 import { AddressField, InstitutionList, useInstitutions } from "../settings/Institutions";
 import { SettingsSection } from "../settings/layout";
+import { PrivacySection } from "../settings/Privacy";
 import {
   SETTINGS_SECTIONS,
   parseSettingsSection,
   type SettingsSectionId,
 } from "../settings/sections.logic";
 
-const ICONS = { connections: Plug, ai: Sparkles, appearance: SunMoon, demo: FlaskConical } as const;
+const ICONS = {
+  connections: Plug,
+  ai: Sparkles,
+  privacy: Shield,
+  appearance: SunMoon,
+  demo: FlaskConical,
+} as const;
 
 function AddInstitution() {
   const institutions = useInstitutions({ includeSaved: false });
@@ -64,6 +71,7 @@ function ConnectionsSection() {
 const BODY: Readonly<Record<SettingsSectionId, () => React.JSX.Element>> = {
   connections: ConnectionsSection,
   ai: AiSection,
+  privacy: PrivacySection,
   appearance: AppearanceSection,
   demo: DemoSection,
 };

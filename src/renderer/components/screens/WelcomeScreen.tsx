@@ -12,6 +12,7 @@ import { useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 import { Brand, PRODUCT_NAME } from "../Brand";
 import { isMacDevice } from "../device";
 import { AiKeyForm } from "../settings/AiKeyForm";
+import { SetupPrivacy } from "../settings/Privacy";
 import {
   AddressField,
   Dot,
@@ -301,6 +302,8 @@ export function SetupScreen() {
           </section>
 
           <AiChoices choice={choice} onChoose={setChoice} disabled={connected === 0} />
+
+          <SetupPrivacy title={<SectionTitle number={3}>Privacy</SectionTitle>} />
         </div>
 
         <aside

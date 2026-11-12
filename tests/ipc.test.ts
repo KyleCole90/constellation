@@ -22,6 +22,8 @@ const registered = () => {
       "error.report": async (report) => {
         reports.push(report);
       },
+      "telemetry.status": async () => ({ enabled: true, available: false }),
+      "telemetry.choose": record,
       "vault.enroll": record,
       "vault.keys": async () => [],
       "vault.forget": record,
@@ -47,6 +49,8 @@ describe("main's handlers", () => {
   it("register one listener per channel", () => {
     expect([...registered().listeners.keys()]).toEqual([
       "error.report",
+      "telemetry.status",
+      "telemetry.choose",
       "vault.enroll",
       "vault.keys",
       "vault.forget",
