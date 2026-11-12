@@ -122,10 +122,14 @@ export const bridgeFakeLms = (
   };
   /** Main answers once the lab moves past what the renderer has, so the Settings screen follows it. */
   const follow = (after: number | null): void =>
-    void bridge.invoke("lms.labNext", { after }).then((next) => {
-      take(next.lab);
-      follow(next.version);
-    });
+    void bridge.invoke("lms.labNext", { after }).then(
+      (next) => {
+        take(next.lab);
+        follow(next.version);
+      },
+      // One failed ask mustn't freeze the lab for the session; ask again shortly.
+      () => setTimeout(() => follow(after), 1000),
+    );
   // A fresh renderer gets a fresh fake, as a page reload does in the web demo.
   command({ do: "reload" });
   follow(null);

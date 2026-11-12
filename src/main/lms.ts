@@ -51,6 +51,8 @@ export const fakeServer = (storage: StorageLike) => (now: () => number) =>
     random: () => Math.random(),
   });
 
+const LAB_WAIT_MS = 25_000;
+
 type LmsChannel = Extract<keyof Handlers, `lms.${string}`>;
 
 const NO_TERM_SETUP = {
@@ -169,7 +171,15 @@ export const lmsHandlers = (options: {
     "lms.samplePackages": ({ school }) => term(school, (setup) => setup.samplePackages()),
     "lms.lab": async (command) => run(command),
     "lms.labNext": async ({ after }) => {
-      if (after === version) await new Promise<void>((wake) => waiting.add(wake));
+      // Bounded, so a waiter left by a closed or reloaded window doesn't sit forever; the renderer simply asks again.
+      if (after === version)
+        await new Promise<void>((wake) => {
+          waiting.add(wake);
+          setTimeout(() => {
+            waiting.delete(wake);
+            wake();
+          }, LAB_WAIT_MS);
+        });
       return { version, lab: labSnapshot(fake.server) };
     },
     "lms.stored": () => unpackaged(() => fake.server.stored()),
