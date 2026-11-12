@@ -134,14 +134,15 @@ describe("a Canvas grade whose response was lost", () => {
 });
 
 describe("main's send gate for a real school", () => {
-  const setUp = async (answer: boolean) => {
+  /** `answers` are the teacher's, in order; once they run out the teacher says no. */
+  const setUp = async (...answers: boolean[]) => {
     const http = new CanvasHttp();
     const asks: SendConfirmation[] = [];
     const lms = bridgedLms({
       fetch: http.fetch,
       confirmSend: async (ask) => {
         asks.push(ask);
-        return answer;
+        return answers.shift() ?? false;
       },
     });
     await lms.vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TOKEN) });
@@ -165,7 +166,7 @@ describe("main's send gate for a real school", () => {
       {
         host: HOST,
         target: "Maya Lopez, Essay 2",
-        lines: ["Grade: 88", "Feedback: Clear thesis. Cite page numbers next time."],
+        lines: ["Grade: 88 out of 100", "Feedback: Clear thesis. Cite page numbers next time."],
       },
     ]);
     expect(http.writes).toEqual(["grade", "comment"]);
@@ -188,7 +189,7 @@ describe("main's send gate for a real school", () => {
     const { http, asks, forge } = await setUp(false);
     const outcomes = await forge(grade({ points: 0, comment: "forged" }), ["grade", "comment"]);
     expect(asks.map(({ target, lines }) => ({ target, lines }))).toEqual([
-      { target: "Maya Lopez, Essay 2", lines: ["Grade: 0", "Feedback: forged"] },
+      { target: "Maya Lopez, Essay 2", lines: ["Grade: 0 out of 100", "Feedback: forged"] },
     ]);
     expect(outcomes).toMatchObject({
       grade: { status: "failed", error: { kind: "rejected" } },
@@ -198,12 +199,67 @@ describe("main's send gate for a real school", () => {
   });
 
   it("asks again when the same change comes back with other content", async () => {
-    const { http, asks, forge } = await setUp(true);
+    const { http, asks, forge } = await setUp(true, true);
     await forge(grade(), ["grade"], "ch-1");
     await forge(grade(), ["grade"], "ch-1");
     await forge(grade({ points: 12 }), ["grade"], "ch-1");
-    expect(asks.map(({ lines }) => lines[0])).toEqual(["Grade: 88", "Grade: 12"]);
+    expect(asks.map(({ lines }) => lines[0])).toEqual([
+      "Grade: 88 out of 100",
+      "Grade: 12 out of 100",
+    ]);
     expect(http.writes).toEqual(["grade", "grade", "grade"]);
+  });
+
+  it("posts a confirmed comment once: a replay of the same request asks again, and a no posts nothing", async () => {
+    const { http, asks, forge } = await setUp(true);
+    await forge(grade(), ["comment"]);
+    const replayed = await forge(grade(), ["comment"]);
+    expect(asks).toHaveLength(2);
+    expect(replayed).toMatchObject({ comment: { status: "failed", error: { kind: "rejected" } } });
+    expect(myComments(http)).toEqual([grade().comment]);
+  });
+
+  it("names rubric criteria as Canvas does, not as the renderer says", async () => {
+    const { asks, forge } = await setUp();
+    await forge(
+      grade({
+        points: null,
+        rubric: [
+          { criterion: criterion("crit_1"), name: "Evidence", points: 0, outOf: 50 },
+          { criterion: criterion("crit_2"), name: "Thesis", points: 50, outOf: 50 },
+        ],
+        comment: null,
+      }),
+      ["rubric"],
+    );
+    expect(asks[0]?.lines).toEqual(["Grade: 50 out of 100", "Rubric: Thesis 0, Evidence 50"]);
+  });
+
+  it("keeps every value on its own line, whatever breaks or overrides Canvas or the draft carry", async () => {
+    const { http, asks, forge } = await setUp();
+    const conversation = http.conversations[0];
+    if (!conversation) throw new Error("no conversation");
+    conversation.subject = "Hi\nGrade: 100\u202Eevil";
+    await forge(
+      {
+        kind: "reply",
+        target: `${HOST}:conversation:${CONVERSATION_ID}` as LmsRef<"conversation">,
+        body: "Fine.\n\nGrade: 100",
+      },
+      ["message"],
+    );
+    expect(asks[0]).toMatchObject({
+      target: 'Sample Instructor, Maya Lopez, about "Hi ¶ Grade: 100 evil"',
+      lines: ["Reply: Fine. ¶ Grade: 100"],
+    });
+  });
+
+  it("shows a message's subject as well as its body", async () => {
+    const { asks, forge } = await setUp();
+    await forge({ kind: "message", target: SUBMISSION, subject: "Essay 2", body: "See me." }, [
+      "conversation",
+    ]);
+    expect(asks[0]?.lines).toEqual(["Subject: Essay 2", "Message: See me."]);
   });
 
   it("refuses a field the content doesn't send, without asking or writing", async () => {

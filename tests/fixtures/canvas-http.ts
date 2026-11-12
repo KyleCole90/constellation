@@ -239,7 +239,7 @@ export class CanvasHttp {
     return {
       ...row,
       user: { name: NAMES[row.user_id] },
-      assignment: { name: "Essay 2" },
+      assignment: { name: "Essay 2", points_possible: 100, rubric: RUBRIC },
     };
   }
 

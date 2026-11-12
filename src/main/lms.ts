@@ -3,9 +3,8 @@ import { isDeepStrictEqual } from "node:util";
 import * as v from "valibot";
 
 import {
-  FIELD_LABEL,
+  appendsEntry,
   fieldsOf,
-  fieldText,
   type ChangeContent,
   type FieldKey,
   type LmsError,
@@ -166,10 +165,12 @@ export const lmsHandlers = (options: {
     return created;
   };
   /**
-   * The content the teacher confirmed for each change, by school and change id, for as long as main runs. A retry or a
-   * resume of the same content sends without asking again; any other content asks first.
+   * What the teacher confirmed for each change, by school and change id, for as long as main runs. A retry or a resume
+   * of the same content sends without asking again, and any other content asks first. A field that adds an entry
+   * (a comment, a message, a post) goes out once per confirmation: once sent, sending it again asks again, so even a
+   * renderer that replays the request can't post twice without the teacher saying so.
    */
-  const confirmed = new Map<string, ChangeContent>();
+  const confirmed = new Map<string, { content: ChangeContent; sent: Set<FieldKey> }>();
   /**
    * The renderer is untrusted, so its permit is only a request. Main writes to a real school only what the teacher
    * confirmed in main's own dialog, and only the fields that content sends.
@@ -185,18 +186,26 @@ export const lmsHandlers = (options: {
     if (fields.some((field) => !sends.includes(field))) return failedAll(fields, NOT_THIS_CHANGE);
     const provider = canvasProvider(school);
     const key = `${school.id}\n${changeId}`;
-    if (!isDeepStrictEqual(confirmed.get(key), content)) {
-      const target = await provider.targetOf(content);
-      if (!target.ok) return failedAll(fields, target.error);
-      const yes = await options.confirmSend({
-        host: school.host,
-        target: target.value,
-        lines: sends.map((field) => `${FIELD_LABEL[field]}: ${fieldText(content, field)}`),
-      });
-      if (!yes) return failedAll(fields, NOT_CONFIRMED);
-      confirmed.set(key, content);
+    let confirmation = confirmed.get(key);
+    if (
+      !confirmation ||
+      !isDeepStrictEqual(confirmation.content, content) ||
+      fields.some((field) => confirmation?.sent.has(field))
+    ) {
+      const described = await provider.describeSend(content);
+      if (!described.ok) return failedAll(fields, described.error);
+      if (!(await options.confirmSend({ host: school.host, ...described.value })))
+        return failedAll(fields, NOT_CONFIRMED);
+      confirmation = { content, sent: new Set() };
+      confirmed.set(key, confirmation);
     }
-    return provider.apply(SendPermit.relayed(changeId, content, fields));
+    // Counted as sent before the request leaves, so a second request racing this one asks first.
+    const appends = fields.filter(appendsEntry);
+    for (const field of appends) confirmation.sent.add(field);
+    const outcomes = await provider.apply(SendPermit.relayed(changeId, content, fields));
+    for (const field of appends)
+      if (outcomes[field]?.status === "failed") confirmation.sent.delete(field);
+    return outcomes;
   };
   const term = async <T>(
     school: School,
