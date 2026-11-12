@@ -1,21 +1,34 @@
 /**
  * Crash reports to PostHog, sent from main only (docs/electron-spec.md, D20, D23, D24). A report carries an error's
- * type, its stack frames (file, line, column, function), the app version and the OS. It never carries message text:
+ * type, its stack frames (file, line, column), the app version and the OS. It never carries message text:
  * every value counts as student data, so anything the scrubber can't prove is ours is dropped.
  *
  * This is one POST to PostHog's capture endpoint, not posthog-node, so nothing but the scrubbed report can ride along:
  * no person profile, no GeoIP, no autocapture, no breadcrumbs.
  */
 
-/** One stack frame, oldest first, as PostHog's raw stack trace takes it. */
-interface Frame {
-  readonly platform: "node:javascript" | "web:javascript";
-  readonly filename: string;
-  readonly function: string;
-  readonly lineno: number;
-  readonly colno: number;
-  readonly in_app: boolean;
-}
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { MAX_FRAMES } from "../shared/ipc";
+
+/**
+ * One stack frame, oldest first, as PostHog's raw stack trace takes it. A frame in a file of this app's own bundle keeps
+ * its path and position; any other frame is only `<withheld>`. No frame carries a function name: a name can come from
+ * data (`{ [studentName]: () => … }`), and in a minified bundle the file and position already find the line.
+ */
+type Frame =
+  | {
+      readonly platform: Platform;
+      readonly filename: string;
+      readonly lineno: number;
+      readonly colno: number;
+      readonly in_app: true;
+    }
+  | { readonly platform: Platform; readonly filename: "<withheld>"; readonly in_app: false };
+
+type Platform = "node:javascript" | "web:javascript";
 
 interface Scrubbed {
   readonly type: string;
@@ -24,52 +37,65 @@ interface Scrubbed {
 
 export type Source = "main" | "renderer";
 
-const IDENTIFIER = /^[A-Za-z_$][\w$]{0,63}$/;
-/** What V8 prints for a function: `fn`, `Class.method`, `new Class`, `async fn`, `<anonymous>`, `fn [as alias]`. */
-const FUNCTION =
-  /^(?:new |async )?(?:<anonymous>|[A-Za-z_$][\w$]*(?:\.(?:<anonymous>|[A-Za-z_$][\w$]*))*)(?: \[as [A-Za-z_$][\w$]*\])?$/;
-const FRAME = /^\s*at (?:(.+?) \()?(.+):(\d+):(\d+)\)?$/;
-/** Where our own code lives: the built app (from any install path), `app://`, or the dev server. */
-const OUR_FILE =
-  /(?:^app:\/\/[^/]+\/|^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?\/|\/(?=out\/(?:main|preload|dist)\/))(.+)$/;
-const PLAIN_PATH = /^[\w.-]+(?:\/[\w.-]+)*$/;
-const WITHHELD = "<withheld>";
+/** The error types a report may name: JavaScript's own. The app has no error classes of its own yet. */
+const ERROR_TYPES: ReadonlySet<string> = new Set([
+  "Error",
+  "AggregateError",
+  "EvalError",
+  "RangeError",
+  "ReferenceError",
+  "SyntaxError",
+  "TypeError",
+  "URIError",
+]);
+const FRAME = /^\s*at (?:.+? \()?(.+):(\d{1,7}):(\d{1,7})\)?$/;
+const PLAIN_PATH = /^out\/[\w-]+(?:\/[\w.-]+)+$/;
 
-const fileOf = (raw: string): { filename: string; in_app: boolean } => {
-  const path = raw.replace(/[?#].*$/, "");
-  if (/^node:[\w/:-]+$/.test(path)) return { filename: path, in_app: false };
-  const ours = OUR_FILE.exec(path)?.[1];
-  return ours !== undefined && PLAIN_PATH.test(ours) && !ours.split("/").includes("..")
-    ? { filename: ours, in_app: true }
-    : { filename: WITHHELD, in_app: false };
+/** A frame's file as a path inside the app (`out/…`), or null when it can't be one. */
+const ownPath = (raw: string, appRoot: string): string | null => {
+  const file = raw.replace(/[?#].*$/, "");
+  const served = /^app:\/\/[^/]+\/(.+)$/.exec(file)?.[1];
+  if (served !== undefined) return `out/dist/${served}`;
+  let path = file;
+  if (file.startsWith("file://")) {
+    try {
+      path = fileURLToPath(file);
+    } catch {
+      return null;
+    }
+  }
+  return path.startsWith(`${appRoot}/`) ? path.slice(appRoot.length + 1) : null;
 };
 
 /**
- * An error as the report may carry it. The type survives only as a plain identifier, and each stack line survives
- * only as a frame: the message, and every line that isn't a frame, is dropped. A file outside the app, like
- * `/Users/<name>/…`, becomes `<withheld>`, and so does a function name that isn't an identifier.
+ * An error as the report may carry it. The type survives only if it is one of JavaScript's own, and each stack line
+ * survives only as a frame: the message, and every line that isn't a frame, is dropped. A frame keeps its file only
+ * when that file exists in this app's own build under `appRoot`, so a path that merely looks like the app's can't
+ * carry a name.
  */
-const scrub = (type: string, stack: string, source: Source): Scrubbed => ({
-  type: IDENTIFIER.test(type) ? type : "Error",
-  frames: stack
-    .split("\n")
-    .flatMap((line) => {
-      const match = FRAME.exec(line);
-      if (!match) return [];
-      const [, fn = "<anonymous>", file = "", lineno = "0", colno = "0"] = match;
-      return [
-        {
-          platform: source === "main" ? "node:javascript" : "web:javascript",
-          ...fileOf(file),
-          function: FUNCTION.test(fn) ? fn : WITHHELD,
-          lineno: Number(lineno),
-          colno: Number(colno),
-        } satisfies Frame,
-      ];
-    })
-    .slice(0, 50)
-    .reverse(),
-});
+const scrub = (type: string, stack: string, source: Source, appRoot: string): Scrubbed => {
+  const platform: Platform = source === "main" ? "node:javascript" : "web:javascript";
+  const frameOf = (file: string, lineno: string, colno: string): Frame => {
+    const path = ownPath(file, appRoot);
+    return path !== null &&
+      PLAIN_PATH.test(path) &&
+      !path.split("/").includes("..") &&
+      existsSync(join(appRoot, path))
+      ? { platform, filename: path, lineno: Number(lineno), colno: Number(colno), in_app: true }
+      : { platform, filename: "<withheld>", in_app: false };
+  };
+  return {
+    type: ERROR_TYPES.has(type) ? type : "Error",
+    frames: stack
+      .split("\n")
+      .flatMap((line) => {
+        const [, file, lineno, colno] = FRAME.exec(line) ?? [];
+        return file && lineno && colno ? [frameOf(file, lineno, colno)] : [];
+      })
+      .slice(0, MAX_FRAMES)
+      .reverse(),
+  };
+};
 
 /** The env var that turns reports off whatever the teacher chose. */
 const isEnvOff = (value: string | undefined) => value?.trim().toLowerCase() === "false";
@@ -80,6 +106,8 @@ const PER_LAUNCH = 25;
 export interface TelemetryOptions {
   /** PostHog's project key, baked in at build time. None means a build that sends nothing. */
   readonly key: string;
+  /** The folder holding this app's `out/`. Only a file that exists under it can name a frame. */
+  readonly appRoot: string;
   readonly host: string;
   /** `CONSTELLATION_TELEMETRY_ENABLED`; `false` turns reports off. */
   readonly env: string | undefined;
@@ -106,7 +134,7 @@ export const createTelemetry = (options: TelemetryOptions) => {
     report: async (type: string, stack: string, source: Source): Promise<void> => {
       if (!available || sent >= PER_LAUNCH || !options.choice.read()) return;
       sent += 1;
-      const { type: kind, frames } = scrub(type, stack, source);
+      const { type: kind, frames } = scrub(type, stack, source, options.appRoot);
       const body = {
         api_key: options.key,
         event: "$exception",

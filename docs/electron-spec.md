@@ -111,7 +111,7 @@ export const ipc = {
 ### Error tracking and privacy (D20, D23, D24, D36)
 
 - PostHog error tracking, sent from main only. Renderer errors reach main over `error.report`.
-- A payload carries only the error type, the stack (file, line and function), the app version and the OS. Message text is never sent, except our own typed error codes.
+- A payload carries only the error type, the stack, the app version and the OS. The type is one of JavaScript's own error names, or `Error`; our own typed error codes join that closed set when they exist. A stack frame keeps its file, line and column only when the file exists in the app's own bundle, and is otherwise only `<withheld>`. No frame carries a function name, since a name can come from data. Message text is never sent.
 - Breadcrumbs, autocapture, session replay and GeoIP are off. The app treats every value as student data.
 - Reports are on by default. The opt-out sits on the setup page and in Settings, and `CONSTELLATION_TELEMETRY_ENABLED=false` also turns them off.
 - `PRIVACY.md` lives in the repo and is shown during setup. It lists everything that leaves the machine: Canvas calls to your school, Anthropic calls with your key, and scrubbed crash reports to PostHog. It says no Constellation server exists, and it makes no claim of FERPA compliance.

@@ -35,6 +35,8 @@ import { startUpdates } from "./updates";
 import { createVault } from "./vault";
 
 const RENDERER_DIR = fileURLToPath(new URL("../dist", import.meta.url));
+/** The folder holding `out/`: the repo, or the packaged app's `app.asar`. */
+const APP_ROOT = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/, "");
 const PRELOAD = fileURLToPath(new URL("../preload/index.cjs", import.meta.url));
 /** Set by `npm run dev` to its vite server. A packaged app always loads its bundled files. */
 const DEV_URL = app.isPackaged ? undefined : process.env.CONSTELLATION_DEV_URL;
@@ -95,6 +97,7 @@ const start = async () => {
   const telemetry = createTelemetry({
     // Both are baked in by `vp pack` from the build's environment (vite.config.ts). A build without a key sends nothing.
     key: process.env.CONSTELLATION_POSTHOG_KEY ?? "",
+    appRoot: APP_ROOT,
     host: process.env.CONSTELLATION_POSTHOG_HOST || "https://us.i.posthog.com",
     env: process.env.CONSTELLATION_TELEMETRY_ENABLED,
     offline: FAKE_ONLY,
@@ -109,9 +112,15 @@ const start = async () => {
     const { type, stack } = errorReport(error);
     void telemetry.report(type, stack, "main");
   };
-  // Both only watch: a monitor leaves an uncaught error's crash as it was, and Electron's main still warns on a rejection.
+  // A monitor leaves an uncaught error's crash as it was. A rejection listener silences Electron's warning, so it warns.
   process.on("uncaughtExceptionMonitor", reportMain);
-  process.on("unhandledRejection", reportMain);
+  process.on("unhandledRejection", (reason) => {
+    process.emitWarning(
+      reason instanceof Error ? (reason.stack ?? String(reason)) : String(reason),
+      "UnhandledPromiseRejectionWarning",
+    );
+    reportMain(reason);
+  });
   const vault = createVault(join(userData, "vault.json"), safeStorage);
   const lms = lmsHandlers({
     makeServer: fakeServer(createFileStorage(join(userData, "lms.json"))),
