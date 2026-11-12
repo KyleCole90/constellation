@@ -9,6 +9,8 @@ import { shiftDate, type Weekday } from "~/shared/domain/term";
  */
 export const TERM_HOST = "canvas.example.edu";
 const ORIGIN = `https://${TERM_HOST}`;
+/** Where Canvas sends a package upload: file storage on another host, which must never see the token. */
+export const STORAGE_ORIGIN = "https://files.storage.example";
 export const TERM_TOKEN = "SENTINEL-canvas-token-71c3";
 const SELF_ID = 4101;
 export const SOURCE_ID = 2201;
@@ -73,6 +75,16 @@ interface Job {
   };
   failAt: { completion: number; message: string } | null;
   landed: boolean;
+  /** A package import: it waits for its file, then for the confirm step, before it runs. */
+  cartridge: { name: string; size: number; uploaded: boolean; confirmed: boolean } | null;
+}
+
+/** One request to file storage, as it arrived. */
+interface Upload {
+  url: string;
+  authorization: string | null;
+  fields: [string, string][];
+  file: { field: string; name: string; size: number; last: boolean } | null;
 }
 
 const json = (body: unknown, status = 200) =>
@@ -182,6 +194,13 @@ export class CanvasTermHttp {
     ),
   ];
   readonly jobs: Job[] = [];
+  readonly uploads: Upload[] = [];
+  /** Set to make storage answer 201 with no redirect, as Instructure's own file storage does. */
+  storageCreates = false;
+  /** Where storage's redirect sends the confirm step. Canvas sends it back to the school. */
+  confirmOrigin = ORIGIN;
+  /** The path storage's redirect names after the origin. */
+  confirmPath = (fileId: number) => `/api/v1/files/${fileId}/create_success`;
   readonly issues = [
     {
       id: 1,
@@ -209,6 +228,8 @@ export class CanvasTermHttp {
   }
   /** Where a job is now, from the clock alone. Its content lands on the first look after it completes. */
   #status(job: Job) {
+    if (job.cartridge && !job.cartridge.confirmed)
+      return { state: "queued", completion: 0, message: null };
     const completion = Math.min(100, Math.floor(((this.#now - job.startedMs) / JOB_MS) * 100));
     if (job.failAt && completion >= job.failAt.completion)
       return { state: "failed", completion: job.failAt.completion, message: job.failAt.message };
@@ -220,10 +241,21 @@ export class CanvasTermHttp {
   }
   #land(job: Job): void {
     job.landed = true;
-    const from = this.#course(job.source);
     const into = this.#course(job.course);
-    if (!from || !into) return;
     const created = at(job.startedMs + JOB_MS);
+    if (job.cartridge && into) {
+      into.body.pages.push({
+        page_id: ++this.#seq,
+        url: "imported",
+        title: `From ${job.cartridge.name}`,
+        body: "<p>Imported.</p>",
+        published: false,
+        created_at: created,
+      });
+      return;
+    }
+    const from = this.#course(job.source);
+    if (!from || !into) return;
     const rewrite = (html: string) =>
       html.split(`/courses/${from.id}/`).join(`/courses/${into.id}/`);
     into.syllabus_body = rewrite(from.syllabus_body);
@@ -258,7 +290,29 @@ export class CanvasTermHttp {
   }
   #jobJson(job: Job) {
     const status = this.#status(job);
-    const workflow_state = status.state === "queued" ? "running" : status.state;
+    const waiting = job.cartridge !== null && !job.cartridge.confirmed;
+    const workflow_state = waiting
+      ? "pre_processing"
+      : status.state === "queued"
+        ? "running"
+        : status.state;
+    if (job.cartridge)
+      return {
+        id: job.id,
+        migration_type: "common_cartridge_importer",
+        migration_type_title: "Common Cartridge 1.x Package",
+        workflow_state,
+        user_id: SELF_ID,
+        started_at: waiting ? null : at(job.startedMs),
+        finished_at:
+          workflow_state === "completed" || workflow_state === "failed"
+            ? at(job.startedMs + JOB_MS)
+            : null,
+        progress_url: `${ORIGIN}/api/v1/progress/${job.id + 1}`,
+        // Canvas makes the file at the preflight, so a job names its package before the upload lands.
+        attachment: { display_name: job.cartridge.name, size: job.cartridge.size },
+        settings: {},
+      };
     return {
       id: job.id,
       migration_type: "course_copy_importer",
@@ -288,6 +342,7 @@ export class CanvasTermHttp {
     const method = init.method ?? "GET";
     const path = parsed.pathname.replace(/^\/api\/v1/, "");
     parsed.searchParams.delete("per_page");
+    if (parsed.origin === STORAGE_ORIGIN) return this.#store(url, init);
     this.requests.push(`${method} ${path}${decodeURIComponent(parsed.search)}`);
     if (parsed.origin !== ORIGIN) throw new Error(`a request left the school: ${url}`);
     if (new Headers(init.headers).get("authorization") !== `Bearer ${TERM_TOKEN}`)
@@ -301,6 +356,55 @@ export class CanvasTermHttp {
     }
     return response;
   };
+
+  /** File storage: takes a multipart post with Canvas's params and the file last, and no token. */
+  #store(url: string, init: RequestInit): Response {
+    const body = init.body instanceof FormData ? init.body : new FormData();
+    const entries = [...body.entries()];
+    const fields: [string, string][] = entries.flatMap(([key, value]) =>
+      typeof value === "string" ? [[key, value]] : [],
+    );
+    const index = entries.findIndex(([, value]) => typeof value !== "string");
+    const found = entries[index];
+    const blob = found?.[1];
+    const upload: Upload = {
+      url,
+      authorization: new Headers(init.headers).get("authorization"),
+      fields,
+      file:
+        found && blob instanceof File
+          ? {
+              field: found[0],
+              name: blob.name,
+              size: blob.size,
+              last: index === entries.length - 1,
+            }
+          : null,
+    };
+    this.uploads.push(upload);
+    const job = this.jobs.find((entry) => url === `${STORAGE_ORIGIN}/upload/${entry.id}`);
+    const key = fields.find(([name]) => name === "key")?.[1];
+    if (!job?.cartridge || upload.authorization !== null || key !== `uploads/${job.id}`)
+      return new Response("<Error>AccessDenied</Error>", { status: 403 });
+    if (!upload.file?.last || upload.file.size !== job.cartridge.size)
+      return new Response("<Error>Malformed</Error>", { status: 400 });
+    job.cartridge.uploaded = true;
+    if (this.storageCreates) {
+      this.#confirm(job);
+      return json({ id: job.id + 5 }, 201);
+    }
+    return new Response(null, {
+      status: 303,
+      headers: {
+        location: `${this.confirmOrigin}${this.confirmPath(job.id + 5)}?uuid=u${job.id}`,
+      },
+    });
+  }
+  #confirm(job: Job): void {
+    if (!job.cartridge?.uploaded || job.cartridge.confirmed) return;
+    job.cartridge.confirmed = true;
+    job.startedMs = this.#now;
+  }
 
   #read(path: string, query: URLSearchParams): Response {
     if (path === "/users/self") return json({ id: SELF_ID, name: "Sample Instructor" });
@@ -326,6 +430,13 @@ export class CanvasTermHttp {
         message: status.message,
         tag: "content_migration",
       });
+    }
+    const confirmed = /^\/files\/(\d+)\/create_success$/.exec(path);
+    if (confirmed) {
+      const job = this.jobs.find((entry) => entry.id + 5 === Number(confirmed[1]));
+      if (!job?.cartridge?.uploaded || query.get("uuid") !== `u${job.id}`) return missing();
+      this.#confirm(job);
+      return json({ id: job.id + 5, display_name: job.cartridge.name });
     }
     const file = /^\/files\/(\d+)$/.exec(path);
     if (file) return missing();
@@ -376,6 +487,34 @@ export class CanvasTermHttp {
     return missing();
   }
 
+  #job(course: number, source: number, form: URLSearchParams): Job {
+    const substitutions: Partial<Record<Weekday, Weekday>> = {};
+    for (const [key, value] of form) {
+      const day = /^date_shift_options\[day_substitutions\]\[(\d)\]$/.exec(key)?.[1];
+      if (day !== undefined) substitutions[Number(day) as Weekday] = Number(value) as Weekday;
+    }
+    const date = (key: string) => (form.get(`date_shift_options[${key}]`) ?? "") as IsoDate;
+    const job: Job = {
+      id: (this.#seq += 10),
+      course,
+      source,
+      startedMs: this.#now,
+      shift: {
+        oldStart: date("old_start_date"),
+        oldEnd: date("old_end_date"),
+        newStart: date("new_start_date"),
+        newEnd: date("new_end_date"),
+        substitutions,
+      },
+      failAt: this.#fail,
+      landed: false,
+      cartridge: null,
+    };
+    this.#fail = null;
+    this.jobs.push(job);
+    return job;
+  }
+
   #write(method: string, path: string, form: URLSearchParams): Response {
     const match = /^\/courses\/(\d+)(\/.*)?$/.exec(path);
     const row = match ? this.#course(Number(match[1])) : undefined;
@@ -388,34 +527,31 @@ export class CanvasTermHttp {
       if (syllabus !== null) row.syllabus_body = syllabus;
       return json(this.#courseJson(row));
     }
+    if (
+      method === "POST" &&
+      rest === "/content_migrations" &&
+      form.get("migration_type") === "common_cartridge_importer"
+    ) {
+      const name = form.get("pre_attachment[name]") ?? "";
+      const size = Number(form.get("pre_attachment[size]"));
+      if (!name.endsWith(".imscc") || !(size > 0))
+        return json({ errors: [{ message: "pre_attachment is required" }] }, 400);
+      const job = this.#job(row.id, 0, form);
+      job.cartridge = { name, size, uploaded: false, confirmed: false };
+      return json({
+        ...this.#jobJson(job),
+        pre_attachment: {
+          upload_url: `${STORAGE_ORIGIN}/upload/${job.id}`,
+          upload_params: { key: `uploads/${job.id}`, "x-amz-signature": "synthetic" },
+          file_param: "file",
+        },
+      });
+    }
     if (method === "POST" && rest === "/content_migrations") {
       const source = Number(form.get("settings[source_course_id]"));
       if (form.get("migration_type") !== "course_copy_importer" || !this.#course(source))
         return json({ errors: [{ message: "invalid migration" }] }, 400);
-      const substitutions: Partial<Record<Weekday, Weekday>> = {};
-      for (const [key, value] of form) {
-        const day = /^date_shift_options\[day_substitutions\]\[(\d)\]$/.exec(key)?.[1];
-        if (day !== undefined) substitutions[Number(day) as Weekday] = Number(value) as Weekday;
-      }
-      const date = (key: string) => (form.get(`date_shift_options[${key}]`) ?? "") as IsoDate;
-      const job: Job = {
-        id: (this.#seq += 10),
-        course: row.id,
-        source,
-        startedMs: this.#now,
-        shift: {
-          oldStart: date("old_start_date"),
-          oldEnd: date("old_end_date"),
-          newStart: date("new_start_date"),
-          newEnd: date("new_end_date"),
-          substitutions,
-        },
-        failAt: this.#fail,
-        landed: false,
-      };
-      this.#fail = null;
-      this.jobs.push(job);
-      return json(this.#jobJson(job));
+      return json(this.#jobJson(this.#job(row.id, source, form)));
     }
     const page = /^\/pages\/(\d+)$/.exec(rest);
     const found = page && row.body.pages.find((entry) => entry.page_id === Number(page[1]));

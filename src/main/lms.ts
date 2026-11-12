@@ -1,3 +1,6 @@
+import { openAsBlob } from "node:fs";
+import { stat } from "node:fs/promises";
+import { basename } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
 import * as v from "valibot";
@@ -9,6 +12,7 @@ import {
   type FieldKey,
   type LmsError,
 } from "../shared/domain/change";
+import type { PickedPackage } from "../shared/domain/content";
 import type { ChangeId, Result, SchoolId } from "../shared/domain/ids";
 import type { School } from "../shared/domain/lms";
 import { SendPermit } from "../shared/domain/permit";
@@ -88,6 +92,28 @@ const NOT_THIS_CHANGE: LmsError = {
 const failedAll = (fields: readonly FieldKey[], error: LmsError): FieldOutcomes =>
   Object.fromEntries(fields.map((field) => [field, { status: "failed", error }]));
 
+/** Canvas's own default cap on an import, so a bigger file is refused before anything is sent. */
+const MAX_PACKAGE_BYTES = 500 * 1024 * 1024;
+const refusal = (reason: string) => ({ ok: false, error: { kind: "rejected", reason } }) as const;
+
+/** The file at `path` if it can be a course package: an `.imscc` file, not empty and not over the cap. */
+const packageAt = async (
+  path: string,
+): Promise<Result<{ name: string; size: number }, LmsError>> => {
+  const name = basename(path);
+  if (!name.toLowerCase().endsWith(".imscc"))
+    return refusal("That file isn't a course export. Choose a file that ends in .imscc.");
+  try {
+    const info = await stat(path);
+    if (!info.isFile() || info.size === 0) return refusal(`${name} is empty or isn't a file.`);
+    if (info.size > MAX_PACKAGE_BYTES)
+      return refusal(`${name} is larger than the 500 MB Canvas imports.`);
+    return { ok: true, value: { name, size: info.size } };
+  } catch {
+    return refusal(`The app couldn't read ${name}.`);
+  }
+};
+
 const NO_TERM_SETUP = {
   ok: false,
   error: { kind: "unsupported", capability: "term setup" },
@@ -107,6 +133,8 @@ export const lmsHandlers = (options: {
   fetch: Fetch | null;
   /** Asks the teacher in a native dialog, which the renderer can't click or read. True means send. */
   confirmSend(ask: SendConfirmation): Promise<boolean>;
+  /** Main's native file picker for an `.imscc` file: its path, or null when the teacher cancels. */
+  choosePackage(): Promise<string | null>;
 }): Pick<Handlers, LmsChannel> => {
   let offset = 0;
   const now = () => options.realNow() + offset;
@@ -129,6 +157,17 @@ export const lmsHandlers = (options: {
   };
   let fake = start();
 
+  /**
+   * The packages the teacher chose in main's picker, by school and file name, for as long as main runs. The renderer
+   * only ever names one, so it can't send a file the teacher didn't choose. A later pick of the same name replaces it.
+   */
+  const picked = new Map<string, string>();
+  const packageFile = async (school: SchoolId, name: string): Promise<Blob | null> => {
+    const path = picked.get(`${school}\n${name}`);
+    // Checked again, since the file may have changed on disk since it was chosen.
+    if (path === undefined || !(await packageAt(path)).ok) return null;
+    return openAsBlob(path).catch(() => null);
+  };
   const canvas = new Map<SchoolId, CanvasProvider>();
   /** The renderer is untrusted, so a Canvas school counts only as main itself would mint it from its host. */
   const canvasProvider = (school: School): CanvasProvider => {
@@ -142,6 +181,7 @@ export const lmsHandlers = (options: {
       lease: options.leaseFor(minted.id),
       fetch: options.fetch,
       now,
+      packageFile: (name) => packageFile(minted.id, name),
     });
     canvas.set(minted.id, created);
     return created;
@@ -287,6 +327,24 @@ export const lmsHandlers = (options: {
       term(school, (setup) => setup.courseContent(course)),
     "lms.migrations": ({ school, course }) => term(school, (setup) => setup.migrations(course)),
     "lms.samplePackages": ({ school }) => term(school, (setup) => setup.samplePackages()),
+    "lms.pickPackage": async ({ school }) => {
+      // A demo school's package is named by the page's file input, as the web demo does.
+      if (school.provider !== "canvas") return NO_TERM_SETUP;
+      // Throws unless main itself would mint this school from its host.
+      canvasProvider(school);
+      const path = await options.choosePackage();
+      if (path === null) return { ok: true, value: null };
+      const file = await packageAt(path);
+      if (!file.ok) return file;
+      picked.set(`${school.id}\n${file.value.name}`, path);
+      return {
+        ok: true,
+        value: {
+          name: file.value.name,
+          kb: Math.ceil(file.value.size / 1024),
+        } satisfies PickedPackage,
+      };
+    },
     "lms.lab": async (command) => run(command),
     "lms.labNext": async ({ after }) => {
       // Bounded, so a waiter left by a closed or reloaded window doesn't sit forever; the renderer simply asks again.

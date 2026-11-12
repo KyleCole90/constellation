@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import * as v from "valibot";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -23,11 +25,12 @@ import {
   SubmissionSchema,
   listOf,
 } from "~/shared/providers/schemas";
+import { PACKAGES } from "~/shared/providers/fake-canvas/seed-term";
 import { Secret } from "~/shared/providers/provider";
 import { DEFAULT_RETRY_POLICY, createWriteback } from "~/renderer/writeback/writeback";
 
 import { DurableLedger } from "./fixtures/ledger";
-import { copyContent } from "./fixtures/term";
+import { cartridgeContent, copyContent } from "./fixtures/term";
 
 /*
  * `npm run contract:live`: every Canvas read against a live school, each answer parsed as the bridge would parse it,
@@ -41,7 +44,12 @@ const {
   CANVAS_SUBMISSION: sandbox = "",
   CANVAS_TERM_SHELL: termShell = "",
   CANVAS_TERM_SOURCE: termSource = "",
+  CANVAS_IMSCC_SHELL: imsccShell = "",
 } = process.env;
+/** The fixture package `contract:live` imports, with the term its dates came from. */
+const LIVE_PACKAGE = PACKAGES.find(
+  (pkg) => pkg.name === "eng210-northgate-spring2026-export.imscc",
+);
 const school = canvasSchoolAt(host);
 const LIVE_TIMEOUT_MS = 120_000;
 const COPY_TIMEOUT_MS = 300_000;
@@ -76,7 +84,26 @@ describe("Canvas reads against a live school", () => {
       return response;
     },
     now: () => Date.now(),
+    packageFile: async (name) =>
+      name === LIVE_PACKAGE?.name
+        ? new Blob([await readFile(new URL(`../fixtures/imscc/${name}`, import.meta.url))])
+        : null,
   });
+
+  /** Polls a course's jobs until the one named `signature` finishes. */
+  const finished = async (course: LmsRef<"course">, signature: string) => {
+    const setup = provider.termSetup;
+    if (!setup) throw new Error("Canvas offers no term setup");
+    let job: Migration | undefined;
+    for (const started = Date.now(); Date.now() - started < COPY_TIMEOUT_MS;) {
+      job = unwrap("migrations", await setup.migrations(course)).findLast(
+        (entry) => entry.signature === signature,
+      );
+      if (job?.state === "completed" || job?.state === "failed") break;
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+    return job;
+  };
 
   /** One change read, approved with a trusted click and sent through the runner, as the app sends it. */
   const runnerFor = async (content: ChangeContent, course: LmsRef<"course">) => {
@@ -191,13 +218,7 @@ describe("Canvas reads against a live school", () => {
       if (!source) throw new Error("CANVAS_TERM_SOURCE isn't a dated course this teacher taught");
       const copy = copyContent(shell, source);
       expect(await (await runnerFor(copy, shell.ref))()).toBe("sent");
-      let job: Migration | undefined;
-      for (const started = Date.now(); Date.now() - started < COPY_TIMEOUT_MS;) {
-        const jobs = unwrap("migrations", await setup.migrations(shell.ref));
-        job = jobs.findLast((entry) => entry.signature === fieldText(copy, "copy"));
-        if (job?.state === "completed" || job?.state === "failed") break;
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-      }
+      const job = await finished(shell.ref, fieldText(copy, "copy"));
       expect(job?.state, job?.message ?? "the copy never finished").toBe("completed");
       const content = unwrap("courseContent", await setup.courseContent(shell.ref));
       expect(content.items.length, "what the copy brought").toBeGreaterThan(0);
@@ -211,6 +232,25 @@ describe("Canvas reads against a live school", () => {
       expect(unwrap("courses", await provider.courses()).map((entry) => entry.ref)).toContain(
         shell.ref,
       );
+    },
+    COPY_TIMEOUT_MS + LIVE_TIMEOUT_MS,
+  );
+  const imsccTest = /^\d+$/.test(imsccShell) ? it : it.skip;
+  imsccTest(
+    "a fixture .imscc imports into a sandbox course (set CANVAS_IMSCC_SHELL=<an empty unpublished course starting later>)",
+    async () => {
+      const setup = provider.termSetup;
+      const hint = LIVE_PACKAGE?.hint;
+      if (!setup || !LIVE_PACKAGE || !hint) throw new Error("no term setup or package");
+      const shell = unwrap("newCourses", await setup.newCourses()).find(
+        (entry) => entry.ref === `${school.id}:course:${imsccShell}`,
+      );
+      if (!shell)
+        throw new Error("CANVAS_IMSCC_SHELL isn't an unpublished course that starts later");
+      const content = cartridgeContent(shell, LIVE_PACKAGE.name, hint);
+      expect(await (await runnerFor(content, shell.ref))()).toBe("sent");
+      const job = await finished(shell.ref, fieldText(content, "copy"));
+      expect(job?.state, job?.message ?? "the import never finished").toBe("completed");
     },
     COPY_TIMEOUT_MS + LIVE_TIMEOUT_MS,
   );

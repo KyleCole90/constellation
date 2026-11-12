@@ -62,6 +62,7 @@ describe("main's handlers", () => {
       "lms.courseContent",
       "lms.migrations",
       "lms.samplePackages",
+      "lms.pickPackage",
       "lms.lab",
       "lms.labNext",
       "lms.stored",

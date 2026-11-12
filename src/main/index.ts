@@ -94,6 +94,15 @@ const start = async () => {
       });
       return response === 0;
     },
+    // Main reads the file itself, so the renderer never names a path.
+    choosePackage: async () => {
+      const { canceled, filePaths } = await dialog.showOpenDialog(window, {
+        title: "Choose a course export",
+        properties: ["openFile"],
+        filters: [{ name: "Common Cartridge", extensions: ["imscc"] }],
+      });
+      return canceled ? null : (filePaths[0] ?? null);
+    },
   });
   handle(
     (channel, listener) =>

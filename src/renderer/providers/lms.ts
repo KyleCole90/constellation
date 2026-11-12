@@ -67,7 +67,7 @@ const createBridgeProvider = (
   };
 };
 
-const bridgeTermSetup = (bridge: Bridge, school: School): TermSetup => {
+const bridgeTermSetup = (bridge: Bridge, school: School): Omit<TermSetup, "pickPackage"> => {
   const bySchool = { school };
   const byCourse = (course: LmsRef<"course">) => ({ school, course });
   return {
@@ -89,7 +89,18 @@ export const bridgeCanvas = (
   ...canvas,
   create: ({ school }) => ({
     ...createBridgeProvider(bridge, face, school, now),
-    termSetup: bridgeTermSetup(bridge, school),
+    termSetup: {
+      ...bridgeTermSetup(bridge, school),
+      // Not `read`: a picker main never answered isn't the school being offline, so it says so.
+      pickPackage: () =>
+        bridge.invoke("lms.pickPackage", { school }).catch(
+          () =>
+            ({
+              ok: false,
+              error: { kind: "rejected", reason: "The file picker didn't open. Try again." },
+            }) as const,
+        ),
+    },
   }),
 });
 

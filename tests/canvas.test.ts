@@ -73,6 +73,7 @@ const canvasWith = (
       lease: leaseOf(token),
       fetch: network.fetch,
       now: () => Date.now(),
+      packageFile: async () => null,
     }),
   };
 };
@@ -193,6 +194,7 @@ describe("Canvas reads", () => {
       lease: leaseOf(TOKEN),
       fetch: endless,
       now: () => Date.now(),
+      packageFile: async () => null,
     });
     const courses = await provider.courses();
     expect(courses.ok || courses.error.kind).toBe("rejected");
