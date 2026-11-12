@@ -1,7 +1,15 @@
+import { isDeepStrictEqual } from "node:util";
+
 import * as v from "valibot";
 
-import type { LmsError } from "../shared/domain/change";
-import type { Result, SchoolId } from "../shared/domain/ids";
+import {
+  appendsEntry,
+  fieldsOf,
+  type ChangeContent,
+  type FieldKey,
+  type LmsError,
+} from "../shared/domain/change";
+import type { ChangeId, Result, SchoolId } from "../shared/domain/ids";
 import type { School } from "../shared/domain/lms";
 import { SendPermit } from "../shared/domain/permit";
 import type { Handlers } from "../shared/ipc";
@@ -10,13 +18,19 @@ import { createFakeCanvasDescriptor, FAKE_SCHOOLS } from "../shared/providers/fa
 import { FakeCanvasServer, type StorageLike } from "../shared/providers/fake-canvas/server";
 import type {
   CredentialLease,
+  FieldOutcomes,
   LmsProvider,
   TermSetup,
   VaultKey,
 } from "../shared/providers/provider";
 
 import { jsonFile } from "./json-file";
-import { canvasSchoolAt, createCanvasProvider, type Fetch } from "./providers/canvas";
+import {
+  canvasSchoolAt,
+  createCanvasProvider,
+  type CanvasProvider,
+  type Fetch,
+} from "./providers/canvas";
 
 /**
  * A `StorageLike` in one JSON file under `userData` (docs/electron-spec.md, D8). Main is its only writer, so it reads
@@ -56,6 +70,24 @@ const LAB_WAIT_MS = 25_000;
 
 type LmsChannel = Extract<keyof Handlers, `lms.${string}`>;
 
+/** What main asks the teacher before it writes to a real school: where, to whom, and every field the change sends. */
+export interface SendConfirmation {
+  host: string;
+  target: string;
+  lines: readonly string[];
+}
+
+const NOT_CONFIRMED: LmsError = {
+  kind: "rejected",
+  reason: "Not sent. You chose not to send it when the app asked you to confirm.",
+};
+const NOT_THIS_CHANGE: LmsError = {
+  kind: "rejected",
+  reason: "Not sent. The send named a field this change doesn't write.",
+};
+const failedAll = (fields: readonly FieldKey[], error: LmsError): FieldOutcomes =>
+  Object.fromEntries(fields.map((field) => [field, { status: "failed", error }]));
+
 const NO_TERM_SETUP = {
   ok: false,
   error: { kind: "unsupported", capability: "term setup" },
@@ -73,6 +105,8 @@ export const lmsHandlers = (options: {
   packaged: boolean;
   /** Real Canvas's network. Null leaves only the fake's schools, as verify runs the app, so nothing reaches a real host. */
   fetch: Fetch | null;
+  /** Asks the teacher in a native dialog, which the renderer can't click or read. True means send. */
+  confirmSend(ask: SendConfirmation): Promise<boolean>;
 }): Pick<Handlers, LmsChannel> => {
   let offset = 0;
   const now = () => options.realNow() + offset;
@@ -95,9 +129,9 @@ export const lmsHandlers = (options: {
   };
   let fake = start();
 
-  const canvas = new Map<SchoolId, LmsProvider>();
+  const canvas = new Map<SchoolId, CanvasProvider>();
   /** The renderer is untrusted, so a Canvas school counts only as main itself would mint it from its host. */
-  const canvasProvider = (school: School): LmsProvider => {
+  const canvasProvider = (school: School): CanvasProvider => {
     const minted = canvasSchoolAt(school.host);
     if (!options.fetch || minted?.id !== school.id)
       throw new Error("That isn't a Canvas school this app connects to.");
@@ -107,6 +141,7 @@ export const lmsHandlers = (options: {
       school: minted,
       lease: options.leaseFor(minted.id),
       fetch: options.fetch,
+      now,
     });
     canvas.set(minted.id, created);
     return created;
@@ -128,6 +163,49 @@ export const lmsHandlers = (options: {
     const created = fake.descriptor.create({ school, lease: options.leaseFor(school.id) });
     fake.providers.set(school.id, created);
     return created;
+  };
+  /**
+   * What the teacher confirmed for each change, by school and change id, for as long as main runs. A retry or a resume
+   * of the same content sends without asking again, and any other content asks first. A field that adds an entry
+   * (a comment, a message, a post) goes out once per confirmation: once sent, sending it again asks again, so even a
+   * renderer that replays the request can't post twice without the teacher saying so.
+   */
+  const confirmed = new Map<string, { content: ChangeContent; sent: Set<FieldKey> }>();
+  /**
+   * The renderer is untrusted, so its permit is only a request. Main writes to a real school only what the teacher
+   * confirmed in main's own dialog, and only the fields that content sends.
+   */
+  const applyCanvas = async (
+    school: School,
+    changeId: ChangeId,
+    content: ChangeContent,
+    fields: readonly FieldKey[],
+  ): Promise<FieldOutcomes> => {
+    const sends = fieldsOf(content);
+    if (fields.length === 0) return {};
+    if (fields.some((field) => !sends.includes(field))) return failedAll(fields, NOT_THIS_CHANGE);
+    const provider = canvasProvider(school);
+    const key = `${school.id}\n${changeId}`;
+    let confirmation = confirmed.get(key);
+    if (
+      !confirmation ||
+      !isDeepStrictEqual(confirmation.content, content) ||
+      fields.some((field) => confirmation?.sent.has(field))
+    ) {
+      const described = await provider.describeSend(content);
+      if (!described.ok) return failedAll(fields, described.error);
+      if (!(await options.confirmSend({ host: school.host, ...described.value })))
+        return failedAll(fields, NOT_CONFIRMED);
+      confirmation = { content, sent: new Set() };
+      confirmed.set(key, confirmation);
+    }
+    // Counted as sent before the request leaves, so a second request racing this one asks first.
+    const appends = fields.filter(appendsEntry);
+    for (const field of appends) confirmation.sent.add(field);
+    const outcomes = await provider.apply(SendPermit.relayed(changeId, content, fields));
+    for (const field of appends)
+      if (outcomes[field]?.status === "failed") confirmation.sent.delete(field);
+    return outcomes;
   };
   const term = async <T>(
     school: School,
@@ -194,8 +272,15 @@ export const lmsHandlers = (options: {
     "lms.conversations": ({ school }) => provider(school).conversations(),
     "lms.announcements": ({ school, course }) => provider(school).announcements(course),
     "lms.observe": ({ school, content }) => provider(school).observe(content),
-    "lms.apply": ({ school, permit }) =>
-      provider(school).apply(SendPermit.relayed(permit.changeId, permit.content, permit.fields)),
+    "lms.apply": ({ school, permit: { changeId, content, fields } }) => {
+      switch (school.provider) {
+        case "canvas":
+          return applyCanvas(school, changeId, content, fields);
+        // The demo's LMS is a file the renderer can already rewrite through the failure lab, so nothing is guarded here.
+        case "fake-canvas":
+          return fakeProvider(school).apply(SendPermit.relayed(changeId, content, fields));
+      }
+    },
     "lms.newCourses": ({ school }) => term(school, (setup) => setup.newCourses()),
     "lms.copySources": ({ school }) => term(school, (setup) => setup.copySources()),
     "lms.courseContent": ({ school, course }) =>

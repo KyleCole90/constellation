@@ -2,17 +2,22 @@ import type { Capabilities, LmsProvider, ProviderDescriptor } from "./provider";
 
 const MIN_TOKEN_LENGTH = 20;
 
-/** Writes ship in step 12 (docs/electron-spec.md), so Canvas claims none of the write capabilities yet. */
+/** A draft's attachment is a name and a size, not a file, so Canvas takes no attachments until there is one to upload. */
 const CAPABILITIES: Capabilities = {
   messaging: true,
-  rubricWrite: false,
+  rubricWrite: true,
   attachments: false,
-  excuse: false,
+  excuse: true,
   commentEffect: "append",
 };
 
 const SCOPE_WORDS: Readonly<Record<string, string>> = {
   "url:GET|/api/v1/courses": "Read your courses, rosters, and submissions",
+  "url:PUT|/api/v1/courses/:course_id/assignments/:assignment_id/submissions/:user_id":
+    "Post grades and comments",
+  "url:POST|/api/v1/conversations/:id/add_message": "Reply to messages",
+  "url:POST|/api/v1/conversations": "Message students",
+  "url:POST|/api/v1/courses/:course_id/discussion_topics": "Post announcements",
 };
 /** A personal access token carries all its owner's rights. These are the ones the app uses so far. */
 export const CANVAS_SCOPES = Object.keys(SCOPE_WORDS);

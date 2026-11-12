@@ -96,6 +96,8 @@ const FIELD_MODE = {
   text: "splice",
 } as const;
 export type FieldKey = keyof typeof FIELD_MODE;
+/** An append field adds an entry each time it is written, so sending it twice posts twice. */
+export const appendsEntry = (field: FieldKey): boolean => FIELD_MODE[field] === "append";
 
 export const fieldsOf = (content: ChangeContent): readonly FieldKey[] => {
   switch (content.kind) {

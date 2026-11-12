@@ -73,7 +73,7 @@ const ipc = {
     input: v.strictObject({ school: SchoolSchema, content: ChangeContentSchema }),
     output: readOf(RemoteStateSchema),
   },
-  /** A SendPermit the renderer minted, as plain data. Main checks it against its approval in the writeback step (12). */
+  /** A SendPermit the renderer minted, as plain data. It asks; main decides (`lmsHandlers` in `src/main/lms.ts`). */
   "lms.apply": {
     input: v.strictObject({
       school: SchoolSchema,

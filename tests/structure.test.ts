@@ -97,7 +97,7 @@ const permitImporters = (sources: readonly SourceFile[]): readonly string[] =>
     )
     .map((file) => file.path);
 
-/** Main rebuilds the renderer's permit from IPC data until step 12 checks it. Nothing else may. */
+/** Main builds its own permit from IPC data once it has decided the send may go. Nothing else may. */
 const relayers = (sources: readonly SourceFile[]): readonly string[] =>
   sources
     .filter(
