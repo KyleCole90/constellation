@@ -46,7 +46,12 @@ export default defineConfig({
       outDir: "out/main",
       format: "esm",
       // The packaged app ships no node_modules, so every dependency main imports goes in its bundle. `npm run smoke:packaged` fails on one left out.
-      deps: { neverBundle: ["electron"], alwaysBundle: ["valibot", "@anthropic-ai/sdk"] },
+      deps: {
+        neverBundle: ["electron"],
+        alwaysBundle: ["valibot", "@anthropic-ai/sdk", "electron-updater"],
+      },
+      // Fixed at build time, so a packaged app's environment can't turn updates on (src/main/index.ts).
+      env: { CONSTELLATION_UPDATES: process.env.CONSTELLATION_UPDATES === "on" ? "on" : "off" },
     },
     {
       entry: "src/preload/index.ts",

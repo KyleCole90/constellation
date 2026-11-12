@@ -12,6 +12,7 @@ import {
   safeStorage,
   shell,
 } from "electron";
+import electronUpdater from "electron-updater";
 
 import { RULES_AGENT_SWITCH, handle } from "../shared/ipc";
 
@@ -26,6 +27,7 @@ import {
 } from "./security";
 import { createFileStorage, fakeServer, lmsHandlers } from "./lms";
 import { anthropicAgent } from "./providers/anthropic";
+import { startUpdates } from "./updates";
 import { createVault } from "./vault";
 
 const RENDERER_DIR = fileURLToPath(new URL("../dist", import.meta.url));
@@ -41,6 +43,11 @@ const DEV_ORIGIN = app.isPackaged
 /** Set by `npm run verify`: only the fake LMS's schools and the rules agent, so a run never reaches Canvas or Anthropic. */
 const FAKE_ONLY = !app.isPackaged && process.env.CONSTELLATION_LMS === "fake";
 /** Only the unpackaged app takes CDP. A packaged app quits before it opens a window (`npm run smoke:packaged`). */
+/**
+ * Baked in by `CONSTELLATION_UPDATES=on npm run build`, which only the release workflow runs. Every other build bakes
+ * in `false`, so an unsigned build (`npm run smoke:packaged`, a local package) never checks.
+ */
+const UPDATES = app.isPackaged && process.env.CONSTELLATION_UPDATES === "on";
 const DEBUGGER_ASKED =
   app.isPackaged &&
   ["remote-debugging-port", "remote-debugging-pipe"].some((name) =>
@@ -136,6 +143,19 @@ const start = async () => {
   });
   app.on("window-all-closed", () => app.quit());
   await window.loadURL(DEV_URL ?? APP_URL);
+  // "Later" is the default, so a Return meant for the app can't restart it.
+  if (UPDATES)
+    startUpdates(electronUpdater.autoUpdater, async (version) => {
+      const { response } = await dialog.showMessageBox(window, {
+        type: "info",
+        message: `Constellation ${version} is ready`,
+        detail: "It installs when you quit. Restart now to use it sooner.",
+        buttons: ["Restart Now", "Later"],
+        defaultId: 1,
+        cancelId: 1,
+      });
+      return response === 0;
+    });
 };
 
 if (DEBUGGER_ASKED) app.exit(1);
