@@ -4,7 +4,7 @@ import type { TermBreak, TermDates, Weekday } from "~/shared/domain/term";
 
 import { SEED } from "./seed";
 
-export interface RawLink {
+interface RawLink {
   text: string;
   url: string;
 }

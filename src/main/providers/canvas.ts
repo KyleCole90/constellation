@@ -41,6 +41,8 @@ import {
   type Read,
 } from "../../shared/providers/provider";
 
+import { canvasTermSetup, type SendDescription } from "./canvas-term";
+
 /**
  * The school at `raw` as real Canvas: an `https:` host name with no port, path or credentials, and no IP literal,
  * since a school's Canvas always has a name. The id is the host, so a token saved under an id only ever goes to that
@@ -77,13 +79,6 @@ const unreadable = (what: string) =>
     ok: false,
     error: { kind: "rejected", reason: `Canvas sent ${what} this app can't read.` },
   }) as const satisfies Result<never, LmsError>;
-/** Course copy, fixes and publishing come with term setup (docs/electron-spec.md, step 13). */
-const unsupported = (content: ChangeContent) =>
-  ({
-    ok: false,
-    error: { kind: "unsupported", capability: content.kind },
-  }) as const satisfies Result<never, LmsError>;
-
 const retryAfterMs = (response: Response): number | null => {
   const seconds = Number(response.headers.get("retry-after"));
   return response.headers.has("retry-after") && Number.isFinite(seconds) && seconds >= 0
@@ -292,13 +287,6 @@ const MAX_PAGES = 100;
 /** `fetch` as the provider calls it. Main passes Electron's `net.fetch`, which uses the system's proxy and certificates. */
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 
-/** What main's send dialog shows: who or what the change lands on, as Canvas names it, and each value it sends. */
-interface SendDescription {
-  /** "Maya Lopez, Essay 2". */
-  target: string;
-  lines: readonly string[];
-}
-
 /** The Canvas provider, plus the words main shows when it asks the teacher to confirm a send. */
 export interface CanvasProvider extends LmsProvider {
   /** Every field `content` sends, in the values `apply` sends it with. */
@@ -444,7 +432,11 @@ export const createCanvasProvider = (deps: {
    * One write. Canvas answering at all means it did or didn't apply; a request that never got an answer may have
    * applied, so it is `unknown`, and only a later read can say.
    */
-  const write = (method: "PUT" | "POST", path: string, form: URLSearchParams): Promise<Outcome> =>
+  const write = (
+    method: "PUT" | "POST" | "DELETE",
+    path: string,
+    form: URLSearchParams,
+  ): Promise<Outcome> =>
     lease.use(async (credential): Promise<Outcome> => {
       if (!credential) return { status: "failed", error: { kind: "auth_expired" } };
       const secret = credential.kind === "bearer" ? credential.token : credential.access;
@@ -470,6 +462,18 @@ export const createCanvasProvider = (deps: {
     });
   const refused = (reason: string): Promise<Outcome> =>
     Promise.resolve({ status: "failed", error: { kind: "rejected", reason } });
+
+  const term = canvasTermSetup({
+    school,
+    now: deps.now,
+    list,
+    one,
+    write,
+    me,
+    idsIn,
+    oneLine,
+    named,
+  });
 
   /** The request that writes `field` of `content`, or a refusal when the content names nothing this school holds. */
   const writeOf = (content: ChangeContent, field: FieldKey): Promise<Outcome> => {
@@ -556,7 +560,7 @@ export const createCanvasProvider = (deps: {
       case "course-copy":
       case "text-fix":
       case "item-set":
-        break;
+        return term.writeOf(content, field);
     }
     return Promise.resolve({
       status: "failed",
@@ -679,7 +683,7 @@ export const createCanvasProvider = (deps: {
       case "course-copy":
       case "text-fix":
       case "item-set":
-        return unsupported(content);
+        return term.observe(content);
     }
   };
 
@@ -763,7 +767,7 @@ export const createCanvasProvider = (deps: {
       case "course-copy":
       case "text-fix":
       case "item-set":
-        return unsupported(content);
+        return term.describeSend(content);
     }
   };
 
@@ -808,7 +812,8 @@ export const createCanvasProvider = (deps: {
     },
     courses: async () => {
       const rows = await list(
-        "/courses?enrollment_type=teacher&enrollment_state=active&include[]=total_students",
+        // A teacher's unpublished courses list too, and only a published one is a course students can reach.
+        "/courses?enrollment_type=teacher&enrollment_state=active&include[]=total_students&state[]=available",
         CourseRow,
       );
       if (!rows.ok) return rows;
@@ -970,5 +975,6 @@ export const createCanvasProvider = (deps: {
       return outcomes;
     },
     describeSend,
+    termSetup: term.termSetup,
   };
 };

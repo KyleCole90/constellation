@@ -513,15 +513,12 @@ export const fieldText = (content: ChangeContent, field: FieldKey): string => {
   }
 };
 
-/** Equals the migration's signature the LMS side records, so a change finds its job by text alone. Source and dates in a fixed order. */
-export const copySignature = ({ source, shift }: CourseCopyContent): string => {
-  const from = source.kind === "course" ? source.ref : `cartridge:${source.name}`;
-  const days = Object.entries(shift.substitutions)
-    .map(([day, to]) => `${day}>${to}`)
-    .sort()
-    .join(",");
-  return `${from} ${shift.oldStart}..${shift.oldEnd} to ${shift.newStart}..${shift.newEnd} days ${days}`;
-};
+/**
+ * Equals the migration's signature the LMS reports, so a change finds its job by text alone. Only the source: Canvas
+ * doesn't echo a job's date shift back, and `seen` already keeps an earlier job from passing as this one.
+ */
+export const copySignature = ({ source }: Pick<CourseCopyContent, "source">): string =>
+  source.kind === "course" ? source.ref : `cartridge:${source.name}`;
 
 /** Also the words a provider reports as the current value, so the two compare as plain strings. */
 const intentText = (intent: SetIntent): string => {

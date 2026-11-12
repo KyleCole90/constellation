@@ -83,7 +83,7 @@ const ok = (name: string, headers?: Record<string, string>): Reply => ({
 });
 const SELF = { "/api/v1/users/self": ok("users-self.json") };
 const COURSES =
-  "/api/v1/courses?enrollment_type=teacher&enrollment_state=active&include[]=total_students";
+  "/api/v1/courses?enrollment_type=teacher&enrollment_state=active&include[]=total_students&state[]=available";
 
 describe("a Canvas school's address", () => {
   it("names an https host, and the school's id is that host", () => {
@@ -549,7 +549,7 @@ describe("a school the renderer relabels", () => {
 });
 
 describe("the renderer's Canvas client", () => {
-  it("finds the school through main, reads through the bridge, and offers no term setup yet", async () => {
+  it("finds the school through main, reads through the bridge, and offers term setup", async () => {
     const network = recorded({ ...SELF, [COURSES]: ok("courses-page-2.json") });
     const lms = bridgedLms({ fetch: network.fetch });
     await lms.vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TOKEN) });
@@ -559,7 +559,7 @@ describe("the renderer's Canvas client", () => {
       school,
       lease: createMemoryVault().leaseFor(school.id),
     });
-    expect(canvas.termSetup).toBeUndefined();
+    expect(await canvas.termSetup?.samplePackages()).toEqual({ ok: true, value: [] });
     expect(await canvas.verify()).toMatchObject({ ok: true });
     const courses = await canvas.courses();
     expect(courses.ok && courses.value.map((course) => course.code)).toEqual(["ENG-210-02"]);

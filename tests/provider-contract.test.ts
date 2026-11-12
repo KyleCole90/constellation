@@ -74,6 +74,7 @@ runTermSetupContract("fake Canvas over the bridge", async (): Promise<TermContra
     loseNext: () => lms.lab.loseNextResponse(),
     failNextMigration: (stage, message) => lms.lab.failNextMigration(stage, message),
     writeCount: () => lms.server.log.filter((entry) => entry.kind === "write").length,
+    offersPackages: true,
   };
 });
 
@@ -88,6 +89,7 @@ runTermSetupContract("fake Canvas", async (): Promise<TermContractHarness> => {
     loseNext: () => rig.server.loseNextResponse(),
     failNextMigration: (stage, message) => rig.server.failNextMigration(stage, message),
     writeCount: () => rig.server.log.filter((entry) => entry.kind === "write").length,
+    offersPackages: true,
   };
 });
 

@@ -79,7 +79,7 @@ const bridgeTermSetup = (bridge: Bridge, school: School): TermSetup => {
   };
 };
 
-/** Real Canvas, which main runs. It offers no term setup yet (step 13), so the app never shows the offer for it. */
+/** Real Canvas, which main runs, term setup included. */
 export const bridgeCanvas = (
   bridge: Bridge,
   canvas: Omit<ProviderDescriptor, "create">,
@@ -87,7 +87,10 @@ export const bridgeCanvas = (
   now: () => number,
 ): ProviderDescriptor => ({
   ...canvas,
-  create: ({ school }) => createBridgeProvider(bridge, face, school, now),
+  create: ({ school }) => ({
+    ...createBridgeProvider(bridge, face, school, now),
+    termSetup: bridgeTermSetup(bridge, school),
+  }),
 });
 
 /** What the lab shows until main's first answer arrives. */
