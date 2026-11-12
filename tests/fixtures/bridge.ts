@@ -1,4 +1,4 @@
-import { lmsHandlers } from "~/main/lms";
+import { lmsHandlers, type SendConfirmation } from "~/main/lms";
 import type { Fetch } from "~/main/providers/canvas";
 import type { SchoolId } from "~/shared/domain/ids";
 import { handle, invoker, type Bridge } from "~/shared/ipc";
@@ -28,6 +28,8 @@ export const fakeLmsHandlers = (
     vault?: Vault;
     packaged?: boolean;
     fetch?: Fetch;
+    /** The teacher's answer in main's send dialog. Says yes unless a test says otherwise. */
+    confirmSend?: (ask: SendConfirmation) => Promise<boolean>;
     onServer?: (server: FakeCanvasServer) => void;
   } = {},
 ) => {
@@ -51,6 +53,7 @@ export const fakeLmsHandlers = (
     leaseFor: (key) => vault.leaseFor(key),
     packaged: options.packaged ?? false,
     fetch: options.fetch ?? null,
+    confirmSend: options.confirmSend ?? (async () => true),
   });
 };
 
@@ -58,7 +61,13 @@ export const fakeLmsHandlers = (
  * The desktop app's LMS in one process: the renderer's bridge client, the real IPC map with structured clone on
  * both edges, and main's handlers over a quiet fake LMS. Main's vault is a memory vault here.
  */
-export const bridgedLms = (options: { packaged?: boolean; fetch?: Fetch } = {}) => {
+export const bridgedLms = (
+  options: {
+    packaged?: boolean;
+    fetch?: Fetch;
+    confirmSend?: (ask: SendConfirmation) => Promise<boolean>;
+  } = {},
+) => {
   const clock = new VirtualClock();
   const vault = createMemoryVault();
   const servers: FakeCanvasServer[] = [];
@@ -79,6 +88,7 @@ export const bridgedLms = (options: { packaged?: boolean; fetch?: Fetch } = {}) 
         vault,
         ...(options.packaged === undefined ? {} : { packaged: options.packaged }),
         ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+        ...(options.confirmSend === undefined ? {} : { confirmSend: options.confirmSend }),
         onServer: (server) => servers.push(server),
       }),
     },

@@ -27,8 +27,8 @@ export class SendPermit {
     return new SendPermit(record.id, record.content, fields);
   }
   /**
-   * Main's copy of a permit the renderer minted, rebuilt from the plain data IPC carries. Main takes it as sent until
-   * the writeback step checks it against its approval (docs/electron-spec.md, step 12). Only src/main calls this,
+   * Main's permit, built from the plain data IPC carries once main has decided the send may go: for a real school,
+   * only after the teacher confirms that content in main's own dialog (`src/main/lms.ts`). Only src/main calls this,
    * enforced by a structure test.
    */
   static relayed(

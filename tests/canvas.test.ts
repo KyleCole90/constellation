@@ -5,16 +5,14 @@ import { describe, expect, it } from "vite-plus/test";
 import { canvasSchoolAt, createCanvasProvider, type Fetch } from "~/main/providers/canvas";
 import type { LmsRef, SchoolHost, SchoolId } from "~/shared/domain/ids";
 import type { School } from "~/shared/domain/lms";
-import { mintSendPermit } from "~/shared/domain/permit";
 import { Secret, type CredentialLease } from "~/shared/providers/provider";
 
 import { bridgeCanvas } from "~/renderer/providers/lms";
 import { createMemoryVault } from "~/renderer/providers/vault";
-import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
+import { CANVAS, CANVAS_FACE, CANVAS_SCOPES } from "~/shared/providers/canvas";
 import type { LabCommand } from "~/shared/providers/fake-canvas/lab";
 
 import { bridgedLms, fakeLmsHandlers } from "./fixtures/bridge";
-import { gradeContent, sending } from "./fixtures/changes";
 
 const HOST = "canvas.example.edu";
 const ORIGIN = `https://${HOST}`;
@@ -70,7 +68,12 @@ const canvasWith = (
   const network = recorded(replies);
   return {
     ...network,
-    provider: createCanvasProvider({ school: SCHOOL, lease: leaseOf(token), fetch: network.fetch }),
+    provider: createCanvasProvider({
+      school: SCHOOL,
+      lease: leaseOf(token),
+      fetch: network.fetch,
+      now: () => Date.now(),
+    }),
   };
 };
 
@@ -110,7 +113,7 @@ describe("Canvas reads", () => {
     const canvas = canvasWith(SELF);
     expect(await canvas.provider.verify()).toEqual({
       ok: true,
-      value: { displayName: "Sample Instructor", scopes: ["url:GET|/api/v1/courses"] },
+      value: { displayName: "Sample Instructor", scopes: CANVAS_SCOPES },
     });
     expect(canvas.requests).toEqual([
       { url: `${ORIGIN}/api/v1/users/self`, auth: `Bearer ${TOKEN}` },
@@ -461,34 +464,6 @@ describe("student-written HTML", () => {
     });
     const announcements = await canvas.provider.announcements(COURSE);
     expect(announcements.ok && announcements.value[0]?.body).toBe("a \uFFFD b \uFFFD c A");
-  });
-});
-
-describe("Canvas writes before step 12", () => {
-  it("observe refuses with a typed not-yet, and asks Canvas nothing", async () => {
-    const canvas = canvasWith({});
-    expect(await canvas.provider.observe(gradeContent())).toEqual({
-      ok: false,
-      error: { kind: "unsupported", capability: "sending changes from this app yet" },
-    });
-    expect(canvas.requests).toEqual([]);
-  });
-
-  it("apply fails every field of a genuine permit, and asks Canvas nothing", async () => {
-    const canvas = canvasWith({});
-    const permit = mintSendPermit(sending(), ["grade", "comment"]);
-    if (!permit) throw new Error("no permit");
-    expect(await canvas.provider.apply(permit)).toEqual({
-      grade: {
-        status: "failed",
-        error: { kind: "unsupported", capability: "sending changes from this app yet" },
-      },
-      comment: {
-        status: "failed",
-        error: { kind: "unsupported", capability: "sending changes from this app yet" },
-      },
-    });
-    expect(canvas.requests).toEqual([]);
   });
 });
 

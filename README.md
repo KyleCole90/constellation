@@ -4,7 +4,7 @@ Each school is a star in your academic journey.
 
 Licensed under AGPL-3.0. See [LICENSE](LICENSE).
 
-Constellation is a prototype. An adjunct who teaches at two schools runs their week from one workspace. A course is a project, a task is a thread, and a proposed Canvas change is a plain preview that a person reads and approves. North Star is home, above every course. Each ask starts a chat that stays in the sidebar, and every return home is clean. A chat answers questions, finds things, and hands work to the right course thread or threads. The grading list opens from What's due. The demo data is invented and runs on a fake LMS. Only the desktop app talks to a real Canvas, and only to read.
+Constellation is a prototype. An adjunct who teaches at two schools runs their week from one workspace. A course is a project, a task is a thread, and a proposed Canvas change is a plain preview that a person reads and approves. North Star is home, above every course. Each ask starts a chat that stays in the sidebar, and every return home is clean. A chat answers questions, finds things, and hands work to the right course thread or threads. The grading list opens from What's due. The demo data is invented and runs on a fake LMS. Only the desktop app talks to a real Canvas.
 
 **Calendar** shows every assignment at every school by the day it is due, with one row per course. Select a day to list what is due that day beside the grid.
 
@@ -151,8 +151,10 @@ Code to clean up:
 Real Canvas, in the desktop app only:
 
 - Main runs it in `src/main/providers/canvas.ts`, so the token and every request stay out of the renderer. Any address that isn't a demo school is read as a Canvas host: `https:` only, with no port, path, credentials or IP address. `npm run verify` turns it off, so a run never reaches a real host.
-- It reads (`verify` and the six lists) and follows every page. Writes, term setup and `.imscc` upload come in later steps, so Send on a Canvas school holds with a message saying so.
-- `tests/canvas.test.ts` runs it over recorded responses shaped like the Canvas docs. `CANVAS_HOST=school.instructure.com CANVAS_TOKEN=… npm run contract:live` runs the same reads against a live school. It never runs in `npm test` or CI.
+- It reads (`verify` and the six lists) and follows every page. Term setup and `.imscc` upload come in later steps.
+- It sends grades, rubric scores, excuses, comments, replies, messages and announcements through the same write path as the fake. Each field is its own request, so each reports its own outcome. The rubric goes before the grade, because Canvas can score a submission from its rubric and that would replace a late penalty. A request that gets no answer reads as `unknown`, and the runner reads before it writes again. Comment attachments aren't sent, because a draft holds only a file's name.
+- Main decides each send to a real school. The renderer's permit only asks. Before main writes a change for the first time, it shows a native dialog that the renderer can't click or read. The dialog names the student or course as Canvas reports it, and every field the change sends, in main's own words. Main remembers the content you confirmed, so a retry or a resume of the same content doesn't ask again. Edited content asks again, and a field that the content doesn't send is refused. The demo schools aren't guarded this way, because the renderer can already rewrite the fake through the failure lab.
+- `tests/canvas.test.ts` runs the reads over recorded responses shaped like the Canvas docs. `tests/canvas-writeback.test.ts` runs `runProviderContract` and the runner against a small fake Canvas over HTTP, including a write whose response is lost after it applied. `CANVAS_HOST=school.instructure.com CANVAS_TOKEN=… npm run contract:live` runs the same reads against a live school. Add `CANVAS_SUBMISSION=<course id>/<assignment id>/<student id>` on a sandbox course to also send a grade of 1 and a dated comment through the runner, throw away the comment's response, and check that the comment appears exactly once. It never runs in `npm test` or CI.
 - A school's name shows as its address, a text submission shows no title, and a file or media submission shows no body.
 
 Vendor docs used:

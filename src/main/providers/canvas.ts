@@ -1,6 +1,14 @@
 import * as v from "valibot";
 
-import type { FieldKey, LmsError } from "../../shared/domain/change";
+import {
+  finalGrade,
+  scoredRubricPoints,
+  type ChangeContent,
+  type FieldKey,
+  type LmsError,
+  type RemoteEntry,
+  type RemoteState,
+} from "../../shared/domain/change";
 import {
   isoTime,
   parseIsoTime,
@@ -67,8 +75,12 @@ const unreadable = (what: string) =>
     ok: false,
     error: { kind: "rejected", reason: `Canvas sent ${what} this app can't read.` },
   }) as const satisfies Result<never, LmsError>;
-/** Writes ship in step 12 (docs/electron-spec.md). Until then every write and its read-back refuse, rather than half-run. */
-const NOT_YET = { kind: "unsupported", capability: "sending changes from this app yet" } as const;
+/** Course copy, fixes and publishing come with term setup (docs/electron-spec.md, step 13). */
+const unsupported = (content: ChangeContent) =>
+  ({
+    ok: false,
+    error: { kind: "unsupported", capability: content.kind },
+  }) as const satisfies Result<never, LmsError>;
 
 const retryAfterMs = (response: Response): number | null => {
   const seconds = Number(response.headers.get("retry-after"));
@@ -159,7 +171,7 @@ const SubmissionRow = v.object({
   ),
   user: v.nullish(v.object({ name: v.string() }), null),
 });
-const ConversationRow = v.object({ id: Id });
+const ConversationRow = v.object({ id: Id, subject: v.nullish(v.string(), "") });
 const ConversationDetail = v.object({
   id: Id,
   subject: v.nullish(v.string(), ""),
@@ -169,6 +181,11 @@ const ConversationDetail = v.object({
   /** Newest first. */
   messages: v.array(v.object({ id: Id, author_id: Id, body: v.string(), created_at: Time })),
 });
+const SubmissionNames = v.object({
+  user: v.object({ name: v.string() }),
+  assignment: v.object({ name: v.string() }),
+});
+const CourseNames = v.object({ course_code: v.string() });
 const AnnouncementRow = v.object({
   id: Id,
   title: v.string(),
@@ -203,6 +220,34 @@ const paragraphsOf = (html: string): string[] =>
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter((line) => line !== "");
 
+const escapeHtml = (text: string): string =>
+  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+/** Plain text as the rich text Canvas stores: a paragraph per blank line, which `paragraphsOf` reads back. */
+const htmlOf = (text: string): string =>
+  text
+    .split(/\n\s*\n/)
+    .map((paragraph) => `<p>${escapeHtml(paragraph.trim()).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+
+type Outcome = NonNullable<FieldOutcomes[FieldKey]>;
+/**
+ * The order a grade's fields go out in, one request each so each reports its own outcome. Canvas may score a submission
+ * from its rubric assessment, so the grade follows the rubric and keeps the teacher's total.
+ */
+const WRITE_ORDER: readonly FieldKey[] = [
+  "excuse",
+  "rubric",
+  "grade",
+  "comment",
+  "attachment",
+  "message",
+  "conversation",
+  "post",
+  "copy",
+  "value",
+  "text",
+];
+
 const workflowOf = (row: v.InferOutput<typeof SubmissionRow>): Submission["workflow"] => {
   if (row.excused) return "excused";
   if (row.workflow_state === "graded") return "graded";
@@ -225,16 +270,24 @@ const MAX_PAGES = 100;
 /** `fetch` as the provider calls it. Main passes Electron's `net.fetch`, which uses the system's proxy and certificates. */
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 
+/** The Canvas provider, plus the words main shows when it asks the teacher to confirm a send. */
+export interface CanvasProvider extends LmsProvider {
+  /** Who or what `content` lands on, as Canvas names it: "Maya Lopez, Essay 2". */
+  targetOf(content: ChangeContent): Read<string>;
+}
+
 /**
  * A school's real Canvas, run in main with the token from main's vault (docs/electron-spec.md, step 11). Each read
  * follows `Link: rel="next"` to the end, so it returns the whole list. A throttle comes back as `rate_limited` at once:
- * the runner pauses the lane, and this never sleeps. Writes refuse until step 12.
+ * the runner pauses the lane, and this never sleeps. Each written field is its own request, so it reports its own
+ * outcome, and a request whose answer never came back is `unknown` until a read says otherwise.
  */
 export const createCanvasProvider = (deps: {
   school: School;
   lease: CredentialLease;
   fetch: Fetch;
-}): LmsProvider => {
+  now(): number;
+}): CanvasProvider => {
   const { school, lease } = deps;
   const origin = `https://${school.host}`;
 
@@ -309,21 +362,317 @@ export const createCanvasProvider = (deps: {
   };
 
   /**
-   * The Canvas id in a course ref this provider minted: `<school>:course:<digits>`. The ref comes from the untrusted
+   * The Canvas ids in a ref this provider minted, as `<school>:<kind>:<digits>...`. The ref comes from the untrusted
    * renderer, so anything else goes nowhere near a request path.
    */
-  const courseId = (course: LmsRef<"course">): number | null => {
-    const [owner, kind, id, ...rest] = refParts(course);
-    return owner === school.id && kind === "course" && /^\d+$/.test(id ?? "") && rest.length === 0
-      ? Number(id)
+  const idsIn = (ref: string, kind: string, count: number): number[] | null => {
+    const [owner, refKind, ...ids] = refParts(ref);
+    return owner === school.id &&
+      refKind === kind &&
+      ids.length === count &&
+      ids.every((id) => /^\d+$/.test(id))
+      ? ids.map(Number)
       : null;
   };
+  const NOT_FOUND = { ok: false, error: { kind: "not_found" } } as const;
   const inCourse = async <T>(course: LmsRef<"course">, read: (id: number) => Read<T>): Read<T> => {
-    const id = courseId(course);
-    return id === null ? { ok: false, error: { kind: "not_found" } } : read(id);
+    const [id] = idsIn(course, "course", 1) ?? [];
+    return id === undefined ? NOT_FOUND : read(id);
   };
-  const notYet = (fields: readonly FieldKey[]): FieldOutcomes =>
-    Object.fromEntries(fields.map((field) => [field, { status: "failed", error: NOT_YET }]));
+  /** A submission ref's course, assignment and student, and the path Canvas keeps it at. */
+  const submissionAt = (ref: LmsRef<"submission">) => {
+    const [course, assignment, user] = idsIn(ref, "submission", 3) ?? [];
+    if (course === undefined || assignment === undefined || user === undefined) return null;
+    return {
+      course,
+      assignment,
+      user,
+      path: `/courses/${course}/assignments/${assignment}/submissions/${user}`,
+    };
+  };
+
+  /**
+   * One write. Canvas answering at all means it did or didn't apply; a request that never got an answer may have
+   * applied, so it is `unknown`, and only a later read can say.
+   */
+  const write = (method: "PUT" | "POST", path: string, form: URLSearchParams): Promise<Outcome> =>
+    lease.use(async (credential): Promise<Outcome> => {
+      if (!credential) return { status: "failed", error: { kind: "auth_expired" } };
+      const secret = credential.kind === "bearer" ? credential.token : credential.access;
+      let response: Response;
+      try {
+        response = await revealSecret(secret, (token) =>
+          deps.fetch(`${origin}/api/v1${path}`, {
+            method,
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+            body: form.toString(),
+            redirect: "manual",
+          }),
+        );
+      } catch {
+        return { status: "unknown", since: isoTime(deps.now()) };
+      }
+      if (!response.ok) return { status: "failed", error: await errorOf(response) };
+      return { status: "landed", at: isoTime(deps.now()), via: "response" };
+    });
+  const refused = (reason: string): Promise<Outcome> =>
+    Promise.resolve({ status: "failed", error: { kind: "rejected", reason } });
+
+  /** The request that writes `field` of `content`, or a refusal when the content names nothing this school holds. */
+  const writeOf = (content: ChangeContent, field: FieldKey): Promise<Outcome> => {
+    const form = (entries: Record<string, string>) => new URLSearchParams(entries);
+    switch (content.kind) {
+      case "grade": {
+        const at = submissionAt(content.target);
+        if (!at) return refused("That submission isn't at this school.");
+        switch (field) {
+          case "excuse":
+            return write("PUT", at.path, form({ "submission[excuse]": "true" }));
+          case "grade": {
+            const grade = finalGrade(content);
+            return grade === null
+              ? refused("There is no grade to send.")
+              : write("PUT", at.path, form({ "submission[posted_grade]": String(grade) }));
+          }
+          case "rubric": {
+            const scores = Object.entries(scoredRubricPoints(content.rubric ?? []));
+            const params = new URLSearchParams();
+            for (const [criterion, points] of scores) {
+              const [owner, kind, assignment, id, ...rest] = refParts(criterion);
+              if (
+                owner !== school.id ||
+                kind !== "criterion" ||
+                assignment !== String(at.assignment) ||
+                !/^[\w-]+$/.test(id ?? "") ||
+                rest.length > 0
+              )
+                return refused("A rubric score names a criterion this assignment doesn't have.");
+              params.set(`rubric_assessment[${id}][points]`, String(points));
+            }
+            return scores.length === 0
+              ? refused("There are no rubric scores to send.")
+              : write("PUT", at.path, params);
+          }
+          case "comment":
+            return content.comment === null
+              ? refused("There is no feedback to send.")
+              : write("PUT", at.path, form({ "comment[text_comment]": content.comment }));
+          case "attachment":
+          case "message":
+          case "conversation":
+          case "post":
+          case "copy":
+          case "value":
+          case "text":
+            break;
+        }
+        break;
+      }
+      case "reply": {
+        const [id] = idsIn(content.target, "conversation", 1) ?? [];
+        if (id === undefined) return refused("That conversation isn't at this school.");
+        if (field === "message")
+          return write("POST", `/conversations/${id}/add_message`, form({ body: content.body }));
+        break;
+      }
+      case "message": {
+        const at = submissionAt(content.target);
+        if (!at) return refused("That student isn't at this school.");
+        // `force_new`, or Canvas adds the message to an earlier conversation with the student.
+        if (field === "conversation")
+          return write(
+            "POST",
+            "/conversations",
+            form({
+              "recipients[]": String(at.user),
+              subject: content.subject,
+              body: content.body,
+              context_code: `course_${at.course}`,
+              force_new: "true",
+            }),
+          );
+        break;
+      }
+      case "announcement": {
+        const [id] = idsIn(content.target, "course", 1) ?? [];
+        if (id === undefined) return refused("That course isn't at this school.");
+        if (field === "post")
+          return write(
+            "POST",
+            `/courses/${id}/discussion_topics`,
+            form({
+              title: content.title,
+              message: htmlOf(content.body),
+              is_announcement: "true",
+              published: "true",
+            }),
+          );
+        break;
+      }
+      case "course-copy":
+      case "text-fix":
+      case "item-set":
+        break;
+    }
+    return Promise.resolve({
+      status: "failed",
+      error: { kind: "unsupported", capability: `${content.kind} ${field}` },
+    });
+  };
+
+  const entriesOf = (
+    messages: readonly { id: number; author_id: number; body: string }[],
+    mine: number,
+  ): RemoteEntry[] =>
+    messages.map((message) => ({
+      id: String(message.id),
+      mine: message.author_id === mine,
+      text: message.body,
+    }));
+
+  const observe = async (content: ChangeContent): Read<RemoteState> => {
+    switch (content.kind) {
+      case "grade": {
+        const at = submissionAt(content.target);
+        if (!at) return NOT_FOUND;
+        const mine = await me();
+        if (!mine.ok) return mine;
+        const read = await one(
+          `${at.path}?include[]=submission_comments&include[]=rubric_assessment`,
+          SubmissionRow,
+        );
+        if (!read.ok) return read;
+        const row = read.value;
+        return {
+          ok: true,
+          value: {
+            kind: "grade",
+            targetVersion: `attempt:${row.attempt}`,
+            grade: row.excused ? null : row.score,
+            rubric: row.rubric_assessment
+              ? Object.fromEntries(
+                  Object.entries(row.rubric_assessment).flatMap(([criterion, { points }]) =>
+                    points === null
+                      ? []
+                      : [[refs.criterion(school.id, at.assignment, criterion), points]],
+                  ),
+                )
+              : null,
+            excused: row.excused,
+            comments: row.submission_comments.map((comment) => ({
+              id: String(comment.id),
+              mine: comment.author_id === mine.value,
+              text: comment.comment,
+            })),
+            attachments: [],
+          },
+        };
+      }
+      case "reply": {
+        const [id] = idsIn(content.target, "conversation", 1) ?? [];
+        if (id === undefined) return NOT_FOUND;
+        const mine = await me();
+        if (!mine.ok) return mine;
+        const read = await one(`/conversations/${id}?auto_mark_as_read=false`, ConversationDetail);
+        if (!read.ok) return read;
+        const messages = read.value.messages.toReversed();
+        return {
+          ok: true,
+          value: {
+            kind: "reply",
+            targetVersion: `messages:${messages.length}`,
+            messages: entriesOf(messages, mine.value),
+          },
+        };
+      }
+      case "message": {
+        const at = submissionAt(content.target);
+        if (!at) return NOT_FOUND;
+        const mine = await me();
+        if (!mine.ok) return mine;
+        // A conversation the teacher started and nobody answered sits in "sent", not the inbox.
+        const rows = await list(
+          `/conversations?scope=sent&filter[]=user_${at.user}`,
+          ConversationRow,
+        );
+        if (!rows.ok) return rows;
+        const openings: RemoteEntry[] = [];
+        for (const row of rows.value.filter((entry) => entry.subject === content.subject)) {
+          const read = await one(
+            `/conversations/${row.id}?auto_mark_as_read=false`,
+            ConversationDetail,
+          );
+          if (!read.ok) return read;
+          openings.push(...entriesOf(read.value.messages.slice(-1), mine.value));
+        }
+        return {
+          ok: true,
+          value: { kind: "message", targetVersion: "student", messages: openings },
+        };
+      }
+      case "announcement":
+        return inCourse(content.target, async (id) => {
+          // Every topic, delayed ones too: a post this app made is there whether or not it shows yet.
+          const rows = await list(
+            `/courses/${id}/discussion_topics?only_announcements=true`,
+            AnnouncementRow,
+          );
+          if (!rows.ok) return rows;
+          return {
+            ok: true,
+            value: {
+              kind: "announcement",
+              targetVersion: "course",
+              // Only teachers post announcements, and `seen` tells this app's posts from earlier ones.
+              posts: rows.value.map((row) => ({
+                id: String(row.id),
+                mine: true,
+                text: `${row.title}\n\n${paragraphsOf(row.message).join("\n\n")}`,
+              })),
+            },
+          };
+        });
+      case "course-copy":
+      case "text-fix":
+      case "item-set":
+        return unsupported(content);
+    }
+  };
+
+  const targetOf = async (content: ChangeContent): Read<string> => {
+    switch (content.kind) {
+      case "grade":
+      case "message": {
+        const at = submissionAt(content.target);
+        if (!at) return NOT_FOUND;
+        const read = await one(`${at.path}?include[]=user&include[]=assignment`, SubmissionNames);
+        return read.ok
+          ? { ok: true, value: `${read.value.user.name}, ${read.value.assignment.name}` }
+          : read;
+      }
+      case "reply": {
+        const [id] = idsIn(content.target, "conversation", 1) ?? [];
+        if (id === undefined) return NOT_FOUND;
+        const read = await one(`/conversations/${id}?auto_mark_as_read=false`, ConversationDetail);
+        if (!read.ok) return read;
+        const names = read.value.participants.map((person) => person.name).join(", ");
+        return { ok: true, value: `"${read.value.subject}" with ${names}` };
+      }
+      case "announcement":
+        return inCourse(content.target, async (id) => {
+          const read = await one(`/courses/${id}`, CourseNames);
+          return read.ok ? { ok: true, value: read.value.course_code } : read;
+        });
+      case "course-copy":
+      case "text-fix":
+      case "item-set":
+        return unsupported(content);
+    }
+  };
 
   const conversation = async (
     id: number,
@@ -508,7 +857,25 @@ export const createCanvasProvider = (deps: {
           ),
         };
       }),
-    observe: async () => ({ ok: false, error: NOT_YET }),
-    apply: async (permit) => (SendPermit.isGenuine(permit) ? notYet(permit.fields) : {}),
+    observe,
+    /**
+     * In `WRITE_ORDER`, one request per field. After a field that didn't land, nothing more is sent, so the rest
+     * failed: with its error, or as unavailable when its answer was lost.
+     */
+    apply: async (permit) => {
+      if (!SendPermit.isGenuine(permit)) return {};
+      const { content, fields } = permit;
+      const outcomes: Partial<Record<FieldKey, Outcome>> = {};
+      let unsent: Outcome | null = null;
+      for (const field of WRITE_ORDER.filter((key) => fields.includes(key))) {
+        const outcome: Outcome = unsent ?? (await writeOf(content, field));
+        outcomes[field] = outcome;
+        if (outcome.status === "failed") unsent = outcome;
+        if (outcome.status === "unknown")
+          unsent = { status: "failed", error: { kind: "unavailable", status: null } };
+      }
+      return outcomes;
+    },
+    targetOf,
   };
 };

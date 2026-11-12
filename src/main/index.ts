@@ -1,7 +1,17 @@
 import { join } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
-import { app, BrowserWindow, ipcMain, Menu, net, protocol, safeStorage, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  net,
+  protocol,
+  safeStorage,
+  shell,
+} from "electron";
 
 import { handle } from "../shared/ipc";
 
@@ -72,6 +82,17 @@ const start = async () => {
     leaseFor: (key) => vault.lease(key),
     packaged: app.isPackaged,
     fetch: FAKE_ONLY ? null : (url, init) => net.fetch(url, init),
+    confirmSend: async ({ host, target, lines }) => {
+      const { response } = await dialog.showMessageBox(window, {
+        type: "question",
+        message: `Send to ${target} on ${host}?`,
+        detail: lines.join("\n\n"),
+        buttons: ["Send", "Don't Send"],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      return response === 0;
+    },
   });
   handle(
     (channel, listener) =>
