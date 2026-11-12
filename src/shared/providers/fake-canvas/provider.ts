@@ -2,7 +2,6 @@ import type { ChangeContent, FieldKey, LmsError } from "~/shared/domain/change";
 import {
   isContentItemType,
   type ContentItem,
-  type ContentLink,
   type CourseContent,
   type CourseModule,
   type Migration,
@@ -21,8 +20,8 @@ import type {
 } from "~/shared/providers/provider";
 
 import { CANVAS } from "../canvas";
+import { classifyLink, type LinkContext } from "../canvas-links";
 import { refParts, refs } from "../canvas-refs";
-import type { RawLink } from "./seed-term";
 import {
   INSTRUCTOR,
   SCHOOLS_SEED,
@@ -124,47 +123,6 @@ const allFields = (
   fields: readonly FieldKey[],
   outcome: NonNullable<FieldOutcomes[FieldKey]>,
 ): FieldOutcomes => Object.fromEntries(fields.map((field) => [field, outcome]));
-
-// ---- Links. URL grammar is Canvas knowledge, so it is read here and nowhere above. ----
-
-interface LinkContext {
-  school: SchoolId;
-  host: string;
-  courseId: number;
-  pages: ReadonlySet<string>;
-  files: ReadonlySet<number>;
-}
-
-const COURSE_PATH =
-  /^https?:\/\/([^/]+)\/courses\/(\d+)\/(pages|files|external_tools|assignments|discussion_topics|modules)\/([^/?#]+)/;
-
-/**
- * Same host and this course: a page or file is checked against what the course holds, and a tool link stays a tool link
- * for the scan to check against configured tools. Another course gets a replacement only when it is on the same host
- * and the same page exists here. Anything that is not a course URL is the open web.
- */
-const classifyLink = (link: RawLink, ctx: LinkContext): ContentLink => {
-  const match = COURSE_PATH.exec(link.url);
-  if (!match) return { ...link, points: "web" };
-  const [, host, courseId, kind, slug] = match;
-  if (host !== ctx.host || Number(courseId) !== ctx.courseId) {
-    const replacement =
-      host === ctx.host && kind === "pages" && slug !== undefined && ctx.pages.has(slug)
-        ? link.url.replace(`/courses/${courseId}/`, `/courses/${ctx.courseId}/`)
-        : null;
-    return { ...link, points: "other-course", replacement };
-  }
-  if (kind === "pages")
-    return {
-      ...link,
-      points: slug !== undefined && ctx.pages.has(slug) ? "this-course" : "missing-page",
-    };
-  if (kind === "files")
-    return { ...link, points: ctx.files.has(Number(slug)) ? "this-course" : "missing-file" };
-  if (kind === "external_tools")
-    return { ...link, points: "tool", tool: refs.tool(ctx.school, ctx.courseId, Number(slug)) };
-  return { ...link, points: "this-course" };
-};
 
 const openUrl = (
   host: string,

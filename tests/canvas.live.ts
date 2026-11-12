@@ -2,7 +2,15 @@ import * as v from "valibot";
 import { describe, expect, it } from "vite-plus/test";
 
 import { canvasSchoolAt, createCanvasProvider } from "~/main/providers/canvas";
-import { newChangeRecord, type GradeContent, type LmsError } from "~/shared/domain/change";
+import {
+  fieldText,
+  newChangeRecord,
+  type ChangeContent,
+  type GradeContent,
+  type LmsError,
+  type SetContent,
+} from "~/shared/domain/change";
+import type { Migration } from "~/shared/domain/content";
 import { ApprovalWitness, fingerprintOf } from "~/shared/domain/approval";
 import type { ChangeId, IsoTime, LmsRef, Result } from "~/shared/domain/ids";
 import {
@@ -19,19 +27,24 @@ import { Secret } from "~/shared/providers/provider";
 import { DEFAULT_RETRY_POLICY, createWriteback } from "~/renderer/writeback/writeback";
 
 import { DurableLedger } from "./fixtures/ledger";
+import { copyContent } from "./fixtures/term";
 
 /*
  * `npm run contract:live`: every Canvas read against a live school, each answer parsed as the bridge would parse it,
- * then one grade and comment sent through the runner with the comment's response thrown away. It reaches a real host,
+ * then one grade and comment sent through the runner with the comment's response thrown away, and, given a sandbox
+ * shell and source, a course copied and published. It reaches a real host,
  * so it runs only through that script, never in `npm test` or CI.
  */
 const {
   CANVAS_HOST: host = "",
   CANVAS_TOKEN: token = "",
   CANVAS_SUBMISSION: sandbox = "",
+  CANVAS_TERM_SHELL: termShell = "",
+  CANVAS_TERM_SOURCE: termSource = "",
 } = process.env;
 const school = canvasSchoolAt(host);
 const LIVE_TIMEOUT_MS = 120_000;
+const COPY_TIMEOUT_MS = 300_000;
 
 const unwrap = <T>(label: string, result: Result<T, LmsError>): T => {
   if (!result.ok) throw new Error(`${label}: ${JSON.stringify(result.error)}`);
@@ -64,6 +77,43 @@ describe("Canvas reads against a live school", () => {
     },
     now: () => Date.now(),
   });
+
+  /** One change read, approved with a trusted click and sent through the runner, as the app sends it. */
+  const runnerFor = async (content: ChangeContent, course: LmsRef<"course">) => {
+    const at = new Date().toISOString() as IsoTime;
+    const remote = unwrap("observe", await provider.observe(content));
+    const ledger = new DurableLedger();
+    const draft = newChangeRecord({
+      id: `ch-live-${content.kind}` as ChangeId,
+      school: school.id,
+      course,
+      subject: "contract:live",
+      content,
+      basis: { readAt: at, remote },
+      at,
+      by: "you",
+    });
+    ledger.add(draft);
+    const witness = ApprovalWitness.fromClick({ isTrusted: true, type: "click" }, [
+      { changeId: draft.id, fingerprint: fingerprintOf(draft) },
+    ]);
+    if (!witness) throw new Error("no witness");
+    expect(ledger.commit(draft.id, { type: "approve", witness, at }).ok).toBe(true);
+    const writeback = createWriteback({
+      ledger,
+      providerFor: () => provider,
+      markExpired: () => undefined,
+      now: () => Date.now(),
+      sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+      random: () => Math.random(),
+      policy: DEFAULT_RETRY_POLICY,
+      locks: null,
+    });
+    return async () => {
+      await writeback.send([draft.id]);
+      return ledger.get(draft.id)?.state.tag;
+    };
+  };
 
   it(
     "verify and the six list reads return whole lists the bridge accepts",
@@ -113,42 +163,55 @@ describe("Canvas reads against a live school", () => {
         override: null,
         excused: false,
       };
-      const remote = unwrap("observe", await provider.observe(content));
-      const ledger = new DurableLedger();
-      const draft = newChangeRecord({
-        id: "ch-live" as ChangeId,
-        school: school.id,
-        course: `${school.id}:course:${course}` as LmsRef<"course">,
-        subject: "contract:live",
-        content,
-        basis: { readAt: at, remote },
-        at,
-        by: "you",
-      });
-      ledger.add(draft);
-      const witness = ApprovalWitness.fromClick({ isTrusted: true, type: "click" }, [
-        { changeId: draft.id, fingerprint: fingerprintOf(draft) },
-      ]);
-      if (!witness) throw new Error("no witness");
-      expect(ledger.commit(draft.id, { type: "approve", witness, at }).ok).toBe(true);
-      const writeback = createWriteback({
-        ledger,
-        providerFor: () => provider,
-        markExpired: () => undefined,
-        now: () => Date.now(),
-        sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
-        random: () => Math.random(),
-        policy: DEFAULT_RETRY_POLICY,
-        locks: null,
-      });
+      const send = await runnerFor(content, `${school.id}:course:${course}` as LmsRef<"course">);
       loseComment = true;
-      await writeback.send([draft.id]);
-      expect(ledger.get(draft.id)?.state.tag).toBe("sent");
+      expect(await send()).toBe("sent");
       const after = unwrap("observe after", await provider.observe(content));
       if (after.kind !== "grade") throw new Error("observe read no grade");
       expect(after.grade).toBe(1);
       expect(after.comments.filter((comment) => comment.text === content.comment)).toHaveLength(1);
     },
     LIVE_TIMEOUT_MS,
+  );
+
+  const termTest = [termShell, termSource].every((id) => /^\d+$/.test(id)) ? it : it.skip;
+  termTest(
+    "a sandbox course goes from copy to published (set CANVAS_TERM_SHELL=<an empty unpublished course starting later> and CANVAS_TERM_SOURCE=<a dated course to copy from>)",
+    async () => {
+      const setup = provider.termSetup;
+      if (!setup) throw new Error("Canvas offers no term setup");
+      const shell = unwrap("newCourses", await setup.newCourses()).find(
+        (entry) => entry.ref === `${school.id}:course:${termShell}`,
+      );
+      const source = unwrap("copySources", await setup.copySources()).find(
+        (entry) => entry.ref === `${school.id}:course:${termSource}`,
+      );
+      if (!shell)
+        throw new Error("CANVAS_TERM_SHELL isn't an unpublished course that starts later");
+      if (!source) throw new Error("CANVAS_TERM_SOURCE isn't a dated course this teacher taught");
+      const copy = copyContent(shell, source);
+      expect(await (await runnerFor(copy, shell.ref))()).toBe("sent");
+      let job: Migration | undefined;
+      for (const started = Date.now(); Date.now() - started < COPY_TIMEOUT_MS;) {
+        const jobs = unwrap("migrations", await setup.migrations(shell.ref));
+        job = jobs.findLast((entry) => entry.signature === fieldText(copy, "copy"));
+        if (job?.state === "completed" || job?.state === "failed") break;
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+      expect(job?.state, job?.message ?? "the copy never finished").toBe("completed");
+      const content = unwrap("courseContent", await setup.courseContent(shell.ref));
+      expect(content.items.length, "what the copy brought").toBeGreaterThan(0);
+      const publish: SetContent = {
+        kind: "item-set",
+        target: shell.stateTarget,
+        where: shell.code,
+        intent: { set: "course-published" },
+      };
+      expect(await (await runnerFor(publish, shell.ref))()).toBe("sent");
+      expect(unwrap("courses", await provider.courses()).map((entry) => entry.ref)).toContain(
+        shell.ref,
+      );
+    },
+    COPY_TIMEOUT_MS + LIVE_TIMEOUT_MS,
   );
 });

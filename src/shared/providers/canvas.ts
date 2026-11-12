@@ -18,6 +18,17 @@ const SCOPE_WORDS: Readonly<Record<string, string>> = {
   "url:POST|/api/v1/conversations/:id/add_message": "Reply to messages",
   "url:POST|/api/v1/conversations": "Message students",
   "url:POST|/api/v1/courses/:course_id/discussion_topics": "Post announcements",
+  "url:POST|/api/v1/courses/:course_id/content_migrations": "Copy content into a course",
+  "url:GET|/api/v1/courses/:course_id/content_migrations": "Check on a copy",
+  "url:GET|/api/v1/progress/:id": "Read how far a copy has gone",
+  "url:GET|/api/v1/courses/:course_id/content_migrations/:id/migration_issues":
+    "Read a copy's report",
+  "url:PUT|/api/v1/courses/:id": "Publish a course and edit its syllabus",
+  "url:PUT|/api/v1/courses/:course_id/pages/:url_or_id": "Edit pages",
+  "url:PUT|/api/v1/courses/:course_id/assignments/:id": "Edit assignments",
+  "url:PUT|/api/v1/courses/:course_id/discussion_topics/:topic_id": "Edit announcements",
+  "url:DELETE|/api/v1/courses/:course_id/discussion_topics/:topic_id": "Delete an announcement",
+  "url:PUT|/api/v1/files/:id": "Show files to students",
 };
 /** A personal access token carries all its owner's rights. These are the ones the app uses so far. */
 export const CANVAS_SCOPES = Object.keys(SCOPE_WORDS);

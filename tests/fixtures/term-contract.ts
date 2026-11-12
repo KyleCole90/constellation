@@ -26,6 +26,8 @@ export interface TermContractHarness {
   loseNext(): void;
   failNextMigration(stage: "pre_processing" | "running", message: string): void;
   writeCount(): number;
+  /** Whether the LMS lists sample packages to import. Real Canvas has none until package upload (step 14). */
+  offersPackages: boolean;
 }
 
 const MIGRATION_KEYS = new Set(["ref", "signature", "state", "completion", "message", "issues"]);
@@ -45,7 +47,7 @@ const copyRemote = async (provider: LmsProvider, content: CourseCopyContent) => 
   return remote;
 };
 
-/** A provider that offers term setup passes this too. The fake is the first; a real Canvas adapter would be the second. */
+/** A provider that offers term setup passes this too: the fake, and real Canvas over recorded HTTP. */
 export const runTermSetupContract = (
   name: string,
   makeHarness: () => Promise<TermContractHarness>,
@@ -298,9 +300,9 @@ export const runTermSetupContract = (
     });
 
     it("the sample packages are listed, and the copy sources list templates first", async () => {
-      const { provider } = await makeHarness();
+      const { provider, offersPackages } = await makeHarness();
       const packages = await unwrap(setupOf(provider).samplePackages());
-      expect(packages.length).toBeGreaterThan(0);
+      expect(packages.length > 0).toBe(offersPackages);
       for (const pkg of packages) expect(pkg.name.endsWith(".imscc")).toBe(true);
       const sources = await unwrap(setupOf(provider).copySources());
       const firstPlain = sources.findIndex((source) => !source.template);
