@@ -26,6 +26,10 @@ const registered = () => {
       "vault.keys": async () => [],
       "vault.forget": record,
       "vault.standIn": async () => null,
+      "agent.run": async (input) => {
+        handled.push(input);
+        return { ok: false, reason: "no agent in this rig" };
+      },
       ...fakeLmsHandlers(),
     },
   );
@@ -47,6 +51,7 @@ describe("main's handlers", () => {
       "vault.keys",
       "vault.forget",
       "vault.standIn",
+      "agent.run",
       "lms.schoolAt",
       "lms.verify",
       "lms.courses",
@@ -108,6 +113,12 @@ describe("main's handlers", () => {
     ["vault.forget", { key: 7 }],
     ["vault.forget", "lcc"],
     ["vault.standIn", {}],
+    ["agent.run", { request: "", history: [], scope: {} }],
+    [
+      "agent.run",
+      { request: "Draft a grade.", history: [{ role: "system", text: "x" }], scope: {} },
+    ],
+    ["agent.run", { request: "Draft a grade.", history: [], scope: {}, model: "claude-fable-5-2" }],
   ])("reject %s with a bad input %j", async (channel, input) => {
     const main = registered();
     await expect(main.call(channel, input)).rejects.toThrow();

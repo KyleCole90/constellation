@@ -18,6 +18,8 @@ const IGNORED = [
 
 const ELECTRON_ONLY_IN_MAIN =
   "`electron` belongs to src/main and src/preload. The renderer reaches main through `window.constellation` (docs/electron-spec.md, D16).";
+const ANTHROPIC_ONLY_IN_MAIN =
+  "The Anthropic SDK runs in src/main, with the key from main's vault. The renderer asks over `agent.run` (docs/electron-spec.md, AI).";
 const NODE_ONLY_IN_MAIN =
   "Node builtins belong to src/main. src/shared is pure code both processes run, and the renderer gets no Node access (docs/electron-spec.md, D5, D15).";
 const IPC_THROUGH_THE_MAP =
@@ -44,7 +46,7 @@ export default defineConfig({
       outDir: "out/main",
       format: "esm",
       // The packaged app ships no node_modules, so every dependency main imports goes in its bundle. `npm run smoke:packaged` fails on one left out.
-      deps: { neverBundle: ["electron"], alwaysBundle: ["valibot"] },
+      deps: { neverBundle: ["electron"], alwaysBundle: ["valibot", "@anthropic-ai/sdk"] },
     },
     {
       entry: "src/preload/index.ts",
@@ -154,10 +156,12 @@ export default defineConfig({
             {
               paths: [
                 { name: "electron", message: ELECTRON_ONLY_IN_MAIN },
+                { name: "@anthropic-ai/sdk", message: ANTHROPIC_ONLY_IN_MAIN },
                 ...builtinModules.map((name) => ({ name, message: NODE_ONLY_IN_MAIN })),
               ],
               patterns: [
                 { group: ["electron/*"], message: ELECTRON_ONLY_IN_MAIN },
+                { group: ["@anthropic-ai/*"], message: ANTHROPIC_ONLY_IN_MAIN },
                 { group: ["node:*", "node:*/**"], message: NODE_ONLY_IN_MAIN },
               ],
             },

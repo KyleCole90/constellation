@@ -101,6 +101,8 @@ export type Thread = ThreadSubject & {
   updatedAt: IsoTime;
   /** When the teacher last settled it. Read it through `isSettled`, because a later message resumes the thread. */
   settledAt?: IsoTime;
+  /** What Claude's runs in this thread used and cost, summed. Absent until a run reports one. */
+  spend?: { tokens: number; usd: number };
 };
 
 export type OnboardingStep = "welcome" | "setup" | "done";

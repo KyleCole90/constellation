@@ -199,7 +199,7 @@ const createBrowserVault = (): Vault => {
  * The desktop app's vault. Main keeps each token, encrypted with `safeStorage`, and never sends one back.
  * A lease gets a stand-in, which the fake LMS checks the way it would check the token.
  */
-export const createBridgeVault = (bridge: Bridge): Vault => {
+export const createBridgeVault = (bridge: Pick<Bridge, "invoke">): Vault => {
   const keys = () => bridge.invoke("vault.keys", undefined);
   const forget = (key: VaultKey) => bridge.invoke("vault.forget", { key });
   const vault: Vault = {

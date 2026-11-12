@@ -1,4 +1,4 @@
-import { VAULT_PLACE } from "~/renderer/desktop";
+import { REAL_AI, VAULT_PLACE } from "~/renderer/desktop";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { Check, Lock } from "lucide-react";
 import { useState } from "react";
@@ -21,8 +21,9 @@ import {
 } from "../settings/Institutions";
 import { Button } from "../ui/button";
 
-const NO_MODEL =
-  "No model is wired up in this build yet, so AI drafts come from built-in rules for now.";
+const NO_MODEL = REAL_AI
+  ? "With a key, drafts and chat come from Claude, billed to your Anthropic account."
+  : "No model is wired up in this build yet, so AI drafts come from built-in rules for now.";
 const PROMISE = "Nothing reaches your LMS until you approve it.";
 
 interface AiOption {
@@ -38,15 +39,20 @@ const AI_OPTIONS: readonly AiOption[] = [
     title: "Claude, with your Anthropic API key",
     body: () => `The key stays in ${VAULT_PLACE} and is never shown again.`,
   },
-  {
-    source: "on-device",
-    title: "On-device model",
-    body: (mac) =>
-      mac
-        ? "The model built into macOS. Nothing leaves this Mac."
-        : "Only on a Mac with Apple Intelligence.",
-    needsMac: true,
-  },
+  // The desktop app drafts with Claude alone (D27), so it offers no on-device model.
+  ...(REAL_AI
+    ? []
+    : [
+        {
+          source: "on-device",
+          title: "On-device model",
+          body: (mac: boolean) =>
+            mac
+              ? "The model built into macOS. Nothing leaves this Mac."
+              : "Only on a Mac with Apple Intelligence.",
+          needsMac: true,
+        } satisfies AiOption,
+      ]),
   {
     source: "none",
     title: "No AI",

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { isBlankSecret, Secret } from "~/shared/providers/provider";
+import { REAL_AI } from "~/renderer/desktop";
 import { workspaceStore } from "~/renderer/stores/workspace";
 
 import { SecretForm } from "./SecretForm";
@@ -34,7 +35,8 @@ export function AiKeyForm({
       {...(layout ? { layout } : {})}
       submitLabel={submitLabel}
       busyLabel="Saving"
-      secondary={{ label: "Use a demo key", make: demoKey }}
+      // A demo key drafts only with the rules agent; Anthropic would refuse it.
+      {...(REAL_AI ? {} : { secondary: { label: "Use a demo key", make: demoKey } })}
       aside={aside}
       onSubmit={async (secret) => {
         const problem = await saveKey(secret);

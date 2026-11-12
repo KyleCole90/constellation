@@ -13,13 +13,14 @@ export const run = async (t) => {
   );
   t.assert(header === CSP, "an app:// response carries the CSP", header);
   const globals = await t.eval(
-    `({ process: typeof process, require: typeof require, bridge: Object.keys(window.constellation ?? {}) })`,
+    `({ process: typeof process, require: typeof require, bridge: Object.keys(window.constellation ?? {}).sort(), agent: window.constellation?.agent })`,
   );
   t.assert(
     globals.process === "undefined" &&
       globals.require === "undefined" &&
-      JSON.stringify(globals.bridge) === '["invoke"]',
-    "the page has no process or require, and window.constellation exposes only invoke",
+      JSON.stringify(globals.bridge) === '["agent","invoke"]' &&
+      globals.agent === "rules",
+    "the page has no process or require, and window.constellation exposes only invoke and which agent drafts (rules, under verify)",
     JSON.stringify(globals),
   );
   // A well-formed report reaches main's handler, so the malformed one is refused by main's parse, not by a missing handler.

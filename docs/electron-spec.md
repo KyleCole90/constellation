@@ -65,15 +65,15 @@ export const ipc = {
   "lms.courses": { input: v.object({ school: SchoolId }), output: v.array(Course) },
   "lms.apply": { input: SendPermitSchema, output: FieldOutcomesSchema },
   "vault.enroll": { input: v.object({ key: VaultKey, token: v.string() }), output: v.void() },
-  "agent.run": { input: AgentInputSchema, output: v.unknown(), stream: true },
+  "agent.run": { input: AgentRunInput, output: AgentRunOutput }, // { ok, effects: unknown[], spend } or { ok: false, reason }
   "error.report": { input: RendererErrorSchema, output: v.void() },
 } as const;
 ```
 
 - Main registers handlers through `handle(ipc, handlers)`. The type of `handlers` is a mapped type over the map's keys, so a missing or misspelled handler fails to compile.
 - Main parses every input before its handler runs. The preload parses every output before the renderer sees it. A payload that fails to parse is rejected and reported as an error. It is never coerced.
-- The preload exposes one object, `window.constellation`, with `invoke(channel, input)` and `stream(channel, input, signal)`. The renderer never sees `ipcRenderer`.
-- Only `agent.run` outputs `unknown`, on purpose. Raw model chunks go to `parseAgentEffect` in the renderer, the same parser the rules agent goes through today: one parser, one path (D26).
+- The preload exposes one object, `window.constellation`, with `invoke(channel, input)` and `agent`: `"claude"`, or `"rules"` when main runs verify's fake schools. The renderer never sees `ipcRenderer`.
+- Only `agent.run` outputs `unknown`, on purpose: its effects. Each raw effect goes to `parseAgentEffect` in the renderer, the same parser the rules agent goes through today: one parser, one path (D26).
 - `SendPermit` is checked again in main: `apply` refuses anything that isn't a genuine permit. The renderer is untrusted, so main checks the permit's fingerprint against the approved content it was minted from. (The exact check is designed in the writeback PR.)
 - The renderer's provider and agent become thin clients over this bridge, with the same `LmsProvider` and `Agent` interfaces, so screens and tests don't change.
 
@@ -193,7 +193,7 @@ Each step is one PR that ends green on every check and is proven on the real app
 - **The permit check in main.** `SendPermit` and approval are minted in the renderer today. With the renderer untrusted, main needs its own check before `apply`. The exact rule is designed in PR 12, and it must not add a second write path. _Settled in PR 12:_ the renderer's permit only asks. Before main first writes a change to a real school, it asks the teacher in a native dialog that names the target as Canvas reports it and every field in main's own words. Main remembers the confirmed content per change while it runs, so a retry or resume of that content doesn't ask again. A comment, message or post goes out once per confirmation, and a field the content doesn't send is refused. The demo schools aren't gated, because the failure lab already lets the renderer rewrite the fake.
 - **PostHog delivery.** Send straight to PostHog, or through our own proxy (#3)? Recommendation: send direct for 0.0.1, since a proxy would be the only Constellation server.
 - **Student data at rest.** Workspace state in `userData` localStorage is unencrypted on disk, protected only by the user's account (D9). That's accepted for 0.0.1. `PRIVACY.md` must say so.
-- **The Anthropic model choice and prompts** for each agent task are designed in PR 15.
+- **The Anthropic model choice and prompts** for each agent task are designed in PR 15. _Settled in PR 15:_ one model, `claude-opus-5-5` at `medium` effort, with Anthropic's server-side refusal fallback on, for every task the rules agent covers. One system prompt, and one tool per `AgentEffect` type, so each tool call is one raw effect. `agent.run` is a plain invoke rather than a stream: main returns the run's raw effects and its cost together, and the renderer still parses each one with `parseAgentEffect`. Main writes the scope into the prompt and never reads it, so it crosses as `unknown`. The model names the submission it annotates, because the change id is minted in the renderer once the propose lands. Verify drafts with the rules agent, so a run reaches neither Canvas nor Anthropic. Desktop offers no on-device model (D27). Offline, the composer is disabled with the reason and a run declines without asking main. What students wrote stays data: `<` is escaped in the scope, and the prompt says so.
 - **Notarisation credentials.** Kyle provides an App Store Connect API key, or an app-specific password, for the `release` environment in PR 7.
 
 ## Decision log
@@ -240,7 +240,7 @@ Each step is one PR that ends green on every check and is proven on the real app
 
 - **D24** Error tracking is on by default, with the opt-out on the setup page.
 - **D25** Recorded-response unit tests, plus `contract:live` against Kyle's sandbox courses. Writeback waits for a live pass.
-- **D26** The model runs in main and streams raw chunks, and the renderer parses them: one parser.
+- **D26** The model runs in main and returns raw effects, and the renderer parses them: one parser. (PR 15 replaced the planned stream with a plain invoke.)
 - **D27** Anthropic only. The on-device model is dropped, because it needs a native Swift addon.
 - **D28** No in-app cap, with cost shown. Offline disables Send and AI, and nothing queues.
 
