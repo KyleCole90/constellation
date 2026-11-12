@@ -13,7 +13,7 @@ import {
   shell,
 } from "electron";
 
-import { handle } from "../shared/ipc";
+import { RULES_AGENT_SWITCH, handle } from "../shared/ipc";
 
 import {
   APP_SCHEME,
@@ -25,6 +25,7 @@ import {
   windowOptions,
 } from "./security";
 import { createFileStorage, fakeServer, lmsHandlers } from "./lms";
+import { anthropicAgent } from "./providers/anthropic";
 import { createVault } from "./vault";
 
 const RENDERER_DIR = fileURLToPath(new URL("../dist", import.meta.url));
@@ -37,7 +38,7 @@ const HIDDEN = !app.isPackaged && process.env.CONSTELLATION_WINDOW === "hidden";
 const DEV_ORIGIN = app.isPackaged
   ? undefined
   : (DEV_URL ?? process.env.CONSTELLATION_VERIFY_ORIGIN);
-/** Set by `npm run verify`: only the fake LMS's schools, so a run never reaches a real Canvas host. */
+/** Set by `npm run verify`: only the fake LMS's schools and the rules agent, so a run never reaches Canvas or Anthropic. */
 const FAKE_ONLY = !app.isPackaged && process.env.CONSTELLATION_LMS === "fake";
 /** Only the unpackaged app takes CDP. A packaged app quits before it opens a window (`npm run smoke:packaged`). */
 const DEBUGGER_ASKED =
@@ -115,10 +116,19 @@ const start = async () => {
       "vault.keys": async () => vault.keys(),
       "vault.forget": async ({ key }) => vault.forget(key),
       "vault.standIn": ({ key }) => vault.standIn(key),
+      "agent.run": FAKE_ONLY
+        ? async () => ({ ok: false, reason: "This run drafts with the rules agent." })
+        : anthropicAgent({
+            lease: vault.lease("ai-key"),
+            fetch: (url, init) => net.fetch(url, init),
+          }),
       ...lms,
     },
   );
-  const window = new BrowserWindow({ ...windowOptions(PRELOAD), show: !HIDDEN });
+  const window = new BrowserWindow({
+    ...windowOptions(PRELOAD, FAKE_ONLY ? [RULES_AGENT_SWITCH] : []),
+    show: !HIDDEN,
+  });
   lockNavigation(window.webContents, (url) => void shell.openExternal(url));
   app.on("second-instance", () => {
     if (window.isMinimized()) window.restore();

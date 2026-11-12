@@ -89,6 +89,7 @@ import {
   type Vault,
 } from "~/shared/providers/provider";
 import { desktopBridge } from "~/renderer/desktop";
+import { createBridgeAgent } from "~/renderer/providers/agent";
 import { bridgeCanvas, bridgeFakeLms } from "~/renderer/providers/lms";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
 import { createAppVault } from "~/renderer/providers/vault";
@@ -1182,6 +1183,21 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                 });
               case "work":
                 return say(thread, run, { type: "work", lines: [effect.line], at: nowIso() });
+              case "spend": {
+                const current = get().threads[thread];
+                if (!current) return;
+                const spent = current.spend ?? { tokens: 0, usd: 0 };
+                set({
+                  threads: {
+                    ...get().threads,
+                    [thread]: {
+                      ...current,
+                      spend: { tokens: spent.tokens + effect.tokens, usd: spent.usd + effect.usd },
+                    },
+                  },
+                });
+                return;
+              }
               case "propose":
                 return applyPropose(effect, thread, run);
               case "edit":
@@ -1978,6 +1994,7 @@ const browserDeps = (): WorkspaceDeps => ({
   storage: localStorage,
   vault: createAppVault(),
   backend: desktopBridge ? bridgeBackend(desktopBridge) : fakeCanvasBackend({}),
+  ...(desktopBridge?.agent === "claude" ? { agent: createBridgeAgent(desktopBridge) } : {}),
   realNow: () => Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   random: () => Math.random(),

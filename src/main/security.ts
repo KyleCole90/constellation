@@ -17,11 +17,21 @@ export const CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
-export const windowOptions = (preload: string): BrowserWindowConstructorOptions => ({
+/** `args` reach the preload's `process.argv`. This file imports no app code: verify's scripts load it in plain Node. */
+export const windowOptions = (
+  preload: string,
+  args: readonly string[] = [],
+): BrowserWindowConstructorOptions => ({
   width: 1280,
   height: 820,
   title: "Constellation",
-  webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, preload },
+  webPreferences: {
+    contextIsolation: true,
+    sandbox: true,
+    nodeIntegration: false,
+    preload,
+    ...(args.length > 0 ? { additionalArguments: [...args] } : {}),
+  },
 });
 
 /**

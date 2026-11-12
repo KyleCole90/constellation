@@ -1,4 +1,4 @@
-import { VAULT_PLACE } from "~/renderer/desktop";
+import { REAL_AI, VAULT_PLACE } from "~/renderer/desktop";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { Check, Lock } from "lucide-react";
 import { useState } from "react";
@@ -21,8 +21,9 @@ import {
 } from "../settings/Institutions";
 import { Button } from "../ui/button";
 
-const NO_MODEL =
-  "No model is wired up in this build yet, so AI drafts come from built-in rules for now.";
+const NO_MODEL = REAL_AI
+  ? "With a key, drafts and chat come from Claude, billed to your Anthropic account."
+  : "No model is wired up in this build yet, so AI drafts come from built-in rules for now.";
 const PROMISE = "Nothing reaches your LMS until you approve it.";
 
 interface AiOption {

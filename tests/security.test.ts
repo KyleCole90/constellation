@@ -30,6 +30,16 @@ describe("window options", () => {
       preload: "/preload.cjs",
     });
   });
+
+  it("pass the preload the arguments main gives it", () => {
+    expect(windowOptions("/preload.cjs", ["--constellation-agent=rules"]).webPreferences).toEqual({
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      preload: "/preload.cjs",
+      additionalArguments: ["--constellation-agent=rules"],
+    });
+  });
 });
 
 describe("CSP", () => {

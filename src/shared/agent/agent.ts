@@ -56,6 +56,8 @@ export type AgentEffect =
   /** The agent saying no. The thread renders it apart from ordinary replies. */
   | { type: "decline"; text: string; lines?: readonly AnswerLine[] }
   | { type: "work"; line: string }
+  /** What a model run cost, from the API's own count. The model can't write one: main adds it after the run. */
+  | { type: "spend"; tokens: number; usd: number }
   | {
       type: "propose";
       school: SchoolId;
@@ -587,6 +589,14 @@ export const parseAgentEffect = (
       return isText(raw["line"])
         ? { ok: true, value: { type: "work", line: raw["line"] } }
         : fail({ kind: "malformed", detail: "work line" });
+    case "spend":
+      return isNumber(raw["tokens"]) &&
+        Number.isInteger(raw["tokens"]) &&
+        raw["tokens"] >= 0 &&
+        isNumber(raw["usd"]) &&
+        raw["usd"] >= 0
+        ? { ok: true, value: { type: "spend", tokens: raw["tokens"], usd: raw["usd"] } }
+        : fail({ kind: "malformed", detail: "spend" });
     case "propose": {
       const course = scope.courses.find(
         (c) => c.ref === raw["course"] && c.school === raw["school"],

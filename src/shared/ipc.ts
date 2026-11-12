@@ -41,6 +41,28 @@ const ByKey = v.strictObject({ key: VaultKeySchema });
 const BySchool = v.strictObject({ school: SchoolSchema });
 const ByCourse = v.strictObject({ school: SchoolSchema, course: lmsRef<"course">() });
 
+/**
+ * One agent run, as main needs it: the ask, the thread so far, and the thread's scope. Main only writes the scope into
+ * the prompt, so it stays unknown here; what the model says back is checked against the renderer's own scope.
+ */
+const AgentRunInput = v.strictObject({
+  request: v.pipe(v.string(), v.minLength(1)),
+  history: v.array(v.strictObject({ role: v.picklist(["user", "agent"]), text: v.string() })),
+  scope: v.unknown(),
+});
+/** Raw effects for `parseAgentEffect`, and what the run cost; or why there was no run. */
+const AgentRunOutput = v.variant("ok", [
+  v.strictObject({
+    ok: v.literal(true),
+    effects: v.array(v.unknown()),
+    spend: v.strictObject({
+      tokens: v.pipe(v.number(), v.integer(), v.minValue(0)),
+      usd: v.pipe(v.number(), v.minValue(0)),
+    }),
+  }),
+  v.strictObject({ ok: v.literal(false), reason: v.string() }),
+]);
+
 interface Channel {
   readonly input: v.GenericSchema;
   readonly output: v.GenericSchema;
@@ -61,6 +83,8 @@ const ipc = {
    */
   "vault.standIn": { input: ByKey, output: v.nullable(v.string()) },
   /** The school at an address: one of the fake's, or real Canvas at that host. Null when main knows none there. */
+  /** Claude in main, with the key from main's vault (docs/electron-spec.md, AI). */
+  "agent.run": { input: AgentRunInput, output: AgentRunOutput },
   "lms.schoolAt": { input: v.strictObject({ host: v.string() }), output: v.nullable(SchoolSchema) },
   // A school's LmsProvider, run in main with the token from main's vault (docs/electron-spec.md, step 10).
   "lms.verify": { input: BySchool, output: readOf(AccountInfoSchema) },
@@ -151,8 +175,13 @@ export const handle = (
     });
 };
 
+/** The switch main hands the preload, in `additionalArguments`, when verify runs the app: drafts come from the rules agent. */
+export const RULES_AGENT_SWITCH = "--constellation-agent=rules";
+
 /** What the preload exposes to the renderer as `window.constellation`. */
 export interface Bridge {
+  /** Where drafts come from: Claude in main, or the rules agent when verify runs the app with nothing leaving it. */
+  readonly agent: "claude" | "rules";
   invoke<C extends ChannelName>(channel: C, input: Input<C>): Promise<Output<C>>;
 }
 

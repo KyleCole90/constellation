@@ -168,6 +168,7 @@ export const bridgeFakeLms = (
   follow(null);
 
   const clocked: Bridge = {
+    agent: bridge.agent,
     invoke: (channel, input) => {
       syncClock();
       return bridge.invoke(channel, input);

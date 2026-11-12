@@ -22,6 +22,7 @@
     "smoke:packaged": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir --publish never && node scripts/smoke-packaged.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.8.0",
     "@base-ui/react": "^1.9.0",
     "@tanstack/react-router": "^1.170.46",
     "class-variance-authority": "^0.7.1",

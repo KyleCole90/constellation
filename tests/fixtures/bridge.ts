@@ -87,6 +87,7 @@ export const bridgedLms = (
       "vault.keys": async () => [],
       "vault.forget": record,
       "vault.standIn": async () => null,
+      "agent.run": async () => ({ ok: false, reason: "no agent in this rig" }),
       ...fakeLmsHandlers({
         clock,
         vault,
@@ -105,6 +106,7 @@ export const bridgedLms = (
     return structuredClone(await listen(sender, structuredClone(input)));
   };
   const bridge: Bridge = {
+    agent: "rules",
     invoke: invoker((channel, input) => call(channel, input)),
   };
   const fake = bridgeFakeLms(bridge, FAKE_CANVAS, FAKE_CANVAS_FACE, clock.now);
