@@ -91,8 +91,13 @@ const until = async (probe, failure) => {
 };
 
 // The window is never shown, so it paints without stealing focus, and no other window can cover it: a covered or minimised window gets no frames.
+// Only the fake LMS answers, so no address typed in a run reaches a real Canvas host.
 // ELECTRON_RUN_AS_NODE, set by some agent shells, would start Electron as plain Node.
-const { ELECTRON_RUN_AS_NODE: _, ...APP_ENV } = { ...process.env, CONSTELLATION_WINDOW: "hidden" };
+const { ELECTRON_RUN_AS_NODE: _, ...APP_ENV } = {
+  ...process.env,
+  CONSTELLATION_WINDOW: "hidden",
+  CONSTELLATION_LMS: "fake",
+};
 const launch = (port, profile, origin) =>
   WEB
     ? spawn(

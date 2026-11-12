@@ -1,0 +1,34 @@
+[
+  {
+    "id": 7101,
+    "subject": "Question about Essay 1",
+    "workflow_state": "unread",
+    "last_message": "Can I write about a recent event?",
+    "last_message_at": "2027-01-20T16:00:00Z",
+    "message_count": 2,
+    "subscribed": true,
+    "private": true,
+    "starred": false,
+    "properties": [],
+    "audience": [6401],
+    "avatar_url": "https://canvas.example.edu/images/messages/avatar-group-50.png",
+    "participants": [
+      { "id": 4101, "name": "Sample Instructor" },
+      { "id": 6401, "name": "Avery Sample" }
+    ],
+    "visible": true,
+    "context_name": "Introduction to Composition"
+  },
+  {
+    "id": 7102,
+    "subject": "Study group",
+    "workflow_state": "read",
+    "last_message": "See you Tuesday",
+    "message_count": 1,
+    "participants": [
+      { "id": 4101, "name": "Sample Instructor" },
+      { "id": 6402, "name": "Jordan Example" }
+    ],
+    "context_name": "Writing Center Group"
+  }
+]

@@ -5,7 +5,8 @@
     "scripts/make-imscc.mjs",
     "scripts/block-commands.mjs",
     "src/preload/index.ts",
-    "src/main/index.ts"
+    "src/main/index.ts",
+    "tests/*.live.ts"
   ],
   "ignore": [".audit/**", ".claude/**"],
   "tanstack-router": {

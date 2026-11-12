@@ -4,7 +4,7 @@ Each school is a star in your academic journey.
 
 Licensed under AGPL-3.0. See [LICENSE](LICENSE).
 
-Constellation is a prototype. An adjunct who teaches at two schools runs their week from one workspace. A course is a project, a task is a thread, and a proposed Canvas change is a plain preview that a person reads and approves. North Star is home, above every course. Each ask starts a chat that stays in the sidebar, and every return home is clean. A chat answers questions, finds things, and hands work to the right course thread or threads. The grading list opens from What's due. The data is invented and the only LMS is a fake one in the browser. The app makes no real LMS calls.
+Constellation is a prototype. An adjunct who teaches at two schools runs their week from one workspace. A course is a project, a task is a thread, and a proposed Canvas change is a plain preview that a person reads and approves. North Star is home, above every course. Each ask starts a chat that stays in the sidebar, and every return home is clean. A chat answers questions, finds things, and hands work to the right course thread or threads. The grading list opens from What's due. The demo data is invented and runs on a fake LMS. Only the desktop app talks to a real Canvas, and only to read.
 
 **Calendar** shows every assignment at every school by the day it is due, with one row per course. Select a day to list what is due that day beside the grid.
 
@@ -148,10 +148,12 @@ Code to clean up:
 - `src/renderer/stores/selectors.ts` has two copies of the check for a submission newer than the sent grade.
 - The **Edit** banner uses `document.querySelector` and does nothing if the card has unmounted.
 
-Things to find out before real providers:
+Real Canvas, in the desktop app only:
 
-- Browser calls to real Canvas may be blocked by CORS or OAuth rules. I have not checked. The app may need a small relay.
-- The API facts behind the interface come from the vendor docs, and nothing has run against a real LMS.
+- Main runs it in `src/main/providers/canvas.ts`, so the token and every request stay out of the renderer. Any address that isn't a demo school is read as a Canvas host: `https:` only, with no port, path, credentials or IP address. `npm run verify` turns it off, so a run never reaches a real host.
+- It reads (`verify` and the six lists) and follows every page. Writes, term setup and `.imscc` upload come in later steps, so Send on a Canvas school holds with a message saying so.
+- `tests/canvas.test.ts` runs it over recorded responses shaped like the Canvas docs. `CANVAS_HOST=school.instructure.com CANVAS_TOKEN=… npm run contract:live` runs the same reads against a live school. It never runs in `npm test` or CI.
+- A school's name shows as its address, a text submission shows no title, and a file or media submission shows no body.
 
 Vendor docs used:
 

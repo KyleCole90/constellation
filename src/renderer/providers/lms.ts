@@ -10,7 +10,10 @@ import type {
   LmsProvider,
   ProviderDescriptor,
   Read,
+  TermSetup,
 } from "~/shared/providers/provider";
+
+type Face = Pick<LmsProvider, "vendorLabel" | "capabilities" | "describeScope">;
 
 const UNREACHABLE = {
   ok: false,
@@ -33,10 +36,10 @@ const read = async <T>(call: () => Promise<Result<T, LmsError>>): Read<T> => {
  */
 const createBridgeProvider = (
   bridge: Bridge,
-  face: Pick<LmsProvider, "vendorLabel" | "capabilities" | "describeScope">,
+  face: Face,
   school: School,
   now: () => number,
-): LmsProvider => {
+): Omit<LmsProvider, "termSetup"> => {
   const bySchool = { school };
   const byCourse = (course: LmsRef<"course">) => ({ school, course });
   /** An apply main never answered may still have landed, so every field it was asked to write is in doubt. */
@@ -61,15 +64,31 @@ const createBridgeProvider = (
         .invoke("lms.apply", { school, permit: { changeId, content, fields } })
         .catch(() => unknown(fields));
     },
-    termSetup: {
-      newCourses: () => read(() => bridge.invoke("lms.newCourses", bySchool)),
-      copySources: () => read(() => bridge.invoke("lms.copySources", bySchool)),
-      courseContent: (course) => read(() => bridge.invoke("lms.courseContent", byCourse(course))),
-      migrations: (course) => read(() => bridge.invoke("lms.migrations", byCourse(course))),
-      samplePackages: () => read(() => bridge.invoke("lms.samplePackages", bySchool)),
-    },
   };
 };
+
+const bridgeTermSetup = (bridge: Bridge, school: School): TermSetup => {
+  const bySchool = { school };
+  const byCourse = (course: LmsRef<"course">) => ({ school, course });
+  return {
+    newCourses: () => read(() => bridge.invoke("lms.newCourses", bySchool)),
+    copySources: () => read(() => bridge.invoke("lms.copySources", bySchool)),
+    courseContent: (course) => read(() => bridge.invoke("lms.courseContent", byCourse(course))),
+    migrations: (course) => read(() => bridge.invoke("lms.migrations", byCourse(course))),
+    samplePackages: () => read(() => bridge.invoke("lms.samplePackages", bySchool)),
+  };
+};
+
+/** Real Canvas, which main runs. It offers no term setup yet (step 13), so the app never shows the offer for it. */
+export const bridgeCanvas = (
+  bridge: Bridge,
+  canvas: Omit<ProviderDescriptor, "create">,
+  face: Face,
+  now: () => number,
+): ProviderDescriptor => ({
+  ...canvas,
+  create: ({ school }) => createBridgeProvider(bridge, face, school, now),
+});
 
 /** What the lab shows until main's first answer arrives. */
 const CALM: LabSnapshot = {
@@ -92,7 +111,7 @@ export type BridgeLab = FaultLab & {
 export const bridgeFakeLms = (
   bridge: Bridge,
   fake: Omit<ProviderDescriptor, "create">,
-  face: Pick<LmsProvider, "vendorLabel" | "capabilities" | "describeScope">,
+  face: Face,
   now: () => number,
 ): { descriptor: ProviderDescriptor; lab: BridgeLab; reset(): void } => {
   let sentOffset: number | null = null;
@@ -175,7 +194,10 @@ export const bridgeFakeLms = (
   return {
     descriptor: {
       ...fake,
-      create: ({ school }) => createBridgeProvider(clocked, face, school, now),
+      create: ({ school }) => ({
+        ...createBridgeProvider(clocked, face, school, now),
+        termSetup: bridgeTermSetup(clocked, school),
+      }),
     },
     lab,
     reset: () => command({ do: "reset" }),

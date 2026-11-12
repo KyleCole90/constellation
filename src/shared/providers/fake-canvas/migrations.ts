@@ -2,7 +2,7 @@ import type { Migration, MigrationIssue } from "~/shared/domain/content";
 import { isoTime, type IsoTime, type SchoolId } from "~/shared/domain/ids";
 import { dateOfTime, shiftDate, timeOnDate, type DateShiftOptions } from "~/shared/domain/term";
 
-import { refs } from "./refs";
+import { refs } from "../canvas-refs";
 import type { PackageIssueSeed, RawBody } from "./seed-term";
 
 type MigrationType = "course_copy_importer" | "common_cartridge_importer";

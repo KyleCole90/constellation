@@ -61,8 +61,8 @@ import {
   toMigration,
   type MigrationRecord,
 } from "./migrations";
-import { assignmentCanvasId, refParts, refs } from "./refs";
-import { SEED, type SeedAssignment, type SeedCourse } from "./seed";
+import { refParts, refs } from "../canvas-refs";
+import { assignmentCanvasId, SEED, type SeedAssignment, type SeedCourse } from "./seed";
 import {
   COURSE_COPY_ISSUES,
   HOSTS,

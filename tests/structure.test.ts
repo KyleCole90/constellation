@@ -166,9 +166,10 @@ const fakeFile = (path: string, text: string): SourceFile => {
 };
 
 describe("who may read a secret", () => {
-  it("nothing but the vault, the provider layer and the store's validity check calls revealSecret", () => {
+  it("nothing but the vault, the provider layers and the store's validity check calls revealSecret", () => {
     const allowed = (path: string) =>
       path.startsWith("shared/providers/") ||
+      path.startsWith("main/providers/") ||
       path.startsWith("renderer/providers/") ||
       path === "renderer/stores/workspace.ts";
     expect(
