@@ -59,6 +59,8 @@ const ipc = {
    * which is how a refused replacement keeps the token it replaced. Null when there is no entry.
    */
   "vault.standIn": { input: ByKey, output: v.nullable(v.string()) },
+  /** The school at an address: one of the fake's, or real Canvas at that host. Null when main knows none there. */
+  "lms.schoolAt": { input: v.strictObject({ host: v.string() }), output: v.nullable(SchoolSchema) },
   // A school's LmsProvider, run in main with the token from main's vault (docs/electron-spec.md, step 10).
   "lms.verify": { input: BySchool, output: readOf(AccountInfoSchema) },
   "lms.courses": { input: BySchool, output: readOf(listOf(CourseSchema)) },

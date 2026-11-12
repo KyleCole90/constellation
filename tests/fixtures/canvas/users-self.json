@@ -1,0 +1,10 @@
+{
+  "id": 4101,
+  "name": "Sample Instructor",
+  "sortable_name": "Instructor, Sample",
+  "short_name": "Sample Instructor",
+  "avatar_url": "https://canvas.example.edu/images/messages/avatar-50.png",
+  "locale": null,
+  "effective_locale": "en",
+  "permissions": { "can_update_name": true, "can_update_avatar": true }
+}

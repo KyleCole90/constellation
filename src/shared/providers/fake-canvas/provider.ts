@@ -20,7 +20,8 @@ import type {
   TermSetup,
 } from "~/shared/providers/provider";
 
-import { refParts, refs } from "./refs";
+import { CANVAS } from "../canvas";
+import { refParts, refs } from "../canvas-refs";
 import type { RawLink } from "./seed-term";
 import {
   INSTRUCTOR,
@@ -70,7 +71,6 @@ export const FAKE_CANVAS_FACE = {
   capabilities: CAPABILITIES,
   describeScope: (scope: string) => SCOPE_WORDS[scope] ?? scope,
 } satisfies Pick<LmsProvider, "vendorLabel" | "capabilities" | "describeScope">;
-const MIN_TOKEN_LENGTH = 20;
 
 /** The Canvas path for one content item. The syllabus is a course field, so it goes through the course itself. */
 const itemPath = (target: LmsRef<"item">): string => {
@@ -362,27 +362,8 @@ const createFakeCanvasProvider = (
   };
 };
 
-/** The fake Canvas as onboarding shows it. `create` is the one part that needs the fake itself. */
-export const FAKE_CANVAS: Omit<ProviderDescriptor, "create"> = {
-  kind: "fake-canvas",
-  label: "Canvas",
-  enrollment: {
-    kind: "paste-token",
-    fieldLabel: "Canvas access token",
-    steps: [
-      "In Canvas, open Account, then Settings.",
-      "Under Approved Integrations, choose New Access Token.",
-      'Give it a purpose such as "Constellation" and generate it.',
-      "Copy the token and paste it here. It is shown once, and this app never displays it again.",
-    ],
-    validate: (raw) =>
-      raw.trim().length < MIN_TOKEN_LENGTH
-        ? `That does not look like a Canvas access token. Tokens are at least ${MIN_TOKEN_LENGTH} characters.`
-        : null,
-    addressPlaceholder: "school.instructure.com",
-    tokenPageUrl: (host) => `https://${host}/profile/settings`,
-  },
-};
+/** The fake Canvas as onboarding shows it: as real Canvas does. `create` is the one part that needs the fake itself. */
+export const FAKE_CANVAS: Omit<ProviderDescriptor, "create"> = { ...CANVAS, kind: "fake-canvas" };
 
 export const createFakeCanvasDescriptor = (
   server: FakeCanvasServer,

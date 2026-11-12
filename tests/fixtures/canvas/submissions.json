@@ -1,0 +1,76 @@
+[
+  {
+    "id": 9001,
+    "assignment_id": 5301,
+    "user_id": 6401,
+    "submission_type": "online_text_entry",
+    "body": "<p>The summer I turned twelve, I learned to swim.</p><p>It changed how I saw fear &amp; courage.</p>",
+    "url": null,
+    "grade": "88",
+    "score": 88.0,
+    "submitted_at": "2027-01-30T18:20:00Z",
+    "graded_at": "2027-02-02T15:00:00Z",
+    "grader_id": 4101,
+    "attempt": 1,
+    "workflow_state": "graded",
+    "grade_matches_current_submission": true,
+    "late": false,
+    "missing": false,
+    "excused": false,
+    "seconds_late": 0,
+    "late_policy_status": null,
+    "points_deducted": null,
+    "preview_url": "https://canvas.example.edu/courses/2201/assignments/5301/submissions/6401?preview=1",
+    "rubric_assessment": {
+      "_1001": { "rating_id": null, "comments": "", "points": 52.0 },
+      "_1002": { "rating_id": null, "comments": "", "points": 36.0 }
+    },
+    "submission_comments": [
+      {
+        "id": 31,
+        "author_id": 4101,
+        "author_name": "Sample Instructor",
+        "comment": "Strong opening.",
+        "created_at": "2027-02-02T15:00:00Z",
+        "edited_at": null
+      },
+      {
+        "id": 32,
+        "author_id": 6401,
+        "author_name": "Avery Sample",
+        "comment": "Thank you!",
+        "created_at": "2027-02-03T10:00:00Z",
+        "edited_at": null
+      }
+    ],
+    "user": {
+      "id": 6401,
+      "name": "Avery Sample",
+      "sortable_name": "Sample, Avery",
+      "short_name": "Avery Sample"
+    }
+  },
+  {
+    "id": 9002,
+    "assignment_id": 5301,
+    "user_id": 6402,
+    "submission_type": null,
+    "body": null,
+    "grade": null,
+    "score": null,
+    "submitted_at": null,
+    "attempt": null,
+    "workflow_state": "unsubmitted",
+    "late": true,
+    "missing": true,
+    "excused": null,
+    "seconds_late": 190000,
+    "submission_comments": [],
+    "user": {
+      "id": 6402,
+      "name": "Jordan Example",
+      "sortable_name": "Example, Jordan",
+      "short_name": "Jordan Example"
+    }
+  }
+]

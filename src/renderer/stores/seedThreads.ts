@@ -1,6 +1,6 @@
 import { isoTime, type SchoolId, type ThreadId } from "~/shared/domain/ids";
-import { assignmentCanvasId, refs } from "~/shared/providers/fake-canvas/refs";
-import { SEED, type SeedAssignment } from "~/shared/providers/fake-canvas/seed";
+import { refs } from "~/shared/providers/canvas-refs";
+import { assignmentCanvasId, SEED, type SeedAssignment } from "~/shared/providers/fake-canvas/seed";
 
 import { GRADING_LIST_THREAD, INBOX_THREAD, NORTH_STAR_THREAD } from "./selectors";
 import type { Thread, ThreadMessage, ThreadSubject } from "./types";

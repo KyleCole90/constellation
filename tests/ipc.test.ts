@@ -47,6 +47,7 @@ describe("main's handlers", () => {
       "vault.keys",
       "vault.forget",
       "vault.standIn",
+      "lms.schoolAt",
       "lms.verify",
       "lms.courses",
       "lms.assignments",

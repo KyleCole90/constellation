@@ -89,7 +89,8 @@ import {
   type Vault,
 } from "~/shared/providers/provider";
 import { desktopBridge } from "~/renderer/desktop";
-import { bridgeFakeLms } from "~/renderer/providers/lms";
+import { bridgeCanvas, bridgeFakeLms } from "~/renderer/providers/lms";
+import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
 import { createAppVault } from "~/renderer/providers/vault";
 import {
   DEFAULT_RETRY_POLICY,
@@ -245,8 +246,8 @@ export type WorkspaceState = WorkspaceData &
   };
 
 export interface Backend {
-  /** The school at this address, or null when there is none. A real backend builds it from the host. */
-  schoolAt(host: SchoolHost): School | null;
+  /** The school at this address, or null when there is none. The desktop app asks main, which knows real Canvas. */
+  schoolAt(host: SchoolHost): Promise<School | null>;
   demoHosts: readonly SchoolHost[];
   /** The vendor a newly added school uses. The app is single-vendor today. */
   newSchoolProvider: School["provider"];
@@ -1449,7 +1450,8 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
 
           addSchool: async (host, secret, onStage) => {
             const target =
-              get().schools.find((school) => school.host === host) ?? backend.schoolAt(host);
+              get().schools.find((school) => school.host === host) ??
+              (await backend.schoolAt(host));
             if (!target)
               return {
                 ok: false,
@@ -1990,7 +1992,7 @@ let lab: FaultLab | null = null;
 const FAKE_HOSTS = FAKE_SCHOOLS.map((school) => school.host);
 
 const fakeBackend = (descriptor: ProviderDescriptor, reset: () => void): Backend => ({
-  schoolAt: (host) => FAKE_SCHOOLS.find((school) => school.host === host) ?? null,
+  schoolAt: async (host) => FAKE_SCHOOLS.find((school) => school.host === host) ?? null,
   demoHosts: FAKE_HOSTS,
   newSchoolProvider: "fake-canvas",
   descriptors: { "fake-canvas": descriptor },
@@ -2029,7 +2031,15 @@ const bridgeBackend =
   (now: () => number): Backend => {
     const fake = bridgeFakeLms(bridge, FAKE_CANVAS, FAKE_CANVAS_FACE, now);
     lab = fake.lab;
-    return fakeBackend(fake.descriptor, fake.reset);
+    const backend = fakeBackend(fake.descriptor, fake.reset);
+    return {
+      ...backend,
+      schoolAt: (host) => bridge.invoke("lms.schoolAt", { host }).catch(() => null),
+      descriptors: {
+        ...backend.descriptors,
+        canvas: bridgeCanvas(bridge, CANVAS, CANVAS_FACE, now),
+      },
+    };
   };
 
 let instance: WorkspaceStore | null = null;

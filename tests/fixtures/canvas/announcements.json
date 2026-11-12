@@ -1,0 +1,27 @@
+[
+  {
+    "id": 8801,
+    "title": "Welcome to ENG 101",
+    "message": "<p>Welcome!</p><p>Read the syllabus before <strong>Tuesday</strong>.</p>",
+    "html_url": "https://canvas.example.edu/courses/2201/discussion_topics/8801",
+    "posted_at": "2027-01-12T14:00:00Z",
+    "delayed_post_at": null,
+    "last_reply_at": null,
+    "require_initial_post": null,
+    "discussion_subentry_count": 0,
+    "read_state": "read",
+    "published": true,
+    "locked": false,
+    "user_name": "Sample Instructor",
+    "is_announcement": true
+  },
+  {
+    "id": 8802,
+    "title": "Midterm reminder",
+    "message": "<p>Scheduled for later.</p>",
+    "posted_at": null,
+    "delayed_post_at": "2027-03-01T14:00:00Z",
+    "published": false,
+    "is_announcement": true
+  }
+]

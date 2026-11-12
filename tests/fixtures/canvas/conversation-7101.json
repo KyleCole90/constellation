@@ -1,0 +1,40 @@
+{
+  "id": 7101,
+  "subject": "Question about Essay 1",
+  "workflow_state": "unread",
+  "last_message": "Can I write about a recent event?",
+  "last_message_at": "2027-01-20T16:00:00Z",
+  "message_count": 2,
+  "private": true,
+  "audience": [6401],
+  "context_code": "course_2201",
+  "context_name": "Introduction to Composition",
+  "participants": [
+    { "id": 4101, "name": "Sample Instructor" },
+    { "id": 6401, "name": "Avery Sample" }
+  ],
+  "messages": [
+    {
+      "id": 801,
+      "author_id": 6401,
+      "created_at": "2027-01-20T16:00:00Z",
+      "generated": false,
+      "body": "Can I write about a recent event?",
+      "forwarded_messages": [],
+      "attachments": [],
+      "media_comment": null,
+      "participating_user_ids": [4101, 6401]
+    },
+    {
+      "id": 800,
+      "author_id": 4101,
+      "created_at": "2027-01-19T09:00:00Z",
+      "generated": false,
+      "body": "Essay 1 is posted. Ask me anything.",
+      "forwarded_messages": [],
+      "attachments": [],
+      "media_comment": null,
+      "participating_user_ids": [4101, 6401]
+    }
+  ]
+}

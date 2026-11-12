@@ -6,7 +6,7 @@ import type { School } from "../shared/domain/lms";
 import { SendPermit } from "../shared/domain/permit";
 import type { Handlers } from "../shared/ipc";
 import { labSnapshot, type LabCommand } from "../shared/providers/fake-canvas/lab";
-import { createFakeCanvasDescriptor } from "../shared/providers/fake-canvas/provider";
+import { createFakeCanvasDescriptor, FAKE_SCHOOLS } from "../shared/providers/fake-canvas/provider";
 import { FakeCanvasServer, type StorageLike } from "../shared/providers/fake-canvas/server";
 import type {
   CredentialLease,
@@ -16,6 +16,7 @@ import type {
 } from "../shared/providers/provider";
 
 import { jsonFile } from "./json-file";
+import { canvasSchoolAt, createCanvasProvider, type Fetch } from "./providers/canvas";
 
 /**
  * A `StorageLike` in one JSON file under `userData` (docs/electron-spec.md, D8). Main is its only writer, so it reads
@@ -70,6 +71,8 @@ export const lmsHandlers = (options: {
   leaseFor(key: VaultKey): CredentialLease;
   /** A packaged app refuses the channels only verify reads. */
   packaged: boolean;
+  /** Real Canvas's network. Null leaves only the fake's schools, as verify runs the app, so nothing reaches a real host. */
+  fetch: Fetch | null;
 }): Pick<Handlers, LmsChannel> => {
   let offset = 0;
   const now = () => options.realNow() + offset;
@@ -92,7 +95,31 @@ export const lmsHandlers = (options: {
   };
   let fake = start();
 
+  const canvas = new Map<SchoolId, LmsProvider>();
+  /** The renderer is untrusted, so a Canvas school counts only as main itself would mint it from its host. */
+  const canvasProvider = (school: School): LmsProvider => {
+    const minted = canvasSchoolAt(school.host);
+    if (!options.fetch || minted?.id !== school.id)
+      throw new Error("That isn't a Canvas school this app connects to.");
+    const existing = canvas.get(minted.id);
+    if (existing) return existing;
+    const created = createCanvasProvider({
+      school: minted,
+      lease: options.leaseFor(minted.id),
+      fetch: options.fetch,
+    });
+    canvas.set(minted.id, created);
+    return created;
+  };
   const provider = (school: School): LmsProvider => {
+    switch (school.provider) {
+      case "canvas":
+        return canvasProvider(school);
+      case "fake-canvas":
+        return fakeProvider(school);
+    }
+  };
+  const fakeProvider = (school: School): LmsProvider => {
     const existing = fake.providers.get(school.id);
     if (existing) return existing;
     const created = fake.descriptor.create({ school, lease: options.leaseFor(school.id) });
@@ -153,6 +180,9 @@ export const lmsHandlers = (options: {
   };
 
   return {
+    "lms.schoolAt": async ({ host }) =>
+      FAKE_SCHOOLS.find((school) => school.host === host) ??
+      (options.fetch ? canvasSchoolAt(host) : null),
     "lms.verify": ({ school }) => provider(school).verify(),
     "lms.courses": ({ school }) => provider(school).courses(),
     "lms.assignments": ({ school, course }) => provider(school).assignments(course),

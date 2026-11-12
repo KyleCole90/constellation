@@ -1,0 +1,20 @@
+{
+  "id": 7102,
+  "subject": "Study group",
+  "workflow_state": "read",
+  "context_code": "group_55",
+  "context_name": "Writing Center Group",
+  "participants": [
+    { "id": 4101, "name": "Sample Instructor" },
+    { "id": 6402, "name": "Jordan Example" }
+  ],
+  "messages": [
+    {
+      "id": 810,
+      "author_id": 6402,
+      "created_at": "2027-01-21T12:00:00Z",
+      "body": "See you Tuesday",
+      "attachments": []
+    }
+  ]
+}

@@ -18,6 +18,7 @@
     "verify": "npm run build && node scripts/verify.mjs",
     "dev:web": "vp dev",
     "verify:web": "node scripts/verify.mjs --web",
+    "contract:live": "CONTRACT_LIVE=1 vp test run --reporter=verbose",
     "smoke:packaged": "npm run build && CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --mac --dir --publish never && node scripts/smoke-packaged.mjs"
   },
   "dependencies": {

@@ -1,0 +1,49 @@
+[
+  {
+    "id": 5301,
+    "name": "Essay 1: Personal Narrative",
+    "description": "<p>Write 800 words about a turning point.</p>",
+    "created_at": "2026-10-03T12:00:00Z",
+    "updated_at": "2026-10-03T12:00:00Z",
+    "due_at": "2027-02-01T05:59:59Z",
+    "lock_at": null,
+    "unlock_at": null,
+    "course_id": 2201,
+    "html_url": "https://canvas.example.edu/courses/2201/assignments/5301",
+    "submission_types": ["online_text_entry"],
+    "points_possible": 100.0,
+    "grading_type": "points",
+    "published": true,
+    "use_rubric_for_grading": true,
+    "rubric": [
+      {
+        "id": "_1001",
+        "points": 60.0,
+        "description": "Ideas",
+        "long_description": "",
+        "criterion_use_range": false,
+        "ratings": []
+      },
+      {
+        "id": "_1002",
+        "points": 40.0,
+        "description": "Mechanics",
+        "long_description": "",
+        "criterion_use_range": false,
+        "ratings": []
+      }
+    ],
+    "rubric_settings": { "id": 77, "title": "Narrative rubric", "points_possible": 100.0 }
+  },
+  {
+    "id": 5302,
+    "name": "Discussion: Introductions",
+    "description": null,
+    "due_at": null,
+    "course_id": 2201,
+    "submission_types": ["discussion_topic"],
+    "points_possible": null,
+    "grading_type": "pass_fail",
+    "published": true
+  }
+]

@@ -1038,3 +1038,10 @@ export const SEED: SeedData = {
     },
   ],
 };
+
+/** Not every seeded assignment has a Canvas id, and a path needs one. */
+export const assignmentCanvasId = (
+  assignment: { canvasId?: number },
+  courseIndex: number,
+  assignmentIndex: number,
+): number => assignment.canvasId ?? 900000 + courseIndex * 100 + assignmentIndex;

@@ -27,6 +27,8 @@ const HIDDEN = !app.isPackaged && process.env.CONSTELLATION_WINDOW === "hidden";
 const DEV_ORIGIN = app.isPackaged
   ? undefined
   : (DEV_URL ?? process.env.CONSTELLATION_VERIFY_ORIGIN);
+/** Set by `npm run verify`: only the fake LMS's schools, so a run never reaches a real Canvas host. */
+const FAKE_ONLY = !app.isPackaged && process.env.CONSTELLATION_LMS === "fake";
 /** Only the unpackaged app takes CDP. A packaged app quits before it opens a window (`npm run smoke:packaged`). */
 const DEBUGGER_ASKED =
   app.isPackaged &&
@@ -69,6 +71,7 @@ const start = async () => {
     realNow: () => Date.now(),
     leaseFor: (key) => vault.lease(key),
     packaged: app.isPackaged,
+    fetch: FAKE_ONLY ? null : (url, init) => net.fetch(url, init),
   });
   handle(
     (channel, listener) =>
