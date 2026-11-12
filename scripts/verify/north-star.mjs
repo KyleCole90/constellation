@@ -1719,7 +1719,7 @@ const replyEditsSurviveLeaving = async (t) => {
 
 const declines = async (t) => {
   const writes = () =>
-    t.eval(`JSON.parse(localStorage.getItem("lms-app.fake-canvas.v1")).writeLog.length`);
+    t.eval(`(async () => JSON.parse(await window.__faultLab.stored()).writeLog.length)()`);
   const before = await writes();
   await ask(t, "approve them all");
   await t.waitFor(

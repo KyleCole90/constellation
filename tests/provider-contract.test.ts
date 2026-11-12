@@ -10,7 +10,8 @@ import { SecondLmsStub } from "./fixtures/second-lms-stub";
 import { clickWitness, newDraft } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";
 import { DurableLedger } from "./fixtures/ledger";
-import { LCC, makeRig } from "./fixtures/rig";
+import { bridgedLms } from "./fixtures/bridge";
+import { LCC, gradeContentFor, makeRig } from "./fixtures/rig";
 import { runProviderContract, type ContractHarness } from "./fixtures/provider-contract";
 import { makeTermRig } from "./fixtures/term";
 import { runTermSetupContract, type TermContractHarness } from "./fixtures/term-contract";
@@ -28,6 +29,51 @@ runProviderContract("fake Canvas", async (): Promise<ContractHarness> => {
     throttleNext: (ms) => rig.server.throttleNext(ms),
     expire: () => rig.server.expireToken(LCC),
     writeCount: () => rig.server.log.filter((entry) => entry.kind === "write").length,
+  };
+});
+
+/** The desktop app's provider: a bridge client, through the IPC map, to the fake in main. */
+runProviderContract("fake Canvas over the bridge", async (): Promise<ContractHarness> => {
+  const lms = bridgedLms();
+  await lms.connect(LCC);
+  const submission = lms.server
+    .courses(LCC)
+    .flatMap((course) => lms.server.submissions(course.ref))
+    .find((s) => s.workflow === "submitted");
+  if (!submission) throw new Error("The seed has nothing to grade.");
+  return {
+    provider: lms.provider(LCC),
+    school: LCC,
+    content: gradeContentFor(lms.server, submission),
+    failNext: (field, error) => lms.lab.failNextWrite(field, error),
+    loseNext: () => lms.lab.loseNextResponse(),
+    throttleNext: (ms) => lms.lab.throttleNext(ms),
+    expire: () => lms.lab.expireToken(LCC),
+    writeCount: () => lms.server.log.filter((entry) => entry.kind === "write").length,
+  };
+});
+
+runTermSetupContract("fake Canvas over the bridge", async (): Promise<TermContractHarness> => {
+  const lms = bridgedLms();
+  await lms.connect(LCC);
+  const setup = lms.provider(LCC).termSetup;
+  if (!setup) throw new Error("no term setup over the bridge");
+  const shells = await setup.newCourses();
+  const sources = await setup.copySources();
+  const shell = shells.ok ? shells.value.find((entry) => entry.code === "ENG 101") : undefined;
+  const source = sources.ok
+    ? sources.value.find((entry) => entry.code === "ENG 101" && entry.termName === "Fall 2026")
+    : undefined;
+  if (!shell || !source) throw new Error("the seed has no ENG 101 to copy");
+  return {
+    provider: lms.provider(LCC),
+    school: LCC,
+    shell,
+    source,
+    advance: (ms) => lms.clock.advance(ms),
+    loseNext: () => lms.lab.loseNextResponse(),
+    failNextMigration: (stage, message) => lms.lab.failNextMigration(stage, message),
+    writeCount: () => lms.server.log.filter((entry) => entry.kind === "write").length,
   };
 });
 

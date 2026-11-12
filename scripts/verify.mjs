@@ -524,7 +524,7 @@ const main = async () => {
       async waitFor(expression, label, timeout = WAIT_MS) {
         const end = Date.now() + timeout;
         for (;;) {
-          if (await evaluate(`Boolean(${expression})`)) {
+          if (await evaluate(`Promise.resolve(${expression}).then(Boolean)`)) {
             t.assert(true, label);
             return;
           }

@@ -14,6 +14,7 @@ import {
   trustedSender,
   windowOptions,
 } from "./security";
+import { createFileStorage, fakeServer, lmsHandlers } from "./lms";
 import { createVault } from "./vault";
 
 const RENDERER_DIR = fileURLToPath(new URL("../dist", import.meta.url));
@@ -61,7 +62,14 @@ const start = async () => {
     ]),
   );
   protocol.handle(APP_SCHEME, serve);
-  const vault = createVault(join(app.getPath("userData"), "vault.json"), safeStorage);
+  const userData = app.getPath("userData");
+  const vault = createVault(join(userData, "vault.json"), safeStorage);
+  const lms = lmsHandlers({
+    makeServer: fakeServer(createFileStorage(join(userData, "lms.json"))),
+    realNow: () => Date.now(),
+    leaseFor: (key) => vault.lease(key),
+    packaged: app.isPackaged,
+  });
   handle(
     (channel, listener) =>
       ipcMain.handle(channel, (event, input) => listener(event.senderFrame?.url ?? null, input)),
@@ -73,6 +81,7 @@ const start = async () => {
       "vault.keys": async () => vault.keys(),
       "vault.forget": async ({ key }) => vault.forget(key),
       "vault.standIn": ({ key }) => vault.standIn(key),
+      ...lms,
     },
   );
   const window = new BrowserWindow({ ...windowOptions(PRELOAD), show: !HIDDEN });

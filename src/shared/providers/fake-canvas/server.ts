@@ -1378,6 +1378,7 @@ export class FakeCanvasServer implements FaultLab {
     this.#push();
     this.#changed();
   };
+  /** Verify's way to name a submission. Not on FaultLab, because over IPC it can only answer later. */
   findSubmission = (student: string, assignmentShort: string): LmsRef<"submission"> | null => {
     const assignment = this.#state.assignments.find((a) => a.shortTitle === assignmentShort);
     return (
@@ -1386,6 +1387,8 @@ export class FakeCanvasServer implements FaultLab {
       )?.ref ?? null
     );
   };
+  stored = async (): Promise<string | null> =>
+    this.#options.storage?.getItem(LMS_STORAGE_KEY) ?? null;
   armed = (): ArmedFaults => this.#faults.armed();
   writes = (): readonly WriteRecord[] => {
     this.#pull();

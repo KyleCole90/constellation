@@ -3,6 +3,8 @@ import { describe, expect, it } from "vite-plus/test";
 import type { SchoolId } from "../src/shared/domain/ids";
 import { handle, invoker } from "../src/shared/ipc";
 
+import { fakeLmsHandlers } from "./fixtures/bridge";
+
 type Listener = (sender: string | null, input: unknown) => Promise<unknown>;
 
 const APP = "app://constellation/";
@@ -24,6 +26,7 @@ const registered = () => {
       "vault.keys": async () => [],
       "vault.forget": record,
       "vault.standIn": async () => null,
+      ...fakeLmsHandlers(),
     },
   );
   const call = async (channel: string, input: unknown, sender: string | null = APP) => {
@@ -44,6 +47,24 @@ describe("main's handlers", () => {
       "vault.keys",
       "vault.forget",
       "vault.standIn",
+      "lms.verify",
+      "lms.courses",
+      "lms.assignments",
+      "lms.students",
+      "lms.submissions",
+      "lms.conversations",
+      "lms.announcements",
+      "lms.observe",
+      "lms.apply",
+      "lms.newCourses",
+      "lms.copySources",
+      "lms.courseContent",
+      "lms.migrations",
+      "lms.samplePackages",
+      "lms.lab",
+      "lms.labNext",
+      "lms.stored",
+      "lms.findSubmission",
     ]);
   });
 

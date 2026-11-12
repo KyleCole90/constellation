@@ -186,7 +186,7 @@ const attentionDot = `Boolean(document.querySelector('[data-testid="sidebar"] [d
 const writes = (t) => t.eval(`window.__faultLab.writes().length`);
 const lms = (t, expression) =>
   t.eval(
-    `(() => { const lms = JSON.parse(localStorage.getItem("lms-app.fake-canvas.v1")); return ${expression}; })()`,
+    `(async () => { const lms = JSON.parse(await window.__faultLab.stored()); return ${expression}; })()`,
   );
 
 const openSection = async (t, label) => {
@@ -1640,9 +1640,9 @@ let seededComments = null;
 
 const assertWiped = async (t, tag) => {
   await t.waitFor(`location.pathname === "/welcome"`, `${tag}: lands on /welcome`);
-  const stored = await t.eval(`(() => {
+  const stored = await t.eval(`(async () => {
     const state = JSON.parse(localStorage.getItem("lms-app.v1") ?? "{}").state ?? {};
-    const lms = JSON.parse(localStorage.getItem("lms-app.fake-canvas.v1") ?? "{}");
+    const lms = JSON.parse((await window.__faultLab.stored()) ?? "{}");
     return {
       changes: Object.keys(state.changes ?? {}).length,
       connected: Object.values(state.connections ?? {}).filter((c) => c.status !== "disconnected").length,

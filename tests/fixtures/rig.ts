@@ -28,6 +28,37 @@ export const LCC = "lcc" as SchoolId;
 export const RSU = "rsu" as SchoolId;
 const TOKEN = "fake-token-with-enough-length";
 
+/** A grade a teacher might give: 80% on every criterion, with a comment and nothing attached. */
+export const gradeContentFor = (
+  server: FakeCanvasServer,
+  submission: Submission,
+  comment = `Feedback for ${submission.studentName}.`,
+): GradeContent => {
+  const assignment = server
+    .assignments(submission.course)
+    .find((a) => a.ref === submission.assignment);
+  if (!assignment) throw new Error("The submission has no assignment.");
+  const rubric =
+    assignment.rubric?.map((c) => ({
+      criterion: c.ref,
+      name: c.name,
+      points: Math.floor(c.maxPoints * 0.8),
+      outOf: c.maxPoints,
+    })) ?? null;
+  return {
+    kind: "grade",
+    target: submission.ref,
+    points: rubric ? null : Math.floor(assignment.pointsPossible * 0.8),
+    outOf: assignment.pointsPossible,
+    rubric,
+    late: null,
+    comment,
+    attachment: null,
+    override: null,
+    excused: false,
+  };
+};
+
 /** Sends through the real runner against the fake LMS, with a clock the test drives and a record of each write. */
 export const makeRig = async () => {
   const clock = new VirtualClock();
@@ -97,34 +128,8 @@ export const makeRig = async () => {
       .flatMap((course) => server.submissions(course.ref))
       .filter((s) => s.workflow === "submitted");
 
-  const contentFor = (
-    submission: Submission,
-    comment = `Feedback for ${submission.studentName}.`,
-  ): GradeContent => {
-    const assignment = server
-      .assignments(submission.course)
-      .find((a) => a.ref === submission.assignment);
-    if (!assignment) throw new Error("The submission has no assignment.");
-    const rubric =
-      assignment.rubric?.map((c) => ({
-        criterion: c.ref,
-        name: c.name,
-        points: Math.floor(c.maxPoints * 0.8),
-        outOf: c.maxPoints,
-      })) ?? null;
-    return {
-      kind: "grade",
-      target: submission.ref,
-      points: rubric ? null : Math.floor(assignment.pointsPossible * 0.8),
-      outOf: assignment.pointsPossible,
-      rubric,
-      late: null,
-      comment,
-      attachment: null,
-      override: null,
-      excused: false,
-    };
-  };
+  const contentFor = (submission: Submission, comment?: string): GradeContent =>
+    gradeContentFor(server, submission, comment);
 
   const draft = async (school: SchoolId, content: ChangeContent): Promise<ChangeRecord> => {
     const remote = await provider(school).observe(content);

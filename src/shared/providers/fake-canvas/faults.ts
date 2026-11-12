@@ -71,7 +71,8 @@ export interface FaultLab {
   enrollStudents(course: LmsRef<"course">, count: number): void;
   demoScript(): { enabled: boolean; fired: readonly DemoFault[] };
   setDemoScript(enabled: boolean): void;
-  findSubmission(student: string, assignmentShort: string): LmsRef<"submission"> | null;
+  /** The LMS as stored, for verify to read. Null after a reset. */
+  stored(): Promise<string | null>;
   armed(): ArmedFaults;
   /** Every write that reached the LMS, oldest first. Survives a reload, and only a reset clears it. */
   writes(): readonly WriteRecord[];

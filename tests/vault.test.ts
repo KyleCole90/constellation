@@ -10,6 +10,7 @@ import { handle, invoker } from "~/shared/ipc";
 import { Secret, revealSecret, type Credential } from "~/shared/providers/provider";
 
 import { createVault, type Cipher } from "../src/main/vault";
+import { fakeLmsHandlers } from "./fixtures/bridge";
 import { makeStoreRig } from "./fixtures/store-rig";
 
 const LCC = "lcc" as SchoolId;
@@ -152,6 +153,7 @@ const bridged = () => {
       "vault.keys": async () => main.keys(),
       "vault.forget": async ({ key }) => main.forget(key),
       "vault.standIn": ({ key }) => main.standIn(key),
+      ...fakeLmsHandlers(),
     },
   );
   const invoke = invoker(async (channel, input) => {

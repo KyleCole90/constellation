@@ -67,10 +67,16 @@ import {
   type School,
 } from "~/shared/domain/lms";
 import type { SetupLive } from "~/shared/domain/setup";
+import type { Bridge } from "~/shared/ipc";
 import { workName } from "~/shared/domain/workName";
 import { FakeCanvasServer, type StorageLike } from "~/shared/providers/fake-canvas/server";
 import type { FaultLab, NoiseConfig } from "~/shared/providers/fake-canvas/faults";
-import { FAKE_SCHOOLS, createFakeCanvasDescriptor } from "~/shared/providers/fake-canvas/provider";
+import {
+  FAKE_CANVAS,
+  FAKE_CANVAS_FACE,
+  FAKE_SCHOOLS,
+  createFakeCanvasDescriptor,
+} from "~/shared/providers/fake-canvas/provider";
 import { SEED } from "~/shared/providers/fake-canvas/seed";
 import {
   revealSecret,
@@ -82,6 +88,8 @@ import {
   type Secret,
   type Vault,
 } from "~/shared/providers/provider";
+import { desktopBridge } from "~/renderer/desktop";
+import { bridgeFakeLms } from "~/renderer/providers/lms";
 import { createAppVault } from "~/renderer/providers/vault";
 import {
   DEFAULT_RETRY_POLICY,
@@ -1967,7 +1975,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
 const browserDeps = (): WorkspaceDeps => ({
   storage: localStorage,
   vault: createAppVault(),
-  backend: fakeCanvasBackend({}),
+  backend: desktopBridge ? bridgeBackend(desktopBridge) : fakeCanvasBackend({}),
   realNow: () => Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   random: () => Math.random(),
@@ -1980,6 +1988,16 @@ const browserDeps = (): WorkspaceDeps => ({
 
 let lab: FaultLab | null = null;
 const FAKE_HOSTS = FAKE_SCHOOLS.map((school) => school.host);
+
+const fakeBackend = (descriptor: ProviderDescriptor, reset: () => void): Backend => ({
+  schoolAt: (host) => FAKE_SCHOOLS.find((school) => school.host === host) ?? null,
+  demoHosts: FAKE_HOSTS,
+  newSchoolProvider: "fake-canvas",
+  descriptors: { "fake-canvas": descriptor },
+  epoch: new Date(SEED.now).getTime(),
+  seedThreads,
+  reset,
+});
 
 /** Wires the fake LMS in. A real provider replaces this one function and the screens never notice. */
 export const fakeCanvasBackend =
@@ -2002,15 +2020,16 @@ export const fakeCanvasBackend =
     });
     lab = server;
     options.onServer?.(server);
-    return {
-      schoolAt: (host) => FAKE_SCHOOLS.find((school) => school.host === host) ?? null,
-      demoHosts: FAKE_HOSTS,
-      newSchoolProvider: "fake-canvas",
-      descriptors: { "fake-canvas": createFakeCanvasDescriptor(server, now) },
-      epoch: new Date(SEED.now).getTime(),
-      seedThreads,
-      reset: () => server.reset(),
-    };
+    return fakeBackend(createFakeCanvasDescriptor(server, now), () => server.reset());
+  };
+
+/** The desktop app's fake LMS runs in main, so here it is a client of the bridge (docs/electron-spec.md, step 10). */
+const bridgeBackend =
+  (bridge: Bridge) =>
+  (now: () => number): Backend => {
+    const fake = bridgeFakeLms(bridge, FAKE_CANVAS, FAKE_CANVAS_FACE, now);
+    lab = fake.lab;
+    return fakeBackend(fake.descriptor, fake.reset);
   };
 
 let instance: WorkspaceStore | null = null;

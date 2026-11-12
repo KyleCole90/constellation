@@ -26,5 +26,17 @@ export class SendPermit {
       return null;
     return new SendPermit(record.id, record.content, fields);
   }
+  /**
+   * Main's copy of a permit the renderer minted, rebuilt from the plain data IPC carries. Main takes it as sent until
+   * the writeback step checks it against its approval (docs/electron-spec.md, step 12). Only src/main calls this,
+   * enforced by a structure test.
+   */
+  static relayed(
+    changeId: ChangeId,
+    content: ChangeContent,
+    fields: readonly FieldKey[],
+  ): SendPermit {
+    return new SendPermit(changeId, content, fields);
+  }
 }
 export const mintSendPermit = SendPermit.mint;

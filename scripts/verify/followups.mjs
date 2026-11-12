@@ -35,7 +35,7 @@ const tagOf = (t, subject) =>
     `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).find((c) => c.subject === ${JSON.stringify(subject)})?.state.tag ?? null`,
   );
 const writes = (t) =>
-  t.eval(`JSON.parse(localStorage.getItem("lms-app.fake-canvas.v1")).writeLog.length`);
+  t.eval(`(async () => JSON.parse(await window.__faultLab.stored()).writeLog.length)()`);
 const noAgent = (t, label) =>
   t.waitFor(`!document.querySelector('[data-testid="agent-working"]')`, label);
 
