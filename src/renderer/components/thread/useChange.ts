@@ -24,17 +24,18 @@ export const useChange = (id: ChangeId | null): ChangeView | null => {
   const status = useWorkspace((state) =>
     record ? state.connections[record.school]?.status : undefined,
   );
+  const online = useWorkspace((state) => state.online);
   return useMemo(() => {
     if (!record) return null;
     const preview = workspaceStore().getState().previewFor(record.id);
     if (!preview) return null;
-    const summary = summarizeFor(record, status);
+    const summary = summarizeFor(record, status, online);
     return {
       record,
       summary: saved ? summary : { ...summary, label: NOT_STARTED.label, canDiscard: false },
       preview,
     };
-  }, [record, status, saved]);
+  }, [record, status, online, saved]);
 };
 
 const nowIso = () => isoTime(workspaceStore().getState().now());

@@ -65,6 +65,7 @@ interface Job {
   id: number;
   course: number;
   source: number;
+  createdMs: number;
   startedMs: number;
   shift: {
     oldStart: IsoDate;
@@ -197,6 +198,8 @@ export class CanvasTermHttp {
   readonly uploads: Upload[] = [];
   /** Set to make storage answer 201 with no redirect, as Instructure's own file storage does. */
   storageCreates = false;
+  /** How long Canvas prepares a package after its file arrives, as a big file or a busy queue makes it. */
+  prepareMs = 0;
   /** Where storage's redirect sends the confirm step. Canvas sends it back to the school. */
   confirmOrigin = ORIGIN;
   /** The path storage's redirect names after the origin. */
@@ -228,7 +231,7 @@ export class CanvasTermHttp {
   }
   /** Where a job is now, from the clock alone. Its content lands on the first look after it completes. */
   #status(job: Job) {
-    if (job.cartridge && !job.cartridge.confirmed)
+    if (job.cartridge && (!job.cartridge.confirmed || this.#now < job.startedMs))
       return { state: "queued", completion: 0, message: null };
     const completion = Math.min(100, Math.floor(((this.#now - job.startedMs) / JOB_MS) * 100));
     if (job.failAt && completion >= job.failAt.completion)
@@ -290,7 +293,8 @@ export class CanvasTermHttp {
   }
   #jobJson(job: Job) {
     const status = this.#status(job);
-    const waiting = job.cartridge !== null && !job.cartridge.confirmed;
+    const waiting =
+      job.cartridge !== null && (!job.cartridge.confirmed || this.#now < job.startedMs);
     const workflow_state = waiting
       ? "pre_processing"
       : status.state === "queued"
@@ -303,6 +307,7 @@ export class CanvasTermHttp {
         migration_type_title: "Common Cartridge 1.x Package",
         workflow_state,
         user_id: SELF_ID,
+        created_at: at(job.createdMs),
         started_at: waiting ? null : at(job.startedMs),
         finished_at:
           workflow_state === "completed" || workflow_state === "failed"
@@ -403,7 +408,7 @@ export class CanvasTermHttp {
   #confirm(job: Job): void {
     if (!job.cartridge?.uploaded || job.cartridge.confirmed) return;
     job.cartridge.confirmed = true;
-    job.startedMs = this.#now;
+    job.startedMs = this.#now + this.prepareMs;
   }
 
   #read(path: string, query: URLSearchParams): Response {
@@ -498,6 +503,7 @@ export class CanvasTermHttp {
       id: (this.#seq += 10),
       course,
       source,
+      createdMs: this.#now,
       startedMs: this.#now,
       shift: {
         oldStart: date("old_start_date"),

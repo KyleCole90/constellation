@@ -193,13 +193,15 @@ export const useThreadWork = (
     const record = thread.focus
       ? (state.changes[thread.focus] ?? state.blanks[thread.focus])
       : undefined;
-    const summary = record ? summarizeFor(record, state.connections[record.school]?.status) : null;
+    const summary = record
+      ? summarizeFor(record, state.connections[record.school]?.status, state.online)
+      : null;
     switch (
       walkStep({
         busy: working || (record ? busy.has(record.id) : false),
         summary,
         panel: ui.panel,
-        chordSends: record ? sendsOnChord(record) : false,
+        chordSends: record ? sendsOnChord(record) && state.online : false,
       })
     ) {
       case "open-next":

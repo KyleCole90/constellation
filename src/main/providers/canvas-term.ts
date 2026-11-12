@@ -148,6 +148,7 @@ const MigrationRow = v.object({
   migration_type: v.nullish(v.string(), ""),
   workflow_state: v.string(),
   user_id: v.nullish(Id, null),
+  created_at: OptionalTime,
   started_at: OptionalTime,
   finished_at: OptionalTime,
   progress_url: v.nullish(v.string(), null),
@@ -175,6 +176,18 @@ const stateOf = (row: MigrationRow, progress: string | null): Migration["state"]
   if (row.workflow_state === "running") return progress === "queued" ? "queued" : "running";
   return "preparing";
 };
+
+/**
+ * A package migration is `pre_processing` while Canvas waits for its file or prepares it. Still there this long, it may
+ * never have got the file (the create's answer, with the upload address, was lost), or the file may be big or Canvas
+ * busy. Canvas doesn't say which, so it is `stalled`, never `failed`: it may still run.
+ */
+const STALLED_MS = 10 * 60_000;
+const stalledAt = (row: MigrationRow, now: number): boolean =>
+  row.migration_type === "common_cartridge_importer" &&
+  row.workflow_state === "pre_processing" &&
+  row.created_at !== null &&
+  now - Date.parse(row.created_at) > STALLED_MS;
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const dayName = (day: Weekday): string => DAY_NAMES[day];
@@ -343,7 +356,9 @@ export const canvasTermSetup = (client: CanvasClient) => {
       for (const row of rows.value) {
         const progress = row.workflow_state === "completed" ? null : await progressOf(row);
         if (progress && !progress.ok) return progress;
-        const state = stateOf(row, progress?.value.workflow_state ?? null);
+        const state = stalledAt(row, client.now())
+          ? "stalled"
+          : stateOf(row, progress?.value.workflow_state ?? null);
         let issues: Migration["issues"] = [];
         if (!ACTIVE.has(row.workflow_state)) {
           const read = await list(

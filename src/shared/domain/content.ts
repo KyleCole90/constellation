@@ -119,7 +119,8 @@ export interface Migration {
   ref: LmsRef<"migration">;
   /** Equals the copy field's text. How a change finds its job. */
   signature: string;
-  state: "queued" | "preparing" | "running" | "completed" | "failed";
+  /** `stalled` has been preparing far longer than it should. It may still run, or may never have got its file. */
+  state: "queued" | "preparing" | "stalled" | "running" | "completed" | "failed";
   completion: number;
   message: string | null;
   issues: readonly MigrationIssue[];

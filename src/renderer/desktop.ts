@@ -23,7 +23,11 @@ export const OFFLINE_REASON =
 export const isOnline = (): boolean =>
   (globalThis.navigator as { onLine?: boolean } | undefined)?.onLine !== false;
 
-const onConnectivity = (change: () => void) => {
+/** Sending needs the school; offline, Send is disabled up front, and a queued send could post twice (D28). */
+export const OFFLINE_SEND_REASON =
+  "You're offline, so nothing can be sent. Nothing is queued. Send once you're back online.";
+
+export const onConnectivity = (change: () => void) => {
   window.addEventListener("online", change);
   window.addEventListener("offline", change);
   return () => {

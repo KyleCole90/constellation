@@ -2,6 +2,8 @@ import { AlertTriangle } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import type { ConflictChoice, FieldKey } from "~/shared/domain/change";
+import type { ChangeId } from "~/shared/domain/ids";
+import { OFFLINE_SEND_REASON } from "~/renderer/desktop";
 import { selectSubmission } from "~/renderer/stores/selectors";
 import { cn } from "~/renderer/lib/utils";
 import { REJECTION_TEXT, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
@@ -32,6 +34,7 @@ function Frame({
   children?: ReactNode;
   actions?: ReactNode;
 }) {
+  const online = useWorkspace((state) => state.online);
   return (
     <div
       data-banner={kind}
@@ -43,6 +46,11 @@ function Frame({
         <div className="min-w-0 flex-1 text-body">
           <div className="font-medium">{title}</div>
           {children && <div className="mt-0.5 text-secondary-label">{children}</div>}
+          {!online && (
+            <div data-offline className="mt-1 text-warning-foreground">
+              {OFFLINE_SEND_REASON}
+            </div>
+          )}
         </div>
       </div>
       {actions && (
@@ -148,6 +156,25 @@ function ConflictBanner({ view }: { view: ChangeView }) {
   );
 }
 
+/** Retry and Resume both send, so offline they are disabled up front, like Send (D28). */
+function SendAgain({
+  id,
+  primary = false,
+  children,
+}: {
+  id: ChangeId;
+  primary?: boolean;
+  children: ReactNode;
+}) {
+  const { send } = useThreadActions();
+  const online = useWorkspace((state) => state.online);
+  return (
+    <Button variant={primary ? "default" : "outline"} disabled={!online} onClick={() => send([id])}>
+      {children}
+    </Button>
+  );
+}
+
 function ReconnectBanner({
   view,
   kind,
@@ -159,7 +186,6 @@ function ReconnectBanner({
   title: string;
   words: string;
 }) {
-  const { send } = useThreadActions();
   const [open, setOpen] = useState(false);
   const { record, summary } = view;
   return (
@@ -174,9 +200,7 @@ function ReconnectBanner({
                 Reconnect
               </Button>
             )}
-            {!summary.waitingOnReconnect && (
-              <Button onClick={() => send([record.id])}>Retry</Button>
-            )}
+            {!summary.waitingOnReconnect && <SendAgain id={record.id}>Retry</SendAgain>}
           </>
         }
       >
@@ -188,7 +212,6 @@ function ReconnectBanner({
 }
 
 function InDoubtBanner({ view }: { view: ChangeView }) {
-  const { send } = useThreadActions();
   const [checked, setChecked] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const check = async () => {
@@ -212,7 +235,7 @@ function InDoubtBanner({ view }: { view: ChangeView }) {
           <Button variant="default" disabled={checking} onClick={() => void check()}>
             Check again
           </Button>
-          <Button onClick={() => send([view.record.id])}>Resume, could post twice</Button>
+          <SendAgain id={view.record.id}>Resume, could post twice</SendAgain>
         </>
       }
     >
@@ -235,7 +258,6 @@ export function RecoveryBanner({
   view: ChangeView;
   onEdit?: () => void;
 }) {
-  const { send } = useThreadActions();
   const { record, summary, preview } = view;
   const school = useWorkspace((state) => state.schools.find((s) => s.id === record.school));
   const left = fieldCount(unwritten(preview).length);
@@ -277,9 +299,9 @@ export function RecoveryBanner({
           actions={
             <>
               <EditButton onEdit={onEdit} />
-              <Button variant="default" onClick={() => send([record.id])}>
+              <SendAgain id={record.id} primary>
                 {retryRemainingLabel(preview)}
-              </Button>
+              </SendAgain>
             </>
           }
         >
@@ -294,9 +316,9 @@ export function RecoveryBanner({
           kind="interrupted"
           title="The send was interrupted before it finished."
           actions={
-            <Button variant="default" onClick={() => send([record.id])}>
+            <SendAgain id={record.id} primary>
               Resume
-            </Button>
+            </SendAgain>
           }
         >
           {outcomeWords(preview)} Resume checks the LMS first and sends only what's left.
@@ -317,9 +339,9 @@ export function RecoveryBanner({
           actions={
             <>
               <EditButton onEdit={onEdit} />
-              <Button variant="default" onClick={() => send([record.id])}>
+              <SendAgain id={record.id} primary>
                 Retry
-              </Button>
+              </SendAgain>
             </>
           }
         >

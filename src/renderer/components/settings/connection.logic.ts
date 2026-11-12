@@ -6,7 +6,13 @@ import type { ConnectionRecord } from "~/renderer/stores/types";
 
 import type { BadgeTone, StatusIcon } from "../ui/badge";
 
-export type ConnectionStatus = "connected" | "expired" | "disconnected" | "syncing" | "sync-failed";
+export type ConnectionStatus =
+  | "connected"
+  | "expired"
+  | "disconnected"
+  | "syncing"
+  | "sync-failed"
+  | "offline";
 export type ConnectionAction =
   | "connect"
   | "reconnect"
@@ -36,9 +42,12 @@ export const scopeSummary = (scopes: readonly string[]): string => {
 export const connectionStatus = (
   record: ConnectionRecord | undefined,
   syncing: boolean,
+  online = true,
 ): ConnectionStatus => {
   if (!record || record.status === "disconnected") return "disconnected";
   if (record.status === "expired") return "expired";
+  // The app opens from saved state, so the school's data is still there; only reaching it waits (D28).
+  if (!online) return "offline";
   if (syncing) return "syncing";
   return record.syncError ? "sync-failed" : "connected";
 };
@@ -83,6 +92,15 @@ export const STATUS_VIEW: Readonly<Record<ConnectionStatus, StatusView>> = {
     needsAttention: false,
     needsToken: false,
     actions: ["sync", "replace", "disconnect"],
+  },
+  // Disconnecting is local. Syncing and a new token both need the school.
+  offline: {
+    label: "Offline",
+    badge: "warning",
+    icon: "disconnected",
+    needsAttention: false,
+    needsToken: false,
+    actions: ["disconnect"],
   },
   "sync-failed": {
     label: "Sync failed",

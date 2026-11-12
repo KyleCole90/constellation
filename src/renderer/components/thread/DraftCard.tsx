@@ -550,8 +550,10 @@ export function DiscardButton({ view, size }: { view: ChangeView; size: "sm" | "
 function CardActions({ view, extra }: { view: ChangeView; extra?: React.ReactNode }) {
   const { send } = useThreadActions();
   const { record, summary } = view;
-  // A grade only you have edited skips the preview, as walkStep does, unless it is a zero or has no comment.
-  const chord = sendsOnChord(record) && summary.canApprove;
+  const online = useWorkspace((state) => state.online);
+  // A grade only you have edited skips the preview, as walkStep does, unless it is a zero or has no comment. Offline
+  // nothing sends, so it doesn't offer to.
+  const chord = sendsOnChord(record) && summary.canApprove && online;
   return (
     <div
       data-testid="card-actions"

@@ -286,7 +286,9 @@ export const createSetupActions = (host: SetupHost) => {
     const setup = setupOf(course);
     const content = setup ? copyContentOf(copyOf(setup)) : null;
     if (!setup || !content) return "There is no copy to try again.";
-    if (!failedJob(course)) return "The copy hasn't failed.";
+    // A stalled job may still run, so the screen offering this says copying again could add the content twice.
+    const state = get().setupLive[course]?.migration?.state;
+    if (state !== "failed" && state !== "stalled") return "The copy hasn't failed.";
     const refused = await draftCopy(setup, content.source, content.plan);
     if (!refused) patchLive(course, { migration: null, scan: null });
     return refused;

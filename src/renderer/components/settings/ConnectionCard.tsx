@@ -42,7 +42,7 @@ const ACTION_VARIANT: Readonly<
 export function ConnectionCard({ school }: { school: School }) {
   const record = useWorkspace((state) => state.connections[school.id]);
   const status = useWorkspace((state) =>
-    connectionStatus(state.connections[school.id], Boolean(state.syncing[school.id])),
+    connectionStatus(state.connections[school.id], Boolean(state.syncing[school.id]), state.online),
   );
   const scopes = useWorkspace(useShallow((state) => state.scopeWordsFor(school.id)));
   const waiting = useWorkspace((state) =>

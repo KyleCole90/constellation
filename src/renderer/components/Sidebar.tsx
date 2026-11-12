@@ -58,7 +58,7 @@ import { useNewThread } from "./useNewThread";
 const WAITS_ON_SCHOOL = /reconnect/i;
 
 const schoolStatus = (state: WorkspaceState, school: SchoolId) =>
-  connectionStatus(state.connections[school], Boolean(state.syncing[school]));
+  connectionStatus(state.connections[school], Boolean(state.syncing[school]), state.online);
 
 const toggleSchool = (school: SchoolId) => {
   const { prefs, setPrefs } = workspaceStore().getState();
