@@ -11,6 +11,7 @@ import { Secret, type CredentialLease } from "~/shared/providers/provider";
 import { bridgeCanvas } from "~/renderer/providers/lms";
 import { createMemoryVault } from "~/renderer/providers/vault";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
+import type { LabCommand } from "~/shared/providers/fake-canvas/lab";
 
 import { bridgedLms, fakeLmsHandlers } from "./fixtures/bridge";
 import { gradeContent, sending } from "./fixtures/changes";
@@ -461,6 +462,44 @@ describe("main's lms channels and real Canvas", () => {
       "isn't a Canvas school",
     );
     expect(network.requests).toEqual([]);
+  });
+});
+
+describe("the fake's failure lab and real Canvas", () => {
+  it("never reaches a Canvas school: every lab command aimed at one leaves its reads untouched", async () => {
+    const vault = createMemoryVault();
+    await vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TOKEN) });
+    const network = recorded({ ...SELF, [COURSES]: ok("courses-page-2.json") });
+    const lms = fakeLmsHandlers({ vault, fetch: network.fetch });
+    const commands: LabCommand[] = [
+      { do: "expireToken", school: SCHOOL.id },
+      {
+        do: "changeGradeOutOfBand",
+        submission: `${HOST}:submission:2201:5301:6401` as LmsRef<"submission">,
+        newGrade: 1,
+        by: "lab",
+      },
+      {
+        do: "studentResubmits",
+        submission: `${HOST}:submission:2201:5301:6401` as LmsRef<"submission">,
+      },
+      { do: "enrollStudents", course: COURSE, count: 3 },
+      { do: "throttleNext", retryAfterMs: 60_000, on: "any" },
+      { do: "failNextWrite", field: "grade", error: { kind: "auth_expired" } },
+      { do: "loseNextResponse", applied: true },
+      { do: "holdReads", held: true },
+      { do: "setNoise", patch: { rate429: 1, rate5xx: 1 } },
+      { do: "reset" },
+      { do: "reload" },
+    ];
+    for (const command of commands) await lms["lms.lab"](command);
+    expect(await lms["lms.verify"]({ school: SCHOOL })).toMatchObject({ ok: true });
+    const courses = await lms["lms.courses"]({ school: SCHOOL });
+    expect(courses.ok && courses.value.map((course) => course.code)).toEqual(["ENG-210-02"]);
+    expect(network.requests.map(({ url }) => new URL(url).pathname)).toEqual([
+      "/api/v1/users/self",
+      "/api/v1/courses",
+    ]);
   });
 });
 
