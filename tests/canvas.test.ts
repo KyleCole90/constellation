@@ -542,6 +542,17 @@ describe("the fake's failure lab and real Canvas", () => {
   });
 });
 
+describe("a school the renderer relabels", () => {
+  it("can't lend a Canvas school's token to the fake", async () => {
+    const vault = createMemoryVault();
+    await vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TOKEN) });
+    const lms = fakeLmsHandlers({ vault, fetch: recorded({}).fetch });
+    await expect(async () =>
+      lms["lms.verify"]({ school: { ...SCHOOL, provider: "fake-canvas" } }),
+    ).rejects.toThrow("isn't one of the demo schools");
+  });
+});
+
 describe("the renderer's Canvas client", () => {
   it("finds the school through main, reads through the bridge, and offers no term setup yet", async () => {
     const network = recorded({ ...SELF, [COURSES]: ok("courses-page-2.json") });

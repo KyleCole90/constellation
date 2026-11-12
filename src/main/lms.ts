@@ -119,7 +119,10 @@ export const lmsHandlers = (options: {
         return fakeProvider(school);
     }
   };
-  const fakeProvider = (school: School): LmsProvider => {
+  /** Main's own record of a demo school, so a renderer can't point the fake at a real school's token. */
+  const fakeProvider = (asked: School): LmsProvider => {
+    const school = FAKE_SCHOOLS.find((entry) => entry.id === asked.id && entry.host === asked.host);
+    if (!school) throw new Error("That isn't one of the demo schools.");
     const existing = fake.providers.get(school.id);
     if (existing) return existing;
     const created = fake.descriptor.create({ school, lease: options.leaseFor(school.id) });
