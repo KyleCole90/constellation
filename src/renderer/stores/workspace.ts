@@ -108,7 +108,6 @@ import {
   canSettle,
   NORTH_STAR_THREAD,
   selectAssignment,
-  selectConversation,
   selectCourse,
   selectDueExtras,
   selectThreadUi,
@@ -538,6 +537,34 @@ const nextWorkOf = (state: WorkspaceData, now: number): readonly NextWork[] =>
       now,
     }),
   );
+
+type Narrow = Partial<Omit<AgentScope, "changes" | "focus">>;
+
+/** One item and what it belongs to, as a first draft of it sees them. A correction gets the same, not the whole course. */
+const targetScope = (state: WorkspaceData, ref: string): Narrow | null => {
+  for (const cache of Object.values(state.cache)) {
+    const course = (of: LmsRef<"course">) => cache.courses.filter((c) => c.ref === of);
+    const submission = cache.submissions.find((s) => s.ref === ref);
+    if (submission)
+      return {
+        submissions: [submission],
+        assignments: cache.assignments.filter((a) => a.ref === submission.assignment),
+        courses: course(submission.course),
+        conversations: [],
+      };
+    const conversation = cache.conversations.find((c) => c.ref === ref);
+    if (conversation)
+      return {
+        conversations: [conversation],
+        courses: course(conversation.course),
+        submissions: [],
+        assignments: [],
+      };
+    const courses = cache.courses.filter((c) => c.ref === ref);
+    if (courses.length > 0) return { courses, submissions: [], assignments: [], conversations: [] };
+  }
+  return null;
+};
 
 const scopeOf = (state: WorkspaceData, thread: Thread): Omit<AgentScope, "changes" | "focus"> => {
   const caches = Object.entries(state.cache).flatMap(([school, cache]) =>
@@ -1231,8 +1258,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
         const runThreadAgent = async (
           thread: ThreadId,
           request: string,
-          narrow: Partial<Omit<AgentScope, "changes" | "focus">> | null,
+          narrow: Narrow | null,
           run: AgentRun,
+          target?: string,
         ) => {
           const current = get().threads[thread];
           if (!current || !get().aiOn()) return;
@@ -1243,7 +1271,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             ...narrow,
             get changes() {
               return Object.values(get().changes).filter(
-                (change) => !current.course || change.course === current.course,
+                (change) =>
+                  (!current.course || change.course === current.course) &&
+                  (target === undefined || change.content.target === target),
               );
             },
           };
@@ -1292,7 +1322,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           thread: ThreadId,
           submittedAt: IsoTime | null,
           request: string,
-          narrow: Partial<Omit<AgentScope, "changes" | "focus">>,
+          narrow: Narrow,
           blank: Proposal,
           { focus = true }: OpenOptions = {},
         ): Promise<ChangeId | null> => {
@@ -1309,7 +1339,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           if (!focus) background.add(slot);
           const run = (
             get().aiOn()
-              ? runThreadAgent(thread, request, narrow, newRun(null, []))
+              ? runThreadAgent(thread, request, narrow, newRun(null, []), content.target)
               : openBlank(thread, blank)
           )
             .then(() => existingChange(content, submittedAt)?.id ?? blankOn(content)?.id ?? null)
@@ -1719,17 +1749,17 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             const focus = current?.focus ?? null;
             post(thread, { type: "user", text, at: nowIso(), ...(focus ? { change: focus } : {}) });
             const scan = await setup.scanScope(thread);
-            // With no draft open, a messages thread is about the conversation on screen, so "draft a reply" has one answer.
-            const showing = selectThreadUi(get(), thread).current;
-            const open =
-              current?.kind === "messages" && !focus && showing
-                ? selectConversation(get(), showing as LmsRef<"conversation">)
-                : null;
             const northStar =
               current?.kind === "north-star-chat"
                 ? {
                     courses: get().schools.flatMap(
                       (school) => get().cache[school.id]?.courses ?? [],
+                    ),
+                    // Work that waits on the teacher. Every graded or not-yet-turned-in record is most of a term's data and answers nothing here.
+                    submissions: allCaches().flatMap((cache) =>
+                      cache.submissions.filter(
+                        (s) => s.workflow === "submitted" || s.workflow === "missing",
+                      ),
                     ),
                     northStar: {
                       announcements: allCaches().flatMap((cache) => cache.announcements),
@@ -1739,13 +1769,19 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                     },
                   }
                 : null;
+            // Elsewhere a turn is about the open draft, or else the row on screen, so it sends what that item's draft did.
+            const target =
+              (focus && get().changes[focus]?.content.target) ??
+              selectThreadUi(get(), thread).current ??
+              undefined;
+            const onScreen =
+              northStar || scan || target === undefined ? null : targetScope(get(), target);
             await runThreadAgent(
               thread,
               text,
-              northStar ??
-                (scan && { scan }) ??
-                (open && { conversations: [open], submissions: [], assignments: [] }),
+              northStar ?? (scan && { scan }) ?? onScreen,
               newRun(focus, null),
+              onScreen ? target : undefined,
             );
           },
 

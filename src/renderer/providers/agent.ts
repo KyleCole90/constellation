@@ -22,6 +22,12 @@ const withChange = (raw: unknown, scope: AgentScope): unknown => {
   return { ...rest, change: change?.id ?? submission };
 };
 
+/** North Star answers from who turned in what and when; reading or grading one piece of work is a handoff, whose course thread sends its body. */
+const forClaude = (scope: AgentScope): unknown =>
+  scope.northStar
+    ? { ...scope, submissions: scope.submissions.map(({ body: _body, ...rest }) => rest) }
+    : scope;
+
 /**
  * The desktop app's agent: Claude, run in main over `agent.run` with the key from main's vault. Everything it yields
  * still goes through `parseAgentEffect`, like the rules agent's output (docs/electron-spec.md, D26).
@@ -35,7 +41,7 @@ export const createBridgeAgent = (bridge: Bridge, online = isOnline): Agent => (
       return;
     }
     // Plain data only: the live `changes` getter is read once, here.
-    const plain: unknown = JSON.parse(JSON.stringify(scope));
+    const plain: unknown = JSON.parse(JSON.stringify(forClaude(scope)));
     let answer;
     try {
       answer = await bridge.invoke("agent.run", {
