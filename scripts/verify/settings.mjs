@@ -1627,10 +1627,16 @@ const reloadStays = async (t) => {
     "a reload stays connected",
   );
   await t.waitFor(`document.querySelector(${JSON.stringify(SIDEBAR)})`, "the shell comes back");
+  const dots = await t.eval(
+    `[...document.querySelectorAll('${SIDEBAR} [data-connection]')].map((dot) => dot.dataset.connection)`,
+  );
   t.assert(
-    (await t.eval(
-      `document.querySelectorAll('${SIDEBAR} [data-connection="connected"]').length`,
-    )) === 2,
+    dots.length === 2 && dots.every((dot) => dot === "connected" || dot === "syncing"),
+    "both sidebar dots stay connected while the launch sync runs",
+    JSON.stringify(dots),
+  );
+  await t.waitFor(
+    `document.querySelectorAll('${SIDEBAR} [data-connection="connected"]').length === 2`,
     "both sidebar dots stay connected",
   );
   await assertNoLeak(t, "after a reload");
