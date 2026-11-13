@@ -30,6 +30,8 @@ export interface StoreRigOptions {
   subscribeStorage?: (onChange: () => void) => void;
   locks?: Pick<LockManager, "request">;
   connectivity?: { online(): boolean; subscribe(onChange: () => void): void };
+  /** These seeded schools join as real Canvas, served by the same fake. */
+  realSchools?: readonly SchoolId[];
 }
 
 export const makeStoreRig = async (options: StoreRigOptions = {}) => {
@@ -51,12 +53,24 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
         onServer: (created) => (server = created),
       })(now);
       const descriptor = backend.descriptors["fake-canvas"];
-      if (!options.capabilities || !descriptor) return backend;
-      const narrowed = (context: Parameters<typeof descriptor.create>[0]) => {
-        const provider = descriptor.create(context);
-        return { ...provider, capabilities: { ...provider.capabilities, ...options.capabilities } };
+      if (!descriptor) return backend;
+      const narrowed = { ...descriptor };
+      if (options.capabilities) {
+        const capabilities = options.capabilities;
+        narrowed.create = (context) => {
+          const provider = descriptor.create(context);
+          return { ...provider, capabilities: { ...provider.capabilities, ...capabilities } };
+        };
+      }
+      const real = options.realSchools ?? [];
+      return {
+        ...backend,
+        schoolAt: async (host) => {
+          const school = await backend.schoolAt(host);
+          return school && real.includes(school.id) ? { ...school, provider: "canvas" } : school;
+        },
+        descriptors: { "fake-canvas": narrowed, canvas: narrowed },
       };
-      return { ...backend, descriptors: { "fake-canvas": { ...descriptor, create: narrowed } } };
     },
     realNow: clock.now,
     sleep: clock.sleep,

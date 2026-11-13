@@ -304,6 +304,34 @@ describe("the demo clock", () => {
   });
 });
 
+describe("a real school", () => {
+  const WALL = Date.UTC(2026, 10, 13, 20, 37);
+
+  it("puts the app on the wall clock, from the token it saves to what's due", async () => {
+    const clock = new VirtualClock(WALL);
+    const rig = await makeStoreRig({ clock, realSchools: [LCC] });
+    await rig.connect(LCC);
+    expect(rig.state().now()).toBe(WALL);
+    expect(rig.state().connections[LCC]?.connectedAt).toBe(new Date(WALL).toISOString());
+    const id = await openFor(rig, "Maya Ortiz");
+    expect(rig.state().changes[id]?.basis.readAt.slice(0, 10)).toBe("2026-11-13");
+    clock.advance(5000);
+    expect(rig.state().now()).toBe(WALL + 5000);
+  });
+
+  it("keeps the wall clock beside a demo school", async () => {
+    const rig = await makeStoreRig({ clock: new VirtualClock(WALL), realSchools: [LCC] });
+    await rig.connectAll();
+    expect(rig.state().now()).toBe(WALL);
+  });
+
+  it("leaves a demo-only workspace on the demo clock", async () => {
+    const rig = await makeStoreRig({ clock: new VirtualClock(WALL) });
+    await rig.connectAll();
+    expect(rig.state().now()).toBe(new Date(SEED.now).getTime());
+  });
+});
+
 describe("a second tab", () => {
   const twoTabs = async () => {
     let notify = () => undefined as void;

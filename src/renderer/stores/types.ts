@@ -173,6 +173,6 @@ export interface WorkspaceData {
   prefs: UiPrefs;
   /** Work North Star handed to a thread that hasn't finished, so a reload can start it again. A workspace saved before this has none and still loads. */
   handoffs: Readonly<Record<string, PendingHandoff>>;
-  /** Real epoch ms of the last reset. The demo clock is the seed time plus real time since this. */
+  /** Real epoch ms of the last reset. The demo clock, which runs while every school is a demo school, is the seed time plus real time since this. */
   resetAt: number;
 }

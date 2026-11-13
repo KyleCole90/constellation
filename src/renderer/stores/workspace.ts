@@ -139,7 +139,7 @@ const UNREADABLE_BACKUP_KEY = `${WORKSPACE_STORAGE_KEY}.unreadable`;
 export type ConnectStage = "saving" | "checking" | "reading";
 
 interface WorkspaceActions extends SetupActions {
-  /** Now on the demo clock. Epoch ms. */
+  /** Now in epoch ms, on the demo clock while every school is a demo school and on real time otherwise. */
   now(): number;
   aiOn(): boolean;
   /** Run once at app start: re-checks the vault, recovers any send a reload interrupted, and restarts any handed-off work it cut short. */
@@ -264,7 +264,7 @@ export interface Backend {
 export interface WorkspaceDeps {
   storage: StorageLike;
   vault: Vault;
-  /** Gets the demo clock, because a fake LMS has to agree with the app about what time it is. */
+  /** Gets the app's clock, because a fake LMS has to agree with the app about what time it is. */
   backend(now: () => number): Backend;
   realNow(): number;
   sleep(ms: number): Promise<void>;
@@ -641,6 +641,16 @@ const keepLocalFocus = (persisted: unknown, current: WorkspaceState): WorkspaceS
     }),
   );
   return { ...next, threads };
+};
+
+/**
+ * The fake LMS seeds its dates around the demo epoch, so a workspace of only demo schools keeps that clock. One real
+ * school puts the whole app on real time, so nothing it stamps or counts for that school is ever off. A new provider
+ * has to pick a side here.
+ */
+const ON_DEMO_CLOCK: Readonly<Record<School["provider"], boolean>> = {
+  "fake-canvas": true,
+  canvas: false,
 };
 
 export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
@@ -1958,7 +1968,12 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
     ),
   );
 
-  clock.now = () => backend.epoch + (deps.realNow() - store.getState().resetAt);
+  clock.now = () => {
+    const { schools, resetAt } = store.getState();
+    return schools.every((school) => ON_DEMO_CLOCK[school.provider])
+      ? backend.epoch + (deps.realNow() - resetAt)
+      : deps.realNow();
+  };
 
   /** Another tab may have committed since we last read. A change must never be judged from a stale copy. */
   function syncFromStorage(force = false): void {
