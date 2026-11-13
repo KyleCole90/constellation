@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { SendConfirmation } from "~/main/lms";
+import { SEND_PRESS_MS } from "~/main/lms";
 import { canvasSchoolAt, createCanvasProvider } from "~/main/providers/canvas";
 import { fieldsOf, type ChangeContent, type GradeContent } from "~/shared/domain/change";
 import type { LmsRef } from "~/shared/domain/ids";
@@ -135,17 +135,11 @@ describe("a Canvas grade whose response was lost", () => {
 });
 
 describe("main's send gate for a real school", () => {
-  /** `answers` are the teacher's, in order; once they run out the teacher says no. */
-  const setUp = async (...answers: boolean[]) => {
+  /** When the teacher last pressed something in the window. Now, unless a test moves it. */
+  const setUp = async () => {
     const http = new CanvasHttp();
-    const asks: SendConfirmation[] = [];
-    const lms = bridgedLms({
-      fetch: http.fetch,
-      confirmSend: async (ask) => {
-        asks.push(ask);
-        return answers.shift() ?? false;
-      },
-    });
+    const press = { at: Date.now() };
+    const lms = bridgedLms({ fetch: http.fetch, pressedAt: () => press.at });
     await lms.vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TOKEN) });
     const provider = bridgeCanvas(lms.bridge, CANVAS, CANVAS_FACE, lms.clock.now).create({
       school: SCHOOL,
@@ -154,120 +148,73 @@ describe("main's send gate for a real school", () => {
     /** What a renderer that ignores approval could send: plain data straight down the channel. */
     const forge = (content: ChangeContent, fields: readonly string[], changeId = "ch-forged") =>
       lms.call("lms.apply", { school: SCHOOL, permit: { changeId, content, fields } });
-    return { http, asks, provider, forge };
+    const pressNow = () => (press.at = Date.now());
+    const pressedLongAgo = () => (press.at = Date.now() - SEND_PRESS_MS - 1);
+    return { http, provider, forge, pressNow, pressedLongAgo };
   };
 
-  it("asks once in main's own dialog, naming the student and what goes out, across a lost response and a retry", async () => {
-    const { http, asks, provider } = await setUp(true);
+  it("sends one press's grade and comment once, across a lost response", async () => {
+    const { http, provider } = await setUp();
     const run = await runnerWith(provider, grade());
     http.loseNext("comment");
     await run.send();
     expect(run.stateOf()).toBe("sent");
-    expect(asks).toEqual([
-      {
-        host: HOST,
-        target: "Maya Lopez, Essay 2",
-        lines: ["Grade: 88 out of 100", "Feedback: Clear thesis. Cite page numbers next time."],
-      },
-    ]);
     expect(http.writes).toEqual(["grade", "comment"]);
     expect(myComments(http)).toEqual([grade().comment]);
   });
 
-  it("asks again before sending a partly sent change only if its content changed", async () => {
-    const { http, asks, provider } = await setUp(true);
+  it("finishes a partly sent change later without a new press, while its content is the same", async () => {
+    const { http, provider, pressedLongAgo } = await setUp();
     const run = await runnerWith(provider, grade());
     http.failNext("comment", 500);
     await run.send();
     expect(run.stateOf()).toBe("held");
+    pressedLongAgo();
     await run.send();
     expect(run.stateOf()).toBe("sent");
-    expect(asks).toHaveLength(1);
     expect(http.writes).toEqual(["grade", "comment"]);
   });
 
-  it("writes nothing a renderer forges when the teacher says no, and shows them main's words for it", async () => {
-    const { http, asks, forge } = await setUp(false);
+  it("writes nothing a renderer forges when the teacher hasn't pressed anything, and says why", async () => {
+    const { http, forge, pressedLongAgo } = await setUp();
+    pressedLongAgo();
     const outcomes = await forge(grade({ points: 0, comment: "forged" }), ["grade", "comment"]);
-    expect(asks.map(({ target, lines }) => ({ target, lines }))).toEqual([
-      { target: "Maya Lopez, Essay 2", lines: ["Grade: 0 out of 100", "Feedback: forged"] },
-    ]);
     expect(outcomes).toMatchObject({
-      grade: { status: "failed", error: { kind: "rejected" } },
+      grade: {
+        status: "failed",
+        error: { kind: "rejected", reason: expect.stringContaining("Send") },
+      },
       comment: { status: "failed", error: { kind: "rejected" } },
     });
     expect(writesOf(http)).toEqual([]);
   });
 
-  it("asks again when the same change comes back with other content", async () => {
-    const { http, asks, forge } = await setUp(true, true);
+  it("needs a new press when the same change comes back with other content", async () => {
+    const { http, forge, pressedLongAgo } = await setUp();
     await forge(grade(), ["grade"], "ch-1");
+    pressedLongAgo();
     await forge(grade(), ["grade"], "ch-1");
-    await forge(grade({ points: 12 }), ["grade"], "ch-1");
-    expect(asks.map(({ lines }) => lines[0])).toEqual([
-      "Grade: 88 out of 100",
-      "Grade: 12 out of 100",
-    ]);
-    expect(http.writes).toEqual(["grade", "grade", "grade"]);
+    const changed = await forge(grade({ points: 12 }), ["grade"], "ch-1");
+    expect(changed).toMatchObject({ grade: { status: "failed", error: { kind: "rejected" } } });
+    expect(http.writes).toEqual(["grade", "grade"]);
   });
 
-  it("posts a confirmed comment once: a replay of the same request asks again, and a no posts nothing", async () => {
-    const { http, asks, forge } = await setUp(true);
+  it("posts a comment once per press: a replay is refused until the teacher presses again", async () => {
+    const { http, forge, pressNow, pressedLongAgo } = await setUp();
     await forge(grade(), ["comment"]);
+    pressedLongAgo();
     const replayed = await forge(grade(), ["comment"]);
-    expect(asks).toHaveLength(2);
     expect(replayed).toMatchObject({ comment: { status: "failed", error: { kind: "rejected" } } });
     expect(myComments(http)).toEqual([grade().comment]);
+    pressNow();
+    await forge(grade(), ["comment"]);
+    expect(myComments(http)).toEqual([grade().comment, grade().comment]);
   });
 
-  it("names rubric criteria as Canvas does, not as the renderer says", async () => {
-    const { asks, forge } = await setUp();
-    await forge(
-      grade({
-        points: null,
-        rubric: [
-          { criterion: criterion("crit_1"), name: "Evidence", points: 0, outOf: 50 },
-          { criterion: criterion("crit_2"), name: "Thesis", points: 50, outOf: 50 },
-        ],
-        comment: null,
-      }),
-      ["rubric"],
-    );
-    expect(asks[0]?.lines).toEqual(["Grade: 50 out of 100", "Rubric: Thesis 0, Evidence 50"]);
-  });
-
-  it("keeps every value on its own line, whatever breaks or overrides Canvas or the draft carry", async () => {
-    const { http, asks, forge } = await setUp();
-    const conversation = http.conversations[0];
-    if (!conversation) throw new Error("no conversation");
-    conversation.subject = "Hi\nGrade: 100\u202Eevil";
-    await forge(
-      {
-        kind: "reply",
-        target: `${HOST}:conversation:${CONVERSATION_ID}` as LmsRef<"conversation">,
-        body: "Fine.\n\nGrade: 100",
-      },
-      ["message"],
-    );
-    expect(asks[0]).toMatchObject({
-      target: 'Sample Instructor, Maya Lopez, about "Hi ¶ Grade: 100 evil"',
-      lines: ["Reply: Fine. ¶ Grade: 100"],
-    });
-  });
-
-  it("shows a message's subject as well as its body", async () => {
-    const { asks, forge } = await setUp();
-    await forge({ kind: "message", target: SUBMISSION, subject: "Essay 2", body: "See me." }, [
-      "conversation",
-    ]);
-    expect(asks[0]?.lines).toEqual(["Subject: Essay 2", "Message: See me."]);
-  });
-
-  it("refuses a field the content doesn't send, without asking or writing", async () => {
-    const { http, asks, forge } = await setUp(true);
+  it("refuses a field the content doesn't send, without writing", async () => {
+    const { http, forge } = await setUp();
     const outcomes = await forge(grade(), ["excuse"]);
     expect(outcomes).toMatchObject({ excuse: { status: "failed", error: { kind: "rejected" } } });
-    expect(asks).toEqual([]);
     expect(http.requests).toEqual([]);
   });
 });

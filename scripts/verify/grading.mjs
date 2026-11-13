@@ -642,7 +642,7 @@ const correction = async (t) => {
     '"approve this" gets a plain note in the thread',
   );
   t.assert(
-    (await t.text("[data-declined]")).includes("Review before sending"),
+    (await t.text("[data-declined]")).includes("Approve on the draft"),
     "the note names the button on screen",
     await t.text("[data-declined]"),
   );
@@ -698,8 +698,8 @@ const approval = async (t) => {
   await t.key("Meta+d");
   await t.waitFor(`!document.querySelector(${JSON.stringify(PANEL)})`, "⌘D closes it");
   t.assert(
-    (await previewControls()) === "",
-    "with the panel closed, the card's button leads to the preview and no header button competes",
+    (await previewControls()) === "Preview",
+    "with the panel closed, the card's own Preview is the one Preview control",
     await previewControls(),
   );
   t.assert(
@@ -707,18 +707,25 @@ const approval = async (t) => {
     "the panel button says ⌘D opens the preview",
   );
   t.assert(
-    (await t.text('[data-testid="card-actions"]')).includes("Review before sending"),
-    "the card offers the review",
+    (await t.text('[data-testid="card-actions"]')).includes("Approve") &&
+      !(await t.text('[data-testid="card-actions"]')).includes("Review"),
+    "the card's next step is Approve, with no review step before it",
+    await t.text('[data-testid="card-actions"]'),
   );
   const drafted = await t.eval(
     `({ grade: document.querySelector('${CARD} [data-testid="draft-grade"] b').innerText, rubric: document.querySelectorAll('${CARD} [data-criterion]').length, feedback: document.querySelector('${CARD} [aria-label="Feedback comment"]').value })`,
   );
   await t.key("Meta+Enter");
   await t.waitFor(
-    `document.querySelector('[data-testid="writeback-scroll"]')`,
-    "the chord opens the review",
+    `document.activeElement?.matches('${CARD} [data-approve]')`,
+    "the chord stops on the card's Approve",
   );
-  t.assert((await tagOf(t, subject)) === "draft", "opening the review approves nothing");
+  t.assert((await tagOf(t, subject)) === "draft", "the chord on a draft approves nothing");
+  await t.click("Preview", { within: '[data-testid="card-actions"]' });
+  await t.waitFor(
+    `document.querySelector('[data-testid="writeback-scroll"]')`,
+    "the card's Preview opens what will be sent",
+  );
   t.assert(
     (await t.text('[data-testid="preview-heading"]')).startsWith("What will be sent to "),
     "the preview says what it is showing",
@@ -772,6 +779,10 @@ const approval = async (t) => {
 
   await approve(t, subject);
   t.assert((await tagOf(t, subject)) === "approved", "a real click approves");
+  await t.waitFor(
+    `document.activeElement?.hasAttribute("data-send")`,
+    "approving puts the keyboard on Send, the next and last step",
+  );
   t.assert(
     (await t.eval(`document.querySelector('[data-testid="flow"] [aria-current]').innerText`)) ===
       "Approved",
@@ -843,8 +854,17 @@ const approval = async (t) => {
     `document.body.innerText.includes("Undo approval")`,
     "Enter on the focused button is a real click and approves",
   );
-  await t.key("Meta+Enter");
+  await t.waitFor(
+    `document.activeElement?.hasAttribute("data-send") && document.activeElement.innerText.startsWith("Send to")`,
+    "after Approve, Send is the default",
+  );
+  await t.shot("approved-send-default");
+  await t.key("Enter");
   await sendAndWaitSent(t, subject);
+  t.assert(
+    !(await t.has('[role="dialog"]')),
+    "Return on Send sends, with no confirmation after it",
+  );
   t.assert(
     (await gradeInLms(t, "Maya Ortiz", "Essay 2")) === 81,
     "the LMS holds the approved grade",

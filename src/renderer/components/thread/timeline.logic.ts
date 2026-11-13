@@ -137,8 +137,8 @@ export type WalkStep =
   | "none";
 
 /**
- * Where ⌘↵ goes. On anything an agent touched it walks up to approval and stops on the button: the chord never
- * approves it, and only pressing the button does. A grade only you have edited needs none of that, so one chord approves and sends it, unless `sendsOnChord` stops a zero or an empty comment.
+ * Where ⌘↵ goes. On anything an agent touched it stops on Approve: the chord never approves it, and only pressing the
+ * button does. Once approved, it sends. A grade only you have edited needs none of that, so one chord approves and sends it, unless `sendsOnChord` stops a zero or an empty comment.
  * A change with a banner needs a decision, so the chord leaves it alone rather than guessing a recovery.
  */
 export const walkStep = (input: {
@@ -152,10 +152,11 @@ export const walkStep = (input: {
   if (summary?.sentAt) return "open-next";
   if (busy || summary?.tone === "working") return "none";
   if (!summary) return "open-next";
-  // The source and batch panels can cover the card, and the chord sends only what is on screen.
-  if (chordSends && summary.canApprove && (panel === null || panel === "writeback"))
-    return "approve-and-send";
-  if (panel !== "writeback") return "review";
+  // The source and batch panels can cover the card, and the chord approves or sends only what is on screen.
+  const cardShows = panel === null || panel === "writeback";
+  if (!cardShows) return "review";
+  if (chordSends && summary.canApprove) return "approve-and-send";
   if (summary.canApprove) return "focus-approve";
-  return summary.canSend && summary.banner === null ? "send" : "none";
+  if (summary.canSend && summary.banner === null) return "send";
+  return panel === "writeback" ? "none" : "review";
 };

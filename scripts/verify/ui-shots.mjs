@@ -126,7 +126,7 @@ export const run = async (t) => {
   await t.click(`[data-conversation="${target}"] button`);
   await t.waitFor(`document.querySelector("[data-focused]")`, "reply drafted", 15_000);
   await settled(t, "reply settled");
-  await t.click("Review before sending", { within: id("card-actions") });
+  await t.click("Preview", { within: id("card-actions") });
   await t.waitFor(
     `document.querySelector('${id("thread-panel")} [data-field="message"]')`,
     "preview open",

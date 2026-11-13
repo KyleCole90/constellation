@@ -9,7 +9,7 @@ import { ApproveButton } from "../ApproveButton";
 import { SchoolBadge } from "../SchoolBadge";
 import { Button } from "../ui/button";
 import { Kbd } from "../ui/kbd";
-import { DiscardButton } from "./DraftCard";
+import { DiscardButton, SendButton } from "./DraftCard";
 import { useThreadActions } from "./context";
 import { RecoveryBanner } from "./RecoveryBanner";
 import { SendPreview } from "./SendPreview";
@@ -56,7 +56,7 @@ function Flow({ index }: { index: number }) {
 
 // The footer shows only the next real step, so Send appears once there is an approval to send.
 function Footer({ view }: { view: ChangeView }) {
-  const { busy, send, next, openRow } = useThreadActions();
+  const { busy, next, openRow } = useThreadActions();
   const { record, summary } = view;
   const vendor = useWorkspace((state) => state.vendorLabelFor(record.school) ?? "the LMS");
   const host = useWorkspace((state) => state.schools.find((s) => s.id === record.school)?.host);
@@ -150,16 +150,7 @@ function Footer({ view }: { view: ChangeView }) {
             Undo approval
           </Button>
         )}
-        <Button
-          variant="default"
-          size="lg"
-          disabled={!summary.canSend}
-          data-lands='[data-testid="thread-panel"]'
-          onClick={() => send([record.id])}
-        >
-          Send to {vendor}
-          <Kbd variant="on-primary">⌘↵</Kbd>
-        </Button>
+        <SendButton view={view} size="lg" />
       </div>
     </div>
   );

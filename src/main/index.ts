@@ -122,24 +122,15 @@ const start = async () => {
     reportMain(reason);
   });
   const vault = createVault(join(userData, "vault.json"), safeStorage);
+  /** The teacher's last click, Return or Space in the window, as the OS delivered it. Page script can't produce one. */
+  let pressedAt = Number.NEGATIVE_INFINITY;
   const lms = lmsHandlers({
     makeServer: fakeServer(createFileStorage(join(userData, "lms.json"))),
     realNow: () => Date.now(),
     leaseFor: (key) => vault.lease(key),
     packaged: app.isPackaged,
     fetch: FAKE_ONLY ? null : (url, init) => net.fetch(url, init),
-    // "Don't Send" is the default, so a dialog the renderer times to land mid-typing can't take a Return as a yes.
-    confirmSend: async ({ host, target, lines }) => {
-      const { response } = await dialog.showMessageBox(window, {
-        type: "question",
-        message: `Send to ${target} on ${host}?`,
-        detail: lines.join("\n\n"),
-        buttons: ["Send", "Don't Send"],
-        defaultId: 1,
-        cancelId: 1,
-      });
-      return response === 0;
-    },
+    pressedAt: () => pressedAt,
     // Main reads the file itself, so the renderer never names a path.
     choosePackage: async () => {
       const { canceled, filePaths } = await dialog.showOpenDialog(window, {
@@ -176,6 +167,13 @@ const start = async () => {
     show: !HIDDEN,
   });
   lockNavigation(window.webContents, (url) => void shell.openExternal(url));
+  window.webContents.on("input-event", (_event, input) => {
+    if (input.type === "mouseUp") pressedAt = Date.now();
+  });
+  window.webContents.on("before-input-event", (_event, input) => {
+    if (input.type === "keyDown" && (input.key === "Enter" || input.key === " "))
+      pressedAt = Date.now();
+  });
   app.on("second-instance", () => {
     if (window.isMinimized()) window.restore();
     window.focus();

@@ -232,15 +232,11 @@ describe("walkStep", () => {
     ).toBe("review");
   });
 
-  it("a draft under review stops at the Approve button and never approves", () => {
-    expect(
-      walkStep({
-        busy: false,
-        summary: summary({ canApprove: true }),
-        panel: "writeback",
-        chordSends: false,
-      }),
-    ).toBe("focus-approve");
+  it("a draft on the card or under review stops at the Approve button and never approves", () => {
+    for (const panel of [null, "writeback"] as const)
+      expect(
+        walkStep({ busy: false, summary: summary({ canApprove: true }), panel, chordSends: false }),
+      ).toBe("focus-approve");
   });
 
   it("a grade only you have edited approves and sends from the card or the preview", () => {
@@ -268,15 +264,16 @@ describe("walkStep", () => {
     ).toBe("review");
   });
 
-  it("an approved change sends", () => {
-    expect(
-      walkStep({
-        busy: false,
-        summary: summary({ canSend: true, tone: "ready" }),
-        panel: "writeback",
-        chordSends: false,
-      }),
-    ).toBe("send");
+  it("an approved change sends from the card or the preview", () => {
+    for (const panel of [null, "writeback"] as const)
+      expect(
+        walkStep({
+          busy: false,
+          summary: summary({ canSend: true, tone: "ready" }),
+          panel,
+          chordSends: false,
+        }),
+      ).toBe("send");
   });
 
   it("a change with a banner waits for a decision", () => {

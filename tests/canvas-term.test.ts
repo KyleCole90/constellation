@@ -4,7 +4,6 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import type { SendConfirmation } from "~/main/lms";
 import { canvasSchoolAt, createCanvasProvider } from "~/main/providers/canvas";
 import {
   copySignature,
@@ -238,12 +237,7 @@ describe("Canvas term setup writes", () => {
     expect(await provider.apply(permit)).toMatchObject({
       value: { status: "failed", error: { kind: "not_found" } },
     });
-    expect(await provider.describeSend(content)).toEqual({
-      ok: false,
-      error: { kind: "not_found" },
-    });
     expect(http.requests.filter((line) => line.includes("/files/"))).toEqual([
-      `GET /courses/${SHELL_ID}/files/9999`,
       `GET /courses/${SHELL_ID}/files/9999`,
     ]);
     expect(http.writeCount()).toBe(0);
@@ -284,26 +278,20 @@ describe("Canvas term setup writes", () => {
   });
 });
 
-describe("a sandbox course from copy to published, through main's confirm dialog", () => {
-  const setUp = (...answers: boolean[]) => {
+describe("a sandbox course from copy to published, through main's send gate", () => {
+  const setUp = () => {
     const http = new CanvasTermHttp();
-    const asks: SendConfirmation[] = [];
-    const lms = bridgedLms({
-      fetch: http.fetch,
-      confirmSend: async (ask) => {
-        asks.push(ask);
-        return answers.shift() ?? false;
-      },
-    });
+    const press = { at: Number.NEGATIVE_INFINITY };
+    const lms = bridgedLms({ fetch: http.fetch, pressedAt: () => press.at });
     const provider = bridgeCanvas(lms.bridge, CANVAS, CANVAS_FACE, lms.clock.now).create({
       school: SCHOOL,
       lease: createMemoryVault().leaseFor(SCHOOL.id),
     });
-    return { http, asks, lms, provider };
+    return { http, lms, provider, pressNow: () => (press.at = Date.now()) };
   };
 
-  it("asks before the copy and before the publish, naming each course as Canvas reports it", async () => {
-    const { http, asks, lms, provider } = setUp(false, true, true);
+  it("copies and publishes only right after the teacher presses Send", async () => {
+    const { http, lms, provider, pressNow } = setUp();
     await lms.vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TERM_TOKEN) });
     const { shell, source } = await shellAndSource(provider);
     const copy: CourseCopyContent = copyContent(shell, source);
@@ -312,16 +300,9 @@ describe("a sandbox course from copy to published, through main's confirm dialog
     expect(declined.copy?.status).toBe("failed");
     expect(http.jobs).toEqual([]);
 
+    pressNow();
     const sent = await provider.apply(await permitFor(provider, copy, ["copy"], SCHOOL.id));
     expect(sent.copy?.status).toBe("landed");
-    expect(asks[1]).toEqual({
-      host: TERM_HOST,
-      target: "Copy into ENG-101, ENG-101 Composition",
-      lines: [
-        "Copy from: ENG-101, ENG-101 Composition",
-        `Dates: ${copy.shift.oldStart} to ${copy.shift.oldEnd} move to ${copy.shift.newStart} to ${copy.shift.newEnd}`,
-      ],
-    });
     http.advance(60_000);
     const jobs = await unwrap(setupOf(provider).migrations(shell.ref));
     expect(jobs.map((job) => job.state)).toEqual(["completed"]);
@@ -336,11 +317,6 @@ describe("a sandbox course from copy to published, through main's confirm dialog
       await permitFor(provider, publish, ["value"], SCHOOL.id),
     );
     expect(published.value?.status).toBe("landed");
-    expect(asks[2]).toEqual({
-      host: TERM_HOST,
-      target: "ENG-101, ENG-101 Composition",
-      lines: ["Publish the course, so its students can see it"],
-    });
     expect(http.requests).toContain(`PUT /courses/${SHELL_ID}`);
     expect((await unwrap(provider.courses())).map((course) => course.ref)).toContain(shell.ref);
   });
@@ -532,20 +508,12 @@ describe("Canvas .imscc upload", () => {
 describe("main's .imscc picker", () => {
   const setUp = (path: string | null) => {
     const http = new CanvasTermHttp();
-    const asks: SendConfirmation[] = [];
-    const lms = bridgedLms({
-      fetch: http.fetch,
-      confirmSend: async (ask) => {
-        asks.push(ask);
-        return true;
-      },
-      choosePackage: async () => path,
-    });
+    const lms = bridgedLms({ fetch: http.fetch, choosePackage: async () => path });
     const provider = bridgeCanvas(lms.bridge, CANVAS, CANVAS_FACE, lms.clock.now).create({
       school: SCHOOL,
       lease: createMemoryVault().leaseFor(SCHOOL.id),
     });
-    return { http, asks, lms, provider };
+    return { http, lms, provider };
   };
   const onDisk = (name: string, bytes: Uint8Array) => {
     const path = join(mkdtempSync(join(tmpdir(), "imscc-")), name);
@@ -553,9 +521,9 @@ describe("main's .imscc picker", () => {
     return path;
   };
 
-  it("hands the renderer a name and size only, and the confirm dialog names main's own file", async () => {
+  it("hands the renderer a name and size only, and uploads main's own file", async () => {
     const path = onDisk(PACKAGE, PACKAGE_BYTES);
-    const { http, asks, lms, provider } = setUp(path);
+    const { http, lms, provider } = setUp(path);
     await lms.vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TERM_TOKEN) });
     const picked = await unwrap(
       setupOf(provider).pickPackage?.() ?? Promise.reject(new Error("no picker")),
@@ -565,18 +533,10 @@ describe("main's .imscc picker", () => {
     expect(JSON.stringify(picked)).not.toContain(path);
 
     const { shell, content } = await importOf(provider);
-    // The renderer's size is only a request; the dialog and the upload use main's file.
+    // The renderer's size is only a request; the upload uses main's file.
     const lying = { ...content, source: { ...content.source, kb: 999_999 } };
     const sent = await provider.apply(await permitFor(provider, lying, ["copy"], SCHOOL.id));
     expect(sent.copy?.status).toBe("landed");
-    expect(asks[0]).toEqual({
-      host: TERM_HOST,
-      target: "Import into ENG-101, ENG-101 Composition",
-      lines: [
-        `Package: ${PACKAGE}, ${picked.kb} KB`,
-        `Dates: ${content.shift.oldStart} to ${content.shift.oldEnd} move to ${content.shift.newStart} to ${content.shift.newEnd}`,
-      ],
-    });
     expect(http.uploads[0]?.file?.size).toBe(PACKAGE_BYTES.byteLength);
     expect(shell.ref).toBe(SHELL);
   });

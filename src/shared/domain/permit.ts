@@ -28,7 +28,7 @@ export class SendPermit {
   }
   /**
    * Main's permit, built from the plain data IPC carries once main has decided the send may go: for a real school,
-   * only after the teacher confirms that content in main's own dialog (`src/main/lms.ts`). Only src/main calls this,
+   * only right after the teacher pressed something in the window (`src/main/lms.ts`). Only src/main calls this,
    * enforced by a structure test.
    */
   static relayed(

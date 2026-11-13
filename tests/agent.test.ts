@@ -606,7 +606,7 @@ describe("free-text corrections", () => {
       expect(rig.state().changes[id]?.state.tag).toBe("draft");
       expect(reply).toMatchObject({
         type: "declined",
-        text: expect.stringContaining("Review before sending"),
+        text: expect.stringContaining("Approve on the draft"),
       });
       expect(rig.server.log.filter((entry) => entry.kind === "write")).toEqual([]);
     },
