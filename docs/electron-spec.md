@@ -138,7 +138,7 @@ export const ipc = {
 - Signing and notarisation secrets live in a `release` environment that only Kyle can approve.
 - Updates check at launch, download in the background, and install on quit. There is one stable channel. Before 0.0.1, releases are tagged `0.0.1-alpha.N`.
 - Electron is pinned to an exact version, and Dependabot opens a PR for each major. Falling 3 or more majors behind counts as a security bug.
-- On every push to main, a hosted job deploys the web demo to Cloudflare Pages. The mini's port-4320 deploy is removed.
+- Nothing deploys the web demo from this public repo. The mini's port-4320 deploy is removed.
 
 ## Enforcement
 
@@ -258,7 +258,7 @@ Each step is one PR that ends green on every check and is proven on the real app
 - **D35** Product analytics (#3) come after 0.0.1.
 - **D36** `PRIVACY.md` lives in the repo and is shown in setup.
 - **D37** A native menu with the standard roles.
-- **D38** The demo deploys to Pages from a hosted job, and the mini's deploy goes away.
+- **D38** The mini's demo deploy goes away. _Revised 2026-11-13:_ the demo is not deployed from this public repo at all.
 
 ### Round 8
 
