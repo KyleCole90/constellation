@@ -926,21 +926,16 @@ const nextUp = async (t) => {
 const question = async (t) => {
   const navBeforeChats = await navTops(t);
   const hero = await composerCard(t);
+  // When the glide starts animating, the chat's URL must already be showing. A skipped glide (Chrome skips one on a busy machine) holds nothing up.
   await t.eval(
-    `(() => { window.__sent = null; document.addEventListener("keydown", (e) => { if (e.key === "Enter") window.__sent ??= performance.now(); }, { capture: true }); const start = document.startViewTransition?.bind(document); if (start) document.startViewTransition = (...args) => { window.__glide = true; return start(...args); }; })()`,
+    `(() => { const start = document.startViewTransition?.bind(document); if (start) document.startViewTransition = (...args) => { const glide = start(...args); window.__glide = glide.ready.then(() => location.pathname, () => "skipped"); return glide; }; })()`,
   );
   await t.type("What's due this week?");
   await t.key("Enter");
-  await t.eval(
-    `new Promise((done) => { const tick = () => (location.pathname !== ${JSON.stringify(NORTH_STAR)} ? ((window.__navMs = performance.now() - window.__sent), done()) : requestAnimationFrame(tick)); tick(); })`,
-  );
+  const atGlideStart = await t.eval(`window.__glide ?? "no view transitions"`);
+  t.assert(atGlideStart !== NORTH_STAR, "the glide does not hold up the navigation", atGlideStart);
   t.assert(
-    (await t.eval(`window.__navMs`)) < 500,
-    "the glide does not hold up the navigation",
-    String(await t.eval(`window.__navMs`)),
-  );
-  t.assert(
-    await t.eval(`!document.startViewTransition || window.__glide === true`),
+    await t.eval(`!document.startViewTransition || window.__glide instanceof Promise`),
     "the first send uses a view transition where the browser has one",
   );
   await t.waitFor(
