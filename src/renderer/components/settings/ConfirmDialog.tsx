@@ -29,8 +29,8 @@ export function ConfirmDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPopup>
         <DialogTitle>{title}</DialogTitle>
-        <DialogDescription render={<div />} className="flex flex-col gap-2">
-          {children}
+        <DialogDescription render={<div />}>
+          <div className="flex flex-col gap-2">{children}</div>
         </DialogDescription>
         <div className="flex justify-end gap-btn-gap">
           <DialogClose render={<Button variant="ghost-muted" size="lg" />}>Cancel</DialogClose>
