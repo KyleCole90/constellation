@@ -587,6 +587,9 @@ export const createRuleAgent = (): Agent => ({
     const onOneConversation = only && others.length === 0 && scope.submissions.length === 0;
     if (!change && onOneConversation && /\b(draft|write|reply)\b/i.test(request))
       return yield* draftReply(only);
+    const onOneSubmission = scope.submissions.length === 1 && scope.conversations.length === 0;
+    if (!change && onOneSubmission && /\b(draft|grade|mark|score)\b/i.test(request))
+      return yield* draftGrade(input);
     if (!change) {
       yield say(
         `Open a submission, a message, or an announcement first, and I'll draft it. ${GRADE_CAPABILITIES}`,

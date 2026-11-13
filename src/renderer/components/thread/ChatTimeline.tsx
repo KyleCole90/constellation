@@ -10,7 +10,8 @@ import {
   type RefObject,
 } from "react";
 
-import { selectThreadChanges } from "~/renderer/stores/selectors";
+import type { LmsRef } from "~/shared/domain/ids";
+import { selectSubmission, selectThreadChanges } from "~/renderer/stores/selectors";
 import type { Thread, ThreadMessage, ThreadUi } from "~/renderer/stores/types";
 import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
@@ -399,6 +400,11 @@ export function ChatTimeline({
   useArrivalFocus(scroller, thread.focus);
   /** The course an announcement thread with nothing drafted yet would post to. */
   const toAnnounce = thread.kind === "announcement" && thread.focus === null ? thread.course : null;
+  /** The submission on screen with no draft open, as after a draft that failed or a Discard. */
+  const toGrade = useWorkspace((state) => {
+    const current = thread.focus === null ? ui.current : null;
+    return selectSubmission(state, current as LmsRef<"submission"> | null)?.ref ?? null;
+  });
 
   return (
     <div
@@ -464,6 +470,28 @@ export function ChatTimeline({
               }
             >
               {ai ? "Draft the announcement" : "Write the announcement"}
+            </Button>
+          </div>
+        )}
+        {toGrade && !working && (
+          <div data-testid="grade-open" className="flex gap-btn-gap">
+            {ai && (
+              <Button
+                variant="default"
+                onClick={() => void workspaceStore().getState().openSubmission(thread.id, toGrade)}
+              >
+                Draft again
+              </Button>
+            )}
+            <Button
+              variant={ai ? "outline" : "default"}
+              onClick={() =>
+                void workspaceStore()
+                  .getState()
+                  .openSubmission(thread.id, toGrade, { manual: true })
+              }
+            >
+              Grade it yourself
             </Button>
           </div>
         )}

@@ -9,11 +9,11 @@ import { ApproveButton } from "../ApproveButton";
 import { SchoolBadge } from "../SchoolBadge";
 import { Button } from "../ui/button";
 import { Kbd } from "../ui/kbd";
-import { DiscardButton, SendButton } from "./DraftCard";
+import { DiscardButton, SendButton, UndoApprovalButton } from "./DraftCard";
 import { useThreadActions } from "./context";
 import { RecoveryBanner } from "./RecoveryBanner";
 import { SendPreview } from "./SendPreview";
-import { revokeApproval, useEditDraft, type ChangeView } from "./useChange";
+import { useEditDraft, type ChangeView } from "./useChange";
 import { missingWords } from "./writeback.logic";
 import { approvalResetWords, previewHeading } from "./writeback.logic";
 
@@ -139,17 +139,7 @@ function Footer({ view }: { view: ChangeView }) {
       </span>
       <div className={FOOTER_BUTTONS}>
         {discard}
-        {summary.canUndoApproval && (
-          <Button
-            variant="ghost-muted"
-            size="lg"
-            data-undo-approval
-            data-lands="[data-approve]"
-            onClick={() => revokeApproval(record.id)}
-          >
-            Undo approval
-          </Button>
-        )}
+        <UndoApprovalButton view={view} size="lg" />
         <SendButton view={view} size="lg" />
       </div>
     </div>

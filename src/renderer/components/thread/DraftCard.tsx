@@ -36,6 +36,7 @@ import {
   useChange,
   useEditDraft,
   editChange,
+  revokeApproval,
   type ChangeView,
 } from "./useChange";
 import { useCommitOnLeave } from "./useCommitOnLeave";
@@ -556,6 +557,21 @@ export function SendButton({ view, size }: { view: ChangeView; size: "md" | "lg"
   );
 }
 
+export function UndoApprovalButton({ view, size }: { view: ChangeView; size: "md" | "lg" }) {
+  if (!view.summary.canUndoApproval) return null;
+  return (
+    <Button
+      variant="ghost-muted"
+      size={size}
+      data-undo-approval
+      data-lands="[data-approve]"
+      onClick={() => revokeApproval(view.record.id)}
+    >
+      Undo approval
+    </Button>
+  );
+}
+
 const REDRAFTS = "Opening it again starts a new draft.";
 
 /** Discarding asks nothing, because the toast it leaves can undo it. */
@@ -577,7 +593,15 @@ export function DiscardButton({ view, size }: { view: ChangeView; size: "sm" | "
   );
 }
 
-function CardActions({ view, extra }: { view: ChangeView; extra?: React.ReactNode }) {
+function CardActions({
+  view,
+  panel,
+  extra,
+}: {
+  view: ChangeView;
+  panel: ThreadUi["panel"];
+  extra?: React.ReactNode;
+}) {
   const { send } = useThreadActions();
   const { record, summary } = view;
   const online = useWorkspace((state) => state.online);
@@ -585,6 +609,8 @@ function CardActions({ view, extra }: { view: ChangeView; extra?: React.ReactNod
   // nothing sends, so it doesn't offer to.
   const chord = sendsOnChord(record) && summary.canApprove && online;
   const approved = summary.approvedAt !== null && !summary.banner && summary.tone !== "working";
+  // An open panel already has its own Preview tab.
+  const preview = panel === null && <PreviewButton />;
   return (
     <div
       data-testid="card-actions"
@@ -598,7 +624,7 @@ function CardActions({ view, extra }: { view: ChangeView; extra?: React.ReactNod
       <span className="ml-auto flex items-center gap-btn-gap">
         {chord ? (
           <>
-            <PreviewButton />
+            {preview}
             <ApproveButton
               targets={[record]}
               label="Approve and send"
@@ -608,12 +634,13 @@ function CardActions({ view, extra }: { view: ChangeView; extra?: React.ReactNod
           </>
         ) : summary.canApprove ? (
           <>
-            <PreviewButton />
+            {preview}
             <ApproveButton targets={[record]} label="Approve" primary />
           </>
         ) : approved ? (
           <>
-            <PreviewButton />
+            {preview}
+            <UndoApprovalButton view={view} size="md" />
             <SendButton view={view} size="md" />
           </>
         ) : (
@@ -714,7 +741,15 @@ const useCommentFit = (fieldRef: RefObject<HTMLTextAreaElement | null>): boolean
   return scrolls;
 };
 
-function GradeCard({ view, content }: { view: ChangeView; content: GradeContent }) {
+function GradeCard({
+  view,
+  content,
+  panel,
+}: {
+  view: ChangeView;
+  content: GradeContent;
+  panel: ThreadUi["panel"];
+}) {
   const { record, summary } = view;
   const [error, setError] = useState<string | null>(null);
   const canAttach = useWorkspace(
@@ -913,7 +948,7 @@ function GradeCard({ view, content }: { view: ChangeView; content: GradeContent 
         </div>
       )}
       <CardNotes summary={summary} error={error} />
-      <CardActions view={view} extra={attachControl} />
+      <CardActions view={view} panel={panel} extra={attachControl} />
     </>
   );
 }
@@ -996,7 +1031,7 @@ function TextCard({
         />
       </div>
       <CardNotes summary={summary} error={error} />
-      <CardActions view={view} />
+      <CardActions view={view} panel={panel} />
     </>
   );
 }
@@ -1103,7 +1138,7 @@ export function ChangeCard({
       {view.summary.sentAt ? (
         <Receipt view={view} />
       ) : content.kind === "grade" ? (
-        <GradeCard view={view} content={content} />
+        <GradeCard view={view} content={content} panel={panel} />
       ) : (
         <TextCard view={view} panel={panel} quote={quote} />
       )}

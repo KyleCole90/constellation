@@ -584,6 +584,8 @@ const scopeOf = (state: WorkspaceData, thread: Thread): Omit<AgentScope, "change
 
 interface OpenOptions {
   focus?: boolean;
+  /** A blank form to fill in by hand, even with AI on, as when Claude can't be reached. */
+  manual?: boolean;
 }
 
 /** One agent run. A run that opens something holds what it says until there is a change to file it under, so one student's lines never show under another's card. */
@@ -1063,11 +1065,11 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           fileHeld(thread, run, record.id);
         };
 
-        const openBlank = async (thread: ThreadId, proposal: Proposal) => {
+        const openBlank = async (thread: ThreadId, proposal: Proposal, manual: boolean) => {
           const { content } = proposal;
           const made = await recordFrom(proposal, "you", blankOn(content)?.id ?? newChangeId());
           if (!made.ok) return post(thread, { type: "notice", text: made.error, at: nowIso() });
-          if (get().aiOn()) return;
+          if (get().aiOn() && !manual) return;
           const open = openOn(content);
           if (open) return focusIfWanted(thread, open.id, content);
           set({ blanks: { ...get().blanks, [made.value.id]: made.value } });
@@ -1324,7 +1326,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           request: string,
           narrow: Narrow,
           blank: Proposal,
-          { focus = true }: OpenOptions = {},
+          { focus = true, manual = false }: OpenOptions = {},
         ): Promise<ChangeId | null> => {
           const { content } = blank;
           const slot = slotOf(content);
@@ -1338,9 +1340,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           if (running) return running;
           if (!focus) background.add(slot);
           const run = (
-            get().aiOn()
+            get().aiOn() && !manual
               ? runThreadAgent(thread, request, narrow, newRun(null, []), content.target)
-              : openBlank(thread, blank)
+              : openBlank(thread, blank, manual)
           )
             .then(() => existingChange(content, submittedAt)?.id ?? blankOn(content)?.id ?? null)
             .finally(() => {
@@ -2048,11 +2050,28 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
   return Object.assign(store, { syncFromStorage: () => syncFromStorage() });
 };
 
+let agentDown = false;
+/** Verify's stand-in for Claude being unreachable: while down, the rules agent declines the way Claude's does. */
+export const setAgentDown = (down: boolean): void => {
+  agentDown = down;
+};
+const downable = (agent: Agent): Agent => ({
+  label: agent.label,
+  async *run(input, signal) {
+    if (agentDown)
+      yield { type: "decline", text: "Claude couldn't be reached, so nothing was drafted." };
+    else yield* agent.run(input, signal);
+  },
+});
+
 const browserDeps = (): WorkspaceDeps => ({
   storage: localStorage,
   vault: createAppVault(),
   backend: desktopBridge ? bridgeBackend(desktopBridge) : fakeCanvasBackend({}),
-  ...(desktopBridge?.agent === "claude" ? { agent: createBridgeAgent(desktopBridge) } : {}),
+  agent:
+    desktopBridge?.agent === "claude"
+      ? createBridgeAgent(desktopBridge)
+      : downable(createRuleAgent()),
   ...(desktopBridge ? { connectivity: { online: isOnline, subscribe: onConnectivity } } : {}),
   realNow: () => Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
