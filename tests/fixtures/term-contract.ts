@@ -12,7 +12,7 @@ import { spliceAt } from "~/shared/domain/splice";
 import type { LmsProvider, TermSetup } from "~/shared/providers/provider";
 
 import { permitFor, unwrap } from "./provider-contract";
-import { cartridgeContent, copyContent } from "./term";
+import { cartridgeContent, copyContent, termOf } from "./term";
 
 export interface TermContractHarness {
   provider: LmsProvider;
@@ -287,12 +287,7 @@ export const runTermSetupContract = (
     it("a package nobody uploaded fails the copy and creates no job", async () => {
       const harness = await makeHarness();
       const { provider, school, shell, source } = harness;
-      const content = cartridgeContent(shell, "nobody-uploaded-this.imscc", {
-        name: source.termName,
-        start: source.startAt,
-        end: source.endAt,
-        days: source.meetingDays,
-      });
+      const content = cartridgeContent(shell, "nobody-uploaded-this.imscc", termOf(source));
       const outcomes = await provider.apply(await permitFor(provider, content, ["copy"], school));
       expect(outcomes.copy?.status).toBe("failed");
       if (outcomes.copy?.status === "failed") expect(outcomes.copy.error.kind).toBe("rejected");

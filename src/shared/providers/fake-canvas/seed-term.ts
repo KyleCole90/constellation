@@ -104,7 +104,7 @@ const SPRING_2026 = (days: readonly Weekday[]): TermDates => ({
   end: date("2026-05-08"),
   days,
 });
-const SPRING_2027 = (days: readonly Weekday[]): TermDates => ({
+export const SPRING_2027 = (days: readonly Weekday[]): TermDates => ({
   name: "Spring 2027",
   start: date("2027-01-19"),
   end: date("2027-05-07"),

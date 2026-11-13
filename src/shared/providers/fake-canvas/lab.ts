@@ -102,6 +102,7 @@ export const LabCommandSchema = v.variant("do", [
     message: v.string(),
   }),
   v.object({ do: v.literal("enrollStudents"), course: lmsRef<"course">(), count }),
+  v.object({ do: v.literal("hideTermDates"), hidden: v.boolean() }),
   v.object({ do: v.literal("setDemoScript"), enabled: v.boolean() }),
   v.object({ do: v.literal("reset") }),
   v.object({ do: v.literal("reload") }),

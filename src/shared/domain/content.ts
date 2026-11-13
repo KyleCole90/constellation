@@ -14,6 +14,15 @@ export interface CourseShell extends Course {
   stateTarget: LmsRef<"course-state">;
 }
 
+/**
+ * Whether an unpublished course is one to set up for a coming term. Many schools hide term dates from teachers, so the
+ * LMS says whether a course is over, and an unknown start counts as still to come.
+ */
+export const isComing = (
+  course: { concluded: boolean; startAt: IsoDate | null },
+  today: IsoDate,
+): boolean => !course.concluded && (course.startAt === null || course.startAt > today);
+
 export interface DatedItem {
   ref: LmsRef<"item">;
   title: string;
@@ -25,8 +34,9 @@ export interface SourceCourse {
   code: string;
   title: string;
   termName: string;
-  startAt: IsoDate;
-  endAt: IsoDate;
+  /** Null when the school hides the term's dates and the course has none of its own; the person fills them in. */
+  startAt: IsoDate | null;
+  endAt: IsoDate | null;
   meetingDays: readonly Weekday[];
   template: boolean;
   dated: readonly DatedItem[];

@@ -134,6 +134,7 @@ const CourseRow = v.union([
     name: v.string(),
     course_code: v.string(),
     total_students: v.nullish(v.number(), 0),
+    concluded: v.nullish(v.boolean(), false),
   }),
 ]);
 const AssignmentRow = v.object({
@@ -924,15 +925,16 @@ export const createCanvasProvider = (deps: {
     },
     courses: async () => {
       const rows = await list(
-        // A teacher's unpublished courses list too, and only a published one is a course students can reach.
-        "/courses?enrollment_type=teacher&enrollment_state=active&include[]=total_students&state[]=available",
+        // Only a published course is one students can reach. `enrollment_state=active` would also drop a course whose
+        // term hasn't started, so Canvas's `concluded` flag is what leaves out past terms.
+        "/courses?enrollment_type=teacher&include[]=total_students&include[]=concluded&state[]=available",
         CourseRow,
       );
       if (!rows.ok) return rows;
       return {
         ok: true,
         value: rows.value.flatMap((row): Course[] =>
-          "access_restricted_by_date" in row
+          "access_restricted_by_date" in row || row.concluded
             ? []
             : [
                 {

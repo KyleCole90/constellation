@@ -84,7 +84,7 @@ const ok = (name: string, headers?: Record<string, string>): Reply => ({
 });
 const SELF = { "/api/v1/users/self": ok("users-self.json") };
 const COURSES =
-  "/api/v1/courses?enrollment_type=teacher&enrollment_state=active&include[]=total_students&state[]=available";
+  "/api/v1/courses?enrollment_type=teacher&include[]=total_students&include[]=concluded&state[]=available";
 
 describe("a Canvas school's address", () => {
   it("names an https host, and the school's id is that host", () => {

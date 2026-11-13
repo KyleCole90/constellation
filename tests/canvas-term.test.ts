@@ -28,6 +28,7 @@ import {
   STORAGE_ORIGIN,
   SHELL_ID,
   SOURCE_ID,
+  TEMPLATE_ID,
   TERM_HOST,
   TERM_TOKEN,
 } from "./fixtures/canvas-term-http";
@@ -35,8 +36,8 @@ import { approved, clickWitness, newDraft, sending } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";
 import { DurableLedger } from "./fixtures/ledger";
 import { permitFor, unwrap } from "./fixtures/provider-contract";
-import { runTermSetupContract } from "./fixtures/term-contract";
-import { cartridgeContent, copyContent } from "./fixtures/term";
+import { runTermSetupContract, type TermContractHarness } from "./fixtures/term-contract";
+import { cartridgeContent, copyContent, termOf } from "./fixtures/term";
 
 const SCHOOL = (() => {
   const school = canvasSchoolAt(TERM_HOST);
@@ -79,8 +80,9 @@ const shellAndSource = async (provider: LmsProvider) => {
   return { shell, source };
 };
 
-runTermSetupContract("Canvas over HTTP", async () => {
+const httpTermHarness = (hideTermDates: boolean) => async (): Promise<TermContractHarness> => {
   const http = new CanvasTermHttp();
+  http.hideTermDates = hideTermDates;
   const provider = canvasOver(http);
   return {
     provider,
@@ -92,7 +94,9 @@ runTermSetupContract("Canvas over HTTP", async () => {
     writeCount: http.writeCount,
     offersPackages: false,
   };
-});
+};
+runTermSetupContract("Canvas over HTTP", httpTermHarness(false));
+runTermSetupContract("Canvas over HTTP, term dates hidden", httpTermHarness(true));
 
 describe("Canvas term setup reads", () => {
   it("names the shell and its source as Canvas does, with the dates a shift needs", async () => {
@@ -113,6 +117,30 @@ describe("Canvas term setup reads", () => {
       meetingDays: [],
       dated: [{ title: "Essay 1", dueAt: "2026-09-10T23:59:00.000Z" }],
     });
+  });
+
+  it("offers the shell and its source with null dates when Canvas hides the term's dates from teachers", async () => {
+    const http = new CanvasTermHttp();
+    http.hideTermDates = true;
+    const setup = setupOf(canvasOver(http));
+    const shells = await unwrap(setup.newCourses());
+    expect(shells.map((entry) => [entry.ref, entry.startAt, entry.endAt])).toEqual([
+      [SHELL, null, null],
+    ]);
+    const source = (await unwrap(setup.copySources())).find(
+      (entry) => entry.ref === `${TERM_HOST}:course:${SOURCE_ID}`,
+    );
+    expect(source).toMatchObject({ termName: "Fall 2026", startAt: null, endAt: null });
+  });
+
+  it("lists a published course whose term hasn't started, and leaves out one whose term is over", async () => {
+    const http = new CanvasTermHttp();
+    const provider = canvasOver(http);
+    for (const row of http.courses) row.workflow_state = "available";
+    const listed = (await unwrap(provider.courses())).map((course) => course.ref);
+    expect(listed).toContain(SHELL);
+    expect(listed).toContain(`${TERM_HOST}:course:${SOURCE_ID}`);
+    expect(listed).not.toContain(`${TERM_HOST}:course:${TEMPLATE_ID}`);
   });
 
   it("lists templates first, and a teacher's own address is the school's contact domain", async () => {
@@ -323,7 +351,7 @@ const PACKAGE_BYTES = readFileSync(new URL(`../fixtures/imscc/${PACKAGE}`, impor
 const packageBlob = () => new Blob([PACKAGE_BYTES]);
 const importOf = async (provider: LmsProvider) => {
   const { shell, source } = await shellAndSource(provider);
-  const hint = { name: "Spring 2026", start: source.startAt, end: source.endAt, days: [] };
+  const hint = { ...termOf(source), name: "Spring 2026", days: [] };
   return { shell, content: cartridgeContent(shell, PACKAGE, hint, 1) };
 };
 

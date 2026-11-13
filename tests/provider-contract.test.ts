@@ -78,8 +78,9 @@ runTermSetupContract("fake Canvas over the bridge", async (): Promise<TermContra
   };
 });
 
-runTermSetupContract("fake Canvas", async (): Promise<TermContractHarness> => {
+const fakeTermHarness = async (hideTermDates: boolean): Promise<TermContractHarness> => {
   const rig = await makeTermRig();
+  rig.server.hideTermDates(hideTermDates);
   return {
     provider: rig.provider(LCC),
     school: LCC,
@@ -91,7 +92,9 @@ runTermSetupContract("fake Canvas", async (): Promise<TermContractHarness> => {
     writeCount: () => rig.server.log.filter((entry) => entry.kind === "write").length,
     offersPackages: true,
   };
-});
+};
+runTermSetupContract("fake Canvas", () => fakeTermHarness(false));
+runTermSetupContract("fake Canvas, term dates hidden", () => fakeTermHarness(true));
 
 const makeStub = async () => {
   const stub = new SecondLmsStub();

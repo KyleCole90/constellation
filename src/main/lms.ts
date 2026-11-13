@@ -287,6 +287,8 @@ export const lmsHandlers = (options: {
         return fake.server.failNextMigration(command.stage, command.message);
       case "enrollStudents":
         return fake.server.enrollStudents(command.course, command.count);
+      case "hideTermDates":
+        return fake.server.hideTermDates(command.hidden);
       case "setDemoScript":
         return fake.server.setDemoScript(command.enabled);
       case "reset":
