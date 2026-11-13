@@ -1,7 +1,6 @@
 import * as v from "valibot";
 
 import {
-  fieldsOf,
   finalGrade,
   scoredRubricPoints,
   type ChangeContent,
@@ -41,7 +40,7 @@ import {
   type Read,
 } from "../../shared/providers/provider";
 
-import { canvasTermSetup, type SendDescription } from "./canvas-term";
+import { canvasTermSetup } from "./canvas-term";
 
 /**
  * The school at `raw` as real Canvas: an `https:` host name with no port, path or credentials, and no IP literal,
@@ -179,15 +178,6 @@ const ConversationDetail = v.object({
   /** Newest first. */
   messages: v.array(v.object({ id: Id, author_id: Id, body: v.string(), created_at: Time })),
 });
-const SubmissionNames = v.object({
-  user: v.object({ name: v.string() }),
-  assignment: v.object({
-    name: v.string(),
-    points_possible: v.nullish(v.number(), null),
-    rubric: v.nullish(v.array(v.object({ id: v.string(), description: v.string() })), []),
-  }),
-});
-const CourseNames = v.object({ course_code: v.string() });
 const AnnouncementRow = v.object({
   id: Id,
   title: v.string(),
@@ -231,21 +221,13 @@ const htmlOf = (text: string): string =>
     .map((paragraph) => `<p>${escapeHtml(paragraph.trim()).replace(/\n/g, "<br>")}</p>`)
     .join("");
 
-/**
- * Text going into main's send dialog, on one line: a newline, a control character or a direction override in a name
- * or a draft can't pass itself off as another line of the dialog. A break in a draft shows as ¶.
- */
+/** Text on one line: a newline, a control character or a direction override can't break it. A break shows as ¶. */
 const oneLine = (text: string): string =>
   text
     .replace(/\s*\n\s*/g, " ¶ ")
     .replace(/[\p{Cc}\p{Cf}]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
-const NAME_LIMIT = 120;
-const named = (text: string): string => {
-  const line = oneLine(text);
-  return line.length > NAME_LIMIT ? `${line.slice(0, NAME_LIMIT)}…` : line;
-};
 
 type Outcome = NonNullable<FieldOutcomes[FieldKey]>;
 /**
@@ -300,12 +282,6 @@ const MAX_PAGES = 100;
 /** `fetch` as the provider calls it. Main passes Electron's `net.fetch`, which uses the system's proxy and certificates. */
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 
-/** The Canvas provider, plus the words main shows when it asks the teacher to confirm a send. */
-export interface CanvasProvider extends LmsProvider {
-  /** Every field `content` sends, in the values `apply` sends it with. */
-  describeSend(content: ChangeContent): Read<SendDescription>;
-}
-
 /**
  * A school's real Canvas, run in main with the token from main's vault (docs/electron-spec.md, step 11). Each read
  * follows `Link: rel="next"` to the end, so it returns the whole list. A throttle comes back as `rate_limited` at once:
@@ -319,7 +295,7 @@ export const createCanvasProvider = (deps: {
   now(): number;
   /** The `.imscc` file main's picker chose under `name` for this school, or null when none was. */
   packageFile(name: string): Promise<Blob | null>;
-}): CanvasProvider => {
+}): LmsProvider => {
   const { school, lease } = deps;
   const origin = `https://${school.host}`;
 
@@ -585,7 +561,6 @@ export const createCanvasProvider = (deps: {
     me,
     idsIn,
     oneLine,
-    named,
   });
 
   /** The request that writes `field` of `content`, or a refusal when the content names nothing this school holds. */
@@ -800,90 +775,6 @@ export const createCanvasProvider = (deps: {
     }
   };
 
-  const describeSend = async (content: ChangeContent): Read<SendDescription> => {
-    const described = (target: string, lines: readonly string[]): Read<SendDescription> =>
-      Promise.resolve({ ok: true, value: { target: named(target), lines } });
-    switch (content.kind) {
-      case "grade": {
-        const at = submissionAt(content.target);
-        if (!at) return NOT_FOUND;
-        const read = await one(`${at.path}?include[]=user&include[]=assignment`, SubmissionNames);
-        if (!read.ok) return read;
-        const { user, assignment } = read.value;
-        const criteria = new Map(assignment.rubric.map((row) => [row.id, row.description]));
-        const lines: string[] = [];
-        for (const field of fieldsOf(content))
-          switch (field) {
-            case "excuse":
-              lines.push("Excused");
-              break;
-            case "grade": {
-              const outOf =
-                assignment.points_possible === null ? "" : ` out of ${assignment.points_possible}`;
-              lines.push(`Grade: ${finalGrade(content) ?? "none"}${outOf}`);
-              break;
-            }
-            case "rubric": {
-              const scores = rubricOf(content, at.assignment);
-              const names = scores?.map(([id, points]) => [criteria.get(id), points] as const);
-              if (!names || names.some(([name]) => name === undefined))
-                return { ok: false, error: { kind: "rejected", reason: NO_SUCH_CRITERION } };
-              lines.push(
-                `Rubric: ${names.map(([name, points]) => `${named(name ?? "")} ${points}`).join(", ")}`,
-              );
-              break;
-            }
-            case "comment":
-              lines.push(`Feedback: ${oneLine(content.comment ?? "")}`);
-              break;
-            // Not sent: Canvas takes no attachments from this app.
-            case "attachment":
-            case "message":
-            case "conversation":
-            case "post":
-            case "copy":
-            case "value":
-            case "text":
-              break;
-          }
-        return described(`${user.name}, ${assignment.name}`, lines);
-      }
-      case "message": {
-        const at = submissionAt(content.target);
-        if (!at) return NOT_FOUND;
-        const read = await one(`${at.path}?include[]=user&include[]=assignment`, SubmissionNames);
-        if (!read.ok) return read;
-        return described(`${read.value.user.name}, ${read.value.assignment.name}`, [
-          `Subject: ${oneLine(content.subject)}`,
-          `Message: ${oneLine(content.body)}`,
-        ]);
-      }
-      case "reply": {
-        const [id] = idsIn(content.target, "conversation", 1) ?? [];
-        if (id === undefined) return NOT_FOUND;
-        const read = await one(`/conversations/${id}?auto_mark_as_read=false`, ConversationDetail);
-        if (!read.ok) return read;
-        const names = read.value.participants.map((person) => named(person.name)).join(", ");
-        return described(`${names}, about "${named(read.value.subject)}"`, [
-          `Reply: ${oneLine(content.body)}`,
-        ]);
-      }
-      case "announcement":
-        return inCourse(content.target, async (id) => {
-          const read = await one(`/courses/${id}`, CourseNames);
-          if (!read.ok) return read;
-          return described(read.value.course_code, [
-            `Title: ${oneLine(content.title)}`,
-            `Announcement: ${oneLine(content.body)}`,
-          ]);
-        });
-      case "course-copy":
-      case "text-fix":
-      case "item-set":
-        return term.describeSend(content);
-    }
-  };
-
   const conversation = async (
     id: number,
     mine: number,
@@ -1088,7 +979,6 @@ export const createCanvasProvider = (deps: {
       }
       return outcomes;
     },
-    describeSend,
     termSetup: term.termSetup,
   };
 };

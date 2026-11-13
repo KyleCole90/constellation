@@ -36,6 +36,7 @@ import {
   useChange,
   useEditDraft,
   editChange,
+  revokeApproval,
   type ChangeView,
 } from "./useChange";
 import { useCommitOnLeave } from "./useCommitOnLeave";
@@ -505,23 +506,68 @@ function TitleInPlace({
 
 const reviewLabel = (summary: ChangeSummary): string => {
   if (summary.tone === "attention") return "See what happened";
-  if (summary.canApprove || summary.canSend) return "Review before sending";
   return summary.tone === "working" ? "See what's sending" : "See what's left";
 };
 
-function ReviewButton({ view, chord }: { view: ChangeView; chord: boolean }) {
+function ReviewButton({ view }: { view: ChangeView }) {
   const { setUi } = useThreadActions();
   const { summary } = view;
   return (
     <Button
       data-card-primary
       aria-describedby={cardHeadId(view.record.id)}
-      variant={chord ? "ghost" : summary.tone === "attention" ? "outline" : "default"}
+      variant={summary.tone === "attention" ? "outline" : "default"}
       size="md"
       onClick={() => setUi({ panel: "writeback" })}
     >
-      {chord ? "Preview" : reviewLabel(summary)}
-      {!chord && <Kbd variant="on-primary">⌘↵</Kbd>}
+      {reviewLabel(summary)}
+      <Kbd variant="on-primary">⌘↵</Kbd>
+    </Button>
+  );
+}
+
+function PreviewButton() {
+  const { setUi } = useThreadActions();
+  return (
+    <Button variant="ghost" size="md" onClick={() => setUi({ panel: "writeback" })}>
+      Preview
+    </Button>
+  );
+}
+
+/** The second of the two steps, and the default once approved: Return on it sends. */
+export function SendButton({ view, size }: { view: ChangeView; size: "md" | "lg" }) {
+  const { send } = useThreadActions();
+  const { record, summary } = view;
+  const vendor = useWorkspace((state) => state.vendorLabelFor(record.school) ?? "the LMS");
+  return (
+    <Button
+      data-send
+      data-card-primary
+      aria-describedby={cardHeadId(record.id)}
+      variant="default"
+      size={size}
+      disabled={!summary.canSend}
+      data-lands='[data-testid="thread-panel"], [data-testid="chat"]'
+      onClick={() => send([record.id])}
+    >
+      Send to {vendor}
+      <Kbd variant="on-primary">⌘↵</Kbd>
+    </Button>
+  );
+}
+
+export function UndoApprovalButton({ view, size }: { view: ChangeView; size: "md" | "lg" }) {
+  if (!view.summary.canUndoApproval) return null;
+  return (
+    <Button
+      variant="ghost-muted"
+      size={size}
+      data-undo-approval
+      data-lands="[data-approve]"
+      onClick={() => revokeApproval(view.record.id)}
+    >
+      Undo approval
     </Button>
   );
 }
@@ -547,13 +593,24 @@ export function DiscardButton({ view, size }: { view: ChangeView; size: "sm" | "
   );
 }
 
-function CardActions({ view, extra }: { view: ChangeView; extra?: React.ReactNode }) {
+function CardActions({
+  view,
+  panel,
+  extra,
+}: {
+  view: ChangeView;
+  panel: ThreadUi["panel"];
+  extra?: React.ReactNode;
+}) {
   const { send } = useThreadActions();
   const { record, summary } = view;
   const online = useWorkspace((state) => state.online);
   // A grade only you have edited skips the preview, as walkStep does, unless it is a zero or has no comment. Offline
   // nothing sends, so it doesn't offer to.
   const chord = sendsOnChord(record) && summary.canApprove && online;
+  const approved = summary.approvedAt !== null && !summary.banner && summary.tone !== "working";
+  // An open panel already has its own Preview tab.
+  const preview = panel === null && <PreviewButton />;
   return (
     <div
       data-testid="card-actions"
@@ -565,14 +622,29 @@ function CardActions({ view, extra }: { view: ChangeView; extra?: React.ReactNod
         {extra}
       </span>
       <span className="ml-auto flex items-center gap-btn-gap">
-        <ReviewButton view={view} chord={chord} />
-        {chord && (
-          <ApproveButton
-            targets={[record]}
-            label="Approve and send"
-            kbd={<Kbd variant="on-primary">⌘↵</Kbd>}
-            onApproved={() => send([record.id])}
-          />
+        {chord ? (
+          <>
+            {preview}
+            <ApproveButton
+              targets={[record]}
+              label="Approve and send"
+              kbd={<Kbd variant="on-primary">⌘↵</Kbd>}
+              onApproved={() => send([record.id])}
+            />
+          </>
+        ) : summary.canApprove ? (
+          <>
+            {preview}
+            <ApproveButton targets={[record]} label="Approve" primary />
+          </>
+        ) : approved ? (
+          <>
+            {preview}
+            <UndoApprovalButton view={view} size="md" />
+            <SendButton view={view} size="md" />
+          </>
+        ) : (
+          <ReviewButton view={view} />
         )}
       </span>
     </div>
@@ -669,7 +741,15 @@ const useCommentFit = (fieldRef: RefObject<HTMLTextAreaElement | null>): boolean
   return scrolls;
 };
 
-function GradeCard({ view, content }: { view: ChangeView; content: GradeContent }) {
+function GradeCard({
+  view,
+  content,
+  panel,
+}: {
+  view: ChangeView;
+  content: GradeContent;
+  panel: ThreadUi["panel"];
+}) {
   const { record, summary } = view;
   const [error, setError] = useState<string | null>(null);
   const canAttach = useWorkspace(
@@ -686,6 +766,8 @@ function GradeCard({ view, content }: { view: ChangeView; content: GradeContent 
   const late = latePenalty(content);
   const raw = rawScore(content);
   const overridden = content.override != null;
+  // With no rubric and no late penalty the grade is the score, so the card shows that one number once.
+  const oneNumber = !content.rubric && !content.late && !overridden && !content.excused;
   const comment = useRef<HTMLTextAreaElement>(null);
   const commentScrolls = useCommentFit(comment);
   const attachControl = canAttach && !content.attachment && (
@@ -753,46 +835,54 @@ function GradeCard({ view, content }: { view: ChangeView; content: GradeContent 
       )}
       <div className="flex flex-col gap-1 pr-grade-total-end">
         {prior !== null && <TotalRow label="Previous grade">{prior}</TotalRow>}
-        <TotalRow
-          label="Grade"
-          strong
-          note={
-            overridden
-              ? raw !== null && <>Scores {raw} · Your total</>
-              : content.late && (
+        {!oneNumber && (
+          <TotalRow
+            label="Grade"
+            strong
+            note={
+              overridden
+                ? raw !== null && <>Scores {raw} · Your total</>
+                : content.late && (
+                    <>
+                      {raw !== null && <>Scores {raw} · </>}Late penalty, {content.late.days}d at{" "}
+                      {content.late.pointsPerDay}/day{" "}
+                      {content.late.waived ? (
+                        "waived"
+                      ) : (
+                        <span className="tabular-nums">-{late}</span>
+                      )}
+                    </>
+                  )
+            }
+          >
+            {overridden ? (
+              <Stepper
+                value={content.override}
+                outOf={content.outOf}
+                disabled={!summary.canEdit}
+                label="total"
+                typed
+                onStep={(next) =>
+                  setError(editChange(record.id, { kind: "grade", override: next }))
+                }
+              />
+            ) : (
+              <span data-testid="draft-grade" data-flash={flash} className="rounded px-1">
+                {content.excused ? (
+                  <b className="text-page font-semibold">Excused</b>
+                ) : total === null ? (
+                  <span className="text-meta text-muted-foreground">Not scored</span>
+                ) : (
                   <>
-                    {raw !== null && <>Scores {raw} · </>}Late penalty, {content.late.days}d at{" "}
-                    {content.late.pointsPerDay}/day{" "}
-                    {content.late.waived ? "waived" : <span className="tabular-nums">-{late}</span>}
+                    <b className="text-page font-semibold">{total}</b>{" "}
+                    <span className="text-meta text-muted-foreground">/ {content.outOf}</span>
                   </>
-                )
-          }
-        >
-          {overridden ? (
-            <Stepper
-              value={content.override}
-              outOf={content.outOf}
-              disabled={!summary.canEdit}
-              label="total"
-              typed
-              onStep={(next) => setError(editChange(record.id, { kind: "grade", override: next }))}
-            />
-          ) : (
-            <span data-testid="draft-grade" data-flash={flash} className="rounded px-1">
-              {content.excused ? (
-                <b className="text-page font-semibold">Excused</b>
-              ) : total === null ? (
-                <span className="text-meta text-muted-foreground">Not scored</span>
-              ) : (
-                <>
-                  <b className="text-page font-semibold">{total}</b>{" "}
-                  <span className="text-meta text-muted-foreground">/ {content.outOf}</span>
-                </>
-              )}
-            </span>
-          )}
-        </TotalRow>
-        {summary.canEdit && !content.excused && (
+                )}
+              </span>
+            )}
+          </TotalRow>
+        )}
+        {summary.canEdit && !content.excused && !oneNumber && (
           <div className="flex flex-wrap justify-end gap-2">
             {content.late && !overridden && (
               <Button
@@ -858,7 +948,7 @@ function GradeCard({ view, content }: { view: ChangeView; content: GradeContent 
         </div>
       )}
       <CardNotes summary={summary} error={error} />
-      <CardActions view={view} extra={attachControl} />
+      <CardActions view={view} panel={panel} extra={attachControl} />
     </>
   );
 }
@@ -941,7 +1031,7 @@ function TextCard({
         />
       </div>
       <CardNotes summary={summary} error={error} />
-      <CardActions view={view} />
+      <CardActions view={view} panel={panel} />
     </>
   );
 }
@@ -1048,7 +1138,7 @@ export function ChangeCard({
       {view.summary.sentAt ? (
         <Receipt view={view} />
       ) : content.kind === "grade" ? (
-        <GradeCard view={view} content={content} />
+        <GradeCard view={view} content={content} panel={panel} />
       ) : (
         <TextCard view={view} panel={panel} quote={quote} />
       )}

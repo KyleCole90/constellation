@@ -61,4 +61,15 @@ describe("composerHints", () => {
     expect(hints.placeholder).toContain("Open a submission");
     expect(hints.examples).toEqual([]);
   });
+
+  it("a grading thread showing a submission with no draft, as after a failed draft, offers to draft that one", () => {
+    const hints = composerHints({
+      kind: "grading",
+      content: null,
+      canEdit: false,
+      submission: true,
+    });
+    expect(hints.placeholder).not.toContain("Open a submission");
+    expect(hints.placeholder).toContain("this one");
+  });
 });

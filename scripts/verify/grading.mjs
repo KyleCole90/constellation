@@ -111,8 +111,8 @@ const approve = async (t, subject) => {
 
 const sendAndWaitSent = async (t, subject, timeout) => {
   await t.waitFor(
-    `document.querySelector('[data-testid="sent-banner"]')`,
-    `${subject}: sent banner shows`,
+    `document.querySelector('[data-testid="sent-banner"]') || [...document.querySelectorAll(${JSON.stringify(CARD)})].some((card) => card.innerText.includes(${JSON.stringify(subject)}) && card.innerText.includes("Written to"))`,
+    `${subject}: shows as sent`,
     timeout,
   );
   t.assert((await tagOf(t, subject)) === "sent", `${subject}: state is sent`);
@@ -642,7 +642,7 @@ const correction = async (t) => {
     '"approve this" gets a plain note in the thread',
   );
   t.assert(
-    (await t.text("[data-declined]")).includes("Review before sending"),
+    (await t.text("[data-declined]")).includes("Approve on the draft"),
     "the note names the button on screen",
     await t.text("[data-declined]"),
   );
@@ -698,8 +698,8 @@ const approval = async (t) => {
   await t.key("Meta+d");
   await t.waitFor(`!document.querySelector(${JSON.stringify(PANEL)})`, "⌘D closes it");
   t.assert(
-    (await previewControls()) === "",
-    "with the panel closed, the card's button leads to the preview and no header button competes",
+    (await previewControls()) === "Preview",
+    "with the panel closed, the card's own Preview is the one Preview control",
     await previewControls(),
   );
   t.assert(
@@ -707,18 +707,25 @@ const approval = async (t) => {
     "the panel button says ⌘D opens the preview",
   );
   t.assert(
-    (await t.text('[data-testid="card-actions"]')).includes("Review before sending"),
-    "the card offers the review",
+    (await t.text('[data-testid="card-actions"]')).includes("Approve") &&
+      !(await t.text('[data-testid="card-actions"]')).includes("Review"),
+    "the card's next step is Approve, with no review step before it",
+    await t.text('[data-testid="card-actions"]'),
   );
   const drafted = await t.eval(
     `({ grade: document.querySelector('${CARD} [data-testid="draft-grade"] b').innerText, rubric: document.querySelectorAll('${CARD} [data-criterion]').length, feedback: document.querySelector('${CARD} [aria-label="Feedback comment"]').value })`,
   );
   await t.key("Meta+Enter");
   await t.waitFor(
-    `document.querySelector('[data-testid="writeback-scroll"]')`,
-    "the chord opens the review",
+    `document.activeElement?.matches('${CARD} [data-approve]')`,
+    "the chord stops on the card's Approve",
   );
-  t.assert((await tagOf(t, subject)) === "draft", "opening the review approves nothing");
+  t.assert((await tagOf(t, subject)) === "draft", "the chord on a draft approves nothing");
+  await t.click("Preview", { within: '[data-testid="card-actions"]' });
+  await t.waitFor(
+    `document.querySelector('[data-testid="writeback-scroll"]')`,
+    "the card's Preview opens what will be sent",
+  );
   t.assert(
     (await t.text('[data-testid="preview-heading"]')).startsWith("What will be sent to "),
     "the preview says what it is showing",
@@ -772,6 +779,10 @@ const approval = async (t) => {
 
   await approve(t, subject);
   t.assert((await tagOf(t, subject)) === "approved", "a real click approves");
+  await t.waitFor(
+    `document.activeElement?.hasAttribute("data-send")`,
+    "approving puts the keyboard on Send, the next and last step",
+  );
   t.assert(
     (await t.eval(`document.querySelector('[data-testid="flow"] [aria-current]').innerText`)) ===
       "Approved",
@@ -804,8 +815,8 @@ const approval = async (t) => {
   );
   await t.key("Meta+Enter");
   await t.waitFor(
-    `document.querySelector('${PANEL} [data-approval-reset]')?.innerText.includes("You edited") && document.querySelector('${CARD}[data-previewing]')`,
-    "the chord opens the preview again, which names you too",
+    `document.querySelector('${CARD} [data-approval-reset]')?.innerText.includes("You edited") && document.activeElement?.matches('${CARD} [data-approve]')`,
+    "the chord stops on Approve again, and the card still names you",
   );
   t.assert(
     !(await t.eval(
@@ -822,7 +833,7 @@ const approval = async (t) => {
   await t.type("thesis should be 19");
   await t.key("Enter");
   await t.waitFor(
-    `document.querySelector('${PANEL} [data-approval-reset]')?.innerText.includes("The agent edited")`,
+    `document.querySelector('${CARD} [data-approval-reset]')?.innerText.includes("The agent edited")`,
     "an agent edit resets approval and names the agent",
   );
   t.assert(
@@ -843,8 +854,17 @@ const approval = async (t) => {
     `document.body.innerText.includes("Undo approval")`,
     "Enter on the focused button is a real click and approves",
   );
-  await t.key("Meta+Enter");
+  await t.waitFor(
+    `document.activeElement?.hasAttribute("data-send") && document.activeElement.innerText.startsWith("Send to")`,
+    "after Approve, Send is the default",
+  );
+  await t.shot("approved-send-default");
+  await t.key("Enter");
   await sendAndWaitSent(t, subject);
+  t.assert(
+    !(await t.has('[role="dialog"]')),
+    "Return on Send sends, with no confirmation after it",
+  );
   t.assert(
     (await gradeInLms(t, "Maya Ortiz", "Essay 2")) === 81,
     "the LMS holds the approved grade",
@@ -860,6 +880,8 @@ const approval = async (t) => {
     "queue progress moved",
     await t.text(QUEUE),
   );
+  await t.click("View what was sent", { within: CARD });
+  await t.waitFor(`document.querySelector('${PANEL} [data-field]')`, "View what was sent opens it");
   t.assert(
     (await t.has(`${PANEL} [data-field]`)) && !(await t.has(`${PANEL} [data-field-chip]`)),
     "every field landed, so no section repeats it",
@@ -1656,6 +1678,87 @@ const keyboardAndClear = async (t) => {
   await t.shot("announcement-retarget");
 };
 
+/** Issue #36: a draft that fails leaves the submission open, so "Draft this one", Draft again and a hand grade all work. */
+const failedDraft = async (t) => {
+  await t.goto("/threads/t-queue");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(QUEUE)})`,
+    "failed draft: the list loads",
+  );
+  await expandQueue(t);
+  const row = await t.eval(
+    `[...document.querySelectorAll('${LIST} [data-row]')].find((row) => row.innerText.includes("Not started"))?.dataset.row`,
+  );
+  const student = await t.eval(
+    `document.querySelector('[data-row="${row}"] button span[title]').title`,
+  );
+  await t.eval(`window.__setAgentDown(true)`);
+  await t.click(`[data-row="${row}"] button`);
+  await t.waitFor(
+    `document.querySelector('[data-testid="grade-open"]')`,
+    "failed draft: the submission stays open with Draft again and Grade it yourself",
+    15_000,
+  );
+  t.assert(!(await t.has(CARD)), "failed draft: no card claims a draft");
+  t.assert(
+    !(await t.eval(`document.querySelector("[data-composer]").placeholder`)).includes("Open a"),
+    "failed draft: the composer doesn't ask for a submission that is already open",
+    await t.eval(`document.querySelector("[data-composer]").placeholder`),
+  );
+  await t.shot("failed-draft");
+  await t.eval(`window.__setAgentDown(false)`);
+  const replies = await ask(t, "Draft this one");
+  t.assert(
+    !replies.some((reply) => reply.text?.includes("Nothing is open")),
+    '"Draft this one" knows which submission is open',
+    JSON.stringify(replies),
+  );
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(student)})`,
+    '"Draft this one" drafts the student on screen',
+  );
+  await t.shot("failed-draft-drafted");
+  await t.click("Discard", { within: '[data-testid="card-actions"]' });
+  await t.waitFor(`!document.querySelector(${JSON.stringify(CARD)})`, "failed draft: discarded");
+  await t.goto(`/threads/t-queue`);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(QUEUE)})`,
+    "failed draft: the list loads",
+  );
+  await expandQueue(t);
+  await t.eval(`window.__setAgentDown(true)`);
+  await t.click(`[data-row="${row}"] button`);
+  await t.waitFor(
+    `document.querySelector('[data-testid="grade-open"]')`,
+    "failed draft: a second failure offers the same ways on",
+  );
+  await t.eval(`window.__setAgentDown(false)`);
+  await t.click("Draft again", { within: '[data-testid="grade-open"]' });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(student)})`,
+    "Draft again drafts the same student",
+  );
+  await settled(t, "Draft again: agent finished");
+  await t.click("Discard", { within: '[data-testid="card-actions"]' });
+  await t.waitFor(`!document.querySelector(${JSON.stringify(CARD)})`, "the redraft is discarded");
+  await t.goto(`/threads/t-queue`);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(QUEUE)})`,
+    "failed draft: the list loads",
+  );
+  await expandQueue(t);
+  await t.eval(`window.__setAgentDown(true)`);
+  await t.click(`[data-row="${row}"] button`);
+  await t.waitFor(`document.querySelector('[data-testid="grade-open"]')`, "failed again");
+  await t.click("Grade it yourself", { within: '[data-testid="grade-open"]' });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(student)}) && document.querySelector("[data-typed-score], [data-edit-field]")`,
+    "Grade it yourself opens a blank form for the same student, with Claude still down",
+  );
+  await t.shot("failed-draft-by-hand");
+  await t.eval(`window.__setAgentDown(false)`);
+};
+
 const discard = async (t) => {
   await t.goto("/threads/t-queue");
   await t.waitFor(
@@ -1807,4 +1910,5 @@ export const run = async (t) => {
   await keyboardAndClear(t);
   await discard(t);
   await replyDiscard(t);
+  await failedDraft(t);
 };

@@ -1,4 +1,4 @@
-import { lmsHandlers, type SendConfirmation } from "~/main/lms";
+import { lmsHandlers } from "~/main/lms";
 import type { Fetch } from "~/main/providers/canvas";
 import type { SchoolId } from "~/shared/domain/ids";
 import { handle, invoker, type Bridge } from "~/shared/ipc";
@@ -28,8 +28,8 @@ export const fakeLmsHandlers = (
     vault?: Vault;
     packaged?: boolean;
     fetch?: Fetch;
-    /** The teacher's answer in main's send dialog. Says yes unless a test says otherwise. */
-    confirmSend?: (ask: SendConfirmation) => Promise<boolean>;
+    /** When the teacher last pressed something in the window. Just now, unless a test says otherwise. */
+    pressedAt?: () => number;
     /** The path main's file picker answers. Cancels unless a test says otherwise. */
     choosePackage?: () => Promise<string | null>;
     onServer?: (server: FakeCanvasServer) => void;
@@ -55,7 +55,7 @@ export const fakeLmsHandlers = (
     leaseFor: (key) => vault.leaseFor(key),
     packaged: options.packaged ?? false,
     fetch: options.fetch ?? null,
-    confirmSend: options.confirmSend ?? (async () => true),
+    pressedAt: options.pressedAt ?? (() => Date.now()),
     choosePackage: options.choosePackage ?? (async () => null),
   });
 };
@@ -68,7 +68,7 @@ export const bridgedLms = (
   options: {
     packaged?: boolean;
     fetch?: Fetch;
-    confirmSend?: (ask: SendConfirmation) => Promise<boolean>;
+    pressedAt?: () => number;
     choosePackage?: () => Promise<string | null>;
   } = {},
 ) => {
@@ -95,7 +95,7 @@ export const bridgedLms = (
         vault,
         ...(options.packaged === undefined ? {} : { packaged: options.packaged }),
         ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-        ...(options.confirmSend === undefined ? {} : { confirmSend: options.confirmSend }),
+        ...(options.pressedAt === undefined ? {} : { pressedAt: options.pressedAt }),
         ...(options.choosePackage === undefined ? {} : { choosePackage: options.choosePackage }),
         onServer: (server) => servers.push(server),
       }),

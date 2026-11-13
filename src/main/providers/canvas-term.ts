@@ -30,7 +30,7 @@ import {
 } from "../../shared/domain/ids";
 import type { School } from "../../shared/domain/lms";
 import { applySplice, spliceState } from "../../shared/domain/splice";
-import { dateOfTime, type Weekday } from "../../shared/domain/term";
+import { dateOfTime } from "../../shared/domain/term";
 import { classifyLink } from "../../shared/providers/canvas-links";
 import { refParts, refs } from "../../shared/providers/canvas-refs";
 import type { FieldOutcomes, Read, TermSetup } from "../../shared/providers/provider";
@@ -52,14 +52,8 @@ export interface CanvasClient {
   me(): Promise<Result<number, LmsError>>;
   /** The Canvas ids in a ref this school minted, or null. */
   idsIn(ref: string, kind: string, count: number): number[] | null;
-  /** A name or draft as one line of main's send dialog. */
+  /** Text on one line, with control and direction characters gone. */
   oneLine(text: string): string;
-  named(text: string): string;
-}
-
-export interface SendDescription {
-  target: string;
-  lines: readonly string[];
 }
 
 // ---- What Canvas sends for term setup, per its public API docs. ----
@@ -192,8 +186,6 @@ const stalledAt = (row: MigrationRow, now: number): boolean =>
   row.created_at !== null &&
   now - Date.parse(row.created_at) > STALLED_MS;
 
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
-const dayName = (day: Weekday): string => DAY_NAMES[day];
 const dateOf = (at: IsoTime | null) => (at === null ? null : dateOfTime(at));
 const hashOf = (value: unknown): string =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16);
@@ -700,7 +692,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
   };
   const NOT_PICKED =
     "Choose the .imscc file again. The app forgets a chosen file when it quits, and sends only a file you chose.";
-  const kbOf = (file: Blob) => Math.ceil(file.size / 1024);
   const copyIds = (content: CourseCopyContent) => {
     const [target] = idsIn(content.target, "migrations", 1) ?? [];
     const [source] =
@@ -887,87 +878,5 @@ export const canvasTermSetup = (client: CanvasClient) => {
     }
   };
 
-  const describeSend = async (content: SetupContent): Read<SendDescription> => {
-    const described = (target: string, lines: readonly string[]): Read<SendDescription> =>
-      Promise.resolve({ ok: true, value: { target: client.named(target), lines } });
-    const courseName = async (id: number): Read<string> => {
-      const read = await course(id);
-      return read.ok ? { ok: true, value: `${read.value.course_code}, ${read.value.name}` } : read;
-    };
-    switch (content.kind) {
-      case "course-copy": {
-        const { shift, source } = content;
-        const [target] = idsIn(content.target, "migrations", 1) ?? [];
-        if (target === undefined) return NOT_FOUND;
-        let from: string;
-        if (source.kind === "cartridge") {
-          // Main's own record of the file, so the dialog names what goes out, not what the renderer says.
-          const file = await client.packageFile(source.name);
-          if (!file) return { ok: false, error: { kind: "rejected", reason: NOT_PICKED } };
-          from = `Package: ${client.named(source.name)}, ${kbOf(file)} KB`;
-        } else {
-          const ids = copyIds(content);
-          if (!ids) return NOT_FOUND;
-          const named = await courseName(ids.source);
-          if (!named.ok) return named;
-          from = `Copy from: ${client.named(named.value)}`;
-        }
-        const into = await courseName(target);
-        if (!into.ok) return into;
-        const days = Object.entries(shift.substitutions).flatMap(([day, to]) =>
-          // Every weekday is named, and only the ones that move are worth a line.
-          to === undefined || String(to) === day
-            ? []
-            : [`${DAY_NAMES[Number(day)] ?? day} to ${dayName(to)}`],
-        );
-        return described(`${source.kind === "cartridge" ? "Import" : "Copy"} into ${into.value}`, [
-          from,
-          `Dates: ${shift.oldStart} to ${shift.oldEnd} move to ${shift.newStart} to ${shift.newEnd}`,
-          ...(days.length === 0 ? [] : [`Days: ${days.join(", ")}`]),
-        ]);
-      }
-      case "text-fix": {
-        const at = itemAt(content.target);
-        if (!at) return NOT_FOUND;
-        const read = await textOf(at);
-        if (!read.ok) return read;
-        const where = await courseName(at.course);
-        if (!where.ok) return where;
-        const { before, after } = content.splice;
-        return described(`${read.value.title}, ${where.value}`, [
-          ...(before === "" ? [] : [`Replace: ${client.oneLine(before)}`]),
-          `${before === "" ? "Add" : "With"}: ${client.oneLine(after)}`,
-        ]);
-      }
-      case "item-set": {
-        const { intent } = content;
-        if (intent.set === "course-published" || intent.set === "course-template") {
-          const id = courseStateAt(content.target);
-          if (id === undefined) return NOT_FOUND;
-          const name = await courseName(id);
-          if (!name.ok) return name;
-          return described(name.value, [
-            intent.set === "course-published"
-              ? "Publish the course, so its students can see it"
-              : "Save the course as a template",
-          ]);
-        }
-        const at = itemAt(content.target);
-        if (!at) return NOT_FOUND;
-        const where = await courseName(at.course);
-        if (!where.ok) return where;
-        const item = await textOf(at);
-        if (!item.ok) return item;
-        const line =
-          intent.set === "due-at"
-            ? `Due: ${intent.at}`
-            : intent.set === "item-published"
-              ? "Publish it"
-              : "Delete it";
-        return described(`${item.value.title}, ${where.value}`, [line]);
-      }
-    }
-  };
-
-  return { termSetup, writeOf, observe, describeSend };
+  return { termSetup, writeOf, observe };
 };

@@ -13,8 +13,10 @@ export const composerHints = (input: {
   canEdit: boolean;
   setupStep?: string | undefined;
   conversation?: "unanswered" | "answered" | undefined;
+  /** A submission is on screen with no draft open, as after a draft that failed. */
+  submission?: boolean;
 }): ComposerHints => {
-  const { kind, content, canEdit, setupStep, conversation } = input;
+  const { kind, content, canEdit, setupStep, conversation, submission } = input;
   if (kind === "north-star" || kind === "north-star-chat")
     return { placeholder: "Ask what's due, find something, or start work", examples: [] };
   if (kind === "setup")
@@ -43,7 +45,9 @@ export const composerHints = (input: {
       examples: ["Make it shorter", "Drop the last sentence"],
     };
   if (kind === "queue" || kind === "grading")
-    return { placeholder: "Open a submission and I'll draft it", examples: [] };
+    return submission
+      ? { placeholder: "Ask me to draft this one", examples: [] }
+      : { placeholder: "Open a submission and I'll draft it", examples: [] };
   if (kind === "messages")
     return {
       placeholder:

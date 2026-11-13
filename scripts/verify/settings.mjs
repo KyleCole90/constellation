@@ -2126,15 +2126,16 @@ const noKeyFlow = async (t, shot) => {
   await typedScoreLimits(t, shot);
   t.assert(RATINGS.test(await t.text(FORM)), "no key: a set score shows its rating");
   const chordButton = `${FORM} [data-testid="card-actions"] [data-approve]`;
+  const offersChord = `document.querySelector(${JSON.stringify(chordButton)})?.innerText.startsWith("Approve and send")`;
   t.assert(
-    !(await t.has(chordButton)),
-    "no key: a form with no comment offers no Approve and send",
+    !(await t.eval(offersChord)) && (await t.has(chordButton)),
+    "no key: a form with no comment offers Approve, not Approve and send",
     await t.text(`${FORM} [data-testid="card-actions"]`),
   );
   await t.key("Meta+Enter");
   await t.waitFor(
-    `document.querySelector('[data-testid="thread-panel"] [data-approve]')`,
-    "no key: ⌘↵ on a form with no comment opens the preview",
+    `document.activeElement?.matches(${JSON.stringify(chordButton)})`,
+    "no key: ⌘↵ on a form with no comment stops on Approve",
   );
   t.assert(
     await t.eval(
@@ -2151,10 +2152,7 @@ const noKeyFlow = async (t, shot) => {
   await t.eval(`document.querySelector(${JSON.stringify(`${FORM} textarea`)}).focus()`);
   await t.type("Clear thesis. Cite the second source.");
   await t.key("Tab");
-  await t.waitFor(
-    `document.querySelector(${JSON.stringify(chordButton)})`,
-    "no key: a comment brings Approve and send back",
-  );
+  await t.waitFor(offersChord, "no key: a comment brings Approve and send back");
   t.assert(
     /^Approve and send\s*⌘↵$/.test(
       await t.text(`${FORM} [data-testid="card-actions"] [data-approve]`),

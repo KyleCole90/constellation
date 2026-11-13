@@ -47,9 +47,9 @@ const previewOwnsTheDraft = async (t, reply) => {
   );
   t.assert(
     (await t.has(ACTIONS)) && (await t.text(ACTIONS)).includes("Discard"),
-    "the card opens back up with its own Discard and Review",
+    "the card opens back up with its own Discard and Preview",
   );
-  await t.click("Review before sending", { within: ACTIONS });
+  await t.click("Preview", { within: ACTIONS });
   await t.waitFor(
     `document.querySelector(${JSON.stringify(PREVIEWING)}) && document.querySelector(${JSON.stringify(`${PANEL} [data-field="message"]`)})`,
     "the preview opens again on the collapsed card",
@@ -1090,7 +1090,7 @@ const inbox = async (t) => {
     await t.text(`${CARD} [data-card-line]`),
   );
   const reply = await t.eval(`document.querySelector('[aria-label="Reply"]').value`);
-  await t.click("Review before sending", { within: ACTIONS });
+  await t.click("Preview", { within: ACTIONS });
   await t.waitFor(
     `document.querySelector(${JSON.stringify(`${PANEL} [data-field="message"]`)})?.innerText.includes(${JSON.stringify(reply)})`,
     "the preview shows the whole reply",
@@ -1155,7 +1155,7 @@ const inbox = async (t) => {
     15_000,
   );
   await settled(t, "that draft is done");
-  await t.click("Review before sending", { within: ACTIONS });
+  await t.click("Preview", { within: ACTIONS });
   await t.waitFor(
     `document.querySelector(${JSON.stringify(`${CARD}[data-previewing]`)})`,
     "the preview opens on the other draft",
@@ -1364,7 +1364,7 @@ const announcements = async (t) => {
     "a titled announcement's card says its kind and audience",
     await t.text(`${CARD} [data-card-line]`),
   );
-  await t.click("Review before sending", { within: ACTIONS });
+  await t.click("Preview", { within: ACTIONS });
   await t.waitFor(
     `document.querySelector(${JSON.stringify(`${PANEL} [data-field="post"]`)})?.innerText.includes("(edited)")`,
     "the edit shows in the preview",
@@ -1390,7 +1390,7 @@ const announcements = async (t) => {
     `document.querySelector(${JSON.stringify(`${CARD} [data-approval-reset]`)})`,
     "the card says the edit needs approval again",
   );
-  await t.click("Review before sending", { within: ACTIONS });
+  await t.click("Preview", { within: ACTIONS });
   await t.waitFor(
     `document.querySelector("[data-approve]") && document.querySelector(${JSON.stringify(`${PANEL} [data-approval-reset]`)})`,
     "editing after approval resets it",
@@ -1402,7 +1402,7 @@ const announcements = async (t) => {
   await t.click('[aria-label="Edit title"]');
   await t.type(" again");
   await t.key("Enter");
-  await t.click("Review before sending", { within: ACTIONS });
+  await t.click("Preview", { within: ACTIONS });
   await t.waitFor(
     `document.querySelector("[data-approve]") && !document.body.innerText.includes("Undo approval") && document.querySelector(${JSON.stringify(`${PANEL} [data-field="post"]`)})?.innerText.includes("(edited) again")`,
     "a title edit after approval resets it and reaches the preview",
@@ -1934,7 +1934,7 @@ const layouts = async (t) => {
       (await t.box('[data-testid="thread-main"]')).width >= 440,
       `inbox at ${width}: the conversation has a usable column`,
     );
-    await t.click("Review before sending", { within: ACTIONS });
+    await t.click("Preview", { within: ACTIONS });
     await t.waitFor(
       `document.querySelector(${JSON.stringify(`${PANEL} [data-field]`)})`,
       `inbox at ${width}: the panel opens`,
@@ -2002,7 +2002,7 @@ const layouts = async (t) => {
         `!document.querySelector(${JSON.stringify(PANEL)})`,
         "clicking the scrim closes the preview",
       );
-      await t.click("Review before sending", { within: ACTIONS });
+      await t.click("Preview", { within: ACTIONS });
       await t.waitFor(
         `document.querySelector(${JSON.stringify(`${PANEL} [data-field]`)})`,
         "the preview opens again",

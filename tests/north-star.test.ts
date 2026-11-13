@@ -1269,9 +1269,7 @@ describe("what North Star answers", () => {
   it("declines to approve or send as a plain note that names the real button, the same as every other thread", async () => {
     const rig = await connected();
     await ask(rig, "approve them all");
-    expect(messagesOf(rig, chatOf(rig), "declined").at(-1)?.text).toContain(
-      "Review before sending",
-    );
+    expect(messagesOf(rig, chatOf(rig), "declined").at(-1)?.text).toContain("Approve on the draft");
     expect(
       messagesOf(rig, chatOf(rig), "declined")
         .at(-1)

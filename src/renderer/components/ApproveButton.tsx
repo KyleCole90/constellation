@@ -38,6 +38,7 @@ export function ApproveButton({
   testId,
   size = "md",
   kbd,
+  primary = false,
   onApproved,
 }: {
   targets: readonly ChangeRecord[];
@@ -45,6 +46,8 @@ export function ApproveButton({
   testId?: string;
   size?: "sm" | "md" | "lg";
   kbd?: ReactNode;
+  /** The card's main action, which ⌘↵ and the keyboard walk look for. */
+  primary?: boolean;
   onApproved?: () => void;
 }) {
   const [stale, setStale] = useState(false);
@@ -102,7 +105,8 @@ export function ApproveButton({
         variant="default"
         size={size}
         data-approve
-        data-lands='[data-undo-approval], [data-testid="thread-panel"]'
+        data-card-primary={primary || undefined}
+        data-lands='[data-send], [data-undo-approval], [data-testid="thread-panel"]'
         data-testid={testId}
         disabled={targets.length === 0}
         onClick={approve}

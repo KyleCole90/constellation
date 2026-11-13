@@ -634,17 +634,20 @@ const nextUp = async (t) => {
   );
 
   await t.waitFor(
-    `[...document.querySelectorAll("button")].some((button) => button.innerText.includes("Review before sending"))`,
+    `[...document.querySelectorAll("button")].some((button) => button.hasAttribute("data-approve"))`,
     "a grade row's click starts drafting the first submission in the list",
   );
   const draftFits = `(() => { const chat = document.querySelector('[data-testid="chat"]').getBoundingClientRect(); const card = document.querySelector("[data-focused]").getBoundingClientRect(); const bar = document.querySelector('[data-testid="card-actions"]').getBoundingClientRect(); const total = document.querySelector('[data-testid="draft-grade"]').getBoundingClientRect(); return card.top >= chat.top && total.bottom <= bar.top && bar.bottom <= chat.bottom + 1; })()`;
   await t.waitFor(draftFits, "the draft lands with its heading, total and main action all in view");
-  await t.waitFor(actionFocused, "a Next up row lands with the keyboard on Review before sending");
+  await t.waitFor(
+    `${actionFocused} && document.activeElement.hasAttribute("data-approve")`,
+    "a Next up row lands with the keyboard on Approve",
+  );
   t.assert(await t.eval(draftFits), "focus on arrival leaves the draft's top in view");
-  await t.key("Enter");
+  await t.click("Preview", { within: '[role="tablist"]' });
   await t.waitFor(
     `document.querySelector('[data-testid="writeback-scroll"]')`,
-    "Enter on the focused action opens the review",
+    "the card's Preview opens the review",
   );
   t.assert(
     await t.eval(
@@ -760,7 +763,7 @@ const nextUp = async (t) => {
   );
   await t.click(dueRow(announcement.key));
   await t.waitFor(
-    `document.querySelector('[aria-label="Announcement"]') && document.body.innerText.includes("Review before")`,
+    `document.querySelector('[aria-label="Announcement"]') && document.querySelector("[data-approve]")`,
     "clicking the drafted row reopens that draft",
   );
 
@@ -778,7 +781,7 @@ const nextUp = async (t) => {
     JSON.stringify({ reply, replies }),
   );
   await t.waitFor(
-    `[...document.querySelectorAll("button")].some((button) => button.innerText.includes("Review before sending"))`,
+    `[...document.querySelectorAll("button")].some((button) => button.hasAttribute("data-approve"))`,
     "the reply row's click starts a draft",
   );
   const quoteState = () =>
@@ -1724,7 +1727,7 @@ const declines = async (t) => {
   );
   const note = await t.text("[data-declined]");
   t.assert(
-    note.includes("Review before sending") && !note.includes("Approve and Send"),
+    note.includes("Approve on the draft") && !note.includes("Approve and Send"),
     "the note names the button on screen",
     note,
   );
@@ -1733,8 +1736,8 @@ const declines = async (t) => {
   const chat = await pathname(t);
   await t.click('[data-declined] [data-source="change"]');
   await t.waitFor(
-    `location.pathname !== ${JSON.stringify(chat)} && [...document.querySelectorAll("button")].some((button) => button.innerText.includes("Review before sending"))`,
-    "the note's draft link lands on a draft that can be reviewed",
+    `location.pathname !== ${JSON.stringify(chat)} && [...document.querySelectorAll("button")].some((button) => button.hasAttribute("data-approve"))`,
+    "the note's draft link lands on a draft that can be approved",
   );
   await t.goto(chat);
   await t.waitFor(
@@ -2214,12 +2217,11 @@ const repliesCardKeepsItsName = async (t) => {
     `document.querySelector(${JSON.stringify(BANNER)}) && document.querySelector('[data-testid="card-actions"]')`,
     "the replies card opens the thread on its first draft",
   );
-  await t.click("Review before sending", { within: '[data-testid="card-actions"]' });
   await t.click("[data-approve]");
-  await t.waitFor(`document.body.innerText.includes("Undo approval")`, "the first reply approves");
-  await t.click("Send to", { within: '[data-testid="thread-panel"]' });
+  await t.waitFor(`document.querySelector("[data-send]")`, "the first reply approves");
+  await t.click("[data-send]");
   await t.waitFor(
-    `document.querySelector('[data-testid="sent-banner"]')`,
+    `document.querySelector('[data-testid="sent-banner"]') || document.querySelector("[data-focused]")?.innerText.includes("Written to")`,
     "the first reply sends",
     WAIT,
   );

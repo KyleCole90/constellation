@@ -29,12 +29,7 @@ import type {
 } from "../shared/providers/provider";
 
 import { jsonFile } from "./json-file";
-import {
-  canvasSchoolAt,
-  createCanvasProvider,
-  type CanvasProvider,
-  type Fetch,
-} from "./providers/canvas";
+import { canvasSchoolAt, createCanvasProvider, type Fetch } from "./providers/canvas";
 
 /**
  * A `StorageLike` in one JSON file under `userData` (docs/electron-spec.md, D8). Main is its only writer, so it reads
@@ -74,16 +69,12 @@ const LAB_WAIT_MS = 25_000;
 
 type LmsChannel = Extract<keyof Handlers, `lms.${string}`>;
 
-/** What main asks the teacher before it writes to a real school: where, to whom, and every field the change sends. */
-export interface SendConfirmation {
-  host: string;
-  target: string;
-  lines: readonly string[];
-}
+/** How recently the teacher must have pressed something for a send to count as theirs: long enough for the read before it. */
+export const SEND_PRESS_MS = 10_000;
 
-const NOT_CONFIRMED: LmsError = {
+const NOT_PRESSED: LmsError = {
   kind: "rejected",
-  reason: "Not sent. You chose not to send it when the app asked you to confirm.",
+  reason: "Not sent, because it didn't come from your press of Send. Send it again.",
 };
 const NOT_THIS_CHANGE: LmsError = {
   kind: "rejected",
@@ -131,8 +122,11 @@ export const lmsHandlers = (options: {
   packaged: boolean;
   /** Real Canvas's network. Null leaves only the fake's schools, as verify runs the app, so nothing reaches a real host. */
   fetch: Fetch | null;
-  /** Asks the teacher in a native dialog, which the renderer can't click or read. True means send. */
-  confirmSend(ask: SendConfirmation): Promise<boolean>;
+  /**
+   * When the teacher last clicked in the window or pressed Return or Space there, in `realNow` time, as the OS
+   * delivered it. Page script can't produce that input, so the renderer can't fake a press.
+   */
+  pressedAt(): number;
   /** Main's native file picker for an `.imscc` file: its path, or null when the teacher cancels. */
   choosePackage(): Promise<string | null>;
 }): Pick<Handlers, LmsChannel> => {
@@ -168,9 +162,9 @@ export const lmsHandlers = (options: {
     if (path === undefined || !(await packageAt(path)).ok) return null;
     return openAsBlob(path).catch(() => null);
   };
-  const canvas = new Map<SchoolId, CanvasProvider>();
+  const canvas = new Map<SchoolId, LmsProvider>();
   /** The renderer is untrusted, so a Canvas school counts only as main itself would mint it from its host. */
-  const canvasProvider = (school: School): CanvasProvider => {
+  const canvasProvider = (school: School): LmsProvider => {
     const minted = canvasSchoolAt(school.host);
     if (!options.fetch || minted?.id !== school.id)
       throw new Error("That isn't a Canvas school this app connects to.");
@@ -205,15 +199,15 @@ export const lmsHandlers = (options: {
     return created;
   };
   /**
-   * What the teacher confirmed for each change, by school and change id, for as long as main runs. A retry or a resume
-   * of the same content sends without asking again, and any other content asks first. A field that adds an entry
-   * (a comment, a message, a post) goes out once per confirmation: once sent, sending it again asks again, so even a
-   * renderer that replays the request can't post twice without the teacher saying so.
+   * The content each change was sent with, by school and change id, for as long as main runs. A first send of any
+   * content needs the teacher's press moments before, and a retry or resume of the same content doesn't. A field that
+   * adds an entry (a comment, a message, a post) goes out once per press: once sent, sending it again needs a new press,
+   * so even a renderer that replays the request can't post twice without the teacher pressing Send again.
    */
-  const confirmed = new Map<string, { content: ChangeContent; sent: Set<FieldKey> }>();
+  const pressed = new Map<string, { content: ChangeContent; sent: Set<FieldKey> }>();
   /**
-   * The renderer is untrusted, so its permit is only a request. Main writes to a real school only what the teacher
-   * confirmed in main's own dialog, and only the fields that content sends.
+   * The renderer is untrusted, so its permit is only a request. Main writes to a real school only right after the
+   * teacher pressed something, and only the fields that content sends.
    */
   const applyCanvas = async (
     school: School,
@@ -226,25 +220,22 @@ export const lmsHandlers = (options: {
     if (fields.some((field) => !sends.includes(field))) return failedAll(fields, NOT_THIS_CHANGE);
     const provider = canvasProvider(school);
     const key = `${school.id}\n${changeId}`;
-    let confirmation = confirmed.get(key);
+    let press = pressed.get(key);
     if (
-      !confirmation ||
-      !isDeepStrictEqual(confirmation.content, content) ||
-      fields.some((field) => confirmation?.sent.has(field))
+      !press ||
+      !isDeepStrictEqual(press.content, content) ||
+      fields.some((field) => press?.sent.has(field))
     ) {
-      const described = await provider.describeSend(content);
-      if (!described.ok) return failedAll(fields, described.error);
-      if (!(await options.confirmSend({ host: school.host, ...described.value })))
-        return failedAll(fields, NOT_CONFIRMED);
-      confirmation = { content, sent: new Set() };
-      confirmed.set(key, confirmation);
+      if (options.realNow() - options.pressedAt() > SEND_PRESS_MS)
+        return failedAll(fields, NOT_PRESSED);
+      press = { content, sent: new Set() };
+      pressed.set(key, press);
     }
-    // Counted as sent before the request leaves, so a second request racing this one asks first.
+    // Counted as sent before the request leaves, so a second request racing this one needs a new press.
     const appends = fields.filter(appendsEntry);
-    for (const field of appends) confirmation.sent.add(field);
+    for (const field of appends) press.sent.add(field);
     const outcomes = await provider.apply(SendPermit.relayed(changeId, content, fields));
-    for (const field of appends)
-      if (outcomes[field]?.status === "failed") confirmation.sent.delete(field);
+    for (const field of appends) if (outcomes[field]?.status === "failed") press.sent.delete(field);
     return outcomes;
   };
   const term = async <T>(

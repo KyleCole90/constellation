@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import type { LmsRef } from "~/shared/domain/ids";
 import { OFFLINE_REASON, useAiReachable } from "~/renderer/desktop";
-import { selectConversation, selectThreadUi } from "~/renderer/stores/selectors";
+import { selectConversation, selectSubmission, selectThreadUi } from "~/renderer/stores/selectors";
 import type { Thread } from "~/renderer/stores/types";
 import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
@@ -38,6 +38,10 @@ export function Composer({
     if (!open) return undefined;
     return open.messages.at(-1)?.mine ? "answered" : "unanswered";
   });
+  const submission = useWorkspace((state) => {
+    const { current } = selectThreadUi(state, thread.id);
+    return selectSubmission(state, current as LmsRef<"submission"> | null) !== null;
+  });
   const navigate = useNavigate();
   const saved = () => selectThreadUi(workspaceStore().getState(), thread.id).composer ?? "";
   const [text, setText] = useState(saved);
@@ -50,6 +54,7 @@ export function Composer({
     canEdit: focused?.summary.canEdit ?? false,
     setupStep,
     conversation,
+    submission,
   });
 
   const correcting = !batching && setupStep === undefined && (focused?.summary.canEdit ?? false);
