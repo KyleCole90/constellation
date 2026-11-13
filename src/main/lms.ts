@@ -289,6 +289,8 @@ export const lmsHandlers = (options: {
         return fake.server.enrollStudents(command.course, command.count);
       case "clearDueDates":
         return fake.server.clearDueDates(command.course);
+      case "createShell":
+        return fake.server.createShell(command.school, command.code, command.title);
       case "hideTermDates":
         return fake.server.hideTermDates(command.hidden);
       case "setDemoScript":
