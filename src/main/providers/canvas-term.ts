@@ -17,6 +17,7 @@ import {
   type ContentItemType,
   type CourseContent,
   type CourseShell,
+  isComing,
   type Migration,
   type SourceCourse,
 } from "../../shared/domain/content";
@@ -76,6 +77,8 @@ const SetupCourse = v.object({
   name: v.string(),
   course_code: v.string(),
   workflow_state: v.string(),
+  /** Whether the course is over, which Canvas knows even when it hides the term's dates from a teacher. */
+  concluded: v.nullish(v.boolean(), false),
   start_at: OptionalTime,
   end_at: OptionalTime,
   total_students: v.nullish(v.number(), 0),
@@ -260,7 +263,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
 
   const teacherCourses = (states: string) =>
     list(
-      `/courses?enrollment_type=teacher&include[]=term&include[]=total_students&${states}`,
+      `/courses?enrollment_type=teacher&include[]=term&include[]=total_students&include[]=concluded&${states}`,
       SetupCourseRow,
     );
   const readable = (rows: v.InferOutput<typeof SetupCourseRow>[]): SetupCourseRow[] =>
@@ -272,8 +275,9 @@ export const canvasTermSetup = (client: CanvasClient) => {
     const today = dateOfTime(isoTime(client.now()));
     const out: CourseShell[] = [];
     for (const row of readable(rows.value)) {
-      const start = datesOf(row).start;
-      if (row.workflow_state !== "unpublished" || start === null || start <= today) continue;
+      const { start } = datesOf(row);
+      if (row.workflow_state !== "unpublished" || !isComing({ ...row, startAt: start }, today))
+        continue;
       const count = await itemCount(row.id);
       if (!count.ok) return count;
       out.push(shellOf(row, count.value));
@@ -281,15 +285,14 @@ export const canvasTermSetup = (client: CanvasClient) => {
     return { ok: true, value: out };
   };
 
-  /** Courses taught before, and any course saved as a template. A course with no dates of its own or its term's can't be shifted from, so it isn't offered. */
+  /** Courses taught before, and any course saved as a template. Dates Canvas hides from the teacher stay null, for the person to fill in. */
   const copySources = async (): Read<readonly SourceCourse[]> => {
     const rows = await teacherCourses("state[]=available&state[]=completed&state[]=unpublished");
     if (!rows.ok) return rows;
     const out: SourceCourse[] = [];
     for (const row of readable(rows.value)) {
       const { start, end } = datesOf(row);
-      if ((row.workflow_state === "unpublished" && !row.template) || start === null || end === null)
-        continue;
+      if (row.workflow_state === "unpublished" && !row.template) continue;
       const dated = await list(`/courses/${row.id}/assignments`, DatedRow);
       if (!dated.ok) return dated;
       out.push({

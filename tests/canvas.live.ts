@@ -203,7 +203,7 @@ describe("Canvas reads against a live school", () => {
 
   const termTest = [termShell, termSource].every((id) => /^\d+$/.test(id)) ? it : it.skip;
   termTest(
-    "a sandbox course goes from copy to published (set CANVAS_TERM_SHELL=<an empty unpublished course starting later> and CANVAS_TERM_SOURCE=<a dated course to copy from>)",
+    "a sandbox course goes from copy to published (set CANVAS_TERM_SHELL=<an empty unpublished course in a coming term> and CANVAS_TERM_SOURCE=<a dated course to copy from>)",
     async () => {
       const setup = provider.termSetup;
       if (!setup) throw new Error("Canvas offers no term setup");
@@ -213,8 +213,7 @@ describe("Canvas reads against a live school", () => {
       const source = unwrap("copySources", await setup.copySources()).find(
         (entry) => entry.ref === `${school.id}:course:${termSource}`,
       );
-      if (!shell)
-        throw new Error("CANVAS_TERM_SHELL isn't an unpublished course that starts later");
+      if (!shell) throw new Error("CANVAS_TERM_SHELL isn't an unpublished course in a coming term");
       if (!source) throw new Error("CANVAS_TERM_SOURCE isn't a dated course this teacher taught");
       const copy = copyContent(shell, source);
       expect(await (await runnerFor(copy, shell.ref))()).toBe("sent");
@@ -237,7 +236,7 @@ describe("Canvas reads against a live school", () => {
   );
   const imsccTest = /^\d+$/.test(imsccShell) ? it : it.skip;
   imsccTest(
-    "a fixture .imscc imports into a sandbox course (set CANVAS_IMSCC_SHELL=<an empty unpublished course starting later>)",
+    "a fixture .imscc imports into a sandbox course (set CANVAS_IMSCC_SHELL=<an empty unpublished course in a coming term>)",
     async () => {
       const setup = provider.termSetup;
       const hint = LIVE_PACKAGE?.hint;
@@ -246,7 +245,7 @@ describe("Canvas reads against a live school", () => {
         (entry) => entry.ref === `${school.id}:course:${imsccShell}`,
       );
       if (!shell)
-        throw new Error("CANVAS_IMSCC_SHELL isn't an unpublished course that starts later");
+        throw new Error("CANVAS_IMSCC_SHELL isn't an unpublished course in a coming term");
       const content = cartridgeContent(shell, LIVE_PACKAGE.name, hint);
       expect(await (await runnerFor(content, shell.ref))()).toBe("sent");
       const job = await finished(shell.ref, fieldText(content, "copy"));

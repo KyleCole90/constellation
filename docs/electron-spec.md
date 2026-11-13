@@ -94,6 +94,7 @@ export const ipc = {
 - Canvas throttles with a **403 "Rate Limit Exceeded"**, not a 429. The provider maps it, and any 429, to the existing throttled error, so the runner pauses that school's lane without spending a retry. The provider never sleeps.
 - Writes go through the existing single write path: observe, then classify, then apply, with per-field outcomes and the first-send record. The README's design is unchanged, and the Canvas provider must pass `runProviderContract`.
 - Term setup does course copy and `.imscc` upload. The upload uses `pre_attachment`, then the upload URL. The file picker and the file read run in main. A package job still `pre_processing` 10 minutes after it was made reads as stalled, never failed, since Canvas can't say whether its file arrived. The setup offers Copy again and warns that, if the first import still runs, the content lands twice.
+- Canvas reports a term's dates to a teacher only when the term has teacher dates, so at most schools they read as null. Term setup never depends on them. Canvas's `concluded` flag (`include[]=concluded`) leaves out past terms, an unpublished course with no known start is a new-term course, and the Dates step asks the teacher for any date Canvas hides. `courses()` drops `enrollment_state=active` for the same flag, since that filter also hides a published course whose term hasn't started.
 - Writeback ships only after `npm run contract:live` passes against Kyle's sandbox courses.
 
 ### AI (D26, D27, D28, D41)

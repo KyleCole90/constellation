@@ -69,6 +69,8 @@ export interface FaultLab {
   failNextMigration(stage: "pre_processing" | "running", message: string): void;
   /** Puts invented students in a new course, so a copy into it becomes the risky kind. */
   enrollStudents(course: LmsRef<"course">, count: number): void;
+  /** While hidden, every new-term and past course reads with no dates, as at a school whose terms have no teacher dates. */
+  hideTermDates(hidden: boolean): void;
   demoScript(): { enabled: boolean; fired: readonly DemoFault[] };
   setDemoScript(enabled: boolean): void;
   /** The LMS as stored, for verify to read. Null after a reset. */

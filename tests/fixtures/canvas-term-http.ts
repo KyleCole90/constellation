@@ -14,7 +14,7 @@ export const STORAGE_ORIGIN = "https://files.storage.example";
 export const TERM_TOKEN = "SENTINEL-canvas-token-71c3";
 const SELF_ID = 4101;
 export const SOURCE_ID = 2201;
-const TEMPLATE_ID = 2301;
+export const TEMPLATE_ID = 2301;
 export const SHELL_ID = 3301;
 /** Another course on this host, which the old course's pages still link to. */
 const ELSEWHERE_ID = 1901;
@@ -204,6 +204,8 @@ export class CanvasTermHttp {
   confirmOrigin = ORIGIN;
   /** The path storage's redirect names after the origin. */
   confirmPath = (fileId: number) => `/api/v1/files/${fileId}/create_success`;
+  /** Set to report every term's dates, and the courses' own, as null: a school whose terms have no teacher dates. */
+  hideTermDates = false;
   readonly issues = [
     {
       id: 1,
@@ -337,9 +339,29 @@ export class CanvasTermHttp {
       },
     };
   }
-  #courseJson(row: CourseRow) {
+  /** Canvas decides from the real dates, even the ones it hides from the teacher. */
+  #concluded(row: CourseRow): boolean {
+    return row.workflow_state === "completed" || Date.parse(row.end_at) < this.#now;
+  }
+  #enrolled(row: CourseRow, state: string | null): boolean {
+    if (state === null) return true;
+    if (state === "completed") return this.#concluded(row);
+    return state === "active" && !this.#concluded(row) && Date.parse(row.start_at) <= this.#now;
+  }
+  #courseJson(row: CourseRow, include: readonly string[] = []) {
     const { body: _body, ...rest } = row;
-    return rest;
+    const dated = this.hideTermDates
+      ? {
+          start_at: null,
+          end_at: null,
+          term: { name: row.term.name, start_at: null, end_at: null },
+        }
+      : {};
+    return {
+      ...rest,
+      ...dated,
+      ...(include.includes("concluded") ? { concluded: this.#concluded(row) } : {}),
+    };
   }
 
   readonly fetch: Fetch = async (url, init) => {
@@ -420,7 +442,8 @@ export class CanvasTermHttp {
       return json(
         this.courses
           .filter((row) => states.length === 0 || states.includes(row.workflow_state))
-          .map((row) => this.#courseJson(row)),
+          .filter((row) => this.#enrolled(row, query.get("enrollment_state")))
+          .map((row) => this.#courseJson(row, query.getAll("include[]"))),
       );
     }
     const progress = /^\/progress\/(\d+)$/.exec(path);

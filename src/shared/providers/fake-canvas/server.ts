@@ -12,12 +12,13 @@ import {
   type SetContent,
   type TextFixContent,
 } from "~/shared/domain/change";
-import type {
-  CourseShell,
-  Migration,
-  SamplePackage,
-  SchoolPolicy,
-  SourceCourse,
+import {
+  isComing,
+  type CourseShell,
+  type Migration,
+  type SamplePackage,
+  type SchoolPolicy,
+  type SourceCourse,
 } from "~/shared/domain/content";
 import {
   isoTime,
@@ -510,6 +511,7 @@ export class FakeCanvasServer implements FaultLab {
   #version = 0;
   /** One-shot and in memory, like the other armed faults. */
   #nextMigrationFailure: { stage: "pre_processing" | "running"; message: string } | null = null;
+  #termDatesHidden = false;
   readonly #held: Partial<Record<Route["kind"], { gate: Promise<void>; release: () => void }>> = {};
 
   constructor(options: ServerOptions) {
@@ -660,6 +662,7 @@ export class FakeCanvasServer implements FaultLab {
     this.#buckets.clear();
     this.#faults.clear();
     this.#faults.noise = this.#options.noise ?? DEFAULT_NOISE;
+    this.#termDatesHidden = false;
     this.#changed();
   }
 
@@ -766,8 +769,7 @@ export class FakeCanvasServer implements FaultLab {
       modality: shell?.modality ?? null,
       studentCount,
       termName: row.termName,
-      startAt: row.startAt,
-      endAt: row.endAt,
+      ...this.#dates(row),
       itemCount: body.items.length,
       copyTarget: refs.migrations(row.school, courseId),
       stateTarget: refs.courseState(row.school, courseId),
@@ -803,7 +805,7 @@ export class FakeCanvasServer implements FaultLab {
         (shell) =>
           shell.school === school &&
           shell.workflow_state === "unpublished" &&
-          shell.startAt > today,
+          isComing({ concluded: false, startAt: this.#dates(shell).startAt }, today),
       )
       .flatMap((shell) => this.#shellOf(refs.course(school, shell.canvasId)) ?? []);
   };
@@ -819,8 +821,7 @@ export class FakeCanvasServer implements FaultLab {
           code: source.code,
           title: source.title,
           termName: source.termName,
-          startAt: source.startAt,
-          endAt: source.endAt,
+          ...this.#dates(source),
           meetingDays: [...source.days],
           template: source.template,
           dated: items.flatMap((item) =>
@@ -1357,6 +1358,14 @@ export class FakeCanvasServer implements FaultLab {
     this.#nextMigrationFailure = { stage, message };
     this.#changed();
   };
+  hideTermDates = (hidden: boolean): void => {
+    this.#termDatesHidden = hidden;
+    this.#changed();
+  };
+  /** A course's term dates as the teacher reads them: none while `hideTermDates` holds. */
+  #dates({ startAt, endAt }: { startAt: IsoDate; endAt: IsoDate }) {
+    return this.#termDatesHidden ? { startAt: null, endAt: null } : { startAt, endAt };
+  }
   enrollStudents = (course: LmsRef<"course">, count: number): void => {
     this.#pull();
     const shell = this.#shell(Number(refParts(course)[2]));

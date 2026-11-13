@@ -85,7 +85,12 @@ export const initialPlan = (
   if (setup.plan) return setup.plan;
   const hint = setup.source?.kind === "cartridge" ? setup.source.hint : null;
   const oldTerm: TermDates<DraftDate> = source
-    ? { name: source.termName, start: source.startAt, end: source.endAt, days: source.meetingDays }
+    ? {
+        name: source.termName,
+        start: source.startAt ?? "",
+        end: source.endAt ?? "",
+        days: source.meetingDays,
+      }
     : (hint ?? { name: "", start: "", end: "", days: [] });
   return {
     oldTerm,

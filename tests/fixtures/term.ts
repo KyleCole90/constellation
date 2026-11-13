@@ -3,7 +3,11 @@ import type { CourseContent, CourseShell, Migration, SourceCourse } from "~/shar
 import type { ChangeId, LmsRef, SchoolId } from "~/shared/domain/ids";
 import { scanCourse, type Finding, type FindingType } from "~/shared/domain/scan";
 import { shiftOptionsOf, type TermDates, type TermPlan } from "~/shared/domain/term";
-import { SPRING_2027_BREAKS } from "~/shared/providers/fake-canvas/seed-term";
+import {
+  FALL_2026,
+  SPRING_2027,
+  SPRING_2027_BREAKS,
+} from "~/shared/providers/fake-canvas/seed-term";
 import type { TermSetup } from "~/shared/providers/provider";
 
 import { unwrap } from "./provider-contract";
@@ -14,21 +18,22 @@ const CONTACT: Readonly<Record<string, string>> = {
   rsu: "kyle@riverbend.edu",
 };
 
-/** The plan a person would confirm: the source's term into the shell's, meeting days kept, the seeded break. */
+/** The plan a person would confirm: the source's term into the shell's, meeting days kept, the seeded break. Where the LMS hides the new term's dates, the person types Spring 2027's. */
 export const planFor = (oldTerm: TermDates, shell: CourseShell): TermPlan => ({
   oldTerm,
   newTerm: {
     name: shell.termName,
-    start: shell.startAt ?? oldTerm.start,
-    end: shell.endAt ?? oldTerm.end,
+    start: shell.startAt ?? SPRING_2027([]).start,
+    end: shell.endAt ?? SPRING_2027([]).end,
     days: oldTerm.days,
   },
   breaks: SPRING_2027_BREAKS,
 });
+/** The source's term as the Dates step holds it. Where the LMS hides its dates, the person types Fall 2026's. */
 export const termOf = (source: SourceCourse): TermDates => ({
   name: source.termName,
-  start: source.startAt,
-  end: source.endAt,
+  start: source.startAt ?? FALL_2026([]).start,
+  end: source.endAt ?? FALL_2026([]).end,
   days: source.meetingDays,
 });
 

@@ -614,6 +614,70 @@ const cancelBeforeCopy = async (t) => {
   await t.viewport(1440, 900);
 };
 
+const syncShells = async (t, test, label) => {
+  await t.click("Settings");
+  await t.click("Sync now", { within: '[data-school="lcc"]' });
+  await t.waitFor(
+    `(() => { const shells = JSON.parse(localStorage.getItem("lms-app.v1")).state.newCourses.lcc ?? []; return shells.length === 2 && shells.${test}; })()`,
+    `Lakeshore: ${label}`,
+    WAIT,
+  );
+};
+
+// Many schools hide term dates from teachers, so Canvas reports them as null. Setup still offers every course and asks for the dates.
+const hiddenTermDates = async (t) => {
+  const code = "ENG 101";
+  await t.eval("window.__faultLab.hideTermDates(true)");
+  await syncShells(
+    t,
+    "every((shell) => shell.startAt === null)",
+    "a sync reads the new courses with no dates",
+  );
+  await t.click("What's due");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(id("offer-banner"))})?.innerText.includes("4 new courses")`,
+    "with term dates hidden, What's due still offers the 4 new courses",
+    WAIT,
+  );
+  const offer = await offerSelector(t, code, "due");
+  await t.click(`${offer} button:not([aria-label])`);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(id(`source-course-${code}`))})`,
+    `${code}: with term dates hidden, the previous course still lists as a source`,
+    WAIT,
+  );
+  await t.click(id(`source-course-${code}`));
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(id("dates-card"))})`,
+    `${code}: choosing a source opens Dates`,
+  );
+  const blank = await t.eval(
+    `["old-term-start", "old-term-end", "new-term-start", "new-term-end"].map((name) => document.querySelector('[data-testid="' + name + '"]').value)`,
+  );
+  t.assert(
+    blank.every((value) => value === ""),
+    `${code}: dates the school hides start blank for the person to fill`,
+    JSON.stringify(blank),
+  );
+  await fillOldTerm(t, "Fall 2026", "2026-08-24", "2026-12-11");
+  await setField(t, id("new-term-start"), "2027-01-19");
+  await setField(t, id("new-term-end"), "2027-05-07");
+  await t.waitFor(
+    `document.querySelectorAll(${JSON.stringify(id("shift-row"))}).length > 0`,
+    `${code}: typed dates are enough for the shift preview`,
+  );
+  await shot(t, "hidden-term-dates");
+  await t.click("What's due");
+  await t.waitFor(`location.pathname === "/due"`, "What's due opens");
+  await t.click("Cancel setup", { within: offer });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(offer)})?.innerText.includes("Set up this course")`,
+    `${code}: Cancel setup offers the course again`,
+  );
+  await t.eval("window.__faultLab.hideTermDates(false)");
+  await syncShells(t, "every((shell) => shell.startAt !== null)", "a sync reads the dates again");
+};
+
 const sidebarSetupCount = (t) =>
   t.eval(
     `[...document.querySelectorAll('[data-testid="setup-offers-toggle"]')].reduce((sum, el) => sum + Number(el.innerText.match(/^(\\d+) /)?.[1] ?? 0), 0)`,
@@ -1388,6 +1452,7 @@ export const run = async (t) => {
   await clearOwnShots(t);
   shots = 0;
   await setup(t);
+  await hiddenTermDates(t);
   await cancelBeforeCopy(t);
   await dismissAndUndo(t);
   await previousCourseFlow(t);
