@@ -265,7 +265,7 @@ const whatsDue = memoByState((state: WorkspaceData, today: number): readonly Due
     items: live.filter((item) => holds(item.days)),
   })).filter((group) => group.items.length > 0);
 });
-/** Pass the demo clock. */
+/** Pass `state.now()`. */
 export const selectWhatsDue = (state: WorkspaceData, now: number): readonly DueGroup[] =>
   whatsDue(state, startOfDay(now));
 
@@ -285,7 +285,7 @@ const calendar = memoByState((state: WorkspaceData, today: number): CalendarData
     return cache ? [{ school, courses: cache.courses }] : [];
   }),
 }));
-/** Pass the demo clock. */
+/** Pass `state.now()`. */
 export const selectCalendar = (state: WorkspaceData, now: number): CalendarData =>
   calendar(state, startOfDay(now));
 
@@ -532,7 +532,7 @@ const courseOverview = memoByState(
   },
 );
 
-/** Pass the demo clock. */
+/** Pass `state.now()`. */
 export const selectCourseOverview = (
   state: WorkspaceData,
   course: LmsRef<"course">,

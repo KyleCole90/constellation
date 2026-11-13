@@ -933,6 +933,32 @@ const calendar = async (t) => {
   await t.viewport(1440, 900);
 };
 
+/** A real school can't connect under verify, so one joins the saved workspace the way a reload would find it. */
+const realSchoolCalendar = async (t) => {
+  const saved = await t.eval(`localStorage.getItem("lms-app.v1")`);
+  await t.eval(
+    `(() => { const stored = JSON.parse(localStorage.getItem("lms-app.v1")); stored.state.schools.push({ id: "verify-real", abbr: "VR", name: "Verify Real Canvas", host: "verify-real.instructure.com", provider: "canvas" }); localStorage.setItem("lms-app.v1", JSON.stringify(stored)); })()`,
+  );
+  await t.reload();
+  await t.click("Calendar", { within: SIDEBAR });
+  await t.waitFor(`document.querySelector('[aria-current="date"]')`, "the Calendar marks today");
+  const today = await t.eval(
+    `document.querySelector('[aria-current="date"]').getAttribute("aria-label").split(",").slice(0, 2).join(",")`,
+  );
+  const wall = await t.eval(
+    `new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })`,
+  );
+  t.assert(today === wall, "with a real school, today is the real date", `${today} vs ${wall}`);
+  await t.shot("calendar-real-school", null);
+  await t.eval(`localStorage.setItem("lms-app.v1", ${JSON.stringify(saved)})`);
+  await t.reload();
+  await t.click("Calendar", { within: SIDEBAR });
+  await t.waitFor(
+    `document.querySelector('[aria-current="date"]')?.innerText.replace(/\\s+/g, " ").trim() === "Fri 30"`,
+    "a demo-only workspace is back on the demo clock",
+  );
+};
+
 const inbox = async (t) => {
   await t.click("Messages", { within: SIDEBAR });
   await t.waitFor(
@@ -1995,6 +2021,7 @@ export const run = async (t) => {
   await batchAndTimeline(t);
   await whatsDue(t);
   await calendar(t);
+  await realSchoolCalendar(t);
   await gradableAgrees(t);
   await inbox(t);
   await announcements(t);
