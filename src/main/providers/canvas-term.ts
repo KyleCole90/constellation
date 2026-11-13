@@ -763,7 +763,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
               `/courses/${id}`,
               new URLSearchParams(
                 intent.set === "course-published"
-                  ? { event: "offer" }
+                  ? { "course[event]": "offer" }
                   : { "course[template]": "true" },
               ),
             );

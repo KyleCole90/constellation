@@ -155,12 +155,18 @@ describe("a crash report", () => {
     ).properties.$exception_list[0]?.stacktrace.frames;
     const own = (filename: string, lineno: number, colno: number) => ({
       platform: "web:javascript",
+      function: "<withheld>",
       filename,
       lineno,
       colno,
       in_app: true,
     });
-    const withheld = { platform: "web:javascript", filename: "<withheld>", in_app: false };
+    const withheld = {
+      platform: "web:javascript",
+      function: "<withheld>",
+      filename: "<withheld>",
+      in_app: false,
+    };
     expect(frames).toEqual(
       [
         own("out/dist/assets/index-Ab12.js", 3, 40),

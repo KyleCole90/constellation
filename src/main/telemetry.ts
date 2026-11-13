@@ -16,17 +16,26 @@ import { MAX_FRAMES } from "../shared/ipc";
 /**
  * One stack frame, oldest first, as PostHog's raw stack trace takes it. A frame in a file of this app's own bundle keeps
  * its path and position; any other frame is only `<withheld>`. No frame carries a function name: a name can come from
- * data (`{ [studentName]: () => … }`), and in a minified bundle the file and position already find the line.
+ * data (`{ [studentName]: () => … }`), and in a minified bundle the file and position already find the line. PostHog
+ * drops a frame without `function` from Error tracking, so every frame names the same placeholder.
  */
 type Frame =
   | {
       readonly platform: Platform;
+      readonly function: typeof NO_NAME;
       readonly filename: string;
       readonly lineno: number;
       readonly colno: number;
       readonly in_app: true;
     }
-  | { readonly platform: Platform; readonly filename: "<withheld>"; readonly in_app: false };
+  | {
+      readonly platform: Platform;
+      readonly function: typeof NO_NAME;
+      readonly filename: "<withheld>";
+      readonly in_app: false;
+    };
+
+const NO_NAME = "<withheld>";
 
 type Platform = "node:javascript" | "web:javascript";
 
@@ -81,8 +90,15 @@ const scrub = (type: string, stack: string, source: Source, appRoot: string): Sc
       PLAIN_PATH.test(path) &&
       !path.split("/").includes("..") &&
       existsSync(join(appRoot, path))
-      ? { platform, filename: path, lineno: Number(lineno), colno: Number(colno), in_app: true }
-      : { platform, filename: "<withheld>", in_app: false };
+      ? {
+          platform,
+          function: NO_NAME,
+          filename: path,
+          lineno: Number(lineno),
+          colno: Number(colno),
+          in_app: true,
+        }
+      : { platform, function: NO_NAME, filename: "<withheld>", in_app: false };
   };
   return {
     type: ERROR_TYPES.has(type) ? type : "Error",
