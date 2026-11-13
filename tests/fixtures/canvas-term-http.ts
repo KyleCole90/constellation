@@ -527,7 +527,7 @@ export class CanvasTermHttp {
     if (!match || !row) return missing();
     const rest = match[2] ?? "";
     if (method === "PUT" && rest === "") {
-      if (form.get("event") === "offer") row.workflow_state = "available";
+      if (form.get("course[event]") === "offer") row.workflow_state = "available";
       if (form.get("course[template]") === "true") row.template = true;
       const syllabus = form.get("course[syllabus_body]");
       if (syllabus !== null) row.syllabus_body = syllabus;
