@@ -1366,6 +1366,27 @@ export class FakeCanvasServer implements FaultLab {
   #dates({ startAt, endAt }: { startAt: IsoDate; endAt: IsoDate }) {
     return this.#termDatesHidden ? { startAt: null, endAt: null } : { startAt, endAt };
   }
+  /** A new unpublished course for next term, as when the registrar adds a section while the app is open. */
+  createShell = (school: SchoolId, code: string, title: string): void => {
+    this.#pull();
+    const { shells, sources, content } = this.#state.term;
+    const like = shells.find((shell) => shell.school === school);
+    if (!like) return;
+    const canvasId =
+      Math.max(...shells.map((s) => s.canvasId), ...sources.map((s) => s.canvasId)) + 1;
+    shells.push({
+      ...structuredClone(like),
+      canvasId,
+      code,
+      title,
+      workflow_state: "unpublished",
+      template: false,
+      students: [],
+    });
+    content[refs.course(school, canvasId)] = { items: [], modules: [], tools: [] };
+    this.#push();
+    this.#changed();
+  };
   enrollStudents = (course: LmsRef<"course">, count: number): void => {
     this.#pull();
     const shell = this.#shell(Number(refParts(course)[2]));

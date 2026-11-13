@@ -32,6 +32,7 @@ export interface StoreRigOptions {
   connectivity?: { online(): boolean; subscribe(onChange: () => void): void };
   /** These seeded schools join as real Canvas, served by the same fake. */
   realSchools?: readonly SchoolId[];
+  timer?: (run: () => void, ms: number) => () => void;
 }
 
 export const makeStoreRig = async (options: StoreRigOptions = {}) => {
@@ -80,6 +81,7 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
     ...(options.agent ? { agent: options.agent } : {}),
     ...(options.subscribeStorage ? { subscribeStorage: options.subscribeStorage } : {}),
     ...(options.connectivity ? { connectivity: options.connectivity } : {}),
+    ...(options.timer ? { timer: options.timer } : {}),
   });
 
   const state = () => store.getState();

@@ -194,6 +194,7 @@ export const bridgeFakeLms = (
     enrollStudents: (course, count) => command({ do: "enrollStudents", course, count }),
     clearDueDates: (course) => command({ do: "clearDueDates", course }),
     hideTermDates: (hidden) => command({ do: "hideTermDates", hidden }),
+    createShell: (school, code, title) => command({ do: "createShell", school, code, title }),
     demoScript: () => snapshot.demoScript,
     setDemoScript: (enabled) => command({ do: "setDemoScript", enabled }),
     armed: () => snapshot.armed,

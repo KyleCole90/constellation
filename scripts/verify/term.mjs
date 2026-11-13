@@ -1448,6 +1448,58 @@ const afterPublish = async (t) => {
   await shot(t, "after-publish-calendar-next-term");
 };
 
+const offered = (code) =>
+  `(JSON.parse(localStorage.getItem("lms-app.v1")).state.newCourses.lcc ?? []).some((shell) => shell.code === ${JSON.stringify(code)})`;
+const sidebarOffers = (code) =>
+  `[...document.querySelectorAll('[data-testid="setup-offer"][data-surface="sidebar"]')].some((el) => el.innerText.includes(${JSON.stringify(code)}))`;
+const unfoldSidebarOffers = (t) =>
+  t.eval(
+    `document.querySelectorAll('[data-testid="setup-offers-toggle"][aria-expanded="false"]').forEach((row) => row.click())`,
+  );
+
+// Nothing here presses Sync now: the network coming back, and then a relaunch, each read what Canvas added meanwhile.
+const newCourseWithoutSync = async (t) => {
+  await t.click("What's due");
+  await t.waitFor(`location.pathname === "/due"`, "What's due opens");
+  await t.eval(`window.__faultLab.createShell("lcc", "BIO 105", "Biology")`);
+  t.assert(
+    !(await t.eval(offered("BIO 105"))),
+    "a course Canvas adds while the app is open is not offered yet",
+  );
+  await shot(t, "auto-sync-before");
+  const network = (offline) =>
+    t.cdp("Network.emulateNetworkConditions", {
+      offline,
+      latency: 0,
+      downloadThroughput: -1,
+      uploadThroughput: -1,
+    });
+  await t.cdp("Network.enable");
+  await network(true);
+  await t.waitFor("navigator.onLine === false", "the Mac goes offline");
+  await network(false);
+  await t.waitFor("navigator.onLine === true", "the Mac comes back online");
+  await t.waitFor(
+    offered("BIO 105"),
+    "coming back online syncs, so the new course is offered without Sync now",
+    WAIT,
+  );
+  await unfoldSidebarOffers(t);
+  await t.waitFor(sidebarOffers("BIO 105"), "the sidebar offers BIO 105 to set up", WAIT);
+  await shot(t, "auto-sync-online");
+
+  await t.eval(`window.__faultLab.createShell("lcc", "CHEM 110", "Chemistry")`);
+  await t.reload();
+  await t.waitFor(
+    offered("CHEM 110"),
+    "a relaunch syncs, so a course added while the app was closed is offered without Sync now",
+    WAIT,
+  );
+  await unfoldSidebarOffers(t);
+  await t.waitFor(sidebarOffers("CHEM 110"), "the sidebar offers CHEM 110 to set up", WAIT);
+  await shot(t, "auto-sync-launch");
+};
+
 export const run = async (t) => {
   await clearOwnShots(t);
   shots = 0;
@@ -1462,4 +1514,5 @@ export const run = async (t) => {
   await templateFromCourse(t);
   await afterPublish(t);
   await writesLogRowsDiffer(t);
+  await newCourseWithoutSync(t);
 };

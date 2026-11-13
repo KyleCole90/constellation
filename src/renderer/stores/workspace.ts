@@ -89,6 +89,7 @@ import {
   type Vault,
 } from "~/shared/providers/provider";
 import { OFFLINE_SEND_REASON, desktopBridge, isOnline, onConnectivity } from "~/renderer/desktop";
+import { createAutoSync, type AutoSyncDeps } from "~/renderer/stores/autoSync";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 import { bridgeCanvas, bridgeFakeLms } from "~/renderer/providers/lms";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
@@ -276,6 +277,7 @@ export interface WorkspaceDeps {
   subscribeStorage?(onChange: () => void): void;
   /** The desktop app's network. Without one, as in the web demo, whose LMS is in the page, the app is always online. */
   connectivity?: { online(): boolean; subscribe(onChange: () => void): void };
+  timer?: AutoSyncDeps["timer"];
 }
 
 export type WorkspaceStore = StoreApi<WorkspaceState> & { syncFromStorage(): void };
@@ -738,6 +740,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
 
   // Set just below, once the store exists. Actions only run after that.
   let writeback: Writeback;
+  let autoSync: ReturnType<typeof createAutoSync>;
 
   const store = createStore<WorkspaceState>()(
     persist(
@@ -1494,10 +1497,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               set({ aiSource: "none" });
             await writeback.recover();
             for (const pending of Object.values(get().handoffs)) void runHandoff(pending);
-            // A reload between connecting and the first sync would otherwise leave a connected school with no courses.
-            for (const connection of Object.values(get().connections))
-              if (connection.status === "connected" && connection.lastSyncedAt === null)
-                void syncSchool(connection.school);
+            void autoSync.now();
             get().resumeSetups();
             setup.rescanUnsettled();
           },
@@ -2028,9 +2028,21 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
   };
   applyLoadNotice();
 
-  deps.connectivity?.subscribe(() =>
-    store.setState({ online: deps.connectivity?.online() ?? true }),
-  );
+  autoSync = createAutoSync({
+    connected: () =>
+      Object.values(store.getState().connections)
+        .filter((connection) => connection.status === "connected")
+        .map((connection) => connection.school),
+    sync: (school) => store.getState().syncSchool(school),
+    online: () => store.getState().online,
+    ...(deps.timer ? { timer: deps.timer } : {}),
+  });
+
+  deps.connectivity?.subscribe(() => {
+    const online = deps.connectivity?.online() ?? true;
+    store.setState({ online });
+    if (online) void autoSync.now();
+  });
 
   deps.subscribeStorage?.(() => {
     syncFromStorage();
@@ -2054,6 +2066,15 @@ const browserDeps = (): WorkspaceDeps => ({
   backend: desktopBridge ? bridgeBackend(desktopBridge) : fakeCanvasBackend({}),
   ...(desktopBridge?.agent === "claude" ? { agent: createBridgeAgent(desktopBridge) } : {}),
   ...(desktopBridge ? { connectivity: { online: isOnline, subscribe: onConnectivity } } : {}),
+  // Verify and the web demo run the fake LMS, which changes only when a test changes it, so no timer races their steps.
+  ...(desktopBridge?.agent === "claude"
+    ? {
+        timer: (run, ms) => {
+          const id = setTimeout(run, ms);
+          return () => clearTimeout(id);
+        },
+      }
+    : {}),
   realNow: () => Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   random: () => Math.random(),
