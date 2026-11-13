@@ -22,10 +22,18 @@ const withChange = (raw: unknown, scope: AgentScope): unknown => {
   return { ...rest, change: change?.id ?? submission };
 };
 
-/** North Star answers from who turned in what and when; reading or grading one piece of work is a handoff, whose course thread sends its body. */
+/**
+ * North Star's scope holds every record of the term, which the parser and the rules agent's search still use. Claude
+ * reads only the work that waits on the teacher, without bodies; reading or grading one is a handoff to a course thread.
+ */
 const forClaude = (scope: AgentScope): unknown =>
   scope.northStar
-    ? { ...scope, submissions: scope.submissions.map(({ body: _body, ...rest }) => rest) }
+    ? {
+        ...scope,
+        submissions: scope.submissions
+          .filter((s) => s.workflow === "submitted" || s.workflow === "missing")
+          .map(({ body: _body, ...rest }) => rest),
+      }
     : scope;
 
 /**

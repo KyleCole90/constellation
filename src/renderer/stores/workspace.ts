@@ -1755,12 +1755,6 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                     courses: get().schools.flatMap(
                       (school) => get().cache[school.id]?.courses ?? [],
                     ),
-                    // Work that waits on the teacher. Every graded or not-yet-turned-in record is most of a term's data and answers nothing here.
-                    submissions: allCaches().flatMap((cache) =>
-                      cache.submissions.filter(
-                        (s) => s.workflow === "submitted" || s.workflow === "missing",
-                      ),
-                    ),
                     northStar: {
                       announcements: allCaches().flatMap((cache) => cache.announcements),
                       schools: get().schools,

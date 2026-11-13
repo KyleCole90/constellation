@@ -1241,6 +1241,24 @@ describe("what North Star answers", () => {
     expect(lastAgent(rig)?.lines?.map((line) => line.title)).toContain("Priya Raman");
   });
 
+  it("finds a student with nothing waiting, by their course", async () => {
+    const rig = await connected();
+    const submissions = Object.values(rig.state().cache).flatMap((cache) => cache.submissions);
+    const settled = submissions.find(
+      (s) =>
+        !submissions.some(
+          (other) =>
+            other.student === s.student &&
+            (other.workflow === "submitted" || other.workflow === "missing"),
+        ),
+    );
+    if (!settled) throw new Error("The seed has a student with nothing waiting.");
+    await ask(rig, `Find ${settled.studentName}`);
+    expect(lastAgent(rig)?.lines).toContainEqual(
+      expect.objectContaining({ source: { kind: "course", ref: settled.course } }),
+    );
+  });
+
   it("admits when it finds nothing, cites nothing, and says the words as typed", async () => {
     const rig = await connected();
     await ask(rig, "Find anything about Parking Permits");
