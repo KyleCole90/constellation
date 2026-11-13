@@ -7,7 +7,7 @@ const NO_VERIFY_REASON =
   "The pre-commit hook runs fmt, lint and knip, not tests, so a commit with a failing test passes it. Fix what the hook reports.";
 
 const KILL_REASON =
-  "CI and other threads run verify on this Mac, and a process search or a PID from ps matches their processes too. Stop only what you started: capture $! when you start it, run it under timeout <seconds>, or use TaskStop for your own background task.";
+  "Other agent threads run verify on this Mac, and a process search or a PID from ps matches their processes too. Stop only what you started: capture $! when you start it, run it under timeout <seconds>, or use TaskStop for your own background task.";
 
 // Short commit options that take a value; in a cluster like -nm, chars after one of these are its value.
 const COMMIT_VALUE_FLAGS = "mFcCtSu";

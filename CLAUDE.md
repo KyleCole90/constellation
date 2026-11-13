@@ -2,14 +2,14 @@
 
 ## Checks
 
-Run these before you open a PR. CI runs the same commands, and `main` accepts a PR only when the `Check` job passes.
+Run these before you open a PR. CI runs the same commands, plus the full verify suite, and `main` accepts a PR only when the `Check` job passes.
 
 - `npm run check`: format check and lint (`vp check`).
 - `npm run knip`: unused files, exports and dependencies.
-- `npm run typecheck`: the renderer (DOM), shared (no DOM or Node), main (Node, no DOM), preload, Node and test TypeScript projects.
+- `npm run typecheck`: the renderer (DOM), shared (no DOM or Node), main (Node, no DOM), preload, test and tooling (`electron`, `scripts` and root `*.ts` files) TypeScript projects.
 - `npm test`: Vitest.
 - `npm run build`: writes the renderer to `out/dist` (`vp build`, also the web demo) and Electron's main and preload to `out/main` and `out/preload` (`vp pack`).
-- `npm run verify`: builds, then drives the real Electron app in a hidden window (about 9 minutes).
+- `npm run verify -- --only=<module>` for each verify module your change touches, in the foreground. `npm run verify` builds, then drives the real Electron app in a hidden window. CI runs the full suite (about 9 minutes); don't run it locally.
 - `npm run verify:web`: the web demo build loads in headless Chrome, and onboarding finishes.
 - `npm run smoke:packaged`: packages the app unsigned with electron-builder into `out/release`, reads its fuses back, boots it, and checks it refuses `--remote-debugging-port` and `--inspect` (about 15 seconds).
 
