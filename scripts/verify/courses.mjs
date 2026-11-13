@@ -761,7 +761,8 @@ const calendar = async (t) => {
       `${label}: the popup opens`,
     );
   const popupCovers = async (ref, label) => {
-    const fits = await t.eval(
+    // Measured once it holds still: CI once caught the popup at its scale-95 entry, 1.8 px short of its marker.
+    const fits = await t.steady(
       `(() => { const p = document.querySelector(${JSON.stringify(MARKER_POPUP)}).getBoundingClientRect(), m = document.querySelector(${JSON.stringify(markerAt(ref))}).getBoundingClientRect(); return { inside: p.left >= 0 && p.top >= 0 && p.right <= innerWidth && p.bottom <= innerHeight, covers: p.left <= m.left + 0.5 && p.top <= m.top + 0.5 && p.right >= m.right - 0.5 && p.bottom >= m.bottom - 0.5, popup: [p.left, p.top, p.right, p.bottom], marker: [m.left, m.top, m.right, m.bottom], viewport: [innerWidth, innerHeight] }; })()`,
     );
     t.assert(fits.inside, `${label}: the popup stays inside the window`, JSON.stringify(fits));
