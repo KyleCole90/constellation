@@ -30,9 +30,14 @@ jobs:
         run: test "$GITHUB_REF_NAME" = "v$(node -p 'require("./package.json").version')"
       - run: npm ci
       # Only this build checks GitHub Releases for updates: Squirrel.Mac installs one only over a signed app.
-      - run: npm run build
+      # Only this build sends crash reports: without the PostHog key it would ship silently sending nothing.
+      - name: Build
         env:
           CONSTELLATION_UPDATES: "on"
+          CONSTELLATION_POSTHOG_KEY: ${{ secrets.CONSTELLATION_POSTHOG_KEY }}
+        run: |
+          test -n "$CONSTELLATION_POSTHOG_KEY" || { echo "::error::CONSTELLATION_POSTHOG_KEY is empty"; exit 1; }
+          npm run build
       # notarytool and electron-builder both read the App Store Connect API key from a file.
       - name: Write the API key to a file
         env:
