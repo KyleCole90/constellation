@@ -940,7 +940,9 @@ describe("selectors", () => {
     expect(groups[0]?.key).toBe("past");
     expect(groups.map((group) => group.key)).toContain("week");
     expect(
-      groups.flatMap((group) => group.items).every((item) => item.days >= 0 || item.toGrade > 0),
+      groups
+        .flatMap((group) => group.items)
+        .every((item) => item.toGrade > 0 || (item.days !== null && item.days >= 0)),
     ).toBe(true);
   });
 
@@ -1050,6 +1052,51 @@ describe("selectors", () => {
     expect(overview?.unread).toBeGreaterThan(0);
     expect(overview?.lastAnnouncement).not.toBeNull();
     expect(overview?.classAverage).not.toBeNull();
+  });
+
+  it("a course with no due dates still leads to its work to grade, oldest submission first", async () => {
+    const rig = await connected();
+    const course = rig.state().cache[LCC]?.courses.find((c) => c.code === "ENG 101");
+    if (!course) throw new Error("No ENG 101.");
+    rig.server.clearDueDates(course.ref);
+    expect(await rig.state().syncSchool(LCC)).toBe(true);
+    const overview = selectCourseOverview(rig.state(), course.ref, rig.state().now());
+    const waiting = overview?.needsYou.flatMap((item) =>
+      item.kind === "assignment" ? [[item.item.assignment.shortTitle, item.item.toGrade]] : [],
+    );
+    expect(waiting).toEqual([
+      ["Essay 2", 5],
+      ["Reading Response 6", 2],
+    ]);
+    expect(overview?.toGrade).toBe(7);
+    expect(overview?.assignments[0]?.assignment.shortTitle).toBe("Essay 2");
+    expect(overview?.dueThisWeek).toBe(0);
+  });
+
+  it("What's due lists undated work to grade after every dated group", async () => {
+    const rig = await connected();
+    const state = rig.state();
+    const cache = state.cache[LCC];
+    const essay = cache?.assignments.find((a) => a.shortTitle === "Essay 2");
+    if (!cache || !essay) throw new Error("No Essay 2.");
+    const groups = selectWhatsDue(
+      {
+        ...state,
+        cache: {
+          ...state.cache,
+          [LCC]: {
+            ...cache,
+            assignments: cache.assignments.map((a) => (a === essay ? { ...a, dueAt: null } : a)),
+          },
+        },
+      },
+      state.now(),
+    );
+    expect(groups.at(-1)?.key).toBe("undated");
+    expect(groups.at(-1)?.items.map((item) => [item.assignment.ref, item.days])).toEqual([
+      [essay.ref, null],
+    ]);
+    expect(groups.slice(0, -1).flatMap((group) => group.items).length).toBeGreaterThan(0);
   });
 
   it("a collapsed course counts a grade once as it moves from to-grade to ready to send", async () => {

@@ -1377,6 +1377,13 @@ export class FakeCanvasServer implements FaultLab {
     this.#push();
     this.#changed();
   };
+  clearDueDates = (course: LmsRef<"course">): void => {
+    this.#pull();
+    for (const assignment of this.#state.assignments)
+      if (assignment.course === course) assignment.dueAt = null;
+    this.#push();
+    this.#changed();
+  };
   demoScript = () => ({
     enabled: this.#state.script.enabled,
     fired: DEMO_FAULTS.filter((fault) => this.#state.script.fired.includes(fault)),
