@@ -198,14 +198,15 @@ export interface DueItem {
   graded: number;
   missing: number;
   total: number;
-  /** Whole calendar days from today. Negative is past due. */
-  days: number;
+  /** Whole calendar days from today. Negative is past due. Null when the assignment has no due date. */
+  days: number | null;
 }
+export type DatedItem = DueItem & { days: number };
 
 /** Work that came in without a grade is gradable now, before its deadline too. A submission made after its grade was sent comes back as new work. */
 export const hasWorkToGrade = (item: Pick<DueItem, "toGrade">): boolean => item.toGrade > 0;
 export interface DueGroup {
-  key: "past" | "today" | "week" | "later";
+  key: "past" | "today" | "week" | "later" | "undated";
   label: string;
   items: readonly DueItem[];
 }
@@ -222,48 +223,57 @@ const GROUPS: readonly { key: DueGroup["key"]; label: string; holds: (days: numb
     { key: "later", label: "Later", holds: (days) => days > WEEK_AHEAD },
   ];
 
-const datedItems = (
+const dueItems = (
   state: WorkspaceData,
   today: number,
-): { items: readonly DueItem[]; undated: number } => {
-  const items: DueItem[] = [];
-  let undated = 0;
+): { dated: readonly DatedItem[]; undated: readonly DueItem[] } => {
+  const dated: DatedItem[] = [];
+  const undated: { item: DueItem; firstIn: string }[] = [];
   for (const cache of caches(state)) {
     for (const assignment of cache.assignments) {
       const course = cache.courses.find((c) => c.ref === assignment.course);
       const school = schoolOf(state, assignment.school);
       if (!course || !school) continue;
-      if (!assignment.dueAt) {
-        undated++;
-        continue;
-      }
       const submissions = cache.submissions.filter((s) => s.assignment === assignment.ref);
-      items.push({
+      const waiting = submissions.filter((s) => s.workflow === "submitted");
+      const counts = {
         assignment,
         course,
         school,
-        toGrade: submissions.filter((s) => s.workflow === "submitted").length,
-        late: submissions.filter((s) => s.workflow === "submitted" && s.lateDays > 0).length,
+        toGrade: waiting.length,
+        late: waiting.filter((s) => s.lateDays > 0).length,
         submitted: submissions.filter((s) => s.workflow === "submitted" || s.workflow === "graded")
           .length,
         graded: submissions.filter((s) => s.workflow === "graded").length,
         missing: submissions.filter((s) => s.workflow === "missing").length,
         total: submissions.length,
-        days: Math.round((startOfDay(dueMs(assignment)) - today) / DAY),
-      });
+      };
+      if (assignment.dueAt) {
+        dated.push({ ...counts, days: Math.round((startOfDay(dueMs(assignment)) - today) / DAY) });
+      } else {
+        const firstIn = waiting.flatMap((s) => s.submittedAt ?? []).sort()[0] ?? "";
+        undated.push({ item: { ...counts, days: null }, firstIn });
+      }
     }
   }
-  items.sort((a, b) => dueMs(a.assignment) - dueMs(b.assignment));
-  return { items, undated };
+  dated.sort((a, b) => dueMs(a.assignment) - dueMs(b.assignment));
+  // No deadline to order by, so the work that has waited longest comes first.
+  undated.sort((a, b) => a.firstIn.localeCompare(b.firstIn));
+  return { dated, undated: undated.map(({ item }) => item) };
 };
 
+/** Work with no due date comes after every dated group: a deadline is a promise to students, and undated work made none. */
 const whatsDue = memoByState((state: WorkspaceData, today: number): readonly DueGroup[] => {
-  const live = datedItems(state, today).items.filter((item) => item.days >= 0 || item.toGrade > 0);
-  return GROUPS.map(({ key, label, holds }) => ({
-    key,
-    label,
-    items: live.filter((item) => holds(item.days)),
-  })).filter((group) => group.items.length > 0);
+  const { dated, undated } = dueItems(state, today);
+  const live = dated.filter((item) => item.days >= 0 || hasWorkToGrade(item));
+  return [
+    ...GROUPS.map(({ key, label, holds }) => ({
+      key,
+      label,
+      items: live.filter((item) => holds(item.days)),
+    })),
+    { key: "undated" as const, label: "No due date", items: undated.filter(hasWorkToGrade) },
+  ].filter((group) => group.items.length > 0);
 });
 /** Pass `state.now()`. */
 export const selectWhatsDue = (state: WorkspaceData, now: number): readonly DueGroup[] =>
@@ -272,19 +282,23 @@ export const selectWhatsDue = (state: WorkspaceData, now: number): readonly DueG
 export interface CalendarData {
   /** Start of today, epoch ms. Every item's `days` counts from here. */
   today: number;
-  items: readonly DueItem[];
+  items: readonly DatedItem[];
   undated: number;
   lanes: readonly { school: School; courses: readonly Course[] }[];
 }
 
-const calendar = memoByState((state: WorkspaceData, today: number): CalendarData => ({
-  today,
-  ...datedItems(state, today),
-  lanes: state.schools.flatMap((school) => {
-    const cache = state.cache[school.id];
-    return cache ? [{ school, courses: cache.courses }] : [];
-  }),
-}));
+const calendar = memoByState((state: WorkspaceData, today: number): CalendarData => {
+  const { dated, undated } = dueItems(state, today);
+  return {
+    today,
+    items: dated,
+    undated: undated.length,
+    lanes: state.schools.flatMap((school) => {
+      const cache = state.cache[school.id];
+      return cache ? [{ school, courses: cache.courses }] : [];
+    }),
+  };
+});
 /** Pass `state.now()`. */
 export const selectCalendar = (state: WorkspaceData, now: number): CalendarData =>
   calendar(state, startOfDay(now));
@@ -506,7 +520,9 @@ const courseOverview = memoByState(
         )
         .sort((a, b) => dueMs(a) - dueMs(b)),
       lastAnnouncement: announcements[0] ?? null,
-      dueThisWeek: assignments.filter((item) => item.days >= 0 && item.days <= 7).length,
+      dueThisWeek: assignments.filter(
+        (item) => item.days !== null && item.days >= 0 && item.days <= 7,
+      ).length,
       assignments,
       needsYou: [
         ...open.map((change): NeedsYou => ({

@@ -1816,6 +1816,36 @@ const overview = async (t) => {
   );
 };
 
+const undatedWork = async (t) => {
+  const course = await lms(t, `lms.courses.find((c) => c.code === "ENG 101").ref`);
+  await t.eval(`window.__faultLab.clearDueDates(${JSON.stringify(course)})`);
+  await goCourse(t, "ENG 101");
+  await t.click("Sync now", { within: '[data-testid="sync-line"]' });
+  await t.waitFor(
+    `(() => { const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; const own = Object.values(state.cache).flatMap((c) => c.assignments).filter((a) => a.course === ${JSON.stringify(course)}); return own.length > 0 && own.every((a) => a.dueAt === null); })()`,
+    "undated: the app reads ENG 101 with no due dates",
+    15_000,
+  );
+  const waiting = await lms(
+    t,
+    `lms.assignments.filter((a) => a.course === ${JSON.stringify(course)}).map((a) => { const inbox = lms.submissions.filter((s) => s.assignment === a.ref && s.workflow === "submitted"); return { title: a.title, toGrade: inbox.length, first: inbox.map((s) => s.submittedAt).sort()[0] }; }).filter((a) => a.toGrade > 0).sort((a, b) => a.first.localeCompare(b.first)).map((a) => a.title + "|" + a.toGrade)`,
+  );
+  const listed = await t.eval(
+    `[...document.querySelectorAll('[data-section="needs-you"] [data-row] button')].map((button) => [button.children[1]?.textContent, button.children[2]?.textContent.match(/^([0-9]+) to grade$/)?.[1]]).filter(([, toGrade]) => toGrade).map(([title, toGrade]) => title + "|" + toGrade)`,
+  );
+  t.assert(
+    waiting.length > 0 && JSON.stringify(listed) === JSON.stringify(waiting),
+    "undated: Needs you lists every assignment with work to grade, oldest submission first",
+    JSON.stringify({ listed, waiting }),
+  );
+  await shot(t, "overview-undated");
+  await t.click('[data-stat="to-grade"]');
+  await t.waitFor(
+    `location.pathname.startsWith("/threads/") && document.querySelector('[data-testid="pinned-queue"]')`,
+    "undated: To grade opens the grading queue",
+  );
+};
+
 const palette = async (t) => {
   await t.click("Search threads and students", { within: SIDEBAR });
   await t.waitFor(`document.querySelector('[data-testid="palette"]')`, "the palette opens");
@@ -2030,4 +2060,5 @@ export const run = async (t) => {
   await palette(t);
   await layouts(t);
   await dueReplies(t);
+  await undatedWork(t);
 };

@@ -9,7 +9,7 @@ import {
   selectCalendar,
   selectSchoolGap,
   type CalendarData,
-  type DueItem,
+  type DatedItem,
 } from "~/renderer/stores/selectors";
 import { useWorkspace } from "~/renderer/stores/workspace";
 
@@ -46,7 +46,7 @@ const dayTint = (day: CalendarDay): string =>
   cn(day.isWeekend && "bg-foreground/[0.012]", day.isToday && "bg-primary/[0.13]");
 const schoolMix = (school: School, percent: number): string =>
   `color-mix(in srgb, var(--school-${school.id}, var(--muted-foreground)) ${percent}%, transparent)`;
-const dueTime = (item: DueItem): string =>
+const dueTime = (item: DatedItem): string =>
   item.assignment.dueAt ? formatTime(item.assignment.dueAt) : "";
 const coverAnchor = ({ anchor }: { anchor: { height: number } }): number => -anchor.height;
 
@@ -68,7 +68,7 @@ function useWeeksThatFit() {
   return { weeks, wideLane, measureOnAttach };
 }
 
-function Marker({ item }: { item: DueItem }) {
+function Marker({ item }: { item: DatedItem }) {
   const links = useWorkLinks();
   const tone = toneOf(item);
   const { borderPercent, fillPercent, dashed } = TONE_LOOK[tone];
@@ -135,7 +135,7 @@ function DayPanel({
   onClose,
 }: {
   day: CalendarDay;
-  items: readonly DueItem[];
+  items: readonly DatedItem[];
   onClose: () => void;
 }) {
   const links = useWorkLinks();
@@ -239,7 +239,7 @@ function CalendarGrid({
   wideLane,
 }: {
   days: readonly CalendarDay[];
-  items: readonly DueItem[];
+  items: readonly DatedItem[];
   lanes: CalendarData["lanes"];
   picked: number | null;
   onPick: (daysFromToday: number) => void;

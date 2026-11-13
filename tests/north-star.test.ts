@@ -1104,7 +1104,7 @@ describe("what North Star answers", () => {
     const groups = selectWhatsDue(rig.state(), rig.state().now());
     const items = groups
       .flatMap((group) => group.items)
-      .filter((item) => item.days >= 0 && item.days <= 7);
+      .filter((item) => item.days !== null && item.days >= 0 && item.days <= 7);
     expect(answer?.text).toBe(`${items.length} assignments are due in the next 7 days.`);
     expect(
       answer?.lines

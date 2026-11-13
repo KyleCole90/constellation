@@ -7,7 +7,7 @@ import {
   GRADING_LIST_THREAD,
   selectSchoolCoverage,
   selectSchoolGap,
-  type DueItem,
+  type DatedItem,
 } from "~/renderer/stores/selectors";
 import { useWorkspace } from "~/renderer/stores/workspace";
 
@@ -145,7 +145,7 @@ function SittingRow({ sitting }: { sitting: Sitting }) {
   );
 }
 
-function NotYetRow({ item }: { item: DueItem }) {
+function NotYetRow({ item }: { item: DatedItem }) {
   const links = useWorkLinks();
   return (
     <li data-row={item.assignment.ref}>

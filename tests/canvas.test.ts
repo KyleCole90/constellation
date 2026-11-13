@@ -520,6 +520,7 @@ describe("the fake's failure lab and real Canvas", () => {
         submission: `${HOST}:submission:2201:5301:6401` as LmsRef<"submission">,
       },
       { do: "enrollStudents", course: COURSE, count: 3 },
+      { do: "clearDueDates", course: COURSE },
       { do: "throttleNext", retryAfterMs: 60_000, on: "any" },
       { do: "failNextWrite", field: "grade", error: { kind: "auth_expired" } },
       { do: "loseNextResponse", applied: true },
