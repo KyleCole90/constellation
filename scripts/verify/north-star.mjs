@@ -644,7 +644,7 @@ const nextUp = async (t) => {
     "a Next up row lands with the keyboard on Approve",
   );
   t.assert(await t.eval(draftFits), "focus on arrival leaves the draft's top in view");
-  await t.click("Preview", { within: '[data-testid="card-actions"]' });
+  await t.click("Preview", { within: '[role="tablist"]' });
   await t.waitFor(
     `document.querySelector('[data-testid="writeback-scroll"]')`,
     "the card's Preview opens the review",
@@ -763,7 +763,7 @@ const nextUp = async (t) => {
   );
   await t.click(dueRow(announcement.key));
   await t.waitFor(
-    `document.querySelector('[aria-label="Announcement"]') && document.body.innerText.includes("Review before")`,
+    `document.querySelector('[aria-label="Announcement"]') && document.querySelector("[data-approve]")`,
     "clicking the drafted row reopens that draft",
   );
 
@@ -2221,7 +2221,7 @@ const repliesCardKeepsItsName = async (t) => {
   await t.waitFor(`document.querySelector("[data-send]")`, "the first reply approves");
   await t.click("[data-send]");
   await t.waitFor(
-    `document.querySelector('[data-testid="sent-banner"]')`,
+    `document.querySelector('[data-testid="sent-banner"]') || document.querySelector("[data-focused]")?.innerText.includes("Written to")`,
     "the first reply sends",
     WAIT,
   );

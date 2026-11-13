@@ -263,12 +263,6 @@ const messageMissing = async (t) => {
   await t.shot("grading-list-missing-message-draft", null);
   await t.key("Meta+Enter");
   await t.waitFor(
-    `document.querySelector('[data-testid="writeback-scroll"]')`,
-    "the chord reviews her message",
-  );
-  await t.shot("grading-list-missing-message-review", null);
-  await t.key("Meta+Enter");
-  await t.waitFor(
     `document.activeElement?.hasAttribute("data-approve")`,
     "the chord stops at Approve",
   );
@@ -412,7 +406,7 @@ const chordSends = async (t, what) => {
 };
 
 const SETTLED = `Promise.allSettled(document.getAnimations().filter((a) => a.effect.getTiming().iterations !== Infinity).map((a) => a.finished)).then(() => null)`;
-const FOOTER_ROW = `(() => { const bar = document.querySelector(${JSON.stringify(`${FORM} [data-testid="card-actions"]`)}); const preview = bar.querySelector("[data-card-primary]").getBoundingClientRect(); const approve = bar.querySelector("[data-approve]").getBoundingClientRect(); return { panel: Boolean(document.querySelector("[data-panel-scroll]")), sameRow: Math.abs(preview.top - approve.top) < 1, approveRight: approve.right, barRight: bar.getBoundingClientRect().right - parseFloat(getComputedStyle(bar).paddingRight) }; })()`;
+const FOOTER_ROW = `(() => { const bar = document.querySelector(${JSON.stringify(`${FORM} [data-testid="card-actions"]`)}); const first = bar.querySelector("button").getBoundingClientRect(); const approve = bar.querySelector("[data-approve]").getBoundingClientRect(); return { panel: Boolean(document.querySelector("[data-panel-scroll]")), sameRow: Math.abs(first.top + first.height / 2 - approve.top - approve.height / 2) < 1, approveRight: approve.right, barRight: bar.getBoundingClientRect().right - parseFloat(getComputedStyle(bar).paddingRight) }; })()`;
 
 /** With the submission panel open the footer may wrap, but the primary pair stays together on the right. */
 const footerKeepsPairRight = async (t) => {
@@ -425,7 +419,7 @@ const footerKeepsPairRight = async (t) => {
     const footer = await t.eval(FOOTER_ROW);
     t.assert(
       footer.panel && footer.sameRow && footer.approveRight >= footer.barRight - 1,
-      `AI off at ${width}: with the submission panel open Preview and Approve and send share a row at the right edge`,
+      `AI off at ${width}: with the submission panel open the actions share one row, Approve and send at the right edge`,
       JSON.stringify(footer),
     );
   }
@@ -445,7 +439,7 @@ const missingZeroAiOff = async (t) => {
     (await t.text(`${FORM} [data-testid="draft-grade"]`)).includes("0"),
     "AI off: the total reads 0",
   );
-  const offersChord = `Boolean(document.querySelector(${JSON.stringify(`${FORM} [data-testid="card-actions"] [data-approve]`)}))`;
+  const offersChord = `Boolean(document.querySelector(${JSON.stringify(`${FORM} [data-testid="card-actions"] [data-approve]`)})?.innerText.startsWith("Approve and send"))`;
   await settled(t, "AI off zero");
   await t.shot("grading-list-missing-zero-card", null);
   t.assert(!(await t.eval(offersChord)), "AI off: a zero offers no Approve and send on the card");

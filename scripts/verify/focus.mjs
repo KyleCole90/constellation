@@ -205,9 +205,9 @@ const focusedText = (t) => t.eval(`document.activeElement.innerText?.trim() ?? "
 
 const APPROVE = `${PANEL} [data-approve]`;
 const openPreview = async (t) => {
-  await t.waitFor(`document.querySelector("[data-card-primary]")`, "the draft is ready", 20_000);
-  await t.click("[data-card-primary]");
-  await t.waitFor(`document.querySelector('${APPROVE}')`, "Review opens the preview with Approve");
+  await t.waitFor(`document.querySelector("[data-approve]")`, "the draft is ready", 20_000);
+  await t.click("Preview", { within: '[role="tablist"]' });
+  await t.waitFor(`document.querySelector('${APPROVE}')`, "Preview opens with Approve");
 };
 
 const approval = async (t) => {
@@ -226,8 +226,8 @@ const approval = async (t) => {
   await t.waitFor(`Boolean(${named(PANEL, "Undo approval")})`, "Approve approves");
   await settle(t);
   t.assert(
-    (await focusedText(t)) === "Undo approval",
-    `after Approve, focus lands on Undo approval, not Send (focus is on ${await t.eval(FOCUSED)})`,
+    (await focusedText(t)).startsWith("Send to"),
+    `after Approve, focus lands on Send, the second and last step (focus is on ${await t.eval(FOCUSED)})`,
   );
   await t.shot("focus-after-approve");
 
@@ -259,8 +259,10 @@ const approval = async (t) => {
   await t.key("Enter");
   await settle(t);
   t.assert(
-    (await t.has("[data-focused]")) && (await t.eval(`Boolean(${named(PANEL, "Undo approval")})`)),
-    "Enter twice after Undo approval approves again and keeps the draft",
+    (await t.has("[data-focused]")) &&
+      (await t.eval(`Boolean(${named(PANEL, "Undo approval")})`)) &&
+      (await focusedText(t)).startsWith("Send to"),
+    "Enter after Undo approval approves again, sends nothing, and waits on Send",
   );
   await t.shot("focus-undo-enter-enter");
 };
