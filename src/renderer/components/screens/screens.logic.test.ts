@@ -6,6 +6,7 @@ import type { Assignment, School, Submission } from "~/shared/domain/lms";
 import type {
   DueExtras,
   DueGroup,
+  DatedItem,
   DueItem,
   GradebookCell,
   GradebookRow,
@@ -73,7 +74,7 @@ describe("the work plan", () => {
         shortTitle: title,
         dueAt: new Date(NOW + days * 86_400_000 + 8 * 3_600_000).toISOString(),
       },
-    }) as unknown as DueItem;
+    }) as unknown as DatedItem;
   const draft = (course: string, tone = "todo", drafted = true) =>
     ({
       school: rsu,
@@ -111,6 +112,19 @@ describe("the work plan", () => {
       expired,
       now: NOW,
     });
+
+  it("grades undated work after the course's dated work, and says it has no due date", () => {
+    const journal: DueItem = {
+      ...assignment("old", "Journal", 0, 3),
+      days: null,
+      assignment: { ...assignment("old", "Journal", 0, 3).assignment, dueAt: null },
+    };
+    const steps = plan([journal, assignment("old", "Memo", -8, 2)]).steps;
+    expect(steps.map((step) => [step.title, step.why])).toEqual([
+      ["Memo", "8 days past due."],
+      ["Journal", "No due date."],
+    ]);
+  });
 
   it("puts the course with the nearest next deadline first, even when other work is older", () => {
     const steps = plan([

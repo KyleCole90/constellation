@@ -1,7 +1,7 @@
 import { lastOf, type NonEmpty } from "~/renderer/lib/nonEmpty";
 import type { SchoolId } from "~/shared/domain/ids";
 import { formatDay } from "~/renderer/lib/utils";
-import { hasWorkToGrade, type DueItem } from "~/renderer/stores/selectors";
+import { hasWorkToGrade, type DatedItem } from "~/renderer/stores/selectors";
 
 import type { SchoolFilter } from "./due.logic";
 
@@ -53,7 +53,7 @@ export const weekOf = (today: number, daysFromToday: number): number =>
 
 export type MarkerTone = "to-grade" | "upcoming" | "closed";
 
-export const toneOf = (item: Pick<DueItem, "toGrade" | "days">): MarkerTone =>
+export const toneOf = (item: Pick<DatedItem, "toGrade" | "days">): MarkerTone =>
   hasWorkToGrade(item) ? "to-grade" : item.days < 0 ? "closed" : "upcoming";
 
 export const TONE_LOOK: Readonly<
@@ -66,7 +66,7 @@ export const TONE_LOOK: Readonly<
 };
 
 /** Counts the items in the window shown, so it always agrees with the grid. */
-export const calendarSummary = (inWindow: readonly DueItem[], undated: number): string => {
+export const calendarSummary = (inWindow: readonly DatedItem[], undated: number): string => {
   const toGrade = inWindow.filter((item) => toneOf(item) === "to-grade").length;
   const summary = `${inWindow.length} due, ${toGrade} with work to grade`;
   return undated > 0 ? `${summary}, ${undated} without a due date` : summary;
@@ -82,7 +82,7 @@ export type NextDue =
 
 export const nextDue = (
   today: number,
-  items: readonly DueItem[],
+  items: readonly DatedItem[],
   days: NonEmpty<CalendarDay>,
 ): NextDue => {
   const last = lastOf(days);

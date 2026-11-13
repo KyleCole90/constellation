@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type { SchoolId } from "~/shared/domain/ids";
-import type { DueItem } from "~/renderer/stores/selectors";
+import type { DatedItem } from "~/renderer/stores/selectors";
 
 import {
   calendarDays,
@@ -25,7 +25,7 @@ const PANEL = 280;
 const FRIDAY = new Date(2026, 9, 30).getTime();
 const SUNDAY = new Date(2026, 9, 25).getTime();
 
-const item = (fields: Partial<DueItem>) => ({ toGrade: 0, days: 0, ...fields }) as DueItem;
+const item = (fields: Partial<DatedItem>) => ({ toGrade: 0, days: 0, ...fields }) as DatedItem;
 const dates = (today: number, week: number, weeks: 1 | 2) =>
   calendarDays(today, week, weeks).map((day) => `${day.date.getMonth() + 1}/${day.date.getDate()}`);
 

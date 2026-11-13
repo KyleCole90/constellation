@@ -8,6 +8,7 @@ import {
   NOT_STARTED,
   type DueExtras,
   type DueGroup,
+  type DatedItem,
   type DueItem,
   type InboxRow,
   type ThreadStatus,
@@ -97,9 +98,9 @@ export const stepInstruction = ({ work, verb, title }: PlannedWork): string => {
 export interface WorkPlan {
   steps: readonly PlannedWork[];
   /** Every deadline still open, in due order. Sittings are named after the first one in their course. */
-  open: readonly DueItem[];
+  open: readonly DatedItem[];
   /** The open deadlines this week with nothing to grade yet. Later ones, such as next term's, wait for their week. */
-  notYet: readonly DueItem[];
+  notYet: readonly DatedItem[];
   totals: { toGrade: number; unread: number; drafts: number };
 }
 
@@ -116,6 +117,9 @@ export const dueSummary = ({ toGrade, unread, drafts }: WorkPlan["totals"]): str
 
 const WEEKDAY = new Intl.DateTimeFormat("en-US", { weekday: "long" });
 const DAY = 86_400_000;
+
+const dueTime = (dueAt: string | null | undefined): number =>
+  dueAt ? new Date(dueAt).getTime() : Number.POSITIVE_INFINITY;
 
 const EVENING_HOUR = 17;
 const DAYS_A_WEEKDAY_IS_UNAMBIGUOUS = 7;
@@ -156,15 +160,14 @@ const stageWhy = (stage: WorkStage): string =>
 
 export const planWork = ({ groups, extras, stages, expired, now }: PlanInput): WorkPlan => {
   const items = groups.flatMap((group) => group.items);
-  const isOpen = (item: DueItem): boolean =>
-    item.assignment.dueAt !== null && new Date(item.assignment.dueAt).getTime() > now;
+  const isOpen = (item: DueItem): item is DatedItem =>
+    item.days !== null &&
+    item.assignment.dueAt !== null &&
+    new Date(item.assignment.dueAt).getTime() > now;
   const open = items.filter(isOpen);
-  const nextIn = new Map<string, DueItem>();
+  const nextIn = new Map<string, DatedItem>();
   for (const item of open) if (!nextIn.has(item.course.ref)) nextIn.set(item.course.ref, item);
-  const deadlineOf = (course: string): number => {
-    const dueAt = nextIn.get(course)?.assignment.dueAt;
-    return dueAt ? new Date(dueAt).getTime() : Number.POSITIVE_INFINITY;
-  };
+  const deadlineOf = (course: string): number => dueTime(nextIn.get(course)?.assignment.dueAt);
   const beforeWords = (course: string, lead: string): string | null => {
     const next = nextIn.get(course);
     return next
@@ -197,14 +200,8 @@ export const planWork = ({ groups, extras, stages, expired, now }: PlanInput): W
     const course = item.course.ref;
     const stage = stages.get(item.assignment.ref) ?? null;
     if (!stage && !hasWorkToGrade(item)) continue;
-    const late = -item.days;
     ranked.push({
-      rank: [
-        stageRank(stage),
-        deadlineOf(course),
-        KIND_RANK.grade,
-        new Date(item.assignment.dueAt ?? 0).getTime(),
-      ],
+      rank: [stageRank(stage), deadlineOf(course), KIND_RANK.grade, dueTime(item.assignment.dueAt)],
       step: {
         key: `grade:${item.assignment.ref}`,
         work: { kind: "grade", item },
@@ -222,7 +219,7 @@ export const planWork = ({ groups, extras, stages, expired, now }: PlanInput): W
           : isOpen(item)
             ? `Turned in early. Due ${whenWords(item.days, item.assignment.dueAt)}.`
             : (beforeWords(course, "Students need this back before") ??
-              `${counted(late, "day")} past due.`),
+              (item.days === null ? "No due date." : `${counted(-item.days, "day")} past due.`)),
       },
     });
   }
@@ -308,7 +305,7 @@ export interface Sitting {
   key: string;
   school: School;
   course: Course | null;
-  before: DueItem | null;
+  before: DatedItem | null;
   steps: readonly PlannedWork[];
 }
 
