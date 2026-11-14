@@ -176,9 +176,10 @@ describe("Canvas term setup reads", () => {
   it("lists templates first, and a teacher's own address is the school's contact domain", async () => {
     const provider = canvasOver(new CanvasTermHttp());
     const sources = await unwrap(setupOf(provider).copySources());
-    expect(sources.map((entry) => [entry.code, entry.template])).toEqual([
-      ["ENG-TPL", true],
-      ["ENG-101", false],
+    expect(sources.map((entry) => [entry.code, entry.template, entry.termName])).toEqual([
+      // Canvas's placeholder "Default Term" is no term a teacher would name.
+      ["ENG-TPL", true, ""],
+      ["ENG-101", false, "Fall 2026"],
     ]);
     const content = await unwrap(setupOf(provider).courseContent(SHELL));
     expect(content.policy).toEqual({

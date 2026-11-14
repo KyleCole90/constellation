@@ -168,7 +168,10 @@ const copyBody = ({ source, plan, shift }: CourseCopyContent, remote: RemoteStat
         : source.termName
           ? `${source.label} (${source.termName})`
           : source.label,
-    oldTerm: termWords(plan.oldTerm),
+    oldTerm:
+      plan.oldTerm.start === plan.newTerm.start && plan.oldTerm.end === plan.newTerm.end
+        ? "The same dates, so nothing moves"
+        : termWords(plan.oldTerm),
     newTerm: termWords(plan.newTerm),
     days,
     breaks: plan.breaks.map(breakWords),

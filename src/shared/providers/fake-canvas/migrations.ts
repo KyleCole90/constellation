@@ -113,7 +113,8 @@ export const advanceMigration = (
 ): MigrationRecord => {
   if (record.workflow_state === "completed" || record.workflow_state === "failed") return record;
   const elapsed = nowMs - Date.parse(record.started_at);
-  const completion = Math.max(0, Math.min(100, Math.floor((elapsed / durationMs) * 100)));
+  // Canvas reports completion as a fraction, as 55.80645161290322.
+  const completion = Math.max(0, Math.min(100, (elapsed / durationMs) * 100));
   if (record.failAt && completion >= record.failAt.completion) {
     return {
       ...record,

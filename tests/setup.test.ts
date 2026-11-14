@@ -216,6 +216,13 @@ describe("stageOf", () => {
     });
   });
 
+  it("shows Canvas's fractional progress as a whole percent, never 100 before the copy is done", () => {
+    const at = (completion: number) =>
+      stageOf(setup(), mapOf(COPY_SENT), live(migration("running", { completion })));
+    expect(at(55.80645161290322)).toMatchObject({ job: { completion: 55 } });
+    expect(at(99.9)).toMatchObject({ job: { completion: 99 } });
+  });
+
   it("carries the failed job", () => {
     const job = migration("failed", { message: "The package is damaged." });
     expect(stageOf(setup(), mapOf(COPY_SENT), live(job))).toEqual({

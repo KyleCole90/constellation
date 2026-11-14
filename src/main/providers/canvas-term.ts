@@ -85,6 +85,9 @@ const SetupCourse = v.object({
   syllabus_body: v.nullish(v.string(), null),
 });
 type SetupCourseRow = v.InferOutput<typeof SetupCourse>;
+/** Canvas files a course with no term under its placeholder "Default Term", which isn't a term a teacher would name. */
+const termNameOf = (row: SetupCourseRow): string =>
+  row.term?.name === "Default Term" ? "" : (row.term?.name ?? "");
 const SetupCourseRow = v.union([
   v.object({ id: Id, access_restricted_by_date: v.literal(true) }),
   SetupCourse,
@@ -228,7 +231,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
       section: null,
       modality: null,
       studentCount: row.total_students,
-      termName: row.term?.name ?? "",
+      termName: termNameOf(row),
       startAt: start,
       endAt: end,
       itemCount,
@@ -306,7 +309,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
         ref: refs.course(school.id, row.id),
         code: row.course_code,
         title: row.name,
-        termName: row.term?.name ?? "",
+        termName: termNameOf(row),
         startAt: start,
         endAt: end,
         // Canvas keeps no meeting pattern, so the old due dates stand in for one, read the way the date shift reads them.

@@ -112,7 +112,8 @@ export const describeWaiting = (waiting: Waiting): ThreadStatus & { count: numbe
 
 export const setupGroupLabel = (shells: readonly Pick<CourseShell, "termName">[]): string => {
   const terms = new Set(shells.map((shell) => shell.termName));
-  const term = terms.size === 1 ? `${shells[0]?.termName} ` : "";
+  const only = terms.size === 1 ? shells[0]?.termName : "";
+  const term = only ? `${only} ` : "";
   return `${shells.length} ${term}${shells.length === 1 ? "course" : "courses"} to set up`;
 };
 

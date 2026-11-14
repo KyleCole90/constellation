@@ -116,7 +116,8 @@ const MIGRATION_LABEL: Readonly<Record<Migration["state"], string>> = {
 };
 const jobOfMigration = ({ state, completion, message }: Migration): JobView => ({
   label: MIGRATION_LABEL[state],
-  completion,
+  // Canvas reports a fraction, as 55.80645161290322. Down, so the card never says 100 before the copy is done.
+  completion: Math.floor(completion),
   message,
 });
 const CHECKING_COPY: JobView = { label: "Checking on the copy", completion: null, message: null };

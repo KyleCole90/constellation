@@ -285,14 +285,15 @@ function DatesForm({
   };
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
-  const checked = checkPlan(plan);
+  const dates = datedOf(setup, source);
+  const undated = dates?.dated.length === 0;
+  const checked = checkPlan(plan, undated);
   const problems = checked.ok ? [] : checked.error;
   const unchanged = confirmed && JSON.stringify(plan) === JSON.stringify(setup.plan);
   const occupied = occupiedWords(setup.shell);
   const packageTerm = packageTermWords(setup.source, plan.oldTerm);
   const hint = setup.source?.kind === "cartridge" ? setup.source.hint : null;
   const guessed = guessedEnd(hint, plan.newTerm);
-  const dates = datedOf(setup, source);
   const patchOld = (patch: Partial<DraftTerm>) =>
     setPlan((current) => ({ ...current, oldTerm: { ...current.oldTerm, ...patch } }));
   const patchNew = (patch: Partial<DraftTerm>) =>
@@ -345,7 +346,7 @@ function DatesForm({
         />
       </div>
       <p data-testid="day-map" className="text-body">
-        {dayMapWords(plan.oldTerm.days, plan.newTerm.days)}
+        {dayMapWords(plan.oldTerm.days, plan.newTerm.days, undated)}
       </p>
       <Breaks plan={plan} onChange={(breaks) => setPlan((current) => ({ ...current, breaks }))} />
       {guessed !== null && plan.oldTerm.end === guessed && (

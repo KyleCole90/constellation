@@ -183,10 +183,13 @@ export const shiftPreview = (items: readonly DueDay[], plan: TermPlan): readonly
   });
 };
 
+export const NO_NEW_DAYS = "Pick at least one meeting day for the new term.";
+
 export const planProblems = ({ oldTerm, newTerm, breaks }: TermPlan): readonly string[] => [
   ...(oldTerm.start >= oldTerm.end ? ["The old term has to end after it starts."] : []),
   ...(newTerm.start >= newTerm.end ? ["The new term has to end after it starts."] : []),
-  ...(newTerm.days.length === 0 ? ["Pick at least one meeting day for the new term."] : []),
+  // An old meeting day needs a new one to move to. With none, nothing moves by weekday.
+  ...(newTerm.days.length === 0 && oldTerm.days.length > 0 ? [NO_NEW_DAYS] : []),
   ...breaks.flatMap((held) => {
     if (held.start > held.end) return [`${held.name} has to end on or after the day it starts.`];
     return isInside(held.start, newTerm) && isInside(held.end, newTerm)
