@@ -1,0 +1,20 @@
+{
+  "id": 7103,
+  "subject": "Your Essay 1 link isn't working",
+  "workflow_state": "read",
+  "context_code": "account_1",
+  "context_name": "Introduction to Composition",
+  "audience_contexts": { "courses": { "2201": ["StudentEnrollment"] }, "groups": {} },
+  "participants": [
+    { "id": 4101, "name": "Sample Instructor" },
+    { "id": 6401, "name": "Avery Sample" }
+  ],
+  "messages": [
+    {
+      "id": 802,
+      "author_id": 4101,
+      "created_at": "2027-01-21T10:00:00Z",
+      "body": "Hi Avery, the link you turned in for Essay 1 opens an error page. Could you resubmit it?"
+    }
+  ]
+}
