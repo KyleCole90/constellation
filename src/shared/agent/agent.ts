@@ -20,7 +20,7 @@ import {
   type Submission,
 } from "~/shared/domain/lms";
 import { isFindingType, type Finding, type FindingType } from "~/shared/domain/scan";
-import type { TermPlan } from "~/shared/domain/term";
+import type { TermDates, TermPlan } from "~/shared/domain/term";
 
 /** What a course thread is asked to start. Each member names only what that work needs. */
 export type HandoffWork =
@@ -140,7 +140,7 @@ export interface AgentScope {
   conversations: readonly Conversation[];
   courses: readonly Course[];
   /** Present only in a setup thread. The rules' own findings ride along so the agent can speak to them. */
-  scan?: { content: CourseContent; findings: readonly Finding[]; plan: TermPlan };
+  scan?: ScanScope;
   northStar?: {
     announcements: readonly Announcement[];
     schools: readonly School[];
@@ -149,6 +149,29 @@ export interface AgentScope {
     grades: readonly CourseGrades[];
   };
 }
+
+/** The plan as a scan's agent reads it: the old term is only a name when its dates say nothing. */
+type ScanPlan = Omit<TermPlan, "oldTerm"> & {
+  oldTerm: TermDates | Pick<TermDates, "name">;
+};
+export interface ScanScope {
+  content: CourseContent;
+  findings: readonly Finding[];
+  plan: ScanPlan;
+}
+
+/** With nothing due, the Dates step fills a blank old term with the new term's dates, which the teacher never gave (#103). */
+export const scanScopeOf = (
+  content: CourseContent,
+  findings: readonly Finding[],
+  plan: TermPlan,
+): ScanScope => ({
+  content,
+  findings,
+  plan: content.items.some((item) => item.dueAt !== null)
+    ? plan
+    : { ...plan, oldTerm: { name: plan.oldTerm.name } },
+});
 
 /** What the app sends when a person opens something to work on. The scope holds only that one thing. */
 export const DRAFT_GRADE_REQUEST = "Draft a grade for this submission.";
@@ -708,11 +731,19 @@ const parseFinding = (
   if (!isText(raw["why"])) return fail({ kind: "malformed", detail: "why" });
   const after = raw["after"] ?? null;
   if (after !== null && !isText(after)) return fail({ kind: "malformed", detail: "after" });
+  const findingType = raw["findingType"];
+  // Only the rules' findings reach the review list, so a finding of the agent's own would vanish there.
+  if (
+    !scope.scan.findings.some(
+      (finding) => finding.type === findingType && finding.item === item.ref,
+    )
+  )
+    return fail({ kind: "out-of-scope", target: `${findingType} on ${item.ref}` });
   return {
     ok: true,
     value: {
       type: "finding",
-      findingType: raw["findingType"],
+      findingType,
       item: item.ref,
       quote: raw["quote"],
       why: raw["why"],

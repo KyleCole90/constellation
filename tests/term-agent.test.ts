@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   SCAN_COURSE_REQUEST,
   parseAgentEffect,
+  scanScopeOf,
   runAgent,
   type Agent,
   type AgentEffect,
@@ -55,7 +56,7 @@ const setupScope = async () => {
     courses: courses.value,
     scan: { content, findings, plan },
   };
-  return { rig, scope, content, findings };
+  return { rig, scope, content, findings, plan };
 };
 
 describe("what an agent cannot do in a setup thread", () => {
@@ -196,6 +197,32 @@ describe("what an agent cannot do in a setup thread", () => {
     ).toEqual({ ok: false, error: { kind: "out-of-scope", target: "lcc:item:1:page:1" } });
   });
 
+  it("has a finding refused when the rules found nothing of its type on that item, so the list never misses what Claude names (#103)", async () => {
+    const { scope, content, findings } = await setupScope();
+    const item = content.items.find(
+      (entry) =>
+        entry.body.length > 0 &&
+        !findings.some((finding) => finding.item === entry.ref && finding.type === "missing-file"),
+    );
+    if (!item) throw new Error("expected an item with no missing-file finding");
+    expect(
+      parseAgentEffect(
+        {
+          type: "finding",
+          findingType: "missing-file",
+          item: item.ref,
+          quote: item.body.slice(0, 10),
+          why: "A broken icon image.",
+          after: null,
+        },
+        scope,
+      ),
+    ).toEqual({
+      ok: false,
+      error: { kind: "out-of-scope", target: `missing-file on ${item.ref}` },
+    });
+  });
+
   it.each(["publish", "approve", "copy", "send"])(
     "has a %s effect refused as unknown",
     async (type) => {
@@ -227,6 +254,19 @@ describe("what an agent cannot do in a setup thread", () => {
       expect(effects[0]?.type).toBe("decline");
       if (effects[0]?.type === "decline") expect(effects[0].text).toContain("buttons");
     }
+  });
+});
+
+describe("a scan's scope", () => {
+  it("gives the agent no old term dates when nothing is due, since the app filled them in from the new term (#103)", async () => {
+    const { content, findings, plan } = await setupScope();
+    const undated = { ...content, items: content.items.map((item) => ({ ...item, dueAt: null })) };
+    expect(scanScopeOf(undated, findings, plan).plan).toEqual({
+      ...plan,
+      oldTerm: { name: plan.oldTerm.name },
+    });
+    expect(content.items.some((item) => item.dueAt !== null)).toBe(true);
+    expect(scanScopeOf(content, findings, plan).plan).toEqual(plan);
   });
 });
 
