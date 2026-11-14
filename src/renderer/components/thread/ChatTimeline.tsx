@@ -15,6 +15,7 @@ import { undraftableReason, type Submission } from "~/shared/domain/lms";
 import {
   selectAssignment,
   selectSubmission,
+  selectMessageSince,
   selectUndrafted,
   selectThreadChanges,
 } from "~/renderer/stores/selectors";
@@ -28,6 +29,7 @@ import { ChangeCard, ChangeRow } from "./DraftCard";
 import { useRefusedFile } from "./SubmittedFile";
 import { AnswerLines, HandedOffBanner, HandoffGroup, ReplyChips } from "./northStar";
 import { boldRuns, buildTimeline, liveReplies, visibleMessages } from "./timeline.logic";
+import { useChange } from "./useChange";
 import { focusIsFree } from "~/renderer/lib/lostFocus";
 
 const STICK_PX = 80;
@@ -384,7 +386,10 @@ function OpenSubmission({
   const refused = useRefusedFile(submission);
   const blocked = undraftableReason(submission.body) ?? refused;
   const undrafted = useWorkspace((state) => selectUndrafted(state, submission));
-  const offer = undrafted?.offer ?? null;
+  const ask = useChange(useWorkspace((state) => selectMessageSince(state, submission)?.id ?? null));
+  const askSent = ask?.summary.sentAt != null;
+  const asking = ask !== null && !askSent;
+  const offer = ask ? null : (undrafted?.offer ?? null);
   const open = (fill: "draft" | "by-hand") => {
     if (working) return;
     setAsked(fill === "draft");
@@ -415,7 +420,21 @@ function OpenSubmission({
           {blocked}
         </p>
       )}
+      {askSent && (
+        <p data-testid="message-sent" className="text-meta text-secondary-label">
+          Your message to {submission.studentName} was sent.
+        </p>
+      )}
       <div className="flex gap-btn-gap">
+        {asking && (
+          <Button
+            variant="default"
+            data-review-message
+            onClick={() => workspaceStore().getState().focusChange(thread, ask.record.id)}
+          >
+            Review the message to {submission.studentName}
+          </Button>
+        )}
         {ai && offer && (
           <Button
             variant="default"
@@ -438,7 +457,7 @@ function OpenSubmission({
         )}
         {!drafting && (
           <Button
-            variant={ai && !blocked && (!undrafted || offer) ? "outline" : "default"}
+            variant={asking || (ai && !blocked && (!undrafted || offer)) ? "outline" : "default"}
             data-lands="[data-typed-score], [data-card-primary]"
             onClick={() => open("by-hand")}
           >
