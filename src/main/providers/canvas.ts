@@ -19,17 +19,18 @@ import {
   type Result,
   type SchoolId,
 } from "../../shared/domain/ids";
-import type {
-  Announcement,
-  Assignment,
-  Conversation,
-  Course,
-  School,
-  Student,
-  FileContent,
-  Submission,
-  SubmissionBody,
-  SubmissionFile,
+import {
+  googleExportOf,
+  type Announcement,
+  type Assignment,
+  type Conversation,
+  type Course,
+  type School,
+  type Student,
+  type FileContent,
+  type Submission,
+  type SubmissionBody,
+  type SubmissionFile,
 } from "../../shared/domain/lms";
 import { SendPermit } from "../../shared/domain/permit";
 import { CANVAS_FACE, CANVAS_SCOPES } from "../../shared/providers/canvas";
@@ -338,6 +339,35 @@ const bodyOf = (row: v.InferOutput<typeof SubmissionRow>): SubmissionBody => {
 };
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
+/** The most the app sends Claude at once, so the most a link's export may be. */
+const MAX_EXPORT_BYTES = 20 * 1024 * 1024;
+const EXPORT_TIMEOUT_MS = 20_000;
+
+/** The body, or null once it passes `max` bytes: a stream is read only that far, whatever its header claims. */
+const bytesUpTo = async (
+  response: Response,
+  max: number,
+): Promise<Uint8Array<ArrayBuffer> | null> => {
+  if (Number(response.headers.get("content-length")) > max) return null;
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  const reader: ReadableStreamDefaultReader<Uint8Array> | undefined = response.body?.getReader();
+  for (let part = await reader?.read(); part && !part.done; part = await reader?.read()) {
+    total += part.value.byteLength;
+    if (total > max) {
+      await reader?.cancel();
+      return null;
+    }
+    chunks.push(part.value);
+  }
+  const data = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    data.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return data;
+};
 
 /** What Canvas answers a migration created with a `pre_attachment`: where, and with which fields, to post the file. */
 const PreAttachment = v.object({
@@ -954,6 +984,38 @@ export const createCanvasProvider = (deps: {
     }
   };
 
+  /**
+   * The export of the Google file a link submission points at, read with no token and no cookies, so Google serves it
+   * only when the student shared it publicly. The link is the one Canvas holds; a private file answers with a sign-in
+   * page, which isn't a PDF.
+   */
+  const linkExport = async (ref: LmsRef<"submission">): Read<FileContent> => {
+    const at = submissionAt(ref);
+    if (!at) return NOT_FOUND;
+    const row = await one(at.path, v.object({ url: v.nullish(v.string(), null) }));
+    if (!row.ok) return row;
+    const exported = row.value.url === null ? null : googleExportOf(row.value.url);
+    if (!exported) return NOT_FOUND;
+    const refused = (reason: string) =>
+      ({ ok: false, error: { kind: "rejected", reason } }) as const;
+    try {
+      const response = await deps.fetch(exported.url, {
+        credentials: "omit",
+        signal: AbortSignal.timeout(EXPORT_TIMEOUT_MS),
+      });
+      const landed = URL.parse(response.url || exported.url);
+      const type = response.headers.get("content-type")?.split(";")[0]?.trim();
+      if (!response.ok || landed?.protocol !== "https:" || type !== "application/pdf")
+        return refused(`The ${exported.what} isn't shared publicly, so the app can't read it.`);
+      const data = await bytesUpTo(response, MAX_EXPORT_BYTES);
+      return data
+        ? { ok: true, value: { mediaType: "application/pdf", data } }
+        : refused(`The ${exported.what} is larger than the 20 MB the app sends to Claude.`);
+    } catch {
+      return OFFLINE;
+    }
+  };
+
   const conversation = async (
     id: number,
     mine: number,
@@ -987,6 +1049,7 @@ export const createCanvasProvider = (deps: {
 
   return {
     ...CANVAS_FACE,
+    linkExport,
     verify: async () => {
       const self = await one("/users/self", Self);
       return self.ok

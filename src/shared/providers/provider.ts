@@ -70,6 +70,11 @@ export interface LmsProvider {
   submissions(course: LmsRef<"course">): Read<readonly Submission[]>;
   /** One file a submission lists in its body, by its id there. Refuses a file the submission doesn't list. */
   file(submission: LmsRef<"submission">, file: string): Read<FileContent>;
+  /**
+   * The PDF export of the public Google file a link submission points at (`googleExportOf`), read with no credentials.
+   * The link is the one the LMS holds, never one the caller passes. Refuses any other link, and a file that isn't public.
+   */
+  linkExport(submission: LmsRef<"submission">): Read<FileContent>;
   conversations(): Read<readonly Conversation[]>;
   announcements(course: LmsRef<"course">): Read<readonly Announcement[]>;
   observe(content: ChangeContent): Read<RemoteState>;

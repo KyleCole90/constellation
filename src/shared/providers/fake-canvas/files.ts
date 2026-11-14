@@ -181,4 +181,22 @@ export const fixtureFile = (id: string, mediaType: string): FileContent | null =
   return draw ? { mediaType, data: draw() } : null;
 };
 
+/** The Google files the fake web shares publicly, by the export address the app asks for. Any other doc is private. */
+const PUBLIC_EXPORTS: Readonly<Record<string, () => Uint8Array<ArrayBuffer>>> = {
+  "https://docs.google.com/document/d/rr5-cardenas-public/export?format=pdf": () =>
+    pdfOf([
+      "Luis Cardenas - Reading Response 5",
+      "",
+      "The author claims that handwritten notes beat typed ones for memory.",
+      "I kept two notebooks for a week, one typed and one by hand.",
+      "The handwritten one was shorter, so I had to choose what mattered.",
+      "That choosing is what I remembered, which is the article's point.",
+    ]),
+};
+
+export const fixtureExport = (url: string): FileContent | null => {
+  const draw = PUBLIC_EXPORTS[url];
+  return draw ? { mediaType: "application/pdf", data: draw() } : null;
+};
+
 export const fixtureBytes = (id: string): number | null => FILES[id]?.().byteLength ?? null;

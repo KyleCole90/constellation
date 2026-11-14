@@ -179,6 +179,12 @@ export const SEED: SeedData = {
                 },
               ],
             },
+            "7": {
+              kind: "url",
+              url: "https://docs.google.com/document/d/rr5-cardenas-public/edit?usp=sharing",
+              files: [],
+            },
+            "8": { kind: "url", url: "https://padlet.com/hstroud/rr5", files: [] },
           },
         },
         {

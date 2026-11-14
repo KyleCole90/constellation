@@ -63,6 +63,7 @@ describe("main's handlers", () => {
       "lms.students",
       "lms.submissions",
       "lms.file",
+      "lms.linkExport",
       "lms.conversations",
       "lms.announcements",
       "lms.observe",

@@ -186,6 +186,43 @@ export const fileLabel = (file: Pick<SubmissionFile, "name" | "mediaType" | "byt
   return `${extension ? extension.toUpperCase() : file.mediaType}, ${sizeLabel(file.bytes)}`;
 };
 
+const GOOGLE_EXPORTS = {
+  document: { what: "Google Doc", path: "export?format=pdf" },
+  presentation: { what: "Google Slides deck", path: "export/pdf" },
+  spreadsheets: { what: "Google Sheet", path: "export?format=pdf" },
+} as const;
+const GOOGLE_FILE =
+  /^https?:\/\/docs\.google\.com\/(document|presentation|spreadsheets)\/(?:u\/\d+\/)?d\/([\w-]+)(?:[/?#]|$)/i;
+
+/**
+ * The PDF export of the Google Doc, Slides deck or Sheet a link points at, or null for any other link. Google serves
+ * it to an app with no account only when the file is shared publicly. The address is built from the file's id, so it is
+ * always Google's own `https:` host whatever else the student's link carried.
+ */
+export const googleExportOf = (url: string): { what: string; url: string } | null => {
+  const [, kind, id] = GOOGLE_FILE.exec(url.trim()) ?? [];
+  if (!id || (kind !== "document" && kind !== "presentation" && kind !== "spreadsheets"))
+    return null;
+  const { what, path } = GOOGLE_EXPORTS[kind];
+  return { what, url: `https://docs.google.com/${kind}/d/${id}/${path}` };
+};
+
+/** The page snapshot the LMS took of a link, when it is a picture the app can send Claude. */
+export const snapshotOf = (body: Extract<SubmissionBody, { kind: "url" }>): SubmissionFile | null =>
+  body.files.find((file) => claudeBlockFor(file) === "image" && file.bytes <= MAX_IMAGE_BYTES) ??
+  null;
+
+/**
+ * What Claude can read of a link, best first (#71): the export of a public Google file, which is the whole work, then
+ * the LMS's snapshot of the page, which is only its first screen. A draft tries each in turn.
+ */
+export const linkReads = (
+  body: Extract<SubmissionBody, { kind: "url" }>,
+): readonly ("export" | "snapshot")[] => [
+  ...(googleExportOf(body.url) ? (["export"] as const) : []),
+  ...(snapshotOf(body) ? (["snapshot"] as const) : []),
+];
+
 /**
  * Why Claude can't draft a grade from this submission, or null when it can read everything the student turned in.
  * The one rule that keeps a draft from scoring work it never saw as nothing (#64): every caller that offers or runs
@@ -202,7 +239,9 @@ export const undraftableReason = (body: SubmissionBody): string | null => {
         ? null
         : "This recording has no transcript, so Claude can't draft it. Grade it yourself.";
     case "url":
-      return "Claude can't open links, so it can't draft this one. Open the link and grade it yourself.";
+      return linkReads(body).length > 0
+        ? null
+        : "Claude can't open this link, and Canvas took no snapshot of it. Open the link and grade it yourself.";
     case "elsewhere":
       return `This is ${body.what}, which Claude can't read here. Grade it yourself.`;
     case "upload":

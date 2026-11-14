@@ -850,3 +850,90 @@ describe("what a Canvas student turned in", () => {
     expect(canvas.requests).toHaveLength(1);
   });
 });
+
+describe("a link submission's public export (#71)", () => {
+  const AT = "/api/v1/courses/2201/assignments/5301/submissions/6401";
+  const REF = `${HOST}:submission:2201:5301:6401` as LmsRef<"submission">;
+  const DOC = "https://docs.google.com/document/d/1AbC/edit?usp=sharing";
+  const EXPORT = "https://docs.google.com/document/d/1AbC/export?format=pdf";
+
+  const exportWith = (link: string | null, answer: () => Response) => {
+    const sent: { url: string; init: RequestInit }[] = [];
+    const provider = createCanvasProvider({
+      school: SCHOOL,
+      lease: leaseOf(TOKEN),
+      fetch: async (url, init) => {
+        sent.push({ url, init });
+        return url.startsWith(ORIGIN)
+          ? new Response(JSON.stringify({ url: link }), {
+              headers: { "content-type": "application/json" },
+            })
+          : answer();
+      },
+      now: () => Date.now(),
+      packageFile: async () => null,
+    });
+    return { provider, sent };
+  };
+  const pdf = (body: BodyInit, headers: Record<string, string> = {}) =>
+    new Response(body, { headers: { "content-type": "application/pdf", ...headers } });
+
+  it("reads the doc's PDF export with no token, no cookies and a timeout", async () => {
+    const { provider, sent } = exportWith(DOC, () => pdf("%PDF-1.4 essay"));
+    const read = await provider.linkExport(REF);
+    expect(read.ok && new TextDecoder().decode(read.value.data)).toBe("%PDF-1.4 essay");
+    expect(sent.map(({ url }) => url)).toEqual([`${ORIGIN}${AT}`, EXPORT]);
+    const third = sent[1]?.init;
+    expect(new Headers(third?.headers).get("authorization")).toBeNull();
+    expect(third?.credentials).toBe("omit");
+    expect(third?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("treats a private doc, which answers with Google's sign-in page, as not public", async () => {
+    const { provider } = exportWith(
+      DOC,
+      () => new Response("<html>Sign in</html>", { headers: { "content-type": "text/html" } }),
+    );
+    expect(await provider.linkExport(REF)).toEqual({
+      ok: false,
+      error: {
+        kind: "rejected",
+        reason: "The Google Doc isn't shared publicly, so the app can't read it.",
+      },
+    });
+  });
+
+  it("fetches nothing for a link that isn't a Google file, or no link", async () => {
+    for (const link of ["https://padlet.com/me/board", null]) {
+      const { provider, sent } = exportWith(link, () => pdf("%PDF"));
+      expect(await provider.linkExport(REF)).toMatchObject({ ok: false });
+      expect(sent).toHaveLength(1);
+    }
+  });
+
+  it("stops reading an export past 20 MB, whatever its header claims", async () => {
+    const chunk = new Uint8Array(1024 * 1024);
+    let sentChunks = 0;
+    const endless = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        sentChunks += 1;
+        controller.enqueue(chunk);
+      },
+    });
+    const { provider } = exportWith(DOC, () => pdf(endless, { "content-length": "10" }));
+    expect(await provider.linkExport(REF)).toMatchObject({
+      ok: false,
+      error: { reason: "The Google Doc is larger than the 20 MB the app sends to Claude." },
+    });
+    expect(sentChunks).toBeLessThan(25);
+  });
+
+  it("refuses an export that lands off https", async () => {
+    const { provider } = exportWith(DOC, () => {
+      const response = pdf("%PDF");
+      Object.defineProperty(response, "url", { value: "http://plain.example/doc.pdf" });
+      return response;
+    });
+    expect(await provider.linkExport(REF)).toMatchObject({ ok: false });
+  });
+});

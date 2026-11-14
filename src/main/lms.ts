@@ -345,6 +345,7 @@ export const lmsHandlers = (options: {
     "lms.students": ({ school, course }) => provider(school).students(course),
     "lms.submissions": ({ school, course }) => provider(school).submissions(course),
     "lms.file": ({ school, submission, file }) => readFile(school, submission, file),
+    "lms.linkExport": ({ school, submission }) => provider(school).linkExport(submission),
     "lms.conversations": ({ school }) => provider(school).conversations(),
     "lms.announcements": ({ school, course }) => provider(school).announcements(course),
     "lms.observe": ({ school, content }) => provider(school).observe(content),

@@ -1999,13 +1999,23 @@ const handFormTypedBackToClaude = async (t) => {
     await t.eval(`document.querySelector(${JSON.stringify(typed)}).value`),
   );
   await t.shot("hand-form-typed-filled");
+  const paneOpen = `document.querySelector('[data-testid="thread-panel"]') !== null`;
+  t.assert(await t.eval(paneOpen), "typed hand form: the submission pane is open beside the draft");
   await t.click("Discard", { within: '[data-testid="card-actions"]' });
   await opensUndrafted(
     t,
     student,
     "typed hand form: Discard stays on the student, undrafted (#66)",
   );
+  t.assert(await t.eval(paneOpen), "typed hand form: Discard keeps the submission pane open (#71)");
   await t.shot("hand-form-typed-discarded");
+  await t.goto("/due");
+  await t.click('[data-testid="grading-list-link"]');
+  await opensUndrafted(t, student, "typed hand form: the Grading list reopens on the student");
+  t.assert(
+    await t.eval(paneOpen),
+    "typed hand form: back from What's due, the submission pane is still open (#71)",
+  );
 };
 
 const discard = async (t) => {
@@ -2193,8 +2203,47 @@ const submissionTypes = async (t) => {
     "a link shows as a link, with the snapshot the LMS took",
     15_000,
   );
-  await blocked("a link");
+  const draftsLink = async (student, read, shot) => {
+    await openCell("ENG 101", student, "Reading Response 5");
+    t.assert(
+      await t.eval(`${draftButton}?.disabled === false`),
+      `${student}'s link: Claude can draft it`,
+      await t.text(OPEN),
+    );
+    await draftWithClaude(t);
+    await t.waitFor(
+      `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(`${student}, Reading Response 5`)})`,
+      `${student}'s link drafts`,
+      15_000,
+    );
+    await settled(t, `${student}'s link: agent finished`);
+    t.assert(
+      read.test(await t.text(CHAT)),
+      `${student}'s link: the thread says what Claude read (#71)`,
+      await t.text(CHAT),
+    );
+    await t.shot(shot);
+    await t.click("Discard", { within: '[data-testid="card-actions"]' });
+    await t.waitFor(`!document.querySelector(${JSON.stringify(CARD)})`, `${student}: discarded`);
+  };
   await t.shot("submission-url");
+  await draftsLink(
+    "Priya Raman",
+    /Saw only .*screenshot of the link's first screen, so a long doc may be cut off/,
+    "submission-url-snapshot-draft",
+  );
+  await draftsLink(
+    "Luis Cardenas",
+    /Read the whole Google Doc from the link/,
+    "submission-url-export-draft",
+  );
+
+  await openCell("ENG 101", "Hannah Stroud", "Reading Response 5");
+  await t.waitFor(
+    `document.querySelector('${PANEL} [data-work="url"] a[href^="https://padlet.com/"]')`,
+    "a link with no snapshot shows as a link",
+  );
+  await blocked("a link that isn't a Google file, with no snapshot");
 
   const drafts = async (label) =>
     t.assert(

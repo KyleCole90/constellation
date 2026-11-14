@@ -55,6 +55,7 @@ const createBridgeProvider = (
     students: (course) => read(() => bridge.invoke("lms.students", byCourse(course))),
     submissions: (course) => read(() => bridge.invoke("lms.submissions", byCourse(course))),
     file: (submission, file) => read(() => bridge.invoke("lms.file", { school, submission, file })),
+    linkExport: (submission) => read(() => bridge.invoke("lms.linkExport", { school, submission })),
     conversations: () => read(() => bridge.invoke("lms.conversations", bySchool)),
     announcements: (course) => read(() => bridge.invoke("lms.announcements", byCourse(course))),
     observe: (content) => read(() => bridge.invoke("lms.observe", { school, content })),

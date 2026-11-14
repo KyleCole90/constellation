@@ -60,11 +60,11 @@ export const discardChange = (thread: ThreadId, id: ChangeId) => {
   const ui = selectThreadUi(state, thread);
   if (!record || !state.dispatchUser(id, { type: "discard", at: nowIso() }).ok) return;
   state.focusChange(thread, null);
+  // Only the preview showed the change. The student's work beside it stays open for whatever the teacher does next.
+  const panel = ui.panel === "writeback" ? null : ui.panel;
   state.setThreadUi(
     thread,
-    record.content.kind === "grade"
-      ? { panel: null, current: record.content.target }
-      : { panel: null },
+    record.content.kind === "grade" ? { panel, current: record.content.target } : { panel },
   );
   showUndoToast(`Discarded “${record.subject}”`, () => {
     const now = workspaceStore().getState();

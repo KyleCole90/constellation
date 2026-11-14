@@ -28,15 +28,16 @@ import {
   type Result,
   type SchoolId,
 } from "~/shared/domain/ids";
-import type {
-  Announcement,
-  Assignment,
-  Conversation,
-  Course,
-  Student,
-  FileContent,
-  Submission,
-  SubmissionBody,
+import {
+  googleExportOf,
+  type Announcement,
+  type Assignment,
+  type Conversation,
+  type Course,
+  type Student,
+  type FileContent,
+  type Submission,
+  type SubmissionBody,
 } from "~/shared/domain/lms";
 import { longDate } from "~/shared/domain/preview";
 import { applySplice } from "~/shared/domain/splice";
@@ -64,7 +65,7 @@ import {
   type MigrationRecord,
 } from "./migrations";
 import { refParts, refs } from "../canvas-refs";
-import { fixtureBytes, fixtureFile } from "./files";
+import { fixtureBytes, fixtureExport, fixtureFile } from "./files";
 import { assignmentCanvasId, SEED, type SeedAssignment, type SeedCourse } from "./seed";
 import {
   COURSE_COPY_ISSUES,
@@ -157,7 +158,7 @@ export interface RawCourseContent {
 }
 
 interface LmsState {
-  version: 2;
+  version: 3;
   seq: number;
   writes: number;
   tokens: Record<string, TokenBook>;
@@ -460,7 +461,7 @@ const LMS_LISTS = [
  * A store written before new-term setup or the write log existed has neither; it gets fresh ones and keeps the rest.
  */
 const parseStoredLms = (stored: unknown): LmsState | null => {
-  if (!isObject(stored) || stored["version"] !== 2) return null;
+  if (!isObject(stored) || stored["version"] !== 3) return null;
   const { script, writeLog, term, noise } = stored;
   const valid =
     typeof stored["seq"] === "number" &&
@@ -482,7 +483,7 @@ const parseStoredLms = (stored: unknown): LmsState | null => {
 
 const freshState = (demoScript: boolean): LmsState => {
   const state: LmsState = {
-    version: 2,
+    version: 3,
     seq: 0,
     writes: 0,
     tokens: {},
@@ -932,6 +933,11 @@ export class FakeCanvasServer implements FaultLab {
         ? body.files.find((file) => file.id === id)
         : undefined;
     return listed ? fixtureFile(listed.id, listed.mediaType) : null;
+  };
+  linkExport = (ref: LmsRef<"submission">): FileContent | null => {
+    const body = this.#state.submissions.find((s) => s.ref === ref)?.body;
+    const exported = body?.kind === "url" ? googleExportOf(body.url) : null;
+    return exported ? fixtureExport(exported.url) : null;
   };
   conversations = (school: SchoolId): readonly Conversation[] =>
     structuredClone(this.#state.conversations.filter((c) => c.school === school));
