@@ -2403,6 +2403,10 @@ const cantSee = async (t) => {
     );
   };
   const MESSAGE = `${CARD} textarea`;
+  const toGradeIn = () =>
+    t.eval(
+      `(() => { const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; const cache = Object.values(state.cache).find((c) => c.submissions.some((s) => s.ref === ${JSON.stringify(row)})); const course = cache.courses.find((c) => c.ref === cache.submissions.find((s) => s.ref === ${JSON.stringify(row)}).course); const link = document.querySelector('[data-testid="sidebar"] a[title^="' + course.code + ' "]'); return link ? Number(link.title.match(/(\\d+) to grade/)?.[1] ?? 0) : null; })()`,
+    );
   const messages = (target) =>
     t.eval(
       `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).filter((c) => c.content.kind === "message" && c.content.target === ${JSON.stringify(target)}).map((c) => c.state.tag)`,
@@ -2436,6 +2440,7 @@ const cantSee = async (t) => {
   await openOn(row, student, "can't see, reloaded");
   await offered("can't see, reloaded", student);
 
+  const toGradeBefore = await toGradeIn();
   await drafts("resubmit");
   await t.shot("cant-see-message");
 
@@ -2493,6 +2498,20 @@ const cantSee = async (t) => {
     "resubmit, sent: nothing offers to draft or review the message again (#87)",
     JSON.stringify(after),
   );
+  await openRow("resubmit, in the list");
+  const asked = await t.text(`${LIST} [data-row="${row}"]`);
+  t.assert(
+    asked.includes("Asked to resubmit") && !asked.includes("Not started"),
+    "resubmit, in the list: the row says the student was asked to resubmit (#98)",
+    asked,
+  );
+  const toGradeAfter = await toGradeIn();
+  t.assert(
+    toGradeBefore !== null && toGradeAfter === toGradeBefore - 1,
+    "resubmit, in the list: the course's To grade count leaves out the work waiting on the student (#98)",
+    `${toGradeBefore} -> ${toGradeAfter}`,
+  );
+  await t.shot("cant-see-asked-row");
 
   await openOn(second, secondStudent, "second link");
   await opensUndrafted(t, secondStudent, "second link");

@@ -29,6 +29,8 @@ interface WorkRowOf<K extends "submission" | "conversation"> {
   change: ChangeRecord | null;
   summary: ChangeSummary | null;
   open: boolean;
+  /** When the teacher asked the student to resubmit, so the work waits on them. */
+  asked: IsoTime | null;
   missing: boolean;
   /** False when `undraftableReason` refuses the work, so opening it opens the hand form. */
   draftable: boolean;
@@ -49,6 +51,7 @@ export const fromQueueRows = (rows: readonly QueueRow[]): readonly WorkRow[] =>
     change: row.change,
     summary: row.summary,
     open: row.open,
+    asked: row.asked,
     missing: row.missing,
     draftable: undraftableReason(row.submission.body) === null,
   }));
@@ -68,6 +71,7 @@ export const fromConversationRows = (rows: readonly InboxRow[]): readonly WorkRo
     change: row.change,
     summary: row.summary,
     open: awaitsYou(row),
+    asked: null,
     missing: false,
     draftable: true,
   }));
@@ -89,15 +93,22 @@ export const rowLine = (row: WorkRow, thread: Pick<Thread, "course" | "assignmen
 export const spansSchools = (rows: readonly WorkRow[]): boolean =>
   new Set(rows.map((row) => row.school.id)).size > 1;
 
-export const rowStatus = (row: WorkRow, drafting: boolean): ThreadStatus =>
-  drafting ? { tone: "working", label: "Drafting" } : (row.summary ?? NOT_STARTED);
+export const rowStatus = (row: WorkRow, drafting: boolean): ThreadStatus => {
+  if (drafting) return { tone: "working", label: "Drafting" };
+  if (row.asked) return { tone: "todo", label: `Asked to resubmit · ${formatDay(row.asked)}` };
+  return row.summary ?? NOT_STARTED;
+};
 
 const SIMPLE_FILTERS: readonly {
   filter: QueueFilter;
   label: string;
   holds: (row: WorkRow) => boolean;
 }[] = [
-  { filter: "needs-draft", label: NOT_STARTED.label, holds: (row) => row.change === null },
+  {
+    filter: "needs-draft",
+    label: NOT_STARTED.label,
+    holds: (row) => row.change === null && row.asked === null,
+  },
   { filter: "missing", label: "Missing", holds: (row) => row.missing && row.open },
   {
     filter: "ready-to-approve",
