@@ -50,6 +50,7 @@ const ASSIGNMENT_KEYS = new Set([
 ]);
 const SUBMISSION_KEYS = new Set([
   "ref",
+  "page",
   "school",
   "course",
   "assignment",

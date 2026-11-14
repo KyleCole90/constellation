@@ -28,6 +28,7 @@
     "class-variance-authority": "^0.7.1",
     "electron-updater": "6.8.12",
     "lucide-react": "^1.71.0",
+    "pdfjs-dist": "^6.5.438",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "tailwind-merge": "^3.4.0",

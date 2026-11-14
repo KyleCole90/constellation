@@ -282,6 +282,15 @@ const createFakeCanvasProvider = (
       read(route("read", `GET /api/v1/courses/${courseId(course)}/students/submissions`), () =>
         server.submissions(course),
       ),
+    file: async (submission, id) => {
+      const result = await read(route("read", `GET /api/v1/files/${id}`), () =>
+        server.file(submission, id),
+      );
+      if (!result.ok) return result;
+      return result.value
+        ? { ok: true, value: result.value }
+        : { ok: false, error: { kind: "not_found" } };
+    },
     conversations: () =>
       read(route("read", "GET /api/v1/conversations"), () => server.conversations(school.id)),
     announcements: (course) =>

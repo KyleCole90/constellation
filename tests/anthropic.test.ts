@@ -71,7 +71,7 @@ const transport = (reply: (body: Record<string, unknown>) => Response) => {
   return { fetch, sent };
 };
 
-const INPUT = { request: "Make it warmer.", history: [], scope: { focus: null } };
+const INPUT = { request: "Make it warmer.", history: [], scope: { focus: null }, files: [] };
 
 describe("main's Anthropic agent", () => {
   it("asks Claude with the vault's key and the newest Opus, and hands back raw effects and the cost", async () => {
@@ -106,6 +106,51 @@ describe("main's Anthropic agent", () => {
     expect(request?.headers.get("anthropic-beta")).toContain("server-side-fallback-2026-07-01");
     expect(JSON.stringify(request?.body)).not.toContain(KEY);
     expect(JSON.stringify(answer)).not.toContain(KEY);
+  });
+
+  it("hands Claude a submitted PDF and picture as content blocks ahead of the scope", async () => {
+    const api = transport(() => json(200, message([])));
+    const pdf = new TextEncoder().encode("%PDF-1.4");
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    await anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch })({
+      ...INPUT,
+      request: DRAFT_GRADE_REQUEST,
+      files: [
+        { name: "essay.pdf", mediaType: "application/pdf", data: pdf },
+        { name: "notes.png", mediaType: "image/png", data: png },
+      ],
+    });
+    const [turn] = (api.sent[0]?.body["messages"] ?? []) as [{ content: unknown[] }];
+    expect(turn.content.slice(0, 2)).toEqual([
+      {
+        type: "document",
+        source: {
+          type: "base64",
+          media_type: "application/pdf",
+          data: Buffer.from(pdf).toString("base64"),
+        },
+      },
+      {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: "image/png",
+          data: Buffer.from(png).toString("base64"),
+        },
+      },
+    ]);
+    expect(turn.content[2]).toMatchObject({ type: "text" });
+  });
+
+  it("drafts nothing from a file Claude can't read, without asking it", async () => {
+    const api = transport(() => json(200, message([])));
+    const answer = await anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch })({
+      ...INPUT,
+      files: [{ name: "rr5.docx", mediaType: "application/msword", data: new Uint8Array(8) }],
+    });
+    expect(answer).toMatchObject({ ok: false });
+    expect(!answer.ok && answer.reason).toContain("Nothing was drafted.");
+    expect(api.sent).toHaveLength(0);
   });
 
   it("keeps what a student wrote inside the scope, where it can't pose as the teacher", async () => {
@@ -379,6 +424,7 @@ describe("the live check", () => {
       })({
         request: "Say hello to the teacher in one short sentence.",
         history: [],
+        files: [],
         scope: {
           focus: null,
           changes: [],

@@ -11,7 +11,7 @@ import {
 } from "react";
 
 import type { LmsRef, ThreadId } from "~/shared/domain/ids";
-import type { Submission } from "~/shared/domain/lms";
+import { undraftableReason, type Submission } from "~/shared/domain/lms";
 import {
   selectAssignment,
   selectSubmission,
@@ -379,6 +379,7 @@ function OpenSubmission({
   const vendor = useWorkspace((state) => state.vendorLabelFor(submission.school) ?? "the LMS");
   const comment = submission.comments.findLast((c) => c.mine)?.text;
   const drafting = asked && working;
+  const blocked = undraftableReason(submission.body);
   const open = (fill: "draft" | "by-hand") => {
     if (working) return;
     setAsked(fill === "draft");
@@ -404,10 +405,16 @@ function OpenSubmission({
           {comment}
         </p>
       )}
+      {ai && blocked && (
+        <p data-testid="draft-blocked" className="text-meta text-secondary-label">
+          {blocked}
+        </p>
+      )}
       <div className="flex gap-btn-gap">
         {ai && (
           <Button
             variant="default"
+            disabled={blocked !== null}
             aria-disabled={drafting}
             data-lands="[data-card-primary]"
             onClick={() => open("draft")}
@@ -417,7 +424,7 @@ function OpenSubmission({
         )}
         {!drafting && (
           <Button
-            variant={ai ? "outline" : "default"}
+            variant={ai && !blocked ? "outline" : "default"}
             data-lands="[data-typed-score], [data-card-primary]"
             onClick={() => open("by-hand")}
           >

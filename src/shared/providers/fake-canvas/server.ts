@@ -34,6 +34,7 @@ import type {
   Conversation,
   Course,
   Student,
+  FileContent,
   Submission,
   SubmissionBody,
 } from "~/shared/domain/lms";
@@ -63,6 +64,7 @@ import {
   type MigrationRecord,
 } from "./migrations";
 import { refParts, refs } from "../canvas-refs";
+import { fixtureBytes, fixtureFile } from "./files";
 import { assignmentCanvasId, SEED, type SeedAssignment, type SeedCourse } from "./seed";
 import {
   COURSE_COPY_ISSUES,
@@ -155,7 +157,7 @@ export interface RawCourseContent {
 }
 
 interface LmsState {
-  version: 1;
+  version: 2;
   seq: number;
   writes: number;
   tokens: Record<string, TokenBook>;
@@ -217,7 +219,28 @@ const whatChanged = (content: TextFixContent | SetContent): string => {
   }
 };
 
-const bodyOf = (assignment: SeedAssignment, index: number): SubmissionBody => {
+const filesOf = (
+  files: readonly { id: string; name: string; mediaType: string; bytes?: number }[],
+) =>
+  files.map((file) => ({
+    id: file.id,
+    name: file.name,
+    mediaType: file.mediaType,
+    bytes: fixtureBytes(file.id) ?? file.bytes ?? 0,
+  }));
+
+const bodyOf = (assignment: SeedAssignment, student: number, index: number): SubmissionBody => {
+  const work = assignment.work?.[student];
+  if (work) {
+    switch (work.kind) {
+      case "upload":
+        return { kind: "upload", title: "", files: filesOf(work.files) };
+      case "url":
+        return { kind: "url", title: "", url: work.url, files: filesOf(work.files) };
+      case "elsewhere":
+        return { kind: "elsewhere", title: "", what: work.what };
+    }
+  }
   const piece = assignment.pieces?.[index % assignment.pieces.length];
   if (!piece) return { kind: "none" };
   if (assignment.kind === "video")
@@ -227,7 +250,12 @@ const bodyOf = (assignment: SeedAssignment, index: number): SubmissionBody => {
       durationLabel: piece.duration ?? "",
       transcript: piece.doc,
     };
-  return { kind: "text", title: piece.title, wordCount: piece.words, paragraphs: piece.doc };
+  return {
+    kind: assignment.kind === "discussion" ? "discussion" : "text",
+    title: piece.title,
+    wordCount: piece.words,
+    paragraphs: piece.doc,
+  };
 };
 
 const WORKFLOW: Readonly<Record<string, Submission["workflow"]>> = {
@@ -320,8 +348,9 @@ const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): 
             ]
           : [],
         body: hasWork
-          ? bodyOf(assignment, "NLR".includes(status) ? pieceIndex++ : i)
+          ? bodyOf(assignment, i, "NLR".includes(status) ? pieceIndex++ : i)
           : { kind: "none" },
+        page: null,
       });
     });
   });
@@ -433,7 +462,7 @@ const LMS_LISTS = [
  * A store written before new-term setup or the write log existed has neither; it gets fresh ones and keeps the rest.
  */
 const parseStoredLms = (stored: unknown): LmsState | null => {
-  if (!isObject(stored) || stored["version"] !== 1) return null;
+  if (!isObject(stored) || stored["version"] !== 2) return null;
   const { script, writeLog, term, noise } = stored;
   const valid =
     typeof stored["seq"] === "number" &&
@@ -455,7 +484,7 @@ const parseStoredLms = (stored: unknown): LmsState | null => {
 
 const freshState = (demoScript: boolean): LmsState => {
   const state: LmsState = {
-    version: 1,
+    version: 2,
     seq: 0,
     writes: 0,
     tokens: {},
@@ -897,6 +926,14 @@ export class FakeCanvasServer implements FaultLab {
     return structuredClone(this.#state.submissions.filter((s) => s.course === course)).map((s) =>
       s.workflow === "unsubmitted" && pastDue.has(s.assignment) ? { ...s, workflow: "missing" } : s,
     );
+  };
+  file = (ref: LmsRef<"submission">, id: string): FileContent | null => {
+    const body = this.#state.submissions.find((s) => s.ref === ref)?.body;
+    const listed =
+      body?.kind === "upload" || body?.kind === "url"
+        ? body.files.find((file) => file.id === id)
+        : undefined;
+    return listed ? fixtureFile(listed.id, listed.mediaType) : null;
   };
   conversations = (school: SchoolId): readonly Conversation[] =>
     structuredClone(this.#state.conversations.filter((c) => c.school === school));

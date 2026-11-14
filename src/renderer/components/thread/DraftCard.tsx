@@ -15,6 +15,7 @@ import {
 } from "~/shared/domain/change";
 import { FILL_GRADE_REQUEST } from "~/shared/agent/agent";
 import type { ChangeId } from "~/shared/domain/ids";
+import { undraftableReason } from "~/shared/domain/lms";
 import { ratingLabel } from "~/shared/domain/preview";
 import { workLine } from "~/shared/domain/workName";
 import { cn } from "~/renderer/lib/utils";
@@ -608,12 +609,13 @@ function DraftInsteadButton({ view }: { view: ChangeView }) {
   const ai = useAiOn();
   const untouched = useWorkspace((state) => state.blanks[record.id] !== undefined);
   const working = useWorkspace((state) => state.working[threadId] ?? false);
+  const target = record.content.kind === "grade" ? record.content.target : null;
+  const submission = useWorkspace((state) => selectSubmission(state, target));
   const byHand =
     summary.canEdit &&
     summary.approvedAt === null &&
     record.activity.every((entry) => entry.actor !== "agent");
-  if (!ai || !byHand || record.content.kind !== "grade") return null;
-  const { target } = record.content;
+  if (!ai || !byHand || !target || !submission || undraftableReason(submission.body)) return null;
   const draft = () => {
     if (working) return;
     const state = workspaceStore().getState();

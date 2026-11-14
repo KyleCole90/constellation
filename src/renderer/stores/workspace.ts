@@ -15,6 +15,7 @@ import {
   type AgentEffect,
   type AgentInput,
   type AgentScope,
+  type SubmittedFile,
   type AgentSink,
   type NextWork,
   type HandoffWork,
@@ -66,8 +67,11 @@ import {
   bySchoolName,
   isDemoSchool,
   passagesOf,
+  undraftableReason,
   type Course,
+  type FileContent,
   type School,
+  type Submission,
 } from "~/shared/domain/lms";
 import type { SetupLive } from "~/shared/domain/setup";
 import type { Bridge } from "~/shared/ipc";
@@ -88,6 +92,7 @@ import {
   type Credential,
   type LmsProvider,
   type ProviderDescriptor,
+  type Read,
   type Secret,
   type Vault,
 } from "~/shared/providers/provider";
@@ -196,6 +201,8 @@ interface WorkspaceActions extends SetupActions {
     submission: LmsRef<"submission">,
     options?: OpenOptions,
   ): Promise<ChangeId | null>;
+  /** A file the submission lists, read from its school's LMS. The token never leaves main. */
+  readFile(submission: Submission, file: string): Read<FileContent>;
   openConversation(
     thread: ThreadId,
     conversation: LmsRef<"conversation">,
@@ -1329,6 +1336,26 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           };
         };
 
+        const draftFiles = async (
+          narrow: Narrow | null,
+        ): Promise<Result<readonly SubmittedFile[], string>> => {
+          const [submission] = narrow?.submissions ?? [];
+          const body = submission?.body;
+          if (!submission || body?.kind !== "upload") return { ok: true, value: [] };
+          const lms = provider(submission.school);
+          const files: SubmittedFile[] = [];
+          for (const file of body.files) {
+            const read = await lms?.file(submission.ref, file.id);
+            if (!read?.ok)
+              return {
+                ok: false,
+                error: `The app couldn't download ${file.name} from ${lms?.vendorLabel ?? "the LMS"}, so nothing was drafted. Try again, or grade it yourself.`,
+              };
+            files.push({ name: file.name, mediaType: file.mediaType, data: read.value.data });
+          }
+          return { ok: true, value: files };
+        };
+
         const runThreadAgent = async (
           thread: ThreadId,
           request: string,
@@ -1360,9 +1387,14 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           );
           set({ working: { ...get().working, [thread]: true } });
           try {
+            // Filling in the rest of a hand grade reads the same files a fresh draft does.
+            const files =
+              request === DRAFT_GRADE_REQUEST || request === FILL_GRADE_REQUEST
+                ? await draftFiles(narrow)
+                : NO_FILES;
             await runAgent(
-              agent,
-              { request, thread: { history }, scope },
+              files.ok ? agent : declining(files.error),
+              { request, thread: { history }, scope, ...(files.ok ? { files: files.value } : {}) },
               sinkFor(thread, run, request === FILL_GRADE_REQUEST),
               new AbortController().signal,
             );
@@ -1651,6 +1683,12 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
 
           syncSchool,
 
+          readFile: async (submission, file) =>
+            (await provider(submission.school)?.file(submission.ref, file)) ?? {
+              ok: false,
+              error: { kind: "not_found" },
+            },
+
           openSubmission: async (thread, ref, options) => {
             for (const cache of allCaches()) {
               const submission = cache.submissions.find((s) => s.ref === ref);
@@ -1669,7 +1707,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   conversations: [],
                 },
                 blankGrade(submission, assignment),
-                options ?? {},
+                options?.fill === "draft" && undraftableReason(submission.body) !== null
+                  ? { ...options, fill: "by-hand" }
+                  : (options ?? {}),
               );
             }
             return null;
@@ -2139,6 +2179,17 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
 
   return Object.assign(store, { syncFromStorage: () => syncFromStorage() });
 };
+
+const NO_FILES = { ok: true, value: [] } as const satisfies Result<
+  readonly SubmittedFile[],
+  string
+>;
+
+const declining = (text: string): Agent => ({
+  async *run() {
+    yield { type: "decline", text };
+  },
+});
 
 let agentDown = false;
 /** Verify's stand-in for Claude being unreachable: while down, the rules agent declines the way Claude's does. */

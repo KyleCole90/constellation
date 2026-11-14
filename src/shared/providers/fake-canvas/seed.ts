@@ -12,6 +12,16 @@ interface SeedPrior {
   comment: string;
   scores?: Readonly<Record<string, number>>;
 }
+interface SeedFile {
+  id: string;
+  name: string;
+  mediaType: string;
+  bytes?: number;
+}
+type SeedWork =
+  | { kind: "upload"; files: readonly SeedFile[] }
+  | { kind: "url"; url: string; files: readonly SeedFile[] }
+  | { kind: "elsewhere"; what: string };
 export interface SeedAssignment {
   id: string;
   short: string;
@@ -22,7 +32,8 @@ export interface SeedAssignment {
   statuses: string;
   canvasId?: number;
   lateRate?: number;
-  kind?: "video";
+  kind?: "video" | "discussion";
+  work?: Readonly<Record<number, SeedWork>>;
   lateDays?: Readonly<Record<number, number>>;
   fixedGrades?: Readonly<Record<number, number>>;
   prior?: Readonly<Record<number, SeedPrior>>;
@@ -122,6 +133,40 @@ export const SEED: SeedData = {
           pts: 20,
           statuses: "GGGGGGGGGGMGGG",
           fixedGrades: { "13": 12 },
+          work: {
+            "0": {
+              kind: "upload",
+              files: [
+                {
+                  id: "rr5-ortiz-pdf",
+                  name: "Reading Response 5.pdf",
+                  mediaType: "application/pdf",
+                },
+              ],
+            },
+            "1": {
+              kind: "upload",
+              files: [{ id: "rr5-reyes-png", name: "response5-notes.png", mediaType: "image/png" }],
+            },
+            "2": {
+              kind: "url",
+              url: "https://docs.google.com/document/d/rr5-raman/edit",
+              files: [{ id: "rr5-raman-snapshot", name: "snapshot.png", mediaType: "image/png" }],
+            },
+            "3": {
+              kind: "upload",
+              files: [
+                {
+                  id: "rr5-wilk-docx",
+                  name: "RR5 Wilk.docx",
+                  mediaType:
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                  bytes: 18_432,
+                },
+              ],
+            },
+            "4": { kind: "elsewhere", what: "an annotated document in Canvas" },
+          },
         },
         {
           id: "e101-essay2",
@@ -445,6 +490,24 @@ export const SEED: SeedData = {
           due: "2026-10-25T23:59",
           pts: 10,
           statuses: "GGGMGGGGG",
+          kind: "discussion",
+          pieces: [
+            {
+              title: "Discussion 8: Audience Analysis",
+              words: 64,
+              doc: [
+                "My audience for the informative speech is my coworkers at the bike shop. Most of them already ride, so I can skip the basics and spend my time on why tire pressure matters in the cold.",
+                "Replying to Emil: I like that you plan to poll the room first. I might borrow that.",
+              ],
+            },
+            {
+              title: "Discussion 8: Audience Analysis",
+              words: 41,
+              doc: [
+                "I will speak to first-year students about the library. They are busy and a little nervous, so I will keep it short and start with where to find a quiet room.",
+              ],
+            },
+          ],
         },
         {
           id: "c110-speech2",

@@ -56,9 +56,28 @@ export interface Assignment {
   latePointsPerDay: number | null;
 }
 
+export interface SubmissionFile {
+  id: string;
+  name: string;
+  mediaType: string;
+  bytes: number;
+}
+
+export interface FileContent {
+  mediaType: string;
+  data: Uint8Array<ArrayBuffer>;
+}
+
 export type SubmissionBody =
   | { kind: "text"; title: string; wordCount: number; paragraphs: readonly string[] }
+  /** The student's own posts on a graded discussion, oldest first. */
+  | { kind: "discussion"; title: string; wordCount: number; paragraphs: readonly string[] }
   | { kind: "media"; title: string; durationLabel: string; transcript: readonly string[] }
+  /** A link, with any snapshot the LMS took of the page. */
+  | { kind: "url"; title: string; url: string; files: readonly SubmissionFile[] }
+  | { kind: "upload"; title: string; files: readonly SubmissionFile[] }
+  /** Work the app can't read here, such as a quiz or an external tool. `what` names it for the teacher. */
+  | { kind: "elsewhere"; title: string; what: string }
   | { kind: "none" };
 
 export interface SubmissionComment {
@@ -84,15 +103,21 @@ export interface Submission {
   rubricScores: Readonly<Record<string, number>> | null;
   comments: readonly SubmissionComment[];
   body: SubmissionBody;
+  /** The LMS's own `https:` page for this submission, which opens in the browser. */
+  page: string | null;
 }
 
-/** The text a rationale can anchor to: paragraphs of writing, or the transcript of a recording. */
+/** The text a rationale can anchor to: paragraphs of writing or posts, or the transcript of a recording. */
 export const passagesOf = (submission: Submission): readonly string[] => {
   switch (submission.body.kind) {
     case "text":
+    case "discussion":
       return submission.body.paragraphs;
     case "media":
       return submission.body.transcript;
+    case "url":
+    case "upload":
+    case "elsewhere":
     case "none":
       return [];
   }
@@ -104,12 +129,80 @@ const wordsIn = (paragraphs: readonly string[]): number =>
 export const excerptNote = (body: SubmissionBody): string | null => {
   switch (body.kind) {
     case "text":
+    case "discussion":
       return wordsIn(body.paragraphs) < body.wordCount ? "Excerpts" : null;
     case "media":
       return "Auto transcript, excerpts";
+    case "url":
+    case "upload":
+    case "elsewhere":
     case "none":
       return null;
   }
+};
+
+const CLAUDE_READS: Readonly<Record<string, "document" | "image">> = {
+  "application/pdf": "document",
+  "image/png": "image",
+  "image/jpeg": "image",
+  "image/gif": "image",
+  "image/webp": "image",
+};
+const MB = 1024 * 1024;
+/** The app's own caps on what it sends Claude, kept under Anthropic's limits with room for base64. */
+const MAX_IMAGE_BYTES = 5 * MB;
+const MAX_CLAUDE_BYTES = 20 * MB;
+
+export const claudeBlockFor = (file: Pick<SubmissionFile, "mediaType">) =>
+  CLAUDE_READS[file.mediaType] ?? null;
+
+const sizeLabel = (bytes: number): string =>
+  bytes < MB ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / MB).toFixed(1)} MB`;
+
+/** A file's type and size as a teacher reads them: "PDF, 4 KB". */
+export const fileLabel = (file: Pick<SubmissionFile, "name" | "mediaType" | "bytes">): string => {
+  const extension = /\.([a-z0-9]{1,5})$/i.exec(file.name)?.[1];
+  return `${extension ? extension.toUpperCase() : file.mediaType}, ${sizeLabel(file.bytes)}`;
+};
+
+/**
+ * Why Claude can't draft a grade from this submission, or null when it can read everything the student turned in.
+ * The one rule that keeps a draft from scoring work it never saw as nothing (#64): every caller that offers or runs
+ * a grade draft asks here first. A download that fails later is refused where the files are read.
+ */
+export const undraftableReason = (body: SubmissionBody): string | null => {
+  switch (body.kind) {
+    case "text":
+    case "discussion":
+    case "none":
+      return null;
+    case "media":
+      return body.transcript.length > 0
+        ? null
+        : "This recording has no transcript, so Claude can't draft it. Grade it yourself.";
+    case "url":
+      return "Claude can't open links, so it can't draft this one. Open the link and grade it yourself.";
+    case "elsewhere":
+      return `This is ${body.what}, which Claude can't read here. Grade it yourself.`;
+    case "upload":
+      return body.files.length === 0
+        ? "No file came with this upload, so Claude can't draft it. Grade it yourself."
+        : unreadableFiles(body.files);
+  }
+};
+
+export const unreadableFiles = (files: readonly Omit<SubmissionFile, "id">[]): string | null => {
+  const unread = files.find((file) => claudeBlockFor(file) === null);
+  if (unread)
+    return `Claude can't read ${unread.name} (${fileLabel(unread)}), so it can't draft this one. Grade it yourself.`;
+  const big = files.find(
+    (file) => claudeBlockFor(file) === "image" && file.bytes > MAX_IMAGE_BYTES,
+  );
+  if (big)
+    return `${big.name} is larger than the 5 MB picture the app sends to Claude. Grade it yourself.`;
+  if (files.reduce((sum, file) => sum + file.bytes, 0) > MAX_CLAUDE_BYTES)
+    return "These files are larger than the 20 MB the app sends to Claude at once. Grade it yourself.";
+  return null;
 };
 
 export interface ConversationMessage {

@@ -1,9 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type {
   BetaContentBlock,
+  BetaContentBlockParam,
   BetaMessage,
   BetaTool,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
+
+import { unreadableFiles } from "../../shared/domain/lms";
 
 import type { FindingType } from "../../shared/domain/scan";
 import type { Handlers } from "../../shared/ipc";
@@ -62,7 +65,7 @@ What you can do:
 
 Times in the scope are in UTC. Whenever you write a date or a time for the teacher, write it in the teacher's time zone, from <time_zone>, as a clock time they would read ("Mar 9 at 5:59 PM"), and never write UTC.
 
-Grading: score against the rubric criteria and their point ranges in scope.assignments. Write the comment to the student, by first name, warm and specific, a few sentences. When nothing was turned in (body kind "none"), score zero and say so. Leave lateness to the app; it applies the late policy itself.`;
+Grading: score against the rubric criteria and their point ranges in scope.assignments. Write the comment to the student, by first name, warm and specific, a few sentences. When nothing was turned in (body kind "none"), score zero and say so. The files of an upload you are asked to grade come before the scope, as documents and images in the order its body.files lists them: grade what they show. A file has no paragraphs to quote, so its annotations cite no quotes. Never score work you can't see as missing. When the student turned in something you weren't given (a link, a quiz, a file, body kind "elsewhere"), say what you couldn't read with "say" and propose no grade. Leave lateness to the app; it applies the late policy itself.`;
 
 const FINDING_TYPES = [
   "plain-date",
@@ -249,7 +252,7 @@ const TOOLS: readonly BetaTool[] = [
         quotes: {
           type: "array",
           description:
-            "Exact quotes from the submission. paragraph indexes body.paragraphs, or body.transcript for a recording. Empty when the reason is about something the work leaves out.",
+            "Exact quotes from the submission. paragraph indexes body.paragraphs, or body.transcript for a recording. Empty when the reason is about something the work leaves out, and for an upload's files.",
           items: {
             type: "object",
             properties: { paragraph: { type: "integer" }, quote: text },
@@ -317,6 +320,26 @@ const prompt = ({ request, history, scope }: Input): string =>
     .filter(Boolean)
     .join("\n\n");
 
+const IMAGE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+const isImageType = (type: string): type is (typeof IMAGE_TYPES)[number] =>
+  (IMAGE_TYPES as readonly string[]).includes(type);
+
+const blockOf = ({
+  mediaType,
+  data,
+}: Pick<Input["files"][number], "mediaType" | "data">): BetaContentBlockParam => {
+  const base64 = Buffer.from(data).toString("base64");
+  return isImageType(mediaType)
+    ? { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } }
+    : { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } };
+};
+
+/** Files go before the text, as Anthropic advises for images and PDFs. */
+const contentOf = (input: Input): string | BetaContentBlockParam[] =>
+  input.files.length === 0
+    ? prompt(input)
+    : [...input.files.map(blockOf), { type: "text", text: prompt(input) }];
+
 /** Raw effects for the renderer's parser. The tool's name is set last, so the input can't rename the effect. */
 const effectsOf = (content: readonly BetaContentBlock[]): unknown[] =>
   content.flatMap((block): unknown[] => {
@@ -371,7 +394,7 @@ const ask = async (client: Anthropic, input: Input): Promise<Answer> => {
       fallbacks: "default",
       system: SYSTEM,
       tools: [...TOOLS],
-      messages: [{ role: "user", content: prompt(input) }],
+      messages: [{ role: "user", content: contentOf(input) }],
     });
   } catch (error) {
     return reasonFor(error);
@@ -393,6 +416,10 @@ export const anthropicAgent =
   (input) =>
     options.lease.use(async (credential) => {
       if (credential?.kind !== "bearer") return NO_KEY;
+      const unread = unreadableFiles(
+        input.files.map((file) => ({ ...file, bytes: file.data.byteLength })),
+      );
+      if (unread) return failed(`Nothing was drafted. ${unread}`);
       const client = revealSecret(
         credential.token,
         (apiKey) =>

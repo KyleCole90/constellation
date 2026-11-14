@@ -26,8 +26,10 @@ import type {
   Course,
   School,
   Student,
+  FileContent,
   Submission,
   SubmissionBody,
+  SubmissionFile,
 } from "../../shared/domain/lms";
 import { SendPermit } from "../../shared/domain/permit";
 import { CANVAS_FACE, CANVAS_SCOPES } from "../../shared/providers/canvas";
@@ -148,6 +150,14 @@ const AssignmentRow = v.object({
   ),
 });
 const StudentRow = v.object({ id: Id, name: v.string() });
+const AttachmentRow = v.object({
+  id: Id,
+  display_name: v.string(),
+  "content-type": v.nullish(v.string(), "application/octet-stream"),
+  size: v.nullish(v.number(), 0),
+  url: v.nullish(v.string(), null),
+});
+const Attachments = v.nullish(v.array(AttachmentRow), []);
 const SubmissionRow = v.object({
   assignment_id: Id,
   user_id: Id,
@@ -160,6 +170,11 @@ const SubmissionRow = v.object({
   submitted_at: OptionalTime,
   score: v.nullish(v.number(), null),
   body: v.nullish(v.string(), null),
+  submission_type: v.nullish(v.string(), null),
+  url: v.nullish(v.string(), null),
+  preview_url: v.nullish(v.string(), null),
+  attachments: Attachments,
+  discussion_entries: v.nullish(v.array(v.object({ message: v.nullish(v.string(), "") })), []),
   rubric_assessment: v.nullish(
     v.record(v.string(), v.object({ points: v.nullish(v.number(), null) })),
     null,
@@ -259,12 +274,70 @@ const workflowOf = (row: v.InferOutput<typeof SubmissionRow>): Submission["workf
   return row.missing ? "missing" : "unsubmitted";
 };
 
-const bodyOf = (html: string | null): SubmissionBody => {
-  const paragraphs = paragraphsOf(html ?? "");
-  if (paragraphs.length === 0) return { kind: "none" };
-  const wordCount = paragraphs.join(" ").split(/\s+/).filter(Boolean).length;
-  return { kind: "text", title: "", wordCount, paragraphs };
+const textOf = (kind: "text" | "discussion", paragraphs: readonly string[]): SubmissionBody => ({
+  kind,
+  title: "",
+  wordCount: paragraphs.join(" ").split(/\s+/).filter(Boolean).length,
+  paragraphs,
+});
+
+const SUBMISSION_TYPES = {
+  online_text_entry: "a text entry",
+  discussion_topic: "a discussion post",
+  online_url: "a link",
+  online_upload: "an upload",
+  media_recording: "a recording, which plays in Canvas",
+  online_quiz: "a quiz, which Canvas grades",
+  basic_lti_launch: "work in an external tool",
+  external_tool: "work in an external tool",
+  student_annotation: "an annotated document in Canvas",
+} as const;
+type SubmissionType = keyof typeof SUBMISSION_TYPES;
+const isSubmissionType = (type: string): type is SubmissionType =>
+  Object.hasOwn(SUBMISSION_TYPES, type);
+
+const filesOf = (rows: v.InferOutput<typeof Attachments>): SubmissionFile[] =>
+  rows.map((row) => ({
+    id: String(row.id),
+    name: row.display_name,
+    mediaType: row["content-type"],
+    bytes: row.size,
+  }));
+
+const bodyOf = (row: v.InferOutput<typeof SubmissionRow>): SubmissionBody => {
+  const type = row.submission_type;
+  if (type === null) {
+    const paragraphs = paragraphsOf(row.body ?? "");
+    return paragraphs.length === 0 ? { kind: "none" } : textOf("text", paragraphs);
+  }
+  if (!isSubmissionType(type))
+    return { kind: "elsewhere", title: "", what: `a ${type.replaceAll("_", " ")} submission` };
+  const elsewhere = { kind: "elsewhere", title: "", what: SUBMISSION_TYPES[type] } as const;
+  switch (type) {
+    case "online_text_entry": {
+      const paragraphs = paragraphsOf(row.body ?? "");
+      return paragraphs.length === 0 ? elsewhere : textOf("text", paragraphs);
+    }
+    case "discussion_topic": {
+      const paragraphs = row.discussion_entries.flatMap((entry) => paragraphsOf(entry.message));
+      return paragraphs.length === 0 ? elsewhere : textOf("discussion", paragraphs);
+    }
+    case "online_url":
+      return row.url !== null && URL.parse(row.url)?.protocol === "https:"
+        ? { kind: "url", title: "", url: row.url, files: filesOf(row.attachments) }
+        : elsewhere;
+    case "online_upload":
+      return { kind: "upload", title: "", files: filesOf(row.attachments) };
+    case "media_recording":
+    case "online_quiz":
+    case "basic_lti_launch":
+    case "external_tool":
+    case "student_annotation":
+      return elsewhere;
+  }
 };
+
+const MAX_FILE_BYTES = 50 * 1024 * 1024;
 
 /** What Canvas answers a migration created with a `pre_attachment`: where, and with which fields, to post the file. */
 const PreAttachment = v.object({
@@ -847,6 +920,40 @@ export const createCanvasProvider = (deps: {
     }
   };
 
+  /**
+   * Canvas signs a storage address for the file, which is read without the token: Electron's fetch would carry the
+   * token along a redirect to another host, so the app never follows one with it.
+   */
+  const file = async (ref: LmsRef<"submission">, id: string): Read<FileContent> => {
+    const at = submissionAt(ref);
+    if (!at || !/^\d+$/.test(id)) return NOT_FOUND;
+    const row = await one(at.path, v.object({ attachments: Attachments }));
+    if (!row.ok) return row;
+    const listed = row.value.attachments.find((attachment) => String(attachment.id) === id);
+    if (!listed) return NOT_FOUND;
+    const tooBig = {
+      ok: false,
+      error: {
+        kind: "rejected",
+        reason: `${listed.display_name} is larger than the 50 MB the app opens.`,
+      },
+    } as const;
+    if (listed.size > MAX_FILE_BYTES) return tooBig;
+    const signed = await one(`/files/${id}/public_url`, v.object({ public_url: v.string() }));
+    if (!signed.ok) return signed;
+    const storage = URL.parse(signed.value.public_url);
+    if (storage?.protocol !== "https:") return unreadable("a file address");
+    try {
+      const response = await deps.fetch(storage.toString(), {});
+      if (!response.ok) return { ok: false, error: await errorOf(response) };
+      const data = new Uint8Array(await response.arrayBuffer());
+      if (data.byteLength > MAX_FILE_BYTES) return tooBig;
+      return { ok: true, value: { mediaType: listed["content-type"], data } };
+    } catch {
+      return OFFLINE;
+    }
+  };
+
   const conversation = async (
     id: number,
     mine: number,
@@ -998,10 +1105,15 @@ export const createCanvasProvider = (deps: {
                 text: comment.comment,
                 at: comment.created_at,
               })),
-              body: bodyOf(row.body),
+              body: bodyOf(row),
+              page:
+                row.preview_url !== null && URL.parse(row.preview_url)?.origin === origin
+                  ? row.preview_url
+                  : null,
             })),
         };
       }),
+    file,
     conversations: async () => {
       const mine = await me();
       if (!mine.ok) return mine;
