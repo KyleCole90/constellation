@@ -788,21 +788,26 @@ const stageOfChange = (
   return change.state.tag === "approved" || summary?.canApprove ? "review" : null;
 };
 
-export const selectWorkStages = memoByState(
-  (state: WorkspaceData): ReadonlyMap<string, WorkStage> => {
-    const stages = new Map<string, WorkStage>();
-    for (const row of selectQueueRows(state)) {
-      const stage = stageOfChange(row.change, row.summary);
-      if (stage && stages.get(row.assignment.ref) !== "stuck")
-        stages.set(row.assignment.ref, stage);
-    }
-    for (const row of selectInboxRows(state)) {
-      const stage = stageOfChange(row.change, row.summary);
-      if (stage) stages.set(row.conversation.ref, stage);
-    }
-    return stages;
-  },
-);
+/** A ref's most urgent stage, and how many of its changes wait at that stage. */
+export interface Staged {
+  stage: WorkStage;
+  count: number;
+}
+
+export const selectWorkStages = memoByState((state: WorkspaceData): ReadonlyMap<string, Staged> => {
+  const stages = new Map<string, Staged>();
+  const add = (ref: string, stage: WorkStage | null) => {
+    if (!stage) return;
+    const was = stages.get(ref);
+    if (was?.stage === stage) stages.set(ref, { stage, count: was.count + 1 });
+    else if (!was || stage === "stuck") stages.set(ref, { stage, count: 1 });
+  };
+  for (const row of selectQueueRows(state))
+    add(row.assignment.ref, stageOfChange(row.change, row.summary));
+  for (const row of selectInboxRows(state))
+    add(row.conversation.ref, stageOfChange(row.change, row.summary));
+  return stages;
+});
 
 export interface CourseAnnouncements {
   posted: readonly Announcement[];

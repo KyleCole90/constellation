@@ -11,6 +11,7 @@ import {
   type DatedItem,
   type DueItem,
   type InboxRow,
+  type Staged,
   type ThreadStatus,
   type WorkStage,
   WEEK_AHEAD,
@@ -107,7 +108,7 @@ export interface WorkPlan {
 export interface PlanInput {
   groups: readonly DueGroup[];
   extras: DueExtras;
-  stages: ReadonlyMap<string, WorkStage>;
+  stages: ReadonlyMap<string, Staged>;
   expired: readonly School[];
   now: number;
 }
@@ -153,10 +154,12 @@ const stageRank = (stage: WorkStage | null): number => (stage ? STAGE_RANK[stage
 const stageVerb = (stage: WorkStage | null, plain: PlannedWork["verb"]): PlannedWork["verb"] =>
   stage === "stuck" ? "Fix" : stage === "review" ? "Review" : plain;
 
-const stageWhy = (stage: WorkStage): string =>
-  stage === "stuck"
-    ? "A send needs your attention before anything else reaches students."
-    : "Drafts are ready for you to review before they reach students.";
+const stageWhy = ({ stage, count }: Staged, one: string, many?: string): string => {
+  const single = count === 1;
+  return stage === "stuck"
+    ? `${counted(count, "send")} ${single ? "needs" : "need"} your attention before anything else reaches students.`
+    : `${counted(count, one, many)} ${single ? "is" : "are"} waiting on you before ${single ? "it reaches" : "they reach"} students.`;
+};
 
 export const planWork = ({ groups, extras, stages, expired, now }: PlanInput): WorkPlan => {
   const items = groups.flatMap((group) => group.items);
@@ -198,7 +201,8 @@ export const planWork = ({ groups, extras, stages, expired, now }: PlanInput): W
   }
   for (const item of items) {
     const course = item.course.ref;
-    const stage = stages.get(item.assignment.ref) ?? null;
+    const staged = stages.get(item.assignment.ref);
+    const stage = staged?.stage ?? null;
     if (!stage && !hasWorkToGrade(item)) continue;
     ranked.push({
       rank: [stageRank(stage), deadlineOf(course), KIND_RANK.grade, dueTime(item.assignment.dueAt)],
@@ -214,8 +218,8 @@ export const planWork = ({ groups, extras, stages, expired, now }: PlanInput): W
             ? `${counted(item.toGrade, "submission")}, ${item.late} late`
             : counted(item.toGrade, "submission"),
         detailTone: "todo",
-        why: stage
-          ? stageWhy(stage)
+        why: staged
+          ? stageWhy(staged, "grade")
           : isOpen(item)
             ? `Turned in early. Due ${whenWords(item.days, item.assignment.dueAt)}.`
             : (beforeWords(course, "Students need this back before") ??
@@ -238,7 +242,7 @@ export const planWork = ({ groups, extras, stages, expired, now }: PlanInput): W
         detail: draft.status.label,
         detailTone: draft.status.tone,
         why: stage
-          ? stageWhy(stage)
+          ? stageWhy({ stage, count: 1 }, "announcement")
           : (beforeWords(course, "Students should read this before") ?? "Still unsent."),
       },
     });
@@ -248,7 +252,7 @@ export const planWork = ({ groups, extras, stages, expired, now }: PlanInput): W
     { course: string; stage: WorkStage | null; rows: [InboxRow, ...InboxRow[]] }
   >();
   for (const row of extras.unread) {
-    const stage = stages.get(row.conversation.ref) ?? null;
+    const stage = stages.get(row.conversation.ref)?.stage ?? null;
     const key = `${row.course.ref}:${stage ?? "open"}`;
     const group = repliesByStage.get(key);
     if (group) group.rows.push(row);
@@ -279,7 +283,7 @@ export const planWork = ({ groups, extras, stages, expired, now }: PlanInput): W
         // One label means one status, so the first row's tone is everyone's.
         detailTone: statuses.size === 1 ? (first.summary?.tone ?? NOT_STARTED.tone) : "todo",
         why: stage
-          ? stageWhy(stage)
+          ? stageWhy({ stage, count: rows.length }, "reply", "replies")
           : (beforeWords(course, "They're asking ahead of") ??
             (waited > 0 ? `Waiting ${counted(waited, "day")}.` : "Waiting since today.")),
       },

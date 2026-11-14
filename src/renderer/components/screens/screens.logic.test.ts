@@ -12,6 +12,8 @@ import type {
   GradebookRow,
   InboxRow,
   RosterRow,
+  Staged,
+  WorkStage,
 } from "~/renderer/stores/selectors";
 
 import { toneOf } from "./calendar.logic";
@@ -102,13 +104,18 @@ describe("the work plan", () => {
   const plan = (
     items: readonly DueItem[],
     over: Partial<DueExtras> = {},
-    stages: ReadonlyMap<string, "stuck" | "review"> = new Map(),
+    stages: ReadonlyMap<string, WorkStage | Staged> = new Map(),
     expired: readonly School[] = [],
   ) =>
     planWork({
       groups: [{ key: "past", label: "Past due", items }],
       extras: { drafts: [], unread: [], ...over },
-      stages,
+      stages: new Map(
+        [...stages].map(([ref, staged]) => [
+          ref,
+          typeof staged === "string" ? { stage: staged, count: 1 } : staged,
+        ]),
+      ),
       expired,
       now: NOW,
     });
@@ -450,17 +457,28 @@ describe("the work plan", () => {
       const stuck = new Map([["hot:Analysis", "stuck" as const]]);
       const [sitting] = sittingsOf(plan(hot(), {}, stuck));
       expect(sitting?.steps.map((step) => stepReason(step, sitting))).toEqual([
-        "A send needs your attention before anything else reaches students.",
+        "1 send needs your attention before anything else reaches students.",
         null,
       ]);
       const review = new Map([["hot:Analysis", "review" as const]]);
       const [reviewing] = sittingsOf(plan(hot(), {}, review));
       expect(stepReason(reviewing!.steps[0]!, reviewing!)).toBe(
-        "Drafts are ready for you to review before they reach students.",
+        "1 grade is waiting on you before it reaches students.",
       );
       const [closed] = sittingsOf(plan([assignment("done", "Final", -3, 2)]));
       expect(sittingWhen(closed!)).toBe("no deadline coming up");
       expect(stepReason(closed!.steps[0]!, closed!)).toBe("3 days past due.");
+    });
+
+    it("says how many changes wait, so a teacher finds as many as it promised (#93)", () => {
+      const why = (staged: Staged) =>
+        plan(hot(), {}, new Map([["hot:Analysis", staged]])).steps[0]?.why;
+      expect(why({ stage: "review", count: 3 })).toBe(
+        "3 grades are waiting on you before they reach students.",
+      );
+      expect(why({ stage: "stuck", count: 2 })).toBe(
+        "2 sends need your attention before anything else reaches students.",
+      );
     });
 
     it("gives an expired school a block of its own, ahead of the courses", () => {
