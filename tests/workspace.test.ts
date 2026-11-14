@@ -1495,7 +1495,7 @@ describe("the failure lab", () => {
   it.each<[string, (stored: Record<string, unknown>) => void]>([
     ["a collection that isn't a list", (stored) => (stored["courses"] = "nope")],
     ["no demo script", (stored) => delete stored["script"]],
-    ["another version", (stored) => (stored["version"] = 2)],
+    ["another version", (stored) => (stored["version"] = 1)],
   ])("a stored LMS with %s starts fresh instead of loading it", (_name, corrupt) => {
     const storage = memoryStorage();
     const make = () =>

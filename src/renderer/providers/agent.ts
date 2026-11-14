@@ -43,7 +43,7 @@ const forClaude = (scope: AgentScope): unknown =>
  * still goes through `parseAgentEffect`, like the rules agent's output (docs/electron-spec.md, D26).
  */
 export const createBridgeAgent = (bridge: Bridge, online = isOnline): Agent => ({
-  async *run({ request, thread, scope }) {
+  async *run({ request, thread, scope, files = [] }) {
     // A draft opened offline gets the reason at once; nothing is asked, retried or kept for later.
     if (!online()) {
       yield { type: "decline", text: OFFLINE_REASON };
@@ -57,6 +57,7 @@ export const createBridgeAgent = (bridge: Bridge, online = isOnline): Agent => (
         request,
         history: thread.history.map((line) => ({ ...line })),
         scope: plain,
+        files: files.map((file) => ({ ...file })),
       });
     } catch {
       yield { type: "decline", text: UNREACHABLE };

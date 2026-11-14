@@ -13,6 +13,7 @@ import {
 import { useWorkspace } from "~/renderer/stores/workspace";
 
 import { SubmissionBadge } from "../ui/badge";
+import { SubmittedFile } from "./SubmittedFile";
 import {
   criterionHue,
   criterionNumbers,
@@ -145,6 +146,61 @@ function ReasonKey({ record }: { record: ChangeRecord }) {
   );
 }
 
+function OtherWork({ submission }: { submission: Submission }) {
+  const { body, page } = submission;
+  const vendor = useWorkspace((state) => state.vendorLabelFor(submission.school) ?? "the LMS");
+  const inLms = page && (
+    <a href={page} target="_blank" rel="noreferrer" className="link">
+      Open in {vendor}
+    </a>
+  );
+  switch (body.kind) {
+    case "text":
+    case "discussion":
+    case "media":
+      return null;
+    case "url":
+      return (
+        <div data-work="url" className="flex flex-col gap-3">
+          <p className="text-body">
+            Submitted a link:{" "}
+            <a href={body.url} target="_blank" rel="noreferrer" className="link break-all">
+              {body.url}
+            </a>
+          </p>
+          {body.files.map((file) => (
+            <SubmittedFile key={file.id} submission={submission} file={file} />
+          ))}
+        </div>
+      );
+    case "upload":
+      return (
+        <div data-work="upload" className="flex flex-col gap-4">
+          {body.files.length === 0 && (
+            <p className="text-body text-muted-foreground">
+              {vendor} lists no file for this upload. {inLms}
+            </p>
+          )}
+          {body.files.map((file) => (
+            <SubmittedFile key={file.id} submission={submission} file={file} />
+          ))}
+        </div>
+      );
+    case "elsewhere":
+      return (
+        <p data-work="elsewhere" className="text-body text-muted-foreground">
+          The student turned in {body.what}. It doesn't open in the app. {inLms}
+        </p>
+      );
+    case "none":
+      return (
+        <p data-work="none" className="text-body text-muted-foreground">
+          Nothing was submitted.
+        </p>
+      );
+  }
+}
+
 function SubmissionDoc({
   submission,
   record,
@@ -154,7 +210,8 @@ function SubmissionDoc({
 }) {
   const assignment = useWorkspace((state) => selectAssignment(state, submission.assignment));
   const { body } = submission;
-  const title = body.kind === "none" ? (assignment?.title ?? submission.studentName) : body.title;
+  const title =
+    (body.kind === "none" ? "" : body.title) || (assignment?.title ?? submission.studentName);
   const priorComment = submission.comments.filter((comment) => comment.mine).at(-1);
   const note = excerptNote(body);
   const marked = criterionNumbers(markOrder(record), record?.rationale ?? []).size > 0;
@@ -168,7 +225,8 @@ function SubmissionDoc({
         <span className="flex flex-none items-center gap-x-3">
           <span>
             Attempt {submission.attempt}
-            {body.kind === "text" && ` · ${body.wordCount.toLocaleString("en-US")} words`}
+            {(body.kind === "text" || body.kind === "discussion") &&
+              ` · ${body.wordCount.toLocaleString("en-US")} words`}
             {body.kind === "media" && body.durationLabel && ` · ${body.durationLabel} recording`}
           </span>
           {submission.lateDays > 0 && (
@@ -199,15 +257,13 @@ function SubmissionDoc({
         </div>
       )}
       <div className={note || marked ? "" : "mt-3"}>
-        {body.kind === "text" && (
+        {(body.kind === "text" || body.kind === "discussion") && (
           <Paragraphs paragraphs={body.paragraphs} record={record} transcript={false} />
         )}
         {body.kind === "media" && (
           <Paragraphs paragraphs={body.transcript} record={record} transcript />
         )}
-        {body.kind === "none" && (
-          <p className="text-body text-muted-foreground">Nothing was submitted.</p>
-        )}
+        <OtherWork submission={submission} />
       </div>
     </div>
   );

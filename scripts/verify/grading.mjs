@@ -2135,6 +2135,110 @@ const replyDiscard = async (t) => {
   await t.shot("reply-drafted-from-button");
 };
 
+const submissionTypes = async (t) => {
+  const openCell = async (code, student, short) => {
+    await t.click(code, { within: '[data-testid="sidebar"]' });
+    await t.click("Gradebook", { within: '[data-testid="course-tabs"]' });
+    const ref = await t.eval(`(async () => ${refOf(student, short)})()`);
+    await t.waitFor(
+      `document.querySelector('[data-cell="${ref}"]')`,
+      `${student}: the gradebook shows the cell`,
+    );
+    await t.click(`[data-cell="${ref}"]`);
+    await t.waitFor(
+      `document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(student)})`,
+      `${student}, ${short}: opens on the student`,
+    );
+  };
+  const draftButton = `[...document.querySelectorAll('${OPEN} button')].find((b) => b.innerText.includes("Draft with Claude"))`;
+  const blocked = async (label) => {
+    t.assert(
+      (await t.eval(`${draftButton}?.disabled === true`)) &&
+        /grade it yourself/i.test(await t.text('[data-testid="draft-blocked"]')),
+      `${label}: Draft with Claude is off, and the reason says to grade it yourself`,
+      await t.text(OPEN),
+    );
+  };
+  const nothingSubmitted = () =>
+    t.eval(
+      `document.querySelector(${JSON.stringify(PANEL)}).innerText.includes("Nothing was submitted")`,
+    );
+
+  await openCell("ENG 101", "Maya Ortiz", "Reading Response 5");
+  await t.waitFor(
+    `document.querySelector('${PANEL} [data-pdf] canvas[data-pdf-page="1"]')?.width > 0`,
+    "a PDF upload draws its page in the source pane",
+    15_000,
+  );
+  t.assert(
+    !(await nothingSubmitted()) &&
+      (await t.text(PANEL)).includes("Reading Response 5.pdf") &&
+      (await t.eval(`${draftButton}?.disabled === false`)),
+    "the PDF shows with its name, and Claude can draft it",
+    await t.text(PANEL),
+  );
+  await t.shot("submission-pdf");
+
+  await openCell("ENG 101", "Devon Reyes", "Reading Response 5");
+  await t.waitFor(
+    `document.querySelector('${PANEL} [data-file] img')?.naturalWidth > 0`,
+    "an image upload shows inline",
+    15_000,
+  );
+  await t.shot("submission-image");
+
+  await openCell("ENG 101", "Priya Raman", "Reading Response 5");
+  await t.waitFor(
+    `document.querySelector('${PANEL} [data-work="url"] a[href^="https://docs.google.com/"]') && document.querySelector('${PANEL} [data-file] img')?.naturalWidth > 0`,
+    "a link shows as a link, with the snapshot the LMS took",
+    15_000,
+  );
+  await blocked("a link");
+  await t.shot("submission-url");
+
+  await openCell("ENG 101", "Tomasz Wilk", "Reading Response 5");
+  await t.waitFor(
+    `document.querySelector('${PANEL} [data-file="RR5 Wilk.docx"]')?.innerText.includes("DOCX, 18 KB")`,
+    "a Word file shows its name, type and size",
+  );
+  await blocked("a Word file");
+  await t.shot("submission-docx");
+
+  await openCell("ENG 101", "Aaliyah Brooks", "Reading Response 5");
+  await t.waitFor(
+    `document.querySelector('${PANEL} [data-work="elsewhere"]')?.innerText.includes("annotated document")`,
+    "work in the LMS says what it is",
+  );
+  await blocked("work elsewhere");
+
+  await openCell("COMM 110", "Jada Whitfield", "Discussion 8");
+  await t.waitFor(
+    `document.querySelector('${PANEL} [data-testid="paper"]')?.innerText.includes("coworkers at the bike shop")`,
+    "a discussion post reads as text",
+  );
+  t.assert(!(await nothingSubmitted()), "a discussion post isn't Nothing was submitted");
+  await t.shot("submission-discussion");
+
+  await openCell("ENG 101", "Maya Ortiz", "Reading Response 5");
+  await draftWithClaude(t);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes("Maya Ortiz, Reading Response 5")`,
+    "the PDF upload drafts",
+    15_000,
+  );
+  await settled(t, "PDF draft: agent finished");
+  const points = await t.eval(
+    `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).find((c) => c.subject.includes("Maya Ortiz") && c.subject.includes("Reading Response 5"))?.content.points ?? null`,
+  );
+  t.assert(
+    points !== null && points > 0,
+    "the PDF's draft scores the work, not a zero for nothing",
+    points,
+  );
+  await t.click("Discard", { within: '[data-testid="card-actions"]' });
+  await t.waitFor(`!document.querySelector(${JSON.stringify(CARD)})`, "PDF draft: discarded");
+};
+
 export const run = async (t) => {
   await setup(t);
   await pinnedQueue(t);
@@ -2159,4 +2263,5 @@ export const run = async (t) => {
   await handFormBackToClaude(t);
   await handFormTypedBackToClaude(t);
   await failedDraft(t);
+  await submissionTypes(t);
 };

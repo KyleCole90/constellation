@@ -21,6 +21,7 @@ import type {
   Course,
   School,
   Student,
+  FileContent,
   Submission,
 } from "~/shared/domain/lms";
 import type { SendPermit } from "~/shared/domain/permit";
@@ -67,6 +68,8 @@ export interface LmsProvider {
   assignments(course: LmsRef<"course">): Read<readonly Assignment[]>;
   students(course: LmsRef<"course">): Read<readonly Student[]>;
   submissions(course: LmsRef<"course">): Read<readonly Submission[]>;
+  /** One file a submission lists in its body, by its id there. Refuses a file the submission doesn't list. */
+  file(submission: LmsRef<"submission">, file: string): Read<FileContent>;
   conversations(): Read<readonly Conversation[]>;
   announcements(course: LmsRef<"course">): Read<readonly Announcement[]>;
   observe(content: ChangeContent): Read<RemoteState>;

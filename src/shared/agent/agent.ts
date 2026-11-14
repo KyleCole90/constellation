@@ -105,6 +105,14 @@ export interface AgentInput {
   request: string;
   thread: { history: readonly { role: "user" | "agent"; text: string }[] };
   scope: AgentScope;
+  /** The files of the one submission being drafted, read from the LMS, in the order its body lists them. */
+  files?: readonly SubmittedFile[];
+}
+
+export interface SubmittedFile {
+  name: string;
+  mediaType: string;
+  data: Uint8Array<ArrayBuffer>;
 }
 export type Standing = "On track" | "Watch" | "At risk" | "No grades yet";
 

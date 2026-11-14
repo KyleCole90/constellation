@@ -110,12 +110,14 @@ export class SecondLmsStub {
         ? [{ id: `fb:${this.feedback.version}`, mine: true, text: this.feedback.text, at: at() }]
         : [],
       body: { kind: "text", title: "Paper", wordCount: 2, paragraphs: ["Two words."] },
+      page: null,
     });
 
     return {
       vendorLabel: "Other LMS",
       capabilities: CAPABILITIES,
       verify: () => authed(() => OK({ displayName: "Instructor", scopes: ["grades:write"] })),
+      file: async () => ({ ok: false, error: { kind: "not_found" } }),
       courses: () =>
         authed(() =>
           OK([

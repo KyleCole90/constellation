@@ -13,8 +13,8 @@ import {
   type LmsError,
 } from "../shared/domain/change";
 import type { PickedPackage } from "../shared/domain/content";
-import type { ChangeId, Result, SchoolId } from "../shared/domain/ids";
-import type { School } from "../shared/domain/lms";
+import type { ChangeId, LmsRef, Result, SchoolId } from "../shared/domain/ids";
+import type { FileContent, School } from "../shared/domain/lms";
 import { SendPermit } from "../shared/domain/permit";
 import type { Handlers } from "../shared/ipc";
 import { labSnapshot, type LabCommand } from "../shared/providers/fake-canvas/lab";
@@ -67,6 +67,8 @@ export const fakeServer = (storage: StorageLike) => (now: () => number) =>
   });
 
 const LAB_WAIT_MS = 25_000;
+
+const FILE_CACHE_BYTES = 64 * 1024 * 1024;
 
 type LmsChannel = Extract<keyof Handlers, `lms.${string}`>;
 
@@ -239,6 +241,28 @@ export const lmsHandlers = (options: {
     for (const field of appends) if (outcomes[field]?.status === "failed") press.sent.delete(field);
     return outcomes;
   };
+  /** A file's id names one upload, which Canvas never changes. */
+  const files = new Map<string, FileContent>();
+  const readFile = async (
+    school: School,
+    submission: LmsRef<"submission">,
+    id: string,
+  ): Promise<Result<FileContent, LmsError>> => {
+    const key = `${school.id}\n${school.provider}\n${submission}\n${id}`;
+    const kept = files.get(key);
+    if (kept) return { ok: true, value: kept };
+    const read = await provider(school).file(submission, id);
+    if (!read.ok) return read;
+    files.set(key, read.value);
+    let total = 0;
+    for (const value of files.values()) total += value.data.byteLength;
+    for (const [old, value] of files) {
+      if (total <= FILE_CACHE_BYTES) break;
+      files.delete(old);
+      total -= value.data.byteLength;
+    }
+    return read;
+  };
   const term = async <T>(
     school: School,
     read: (setup: TermSetup) => Promise<Result<T, LmsError>>,
@@ -307,6 +331,7 @@ export const lmsHandlers = (options: {
     "lms.assignments": ({ school, course }) => provider(school).assignments(course),
     "lms.students": ({ school, course }) => provider(school).students(course),
     "lms.submissions": ({ school, course }) => provider(school).submissions(course),
+    "lms.file": ({ school, submission, file }) => readFile(school, submission, file),
     "lms.conversations": ({ school }) => provider(school).conversations(),
     "lms.announcements": ({ school, course }) => provider(school).announcements(course),
     "lms.observe": ({ school, content }) => provider(school).observe(content),

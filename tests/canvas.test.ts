@@ -397,6 +397,7 @@ describe("Canvas reads", () => {
       assignment: `${HOST}:assignment:2201:5301`,
       student: `${HOST}:student:6401`,
       studentName: "Avery Sample",
+      page: "https://canvas.example.edu/courses/2201/assignments/5301/submissions/6401?preview=1",
       workflow: "graded",
       attempt: 1,
       lateDays: 0,
@@ -701,5 +702,151 @@ describe("the renderer's Canvas client", () => {
     expect(await canvas.verify()).toMatchObject({ ok: true });
     const courses = await canvas.courses();
     expect(courses.ok && courses.value.map((course) => course.code)).toEqual(["ENG-210-02"]);
+  });
+});
+
+describe("what a Canvas student turned in", () => {
+  const SUBMISSIONS =
+    "/api/v1/courses/2201/students/submissions?student_ids[]=all&grouped=true&include[]=submission_comments&include[]=rubric_assessment&include[]=user";
+  const PDF = {
+    id: 801,
+    display_name: "essay.pdf",
+    "content-type": "application/pdf",
+    size: 4096,
+    url: `${ORIGIN}/files/801/download?verifier=v`,
+  };
+  const bodyFor = async (row: Record<string, unknown>) => {
+    const canvas = canvasWith({
+      ...SELF,
+      [SUBMISSIONS]: {
+        body: JSON.stringify([
+          {
+            user_id: 6401,
+            submissions: [
+              {
+                assignment_id: 5301,
+                user_id: 6401,
+                workflow_state: "submitted",
+                attempt: 1,
+                submitted_at: "2027-01-30T18:20:00Z",
+                user: { id: 6401, name: "Avery Sample" },
+                ...row,
+              },
+            ],
+          },
+        ]),
+      },
+    });
+    const read = await canvas.provider.submissions(COURSE);
+    if (!read.ok) throw new Error(read.error.kind);
+    return read.value[0]?.body;
+  };
+
+  it.each<[string, Record<string, unknown>, Record<string, unknown>]>([
+    [
+      "a discussion post as its entries",
+      {
+        submission_type: "discussion_topic",
+        discussion_entries: [{ message: "<p>My audience is my coworkers.</p>" }],
+      },
+      { kind: "discussion", paragraphs: ["My audience is my coworkers."] },
+    ],
+    [
+      "a link with its snapshot",
+      {
+        submission_type: "online_url",
+        url: "https://docs.example.com/essay",
+        attachments: [{ ...PDF, display_name: "snapshot.png", "content-type": "image/png" }],
+      },
+      {
+        kind: "url",
+        url: "https://docs.example.com/essay",
+        files: [{ id: "801", name: "snapshot.png", mediaType: "image/png", bytes: 4096 }],
+      },
+    ],
+    [
+      "an upload as its files",
+      { submission_type: "online_upload", attachments: [PDF] },
+      {
+        kind: "upload",
+        files: [{ id: "801", name: "essay.pdf", mediaType: "application/pdf", bytes: 4096 }],
+      },
+    ],
+    [
+      "a link that isn't https as work elsewhere",
+      { submission_type: "online_url", url: "javascript:alert(1)" },
+      { kind: "elsewhere", what: "a link" },
+    ],
+    [
+      "a quiz as work elsewhere",
+      { submission_type: "online_quiz" },
+      { kind: "elsewhere", what: "a quiz, which Canvas grades" },
+    ],
+    [
+      "an external tool as work elsewhere",
+      { submission_type: "basic_lti_launch" },
+      { kind: "elsewhere", what: "work in an external tool" },
+    ],
+    [
+      "a type Canvas adds later as work elsewhere",
+      { submission_type: "hologram_upload" },
+      { kind: "elsewhere", what: "a hologram upload submission" },
+    ],
+    ["nothing as nothing", { submission_type: null, body: null }, { kind: "none" }],
+  ])("reads %s", async (_name, row, body) => {
+    expect(await bodyFor(row)).toMatchObject(body);
+  });
+
+  const AT = "/api/v1/courses/2201/assignments/5301/submissions/6401";
+  const REF = `${HOST}:submission:2201:5301:6401` as LmsRef<"submission">;
+  const STORAGE = "https://files.canvas-user-content.example";
+
+  it("downloads a listed file from the address Canvas signs, without the token", async () => {
+    const canvas = canvasWith({
+      [AT]: { body: JSON.stringify({ attachments: [PDF] }) },
+      "/api/v1/files/801/public_url": {
+        body: JSON.stringify({ public_url: `${STORAGE}/801/essay.pdf?sig=s` }),
+      },
+      [`${STORAGE}/801/essay.pdf?sig=s`]: { body: "%PDF-1.4 bytes" },
+    });
+    const read = await canvas.provider.file(REF, "801");
+    expect(read.ok && new TextDecoder().decode(read.value.data)).toBe("%PDF-1.4 bytes");
+    expect(read.ok && read.value.mediaType).toBe("application/pdf");
+    expect(canvas.requests.map((request) => [new URL(request.url).host, request.auth])).toEqual([
+      [HOST, `Bearer ${TOKEN}`],
+      [HOST, `Bearer ${TOKEN}`],
+      ["files.canvas-user-content.example", null],
+    ]);
+  });
+
+  it("refuses a file the submission doesn't list", async () => {
+    const canvas = canvasWith({
+      [AT]: { body: JSON.stringify({ attachments: [{ ...PDF, id: 802 }] }) },
+    });
+    expect(await canvas.provider.file(REF, "801")).toMatchObject({ ok: false });
+    expect(await canvas.provider.file(REF, "../../users/self")).toMatchObject({ ok: false });
+    expect(canvas.requests.map((request) => new URL(request.url).pathname)).toEqual([AT]);
+  });
+
+  it("refuses a signed address that isn't https", async () => {
+    const canvas = canvasWith({
+      [AT]: { body: JSON.stringify({ attachments: [PDF] }) },
+      "/api/v1/files/801/public_url": {
+        body: JSON.stringify({ public_url: "http://plain.example/801" }),
+      },
+    });
+    expect(await canvas.provider.file(REF, "801")).toMatchObject({ ok: false });
+    expect(canvas.requests).toHaveLength(2);
+  });
+
+  it("refuses a file larger than the app opens before downloading it", async () => {
+    const canvas = canvasWith({
+      [AT]: { body: JSON.stringify({ attachments: [{ ...PDF, size: 60 * 1024 * 1024 }] }) },
+    });
+    expect(await canvas.provider.file(REF, "801")).toMatchObject({
+      ok: false,
+      error: { kind: "rejected", reason: "essay.pdf is larger than the 50 MB the app opens." },
+    });
+    expect(canvas.requests).toHaveLength(1);
   });
 });

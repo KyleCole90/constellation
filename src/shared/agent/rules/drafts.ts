@@ -262,6 +262,28 @@ export const GRADE_DRAFTS: Readonly<Record<string, readonly GradeDraft[]>> = {
       attach: false,
     },
   ],
+  "Discussion 8: Audience Analysis": [
+    {
+      opens: "My audience for the informative speech ",
+      scores: null,
+      score: 10,
+      why: {},
+      anchors: {},
+      comment:
+        "{first}, you named a real audience and let what they already know shape the speech. Good reply to Emil, too.",
+      attach: false,
+    },
+    {
+      opens: "I will speak to first-year students abou",
+      scores: null,
+      score: 8,
+      why: {},
+      anchors: {},
+      comment:
+        "{first}, you know who you're speaking to and what they need first. Reply to a classmate's post for the last two points.",
+      attach: false,
+    },
+  ],
   "Outline: Adopt a Storm Drain": [
     {
       opens: "I. Attention: The drain on your street f",

@@ -34,8 +34,10 @@ import type {
   Conversation,
   Course,
   School,
+  FileContent,
   Student,
   Submission,
+  SubmissionFile,
 } from "../domain/lms";
 import {
   isoDate,
@@ -140,6 +142,13 @@ export const StudentSchema: v.GenericSchema<Student> = v.object({
 
 const ScoresSchema = v.record(text, count);
 
+const FileSchema: v.GenericSchema<SubmissionFile> = v.object({
+  id: text,
+  name: text,
+  mediaType: text,
+  bytes: count,
+});
+
 export const SubmissionSchema: v.GenericSchema<Submission> = v.object({
   ref: lmsRef<"submission">(),
   school: SchoolIdSchema,
@@ -162,13 +171,28 @@ export const SubmissionSchema: v.GenericSchema<Submission> = v.object({
       paragraphs: v.array(text),
     }),
     v.object({
+      kind: v.literal("discussion"),
+      title: text,
+      wordCount: count,
+      paragraphs: v.array(text),
+    }),
+    v.object({
       kind: v.literal("media"),
       title: text,
       durationLabel: text,
       transcript: v.array(text),
     }),
+    v.object({ kind: v.literal("url"), title: text, url: text, files: v.array(FileSchema) }),
+    v.object({ kind: v.literal("upload"), title: text, files: v.array(FileSchema) }),
+    v.object({ kind: v.literal("elsewhere"), title: text, what: text }),
     v.object({ kind: v.literal("none") }),
   ]),
+  page: nullable(text),
+});
+
+export const FileContentSchema: v.GenericSchema<FileContent> = v.object({
+  mediaType: text,
+  data: v.instance(Uint8Array),
 });
 
 export const ConversationSchema: v.GenericSchema<Conversation> = v.object({

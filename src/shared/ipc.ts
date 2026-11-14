@@ -22,6 +22,7 @@ import {
   SourceCourseSchema,
   StudentSchema,
   SubmissionSchema,
+  FileContentSchema,
   listOf,
   lmsRef,
   readOf,
@@ -75,6 +76,9 @@ const AgentRunInput = v.strictObject({
   request: v.pipe(v.string(), v.minLength(1)),
   history: v.array(v.strictObject({ role: v.picklist(["user", "agent"]), text: v.string() })),
   scope: v.unknown(),
+  files: v.array(
+    v.strictObject({ name: v.string(), mediaType: v.string(), data: v.instance(Uint8Array) }),
+  ),
 });
 /** Raw effects for `parseAgentEffect`, and what the run cost; or why there was no run. */
 const AgentRunOutput = v.variant("ok", [
@@ -124,6 +128,14 @@ const ipc = {
   "lms.assignments": { input: ByCourse, output: readOf(listOf(AssignmentSchema)) },
   "lms.students": { input: ByCourse, output: readOf(listOf(StudentSchema)) },
   "lms.submissions": { input: ByCourse, output: readOf(listOf(SubmissionSchema)) },
+  "lms.file": {
+    input: v.strictObject({
+      school: SchoolSchema,
+      submission: lmsRef<"submission">(),
+      file: v.string(),
+    }),
+    output: readOf(FileContentSchema),
+  },
   "lms.conversations": { input: BySchool, output: readOf(listOf(ConversationSchema)) },
   "lms.announcements": { input: ByCourse, output: readOf(listOf(AnnouncementSchema)) },
   "lms.observe": {
