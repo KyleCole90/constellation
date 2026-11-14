@@ -90,6 +90,21 @@ describe("reading a document's words", () => {
     expect(await textOf("application/rtf", fixture("essay.rtf"))).toBe(ESSAY);
   });
 
+  it("steps past an RTF picture's binary data, and never backwards", async () => {
+    const rtf = (body: string) => new Uint8Array(Buffer.from(`{\\rtf1 ${body}}`, "latin1"));
+    expect(await textOf("application/rtf", rtf("Before\\par {\\pict\\bin4 }{}}}\\par After"))).toBe(
+      "Before\n\nAfter",
+    );
+    expect(await textOf("application/rtf", rtf("Ends\\bin-50 here"))).toBe("Endshere");
+  });
+
+  it("reads a Word file full of paragraphs that never close in linear time", async () => {
+    const document = Buffer.from(`<w:body>${"<w:p><w:r><w:t>x".repeat(200_000)}</w:body>`);
+    const started = performance.now();
+    await documentText(DOCX, deflatedZip({ "word/document.xml": document }));
+    expect(performance.now() - started).toBeLessThan(2_000);
+  });
+
   it.each<[string, Uint8Array]>([
     ["UTF-8", new Uint8Array(Buffer.from("﻿First line\r\n\r\n\r\n\r\nCafé"))],
     ["UTF-16", new Uint8Array(Buffer.from("﻿First line\n\nCafé", "utf16le"))],

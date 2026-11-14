@@ -58,6 +58,20 @@ const levelNamed = (name: string): number | undefined => {
 };
 
 /** Word's outline levels count from 0; 9 is body text. */
+/**
+ * The inside of each `<tag ...>…</tag>`, found in one pass. A regex that looks ahead for the closing tag goes
+ * quadratic on a file full of tags that never close.
+ */
+const elements = (xml: string, tag: string): { open: string; body: string }[] =>
+  xml
+    .split(`</${tag}>`)
+    .slice(0, -1)
+    .flatMap((chunk) => {
+      const start = Math.max(chunk.lastIndexOf(`<${tag}>`), chunk.lastIndexOf(`<${tag} `));
+      const end = start < 0 ? -1 : chunk.indexOf(">", start);
+      return end < 0 ? [] : [{ open: chunk.slice(start, end), body: chunk.slice(end + 1) }];
+    });
+
 const outlineLevel = (xml: string): number | undefined => {
   const level = /<w:outlineLvl w:val="(\d)"/.exec(xml)?.[1];
   return level !== undefined && Number(level) < 6 ? Number(level) + 1 : undefined;
@@ -65,11 +79,9 @@ const outlineLevel = (xml: string): number | undefined => {
 
 const headingStyles = (styles: string): Map<string, number> => {
   const levels = new Map<string, number>();
-  for (const [, attributes = "", body = ""] of styles.matchAll(
-    /<w:style\b([^>]*)>([\s\S]*?)<\/w:style>/g,
-  )) {
-    const id = /w:styleId="([^"]*)"/.exec(attributes)?.[1];
-    const name = /<w:name w:val="([^"]*)"/.exec(body)?.[1];
+  for (const { open, body } of elements(styles, "w:style")) {
+    const id = /w:styleId="([^"]{0,200})"/.exec(open)?.[1];
+    const name = /<w:name w:val="([^"]{0,200})"/.exec(body)?.[1];
     const level = (name === undefined ? undefined : levelNamed(name)) ?? outlineLevel(body);
     if (id !== undefined && level !== undefined) levels.set(id, level);
   }
@@ -80,7 +92,7 @@ const headingStyles = (styles: string): Map<string, number> => {
 const runsOf = (paragraph: string): string => {
   let text = "";
   for (const [token, words] of paragraph.matchAll(
-    /<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>|<w:tab\/>|<w:(?:br|cr)\b[^>]*\/>/g,
+    /<w:t(?:\s[^>]{0,200})?>([^<]*)<\/w:t>|<w:tab\/>|<w:(?:br|cr)\b[^>]{0,200}\/>/g,
   )) {
     if (words !== undefined) text += decodeXml(words);
     else text += token === "<w:tab/>" ? "\t" : "\n";
@@ -98,19 +110,17 @@ const docxText = async (source: ZipSource): Promise<string | null> => {
   const styles = headingStyles(
     stylesEntry ? await zipEntryText(source, stylesEntry, MAX_XML_BYTES) : "",
   );
-  const paragraphs = [...xml.matchAll(/<w:p\b[^>]*?(?:\/>|>([\s\S]*?)<\/w:p>)/g)].map(
-    ([, body = ""]) => {
-      const style = /<w:pStyle w:val="([^"]*)"/.exec(body)?.[1];
-      const heading =
-        (style === undefined ? undefined : (styles.get(style) ?? levelNamed(style))) ??
-        outlineLevel(body);
-      return {
-        text: runsOf(body),
-        ...(heading === undefined ? {} : { heading }),
-        listed: /<w:numPr\b/.test(body),
-      };
-    },
-  );
+  const paragraphs = elements(xml, "w:p").map(({ body }) => {
+    const style = /<w:pStyle w:val="([^"]{0,200})"/.exec(body)?.[1];
+    const heading =
+      (style === undefined ? undefined : (styles.get(style) ?? levelNamed(style))) ??
+      outlineLevel(body);
+    return {
+      text: runsOf(body),
+      ...(heading === undefined ? {} : { heading }),
+      listed: /<w:numPr\b/.test(body),
+    };
+  });
   return markdownOf(paragraphs);
 };
 
@@ -213,7 +223,7 @@ const rtfText = (rtf: string): string | null => {
             if (rtf[at] === "{" || rtf[at] === "}") break;
             skipOne();
           }
-        } else if (name === "bin" && value !== undefined) at += value;
+        } else if (name === "bin" && value !== undefined) at += Math.max(0, value);
         else {
           const symbol = RTF_SYMBOLS[name];
           if (symbol !== undefined) add(symbol);
