@@ -1115,11 +1115,20 @@ const previousCourseFlow = async (t) => {
   const fresh = await t.eval(
     `[...document.querySelectorAll('${id("finding-row")}[data-status="fix"]')].filter((el) => el.querySelector('${id("finding-toggle")}')).map((el) => el.dataset.findingKey).find((key) => !${JSON.stringify(row)}.includes(key) && key !== ${JSON.stringify(other)})`,
   );
-  await approveAndSendRightAfterTicking(
-    t,
-    code,
-    row,
-    `${id("finding-row")}[data-finding-key="${fresh}"]`,
+  const freshRow = `${id("finding-row")}[data-finding-key="${fresh}"]`;
+  const offset = `(() => { const list = document.querySelector(${JSON.stringify(id("finding-list"))}).getBoundingClientRect().top; return Math.round(document.querySelector(${JSON.stringify(dismissed)}).getBoundingClientRect().top - list); })()`;
+  const offsetBefore = await t.eval(offset);
+  await approveAndSendRightAfterTicking(t, code, row, freshRow);
+  await t.waitFor(
+    `[${JSON.stringify(row)}, ${JSON.stringify(freshRow)}].every((sel) => document.querySelector(sel)?.dataset.status === "fixed")`,
+    `${code}: the rescan after the send marks both fixes fixed`,
+    WAIT,
+  );
+  const offsetAfter = await t.eval(offset);
+  t.assert(
+    offsetAfter === offsetBefore,
+    `${code}: fixes that land and leave the scan keep their place, so the rows below don't jump`,
+    `${offsetBefore}px then ${offsetAfter}px`,
   );
   await t.click(`${dismissed} ${id("finding-dismiss")}`);
   await t.click(`${dismissed} ${id("finding-dismiss-confirm")}`);
@@ -1278,10 +1287,31 @@ const cartridgeFromConnected = async (t) => {
     `${code}: the form says the old term and meeting days are optional`,
     dayMap,
   );
+  const datesText = await t.text(id("dates-card"));
+  t.assert(
+    (datesText.match(/due date/g) ?? []).length === 1,
+    `${code}: Dates says once that nothing has a due date (#88)`,
+    datesText,
+  );
+  t.assert(
+    (await t.text(id("term-name-note"))).includes("keeps the course in the term your school set"),
+    `${code}: Dates says the term names only change the course's text, and the LMS keeps its own term (#88)`,
+  );
   await shot(t, "dates-days-why");
   await pickDaysIfBlank(t, "old", [1, 3]);
   await pickDaysIfBlank(t, "new", [1, 3]);
   await t.click(id("review-copy"));
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(id("copy-card"))})`,
+    `${code}: Review the copy drafts the copy`,
+    WAIT,
+  );
+  t.assert(
+    !(await t.has(id("copy-dates"))) &&
+      !(await t.text(id("dates-card"))).includes("no due dates to move"),
+    `${code}: with nothing dated, neither Dates nor the copy adds a second "no due dates" line (#88)`,
+  );
+  await shot(t, "copy-undated-once");
   await approveCopy(t, code);
   await t.click(id("copy-send"));
   await t.waitFor(

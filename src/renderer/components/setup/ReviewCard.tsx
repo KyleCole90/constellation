@@ -399,7 +399,12 @@ export function ReviewCard({
 }) {
   const { setUi } = useThreadActions();
   const { selected } = useWorkspace((state) => selectThreadUi(state, thread));
-  const groups = useMemo(() => groupRows(rows), [rows]);
+  const [groups, setGroups] = useState(() => groupRows(rows));
+  const [grouped, setGrouped] = useState(rows);
+  if (rows !== grouped) {
+    setGrouped(rows);
+    setGroups(groupRows(rows, groups));
+  }
   const selectable = useMemo(() => new Set<string>(selectableKeys(rows)), [rows]);
   const toggle = (key: RowKey) =>
     setUi({

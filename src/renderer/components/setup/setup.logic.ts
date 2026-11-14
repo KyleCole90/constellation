@@ -265,12 +265,26 @@ export interface RowGroup {
   rows: readonly ReviewRow[];
 }
 
-export const groupRows = (rows: readonly ReviewRow[]): readonly RowGroup[] => {
+/**
+ * Rows on screen keep their group and place, so a fix that lands and leaves the scan changes its status where it is
+ * instead of moving the rows under the teacher's pointer. Rows new since `shown` go after them.
+ */
+export const groupRows = (
+  rows: readonly ReviewRow[],
+  shown: readonly RowGroup[] = [],
+): readonly RowGroup[] => {
+  const current = new Map(rows.map((row) => [row.key, row]));
   const groups = new Map<RowGroup["type"], ReviewRow[]>();
-  for (const row of rows) {
-    const type = row.finding?.type ?? "fixed";
+  const add = (type: RowGroup["type"], row: ReviewRow) => {
+    current.delete(row.key);
     groups.set(type, [...(groups.get(type) ?? []), row]);
-  }
+  };
+  for (const group of shown)
+    for (const held of group.rows) {
+      const row = current.get(held.key);
+      if (row) add(row.finding?.type ?? group.type, row);
+    }
+  for (const row of rows) if (current.has(row.key)) add(row.finding?.type ?? "fixed", row);
   return [...groups].map(([type, members]) => ({
     type,
     label: type === "fixed" ? "Fixed" : FINDING_LABEL[type],
