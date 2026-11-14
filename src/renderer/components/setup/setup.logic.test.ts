@@ -14,7 +14,8 @@ import {
   checkPlan,
   guessedEnd,
   groupRows,
-  initialPlan,
+  formPlan,
+  typedPlan,
   occupiedWords,
   packageTermWords,
   publishedWords,
@@ -116,7 +117,7 @@ describe("meeting days", () => {
 
 describe("the plan a form opens with", () => {
   it("fills the old term from a course source and defaults new days to the old ones", () => {
-    const opened = initialPlan({ plan: null, shell, source: null }, source("a", false));
+    const opened = formPlan({ plan: null, shell, source: null }, source("a", false));
     expect(opened.oldTerm).toEqual({
       name: "Spring",
       start: "2026-01-12",
@@ -132,7 +133,7 @@ describe("the plan a form opens with", () => {
   });
   it("keeps a plan already confirmed over the source", () => {
     const confirmed = plan();
-    expect(initialPlan({ plan: confirmed, shell, source: null }, source("a", false))).toEqual(
+    expect(formPlan({ plan: confirmed, shell, source: null }, source("a", false))).toEqual(
       draftOf(confirmed),
     );
   });
@@ -140,10 +141,10 @@ describe("the plan a form opens with", () => {
     const typed = draft({
       breaks: [{ name: "Break", start: date("2026-10-01"), end: date("2026-10-02") }],
     });
-    expect(initialPlan({ plan: plan(), draft: typed, shell, source: null }, null)).toBe(typed);
+    expect(formPlan({ plan: plan(), draft: typed, shell, source: null }, null)).toEqual(typed);
   });
   it("leaves the old term blank for a package with no hint, and the form refuses it", () => {
-    const opened = initialPlan(
+    const opened = formPlan(
       { plan: null, shell, source: { kind: "cartridge", name: "x.imscc", kb: 1, hint: null } },
       null,
     );
@@ -229,7 +230,7 @@ describe("a package that leaves its end out", () => {
     expect(guessedEnd(null, spring)).toBeNull();
   });
   it("fills the old term's end when Dates opens on such a package", () => {
-    const opened = initialPlan(
+    const opened = formPlan(
       {
         plan: null,
         shell: { ...shell, startAt: spring.start, endAt: spring.end },
@@ -238,6 +239,52 @@ describe("a package that leaves its end out", () => {
       null,
     );
     expect(opened.oldTerm).toMatchObject({ name: "", start: "2026-01-12", end: "2026-05-15" });
+  });
+
+  const undated = { ...shell, startAt: null, endAt: null };
+  const cartridge = {
+    kind: "cartridge",
+    name: "x.imscc",
+    kb: 1,
+    hint: { ...hint, dated: [] },
+  } as const;
+  /** The form's edit loop: a change applies to what was typed, and the form shows that with its blanks filled. */
+  const edit = (
+    setup: Pick<CourseSetup, "plan" | "draft" | "shell" | "source">,
+    patch: Partial<PlanDraft["newTerm"]>,
+  ) => {
+    const typed = typedPlan(setup, null);
+    return { ...setup, draft: { ...typed, newTerm: { ...typed.newTerm, ...patch } } };
+  };
+
+  it("guesses the old end once the teacher types the new term's dates", () => {
+    const opened = { plan: null, shell: undated, source: cartridge };
+    expect(formPlan(opened, null).oldTerm.end).toBe("");
+    const typed = edit(edit(opened, { start: spring.start }), { end: spring.end });
+    expect(formPlan(typed, null).oldTerm.end).toBe("2026-05-15");
+    expect(formPlan(edit(typed, { end: date("2027-05-28") }), null).oldTerm.end).toBe("2026-05-29");
+  });
+  it("keeps an old end the teacher typed when the new term's dates change", () => {
+    const opened = { plan: null, shell: undated, source: cartridge };
+    const typed = typedPlan(opened, null);
+    const kept = {
+      ...opened,
+      draft: {
+        ...typed,
+        oldTerm: { ...typed.oldTerm, end: date("2026-05-01") },
+        newTerm: { ...typed.newTerm, ...spring },
+      },
+    };
+    expect(formPlan(kept, null).oldTerm.end).toBe("2026-05-01");
+  });
+  it("fills the new term from the course's own dates when the course gets them after Dates opened", () => {
+    const typed = edit({ plan: null, shell: undated, source: cartridge }, { name: "Spring 2027" });
+    const dated = formPlan(
+      { ...typed, shell: { ...shell, startAt: spring.start, endAt: spring.end } },
+      null,
+    );
+    expect(dated.newTerm).toMatchObject({ name: "Spring 2027", ...spring });
+    expect(dated.oldTerm.end).toBe("2026-05-15");
   });
 });
 
