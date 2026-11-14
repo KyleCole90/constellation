@@ -15,6 +15,7 @@ import { undraftableReason, type Submission } from "~/shared/domain/lms";
 import {
   selectAssignment,
   selectSubmission,
+  selectUndrafted,
   selectThreadChanges,
 } from "~/renderer/stores/selectors";
 import type { Thread, ThreadMessage, ThreadUi } from "~/renderer/stores/types";
@@ -382,6 +383,8 @@ function OpenSubmission({
   const drafting = asked && working;
   const refused = useRefusedFile(submission);
   const blocked = undraftableReason(submission.body) ?? refused;
+  const undrafted = useWorkspace((state) => selectUndrafted(state, submission));
+  const offer = undrafted?.offer ?? null;
   const open = (fill: "draft" | "by-hand") => {
     if (working) return;
     setAsked(fill === "draft");
@@ -413,7 +416,16 @@ function OpenSubmission({
         </p>
       )}
       <div className="flex gap-btn-gap">
-        {ai && (
+        {ai && offer && (
+          <Button
+            variant="default"
+            data-offer
+            onClick={() => void workspaceStore().getState().sendToAgent(thread, offer)}
+          >
+            {offer}
+          </Button>
+        )}
+        {ai && !undrafted && (
           <Button
             variant="default"
             disabled={blocked !== null}
@@ -426,7 +438,7 @@ function OpenSubmission({
         )}
         {!drafting && (
           <Button
-            variant={ai && !blocked ? "outline" : "default"}
+            variant={ai && !blocked && (!undrafted || offer) ? "outline" : "default"}
             data-lands="[data-typed-score], [data-card-primary]"
             onClick={() => open("by-hand")}
           >

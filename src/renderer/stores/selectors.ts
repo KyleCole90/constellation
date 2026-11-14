@@ -33,7 +33,7 @@ import type {
   Submission,
 } from "~/shared/domain/lms";
 
-import type { SchoolCache, Thread, ThreadMessage, WorkspaceData } from "./types";
+import type { SchoolCache, Thread, ThreadMessage, Undrafted, WorkspaceData } from "./types";
 
 /**
  * Same state and args give the same object, so these are safe as zustand selectors and never loop useSyncExternalStore.
@@ -862,6 +862,15 @@ export const selectThreadChanges = memoByState(
     );
   },
 );
+
+/** Claude's last draft of this submission came back with no grade, and the student hasn't turned it in again since. */
+export const selectUndrafted = (
+  state: WorkspaceData,
+  submission: Submission | null,
+): Undrafted | null => {
+  const undrafted = submission ? state.undrafted[submission.ref] : undefined;
+  return undrafted && undrafted.submittedAt === submission?.submittedAt ? undrafted : null;
+};
 
 export const selectSubmission = (
   state: WorkspaceData,
