@@ -115,6 +115,7 @@ import {
   selectThreadUi,
   selectWhatsDue,
   selectWorkStages,
+  selectCourseGrades,
 } from "./selectors";
 import { createSetupActions, type SetupActions, type SetupOptions } from "./setup";
 import type {
@@ -1767,17 +1768,19 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             const focus = current?.focus ?? null;
             post(thread, { type: "user", text, at: nowIso(), ...(focus ? { change: focus } : {}) });
             const scan = await setup.scanScope(thread);
+            const courses = get().schools.flatMap(
+              (school) => get().cache[school.id]?.courses ?? [],
+            );
             const northStar =
               current?.kind === "north-star-chat"
                 ? {
-                    courses: get().schools.flatMap(
-                      (school) => get().cache[school.id]?.courses ?? [],
-                    ),
+                    courses,
                     northStar: {
                       announcements: allCaches().flatMap((cache) => cache.announcements),
                       schools: get().schools,
                       now: nowIso(),
                       next: nextWorkOf(get(), get().now()),
+                      grades: courses.map((course) => selectCourseGrades(get(), course.ref)),
                     },
                   }
                 : null;

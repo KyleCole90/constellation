@@ -1,4 +1,4 @@
-import type { Source } from "~/shared/agent/agent";
+import type { CourseGrades, Source, Standing } from "~/shared/agent/agent";
 import {
   finalGrade,
   summarize,
@@ -436,8 +436,6 @@ export const selectGradebook = memoByState(
   },
 );
 
-type Standing = "On track" | "Watch" | "At risk" | "No grades yet";
-
 export interface RosterRow {
   student: Student;
   percent: number | null;
@@ -453,6 +451,31 @@ const standingOf = (percent: number | null): Standing =>
       : percent >= 60
         ? "Watch"
         : "At risk";
+
+const classAverageOf = (rows: readonly GradebookRow[]): number | null => {
+  const percents = rows.flatMap((row) => (row.percent === null ? [] : [row.percent]));
+  return percents.length > 0
+    ? Math.round(percents.reduce((sum, value) => sum + value, 0) / percents.length)
+    : null;
+};
+
+/** The numbers the Gradebook and the course's roster show, for North Star's agent to say who is behind. */
+export const selectCourseGrades = (
+  state: WorkspaceData,
+  course: LmsRef<"course">,
+): CourseGrades => {
+  const rows = selectGradebook(state, course)?.rows ?? [];
+  return {
+    course,
+    average: classAverageOf(rows),
+    students: rows.map((row) => ({
+      name: row.student.name,
+      percent: row.percent,
+      missing: row.missing,
+      standing: standingOf(row.percent),
+    })),
+  };
+};
 
 export type NeedsYou =
   | { kind: "assignment"; item: DueItem }
@@ -487,7 +510,6 @@ const courseOverview = memoByState(
     if (!cache || !parent || !school) return null;
     const submissions = cache.submissions.filter((s) => s.course === course);
     const book = selectGradebook(state, course);
-    const percents = book?.rows.flatMap((row) => (row.percent === null ? [] : [row.percent])) ?? [];
     const assignments = whatsDue(state, today)
       .flatMap((group) => group.items)
       .filter((item) => item.course.ref === course);
@@ -510,10 +532,7 @@ const courseOverview = memoByState(
       ).length,
       unread: cache.conversations.filter((c) => c.course === course && c.unread).length,
       missing: submissions.filter((s) => s.workflow === "missing").length,
-      classAverage:
-        percents.length > 0
-          ? Math.round(percents.reduce((sum, value) => sum + value, 0) / percents.length)
-          : null,
+      classAverage: classAverageOf(book?.rows ?? []),
       upcoming: cache.assignments
         .filter(
           (a) => a.course === course && dueMs(a) >= today && dueMs(a) !== Number.POSITIVE_INFINITY,

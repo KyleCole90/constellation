@@ -106,6 +106,20 @@ export interface AgentInput {
   thread: { history: readonly { role: "user" | "agent"; text: string }[] };
   scope: AgentScope;
 }
+export type Standing = "On track" | "Watch" | "At risk" | "No grades yet";
+
+/** One course's gradebook as the Gradebook and the course's roster show it: each student's total over graded work. */
+export interface CourseGrades {
+  course: LmsRef<"course">;
+  average: number | null;
+  students: readonly {
+    name: string;
+    percent: number | null;
+    missing: number;
+    standing: Standing;
+  }[];
+}
+
 /** The allowlist parseAgentEffect checks against. An agent cannot aim outside what the thread opened. */
 export interface AgentScope {
   focus: ChangeId | null;
@@ -121,6 +135,7 @@ export interface AgentScope {
     schools: readonly School[];
     now: IsoTime;
     next: readonly NextWork[];
+    grades: readonly CourseGrades[];
   };
 }
 

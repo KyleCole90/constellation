@@ -11,6 +11,7 @@ import type { Assignment } from "~/shared/domain/lms";
 import {
   NORTH_STAR_THREAD,
   isChatThread,
+  selectCourseGrades,
   selectDueExtras,
   selectHandoffName,
   selectQueueRows,
@@ -102,6 +103,7 @@ const scopeOf = (rig: StoreRig, over: Partial<AgentScope> = {}): AgentScope => (
     schools: rig.state().schools,
     now: "2026-10-30T15:42:00.000Z" as IsoTime,
     next: [],
+    grades: [],
   },
   ...over,
 });
@@ -1816,5 +1818,28 @@ describe("who hasn't turned work in", () => {
         request,
       ).toBe(true);
     }
+  });
+});
+
+describe("who is behind", () => {
+  it("names the students the roster marks Watch or At risk, or with missing work, at the gradebook's percent", async () => {
+    const rig = await connected();
+    await startChat(rig, "Who's falling behind?");
+
+    const behind = allOf(rig, "courses").flatMap((course) =>
+      selectCourseGrades(rig.state(), course.ref).students.filter(
+        (s) => s.standing === "Watch" || s.standing === "At risk" || s.missing > 0,
+      ),
+    );
+    expect(behind.length).toBeGreaterThan(0);
+    const answer = lastAgent(rig);
+    expect(answer?.text).toMatch(new RegExp(`^${behind.length} students are behind`));
+    expect(answer?.lines?.map((line) => line.title).toSorted()).toEqual(
+      behind.map((s) => s.name).toSorted(),
+    );
+    const first = behind.find((s) => s.percent !== null);
+    expect(answer?.lines?.find((line) => line.title === first?.name)?.detail).toContain(
+      `${first?.percent}%`,
+    );
   });
 });
