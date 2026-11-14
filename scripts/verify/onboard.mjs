@@ -9,7 +9,7 @@ const KEY_ROW = '[data-ai-source="key"]';
 
 export const onboard = async (t, { ai = "none", hosts = null } = {}) => {
   await t.click("Set up");
-  await t.click("Use demo institutions and tokens");
+  await t.click("Try it with demo schools");
   await t.waitFor(
     `document.querySelectorAll(${JSON.stringify(ROWS)}).length > 0`,
     "the demo fill adds a row per demo school",
@@ -41,7 +41,7 @@ export const onboardPage = async (
   { ai = "none", hosts = null, click = (locator) => locator.click() } = {},
 ) => {
   await click(page.getByRole("button", { name: "Set up", exact: true }));
-  await click(page.getByRole("button", { name: "Use demo institutions and tokens" }));
+  await click(page.getByRole("button", { name: "Try it with demo schools" }));
   await page.waitForFunction((rows) => document.querySelectorAll(rows).length > 0, ROWS);
   const all = await page.locator(ROWS).evaluateAll((els) => els.map((el) => el.dataset.host));
   for (const host of hosts ?? all) {

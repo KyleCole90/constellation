@@ -65,11 +65,25 @@ const createCrashReports = (bridge: Bridge | undefined) => {
 
 export const crashReports = createCrashReports(desktopBridge);
 
-/** The opt-out, on by default (D24). Hidden in the web demo, which has nothing to turn off. */
-function CrashReportsToggle() {
+const useCrashReports = (): Status | null => {
   const status = useSyncExternalStore(crashReports.subscribe, crashReports.get, crashReports.get);
   useEffect(() => void crashReports.load(), []);
+  return status;
+};
+
+/**
+ * The opt-out, on by default (D24). A copy of the app that can't send reports (no build key, or turned off in its
+ * environment) says so instead of offering a choice that does nothing. Hidden in the web demo, which has nothing to turn off.
+ */
+function CrashReportsToggle() {
+  const status = useCrashReports();
   if (!status) return null;
+  if (!status.available)
+    return (
+      <p data-testid="crash-reports" className="text-meta text-muted-foreground">
+        Crash reports are off in this copy of the app, so none are sent.
+      </p>
+    );
   return (
     <label data-testid="crash-reports" className="flex cursor-pointer items-start gap-3">
       <input
@@ -81,9 +95,8 @@ function CrashReportsToggle() {
       <span className="flex flex-col">
         <span className="text-body font-medium">Send crash reports</span>
         <span className="text-meta text-muted-foreground">
-          {status.available
-            ? "Only an error's type and where in the app's code it happened, the app version and the macOS version. Never its message or anything you typed."
-            : "This build of the app sends no reports, whatever you choose here."}
+          Only an error's type and where in the app's code it happened, the app version and the
+          macOS version. Never its message or anything you typed.
         </span>
       </span>
     </label>
@@ -92,13 +105,16 @@ function CrashReportsToggle() {
 
 /** The setup page's privacy step: the opt-out, then the whole notice behind a disclosure (D24, D36). */
 export function SetupPrivacy({ title }: { title: ReactNode }) {
+  const sends = useCrashReports()?.available === true;
   return (
     <section data-testid="setup-privacy" className="flex flex-col gap-3">
       {title}
       <p className="text-meta text-muted-foreground">
-        {desktopBridge
-          ? "There is no Constellation server. Only your school, Anthropic with your key, and scrubbed crash reports hear from this Mac."
-          : "This web demo sends nothing anywhere."}
+        {!desktopBridge
+          ? "This web demo sends nothing anywhere."
+          : sends
+            ? "There is no Constellation server. Only your school, Anthropic with your key, and scrubbed crash reports hear from this Mac."
+            : "There is no Constellation server. Only your school, and Anthropic if you add a key, hear from this Mac."}
       </p>
       <CrashReportsToggle />
       <details className="rounded-xl border border-border bg-card px-card py-3">

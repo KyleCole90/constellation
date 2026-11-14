@@ -83,6 +83,25 @@ describe("addSchool", () => {
     expect(rig.state().cache[LCC]?.courses.length).toBeGreaterThan(0);
   });
 
+  it("names each course as its first read finishes, then drops the progress once the read lands", async () => {
+    const rig = await makeStoreRig();
+    const seen = ["none"];
+    const stop = rig.store.subscribe((state) => {
+      const progress = state.courseReads[LCC];
+      const step = progress ? `${progress.read.length}/${progress.courses.length}` : "none";
+      if (seen.at(-1) !== step) seen.push(step);
+    });
+    await add(rig, LCC_HOST);
+    stop();
+    const courses = rig.state().cache[LCC]?.courses.length ?? 0;
+    expect(courses).toBeGreaterThan(1);
+    expect(seen).toEqual([
+      "none",
+      ...Array.from({ length: courses + 1 }, (_, read) => `${read}/${courses}`),
+      "none",
+    ]);
+  });
+
   it("refuses an address with no school and leaves nothing behind", async () => {
     const rig = await makeStoreRig();
     const result = await add(rig, "nowhere.example.edu", SENTINEL);

@@ -180,8 +180,11 @@ export const syncFailureWords = (
 export const courseWords = (count: number): string =>
   count === 1 ? "1 course found" : `${count} courses found`;
 
+export const readingWords = (count: number): string =>
+  count === 1 ? "Reading your course" : `Reading your ${count} courses`;
+
 export const STAGE_WORDS = {
   saving: `Saving to ${VAULT_PLACE}`,
-  checking: "Checking token",
+  checking: "Checking your token",
   reading: "Reading your courses",
 } as const;

@@ -110,8 +110,10 @@ const errorOf = async (response: Response): Promise<LmsError> => {
   }
 };
 
-const nextLink = (header: string | null): string | null =>
-  header?.split(",").flatMap((part) => /<([^>]+)>\s*;\s*rel="next"/.exec(part)?.[1] ?? [])[0] ??
+const linkTo = (header: string | null, rel: "next" | "last"): string | null =>
+  header
+    ?.split(",")
+    .flatMap((part) => new RegExp(`<([^>]+)>\\s*;\\s*rel="${rel}"`).exec(part)?.[1] ?? [])[0] ??
   null;
 
 // ---- What Canvas sends, per its public API docs. Unknown keys are dropped; a missing required one fails the read. ----
@@ -168,6 +170,7 @@ const SubmissionRow = v.object({
   ),
   user: v.nullish(v.object({ name: v.string() }), null),
 });
+const StudentSubmissions = v.object({ submissions: v.array(SubmissionRow) });
 const ConversationRow = v.object({ id: Id, subject: v.nullish(v.string(), "") });
 const ConversationDetail = v.object({
   id: Id,
@@ -276,8 +279,15 @@ const PreAttachment = v.object({
 });
 
 const PER_PAGE = 100;
-/** A list longer than this many pages is a Canvas fault (a looping or endless `next`), not a course. */
-const MAX_PAGES = 100;
+/** How many later pages are out at once across the school's lists. Canvas throttles a token that asks for too much in parallel. */
+const PARALLEL_PAGES = 8;
+/**
+ * Students per page of a course's submissions. Canvas reads each submission slowly, and it pages ungrouped
+ * submissions by bookmark, one page after another. Grouped by student it pages by number, so small pages read in parallel.
+ */
+const STUDENTS_PER_PAGE = 3;
+/** A list longer than this many rows is a Canvas fault (a looping or endless `next`), not a course. */
+const MAX_ROWS = 10_000;
 
 /** `fetch` as the provider calls it. Main passes Electron's `net.fetch`, which uses the system's proxy and certificates. */
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
@@ -299,10 +309,25 @@ export const createCanvasProvider = (deps: {
   const { school, lease } = deps;
   const origin = `https://${school.host}`;
 
+  let free = PARALLEL_PAGES;
+  const waiting: (() => void)[] = [];
+  /** Runs `work` once one of the school's parallel page slots is free. */
+  const slot = async <T>(work: () => Promise<T>): Promise<T> => {
+    if (free > 0) free -= 1;
+    else await new Promise<void>((wake) => waiting.push(wake));
+    try {
+      return await work();
+    } finally {
+      const next = waiting.shift();
+      if (next) next();
+      else free += 1;
+    }
+  };
+
   const page = async (
     url: string,
     token: string,
-  ): Promise<Result<{ body: unknown; next: string | null }, LmsError>> => {
+  ): Promise<Result<{ body: unknown; link: string | null }, LmsError>> => {
     let response: Response;
     let text: string;
     try {
@@ -322,28 +347,73 @@ export const createCanvasProvider = (deps: {
     } catch {
       return unreadable("an answer");
     }
-    return { ok: true, value: { body, next: nextLink(response.headers.get("link")) } };
+    return { ok: true, value: { body, link: response.headers.get("link") } };
   };
 
-  /** Every page of `path`, each parsed by `row`. The token goes only to this school's origin, page links included. */
-  const list = <T extends v.GenericSchema>(path: string, row: T): Read<v.InferOutput<T>[]> =>
+  /**
+   * Every page of `path`, each parsed by `row`. The token goes only to this school's origin, page links included.
+   * Canvas pages most lists by number and names the last page, so the rest are read a few at a time. A list paged by
+   * bookmark names no last page, so it is read link by link.
+   */
+  const list = <T extends v.GenericSchema>(
+    path: string,
+    row: T,
+    perPage = PER_PAGE,
+  ): Read<v.InferOutput<T>[]> =>
     lease.use(async (credential) => {
       if (!credential) return { ok: false, error: { kind: "auth_expired" } };
       const secret = credential.kind === "bearer" ? credential.token : credential.access;
-      const first = new URL(`${origin}/api/v1${path}`);
-      first.searchParams.set("per_page", String(PER_PAGE));
-      const rows: v.InferOutput<T>[] = [];
-      let pages = 0;
-      for (let next: string | null = first.toString(); next !== null;) {
-        const url: string = next;
-        if (++pages > MAX_PAGES || !URL.canParse(url) || new URL(url).origin !== origin)
-          return unreadable("a page link");
+      const read = async (
+        url: string,
+      ): Promise<Result<{ rows: v.InferOutput<T>[]; link: string | null }, LmsError>> => {
+        if (!URL.canParse(url) || new URL(url).origin !== origin) return unreadable("a page link");
         const result = await revealSecret(secret, (token) => page(url, token));
         if (!result.ok) return result;
         const parsed = v.safeParse(v.array(row), result.value.body);
-        if (!parsed.success) return unreadable("a list");
-        rows.push(...parsed.output);
-        next = result.value.next;
+        return parsed.success
+          ? { ok: true, value: { rows: parsed.output, link: result.value.link } }
+          : unreadable("a list");
+      };
+      const maxPages = Math.ceil(MAX_ROWS / perPage);
+      const first = new URL(`${origin}/api/v1${path}`);
+      first.searchParams.set("per_page", String(perPage));
+      const head = await read(first.toString());
+      if (!head.ok) return head;
+      const rows = [...head.value.rows];
+
+      const last = linkTo(head.value.link, "last");
+      const count =
+        last && URL.canParse(last) ? Number(new URL(last).searchParams.get("page")) : NaN;
+      if (last && Number.isInteger(count) && count >= 1) {
+        if (count > maxPages) return unreadable("a page link");
+        const urls = Array.from({ length: count - 1 }, (_, index) => {
+          const url = new URL(last);
+          url.searchParams.set("page", String(index + 2));
+          return url.toString();
+        });
+        const results: Awaited<ReturnType<typeof read>>[] = [];
+        let at = 0;
+        const worker = async () => {
+          for (let index = at++; index < urls.length; index = at++) {
+            results[index] = await slot(() => read(urls[index] ?? ""));
+            if (!results[index]?.ok) at = urls.length;
+          }
+        };
+        await Promise.all(Array.from({ length: PARALLEL_PAGES }, worker));
+        for (const result of results) {
+          if (!result.ok) return result;
+          rows.push(...result.value.rows);
+        }
+        return { ok: true, value: rows };
+      }
+
+      let pages = 1;
+      for (let next = linkTo(head.value.link, "next"); next !== null;) {
+        if (++pages > maxPages) return unreadable("a page link");
+        const result = await read(next);
+        if (!result.ok) return result;
+        rows.push(...result.value.rows);
+        next = linkTo(result.value.link, "next");
       }
       return { ok: true, value: rows };
     });
@@ -883,42 +953,51 @@ export const createCanvasProvider = (deps: {
       inCourse(course, async (id) => {
         const mine = await me();
         if (!mine.ok) return mine;
-        const rows = await list(
-          `/courses/${id}/students/submissions?student_ids[]=all&include[]=submission_comments&include[]=rubric_assessment&include[]=user`,
-          SubmissionRow,
+        const students = await list(
+          `/courses/${id}/students/submissions?student_ids[]=all&grouped=true&include[]=submission_comments&include[]=rubric_assessment&include[]=user`,
+          StudentSubmissions,
+          STUDENTS_PER_PAGE,
         );
-        if (!rows.ok) return rows;
+        if (!students.ok) return students;
+        const seen = new Set<string>();
         return {
           ok: true,
-          value: rows.value.map((row): Submission => ({
-            ref: refs.submission(school.id, id, row.assignment_id, row.user_id),
-            school: school.id,
-            course,
-            assignment: refs.assignment(school.id, id, row.assignment_id),
-            student: refs.student(school.id, row.user_id),
-            studentName: row.user?.name ?? "",
-            workflow: workflowOf(row),
-            attempt: row.attempt,
-            lateDays: row.late ? Math.ceil(row.seconds_late / 86_400) : 0,
-            submittedAt: row.submitted_at,
-            grade: row.score,
-            rubricScores: row.rubric_assessment
-              ? Object.fromEntries(
-                  Object.entries(row.rubric_assessment).flatMap(([criterion, { points }]) =>
-                    points === null
-                      ? []
-                      : [[refs.criterion(school.id, row.assignment_id, criterion), points]],
-                  ),
-                )
-              : null,
-            comments: row.submission_comments.map((comment) => ({
-              id: String(comment.id),
-              mine: comment.author_id === mine.value,
-              text: comment.comment,
-              at: comment.created_at,
+          value: students.value
+            .flatMap(({ submissions }) => submissions)
+            // A student in two sections can come back once per section.
+            .filter((row) => {
+              const key = `${row.assignment_id}:${row.user_id}`;
+              return !seen.has(key) && Boolean(seen.add(key));
+            })
+            .map((row): Submission => ({
+              ref: refs.submission(school.id, id, row.assignment_id, row.user_id),
+              school: school.id,
+              course,
+              assignment: refs.assignment(school.id, id, row.assignment_id),
+              student: refs.student(school.id, row.user_id),
+              studentName: row.user?.name ?? "",
+              workflow: workflowOf(row),
+              attempt: row.attempt,
+              lateDays: row.late ? Math.ceil(row.seconds_late / 86_400) : 0,
+              submittedAt: row.submitted_at,
+              grade: row.score,
+              rubricScores: row.rubric_assessment
+                ? Object.fromEntries(
+                    Object.entries(row.rubric_assessment).flatMap(([criterion, { points }]) =>
+                      points === null
+                        ? []
+                        : [[refs.criterion(school.id, row.assignment_id, criterion), points]],
+                    ),
+                  )
+                : null,
+              comments: row.submission_comments.map((comment) => ({
+                id: String(comment.id),
+                mine: comment.author_id === mine.value,
+                text: comment.comment,
+                at: comment.created_at,
+              })),
+              body: bodyOf(row.body),
             })),
-            body: bodyOf(row.body),
-          })),
         };
       }),
     conversations: async () => {

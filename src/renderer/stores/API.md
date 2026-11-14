@@ -32,7 +32,7 @@ const status = useWorkspace((s) => selectThreadStatus(s, threadId));
 | `selectSetupOffers(state)`                                                 | `SetupOffer[]`: new courses at connected schools, with the thread once one is started.                                                                                                                                                                                                               |
 | `selectSetupView(state, course)`                                           | `SetupView`: the setup, its derived stage, live job, review rows, readiness, and any template change.                                                                                                                                                                                                |
 
-State fields: `schools`, `connections`, `onboarding`, `aiSource`, `cache`, `changes`, `blanks`, `threads`, `setups`, `newCourses`, `prefs`, `handoffs`, `notice`, `working`, `syncing`, `setupLive`, `setupOptions`, `resetAt`.
+State fields: `schools`, `connections`, `onboarding`, `aiSource`, `cache`, `changes`, `blanks`, `threads`, `setups`, `newCourses`, `prefs`, `handoffs`, `notice`, `working`, `syncing`, `courseReads`, `setupLive`, `setupOptions`, `resetAt`.
 
 `blanks` holds blank forms nobody has touched, in memory only. No selector over work counts them. A screen reads `changes[id] ?? blanks[id]` for a focused form. Read the AI gate with `useAiOn()`, never `aiSource`. `schools` starts empty. Only `addSchool` grows it, so every school in it was connected at least once. A workspace saved by version 2 loads with every school, connection, change, and thread kept.
 

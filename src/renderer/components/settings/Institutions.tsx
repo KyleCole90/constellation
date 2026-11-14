@@ -1,7 +1,7 @@
 import { ArrowUpRight, Check, CornerDownLeft, LoaderCircle, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { parseSchoolHost, type Result, type SchoolHost } from "~/shared/domain/ids";
+import { parseSchoolHost, type Result, type SchoolHost, type SchoolId } from "~/shared/domain/ids";
 import type { School } from "~/shared/domain/lms";
 import { cn } from "~/renderer/lib/utils";
 import type { Secret } from "~/shared/providers/provider";
@@ -10,11 +10,18 @@ import {
   useWorkspace,
   workspaceStore,
   type ConnectStage,
+  type WorkspaceState,
 } from "~/renderer/stores/workspace";
 
 import { SchoolStar } from "../Brand";
 import { TokenSteps } from "../TokenForm";
-import { STAGE_WORDS, STATUS_VIEW, connectionStatus, courseWords } from "./connection.logic";
+import {
+  STAGE_WORDS,
+  STATUS_VIEW,
+  connectionStatus,
+  courseWords,
+  readingWords,
+} from "./connection.logic";
 import { placeRows, readDraftHosts } from "./drafts.logic";
 import { RemoveSchoolDialog } from "./RemoveSchoolDialog";
 import { SecretForm } from "./SecretForm";
@@ -28,6 +35,9 @@ export interface InstitutionRow {
 }
 
 const demoToken = () => `demo-${crypto.randomUUID()}`;
+
+const firstReadRunning = (state: WorkspaceState, school: SchoolId): boolean =>
+  Boolean(state.syncing[school]) && state.connections[school]?.lastSyncedAt === null;
 
 /** Where the add form has no row for a saved school, its card above is where it connects, so focus goes there. */
 const pointToCard = (school: School): string => {
@@ -235,26 +245,53 @@ export function AddressField({
   );
 }
 
+/** While the first read runs, each course is listed as it finishes, so a slow school shows what it is waiting on. */
 function ConnectedLine({ school }: { school: School }) {
   const record = useWorkspace((state) => state.connections[school.id]);
-  const syncing = useWorkspace((state) => Boolean(state.syncing[school.id]));
+  const reading = useWorkspace((state) => firstReadRunning(state, school.id));
+  const progress = useWorkspace((state) => state.courseReads[school.id]);
   const courses = useWorkspace((state) => state.cache[school.id]?.courses.length ?? 0);
-  if (syncing && courses === 0)
-    return (
+  const connected = (
+    <span className="flex items-center gap-1.5 text-meta text-success-foreground">
+      <Check className="size-3" />
+      Connected as {record?.accountName}
+      {!reading && `, ${courseWords(courses).replace(" found", "")}`}
+    </span>
+  );
+  if (!reading) return connected;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {connected}
       <span
         role="status"
         data-testid="connect-stage"
         className="flex items-center gap-1.5 text-meta text-muted-foreground"
       >
         <LoaderCircle className="size-3 animate-spin" />
-        {STAGE_WORDS.reading}
+        {progress ? readingWords(progress.courses.length) : STAGE_WORDS.reading}
       </span>
-    );
-  return (
-    <span className="flex items-center gap-1.5 text-meta text-success-foreground">
-      <Check className="size-3" />
-      Connected as {record?.accountName}, {courseWords(courses).replace(" found", "")}
-    </span>
+      {progress && progress.courses.length > 0 && (
+        <ul data-testid="course-reads" className="flex flex-col gap-1 pl-4.5">
+          {progress.courses.map((course) => {
+            const read = progress.read.includes(course.ref);
+            return (
+              <li
+                key={course.ref}
+                data-read={read}
+                className="flex min-w-0 items-center gap-1.5 text-meta text-muted-foreground"
+              >
+                {read ? (
+                  <Check aria-label="Read" className="size-3 flex-none text-success-foreground" />
+                ) : (
+                  <LoaderCircle aria-label="Reading" className="size-3 flex-none animate-spin" />
+                )}
+                <span className="truncate">{course.title}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -328,6 +365,9 @@ function InstitutionRowView({
       : null,
   );
   const connected = status !== null && !STATUS_VIEW[status].needsToken;
+  const reading = useWorkspace(
+    (state) => row.school !== null && firstReadRunning(state, row.school.id),
+  );
   const enrollment = useWorkspace((state) =>
     row.school ? state.enrollmentFor(row.school.id) : state.newSchoolEnrollment(),
   );
@@ -337,7 +377,7 @@ function InstitutionRowView({
   const [addressError, setAddressError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const item = useRef<HTMLLIElement>(null);
-  // The row holds the height it had when Connect was pressed, so the rows and choices below stay under the pointer.
+  // Until the first read lands, the row holds the height it had when Connect was pressed, so the rows and choices below stay under the pointer.
   const [held, setHeld] = useState<number>();
 
   const connect = async (secret: Secret): Promise<string | null> => {
@@ -356,7 +396,7 @@ function InstitutionRowView({
   return (
     <li
       ref={item}
-      style={{ minHeight: held }}
+      style={{ minHeight: connected && !reading ? undefined : held }}
       data-host={row.host}
       data-connection={status ?? "new"}
       className="flex flex-col gap-2 px-card py-3"
@@ -373,7 +413,7 @@ function InstitutionRowView({
             onError={setAddressError}
           />
         )}
-        {connected && row.school && (
+        {connected && row.school && row.school.name !== row.host && (
           <span className="truncate text-meta text-muted-foreground">{row.school.name}</span>
         )}
         {removable && (
