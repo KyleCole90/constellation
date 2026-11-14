@@ -361,6 +361,27 @@ describe("review rows", () => {
       ["fixed", 1],
     ]);
   });
+  it("keeps a fix the rescan no longer finds where it was on screen, so the rows below it don't jump", () => {
+    const shown = groupRows([
+      row("a"),
+      row("b", { finding: finding("broken-link") }),
+      row("c", { finding: finding("broken-link") }),
+    ]);
+    const rescanned = groupRows(
+      [
+        row("b", { finding: finding("broken-link") }),
+        row("c", { finding: finding("broken-link") }),
+        row("a", { finding: null, status: "fixed" }),
+        row("e", { finding: finding("empty-module") }),
+      ],
+      shown,
+    );
+    expect(rescanned.map((group) => [group.type, group.rows.map((held) => held.key)])).toEqual([
+      ["plain-date", ["a"]],
+      ["broken-link", ["b", "c"]],
+      ["empty-module", ["e"]],
+    ]);
+  });
   it("says needs approval again after an edit it can approve, and passage moved over any other state", () => {
     expect(rowWord({ status: "checking" }, summary({}))).toEqual({
       label: "Checking",

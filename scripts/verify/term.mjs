@@ -1115,11 +1115,20 @@ const previousCourseFlow = async (t) => {
   const fresh = await t.eval(
     `[...document.querySelectorAll('${id("finding-row")}[data-status="fix"]')].filter((el) => el.querySelector('${id("finding-toggle")}')).map((el) => el.dataset.findingKey).find((key) => !${JSON.stringify(row)}.includes(key) && key !== ${JSON.stringify(other)})`,
   );
-  await approveAndSendRightAfterTicking(
-    t,
-    code,
-    row,
-    `${id("finding-row")}[data-finding-key="${fresh}"]`,
+  const freshRow = `${id("finding-row")}[data-finding-key="${fresh}"]`;
+  const offset = `(() => { const list = document.querySelector(${JSON.stringify(id("finding-list"))}).getBoundingClientRect().top; return Math.round(document.querySelector(${JSON.stringify(dismissed)}).getBoundingClientRect().top - list); })()`;
+  const offsetBefore = await t.eval(offset);
+  await approveAndSendRightAfterTicking(t, code, row, freshRow);
+  await t.waitFor(
+    `[${JSON.stringify(row)}, ${JSON.stringify(freshRow)}].every((sel) => document.querySelector(sel)?.dataset.status === "fixed")`,
+    `${code}: the rescan after the send marks both fixes fixed`,
+    WAIT,
+  );
+  const offsetAfter = await t.eval(offset);
+  t.assert(
+    offsetAfter === offsetBefore,
+    `${code}: fixes that land and leave the scan keep their place, so the rows below don't jump`,
+    `${offsetBefore}px then ${offsetAfter}px`,
   );
   await t.click(`${dismissed} ${id("finding-dismiss")}`);
   await t.click(`${dismissed} ${id("finding-dismiss-confirm")}`);
