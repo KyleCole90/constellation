@@ -32,7 +32,6 @@ const collect = async (agent: Agent, input: AgentInput) => {
 };
 
 const yields = (...raw: readonly unknown[]): Agent => ({
-  label: "test double",
   async *run() {
     yield* raw;
   },

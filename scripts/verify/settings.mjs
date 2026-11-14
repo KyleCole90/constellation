@@ -1293,9 +1293,11 @@ const ai = async (t, shot) => {
       tag,
     );
   await says("Anthropic key", "the AI section says drafts come from the saved key");
+  const card = await t.text('[data-testid="ai-card"]');
   t.assert(
-    (await t.text('[data-testid="ai-agent-row"]')).includes("Rule-based drafts"),
-    "the active agent's label comes from the agent",
+    !/agent|source/i.test(card),
+    "the AI card talks about drafts and the key, not agents or sources (#60)",
+    card,
   );
   await shot("settings-ai");
   await t.click("Replace key", { within: row });
@@ -1319,7 +1321,6 @@ const ai = async (t, shot) => {
   await says("Anthropic key", "the key stays until the removal is confirmed");
   await t.click("Remove key", { within: DIALOG });
   await says("Off", "confirming Remove key turns AI off");
-  t.assert(!(await t.has('[data-testid="ai-agent-row"]')), "with AI off there is no active agent");
   await t.click("Use on-device model", { within: row });
   await says("On-device model", "the on-device model can be chosen in Settings");
   await t.click("Turn off AI", { within: row });
@@ -1339,10 +1340,6 @@ const ai = async (t, shot) => {
     "the AI dialog closes after adding",
   );
   await says("Anthropic key", "the key is the source again");
-  t.assert(
-    (await t.text('[data-testid="ai-agent-row"]')).includes("Rule-based drafts"),
-    "the label stays rule-based, since no model is wired up",
-  );
   await assertNoLeak(t, "after the AI key changes");
 };
 
@@ -1683,10 +1680,11 @@ const reloadStays = async (t) => {
   await assertNoLeak(t, "after a reload");
 };
 
+// Named by its host, as the Canvas provider names a school someone adds by address.
 const REAL_SCHOOL = {
   id: "verify-real",
   abbr: "VR",
-  name: "Verify Real Canvas",
+  name: "verify-real.instructure.com",
   host: "verify-real.instructure.com",
   provider: "canvas",
 };
@@ -1713,6 +1711,12 @@ const realSchoolSettings = async (t, shot) => {
   await t.waitFor(
     `document.querySelector('${CARD(REAL_SCHOOL.id)}')`,
     "the real school's card shows",
+  );
+  const card = await t.text(CARD(REAL_SCHOOL.id));
+  t.assert(
+    card.split(REAL_SCHOOL.host).length === 2,
+    "a school named by its address shows the address once on its card (#60)",
+    card,
   );
   const nav = await t.text(NAV);
   t.assert(!nav.includes("Demo"), "with only a real school, Settings has no Demo section", nav);

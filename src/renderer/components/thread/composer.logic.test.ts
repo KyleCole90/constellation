@@ -24,6 +24,13 @@ describe("composerHints", () => {
     ).toEqual([]);
   });
 
+  it("a form filled in by hand has no draft to correct, so the placeholder doesn't ask for corrections (#59)", () => {
+    const placeholder = (drafted: boolean) =>
+      composerHints({ kind: "grading", content: grade(null), canEdit: true, drafted }).placeholder;
+    expect(placeholder(true)).toBe("Correct the draft: a score, a sentence, the tone");
+    expect(placeholder(false)).toBe("Ask Claude to fill in or change this grade");
+  });
+
   it("a change that can't be edited offers no examples the agent would have to refuse", () => {
     expect(
       composerHints({ kind: "grading", content: grade([score]), canEdit: false }).examples,

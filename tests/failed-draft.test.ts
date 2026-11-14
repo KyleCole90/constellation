@@ -16,7 +16,6 @@ const downOnce = (): Agent => {
   const rules = createRuleAgent();
   let down = true;
   return {
-    label: "down once",
     async *run(input, signal) {
       if (down) {
         down = false;

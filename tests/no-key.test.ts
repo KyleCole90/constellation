@@ -37,7 +37,6 @@ const spyAgent = () => {
   const inner = createRuleAgent();
   const runs: string[] = [];
   const agent: Agent = {
-    label: inner.label,
     run: (input, signal) => {
       runs.push(input.request);
       return inner.run(input, signal);
@@ -791,7 +790,6 @@ describe("focus on a form that isn't there", () => {
 describe("course setup with no key", () => {
   it("scanning gives rule fixes, calls no agent, and keeps the rule's words", async () => {
     const agent: Agent = {
-      label: "Stub",
       async *run(input) {
         calls += 1;
         const finding = input.scope.scan?.findings.find(

@@ -45,7 +45,6 @@ const collect = async (agent: Agent, input: Partial<AgentInput> & { request: str
 };
 
 const yields = (...raw: readonly unknown[]): Agent => ({
-  label: "test double",
   async *run() {
     yield* raw;
   },
@@ -106,7 +105,6 @@ describe("the effect parser", () => {
 
   it("an agent that throws reads as a refusal rather than a crash", async () => {
     const broken: Agent = {
-      label: "broken",
       async *run() {
         yield { type: "say", text: "Starting." };
         throw new Error("model fell over");
@@ -214,7 +212,6 @@ describe("the agent, going through the store", () => {
   it("the input the store hands an agent holds data and no callable thing", async () => {
     let received: unknown = null;
     const spy: Agent = {
-      label: "spy",
       async *run(input) {
         received = input;
         yield { type: "say", text: "Noted." };

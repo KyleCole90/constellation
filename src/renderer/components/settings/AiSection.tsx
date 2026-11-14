@@ -37,7 +37,6 @@ const CHATS_KEPT = "Your chats are kept and come back when AI is on.";
 export function AiSection() {
   const source = useWorkspace((state) => state.aiSource);
   const ai = useAiOn();
-  const agent = useWorkspace((state) => state.agentLabel());
   const hasChats = useWorkspace((state) =>
     Object.values(state.threads).some((thread) => thread.kind === "north-star-chat"),
   );
@@ -110,14 +109,6 @@ export function AiSection() {
                 Spend limits <ArrowUpRight className="size-3" />
               </a>
             }
-          />
-        )}
-        {ai && (
-          <SettingsRow
-            data-testid="ai-agent-row"
-            title="Active agent"
-            description="The agent that writes your drafts. Changing the source doesn't change it."
-            control={<span className="text-meta text-secondary-label">{agent}</span>}
           />
         )}
       </SettingsCard>

@@ -562,7 +562,6 @@ const correctOne = (
 
 /** Yields raw objects on purpose: this agent goes through the same parser a real model would. */
 export const createRuleAgent = (): Agent => ({
-  label: "Rule-based drafts",
   async *run(input) {
     const { request, scope } = input;
     if (scope.northStar) return yield* northStarStream(input, scope.northStar);

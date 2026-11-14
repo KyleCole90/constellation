@@ -617,7 +617,6 @@ describe("a fix", () => {
 
   it("the agent rewords a rule's finding, mints nothing, and its words survive a rules-only rescan", async () => {
     const agent: Agent = {
-      label: "Stub",
       async *run(input) {
         const finding = input.scope.scan?.findings.find(
           (entry) => entry.fix?.kind === "text-fix" && entry.item !== null,
