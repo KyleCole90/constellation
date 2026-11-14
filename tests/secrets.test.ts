@@ -81,7 +81,10 @@ describe("a token passing through connect", () => {
     };
     const rig = await makeStoreRig({ vault });
     const result = await rig.connect(LCC, SENTINEL);
-    expect(result).toEqual({ ok: false, error: "Secure storage needs HTTPS or localhost." });
+    expect(result).toEqual({
+      ok: false,
+      error: { message: "Secure storage needs HTTPS or localhost.", wrongSecret: false },
+    });
     expectNoLeak(rig, SENTINEL, result);
   });
 

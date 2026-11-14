@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { parseSchoolHost, type Result, type SchoolHost, type SchoolId } from "~/shared/domain/ids";
 import type { School } from "~/shared/domain/lms";
 import { cn } from "~/renderer/lib/utils";
-import type { Secret } from "~/shared/providers/provider";
+import type { Secret, SecretRefusal } from "~/shared/providers/provider";
 import {
   hasChanges,
   useWorkspace,
@@ -380,7 +380,7 @@ function InstitutionRowView({
   // Until the first read lands, the row holds the height it had when Connect was pressed, so the rows and choices below stay under the pointer.
   const [held, setHeld] = useState<number>();
 
-  const connect = async (secret: Secret): Promise<string | null> => {
+  const connect = async (secret: Secret): Promise<SecretRefusal | null> => {
     const store = workspaceStore().getState();
     setHeld(item.current?.offsetHeight);
     setConnecting(true);

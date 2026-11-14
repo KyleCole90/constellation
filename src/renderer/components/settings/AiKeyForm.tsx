@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { isBlankSecret, Secret } from "~/shared/providers/provider";
+import { isBlankSecret, Secret, type SecretRefusal } from "~/shared/providers/provider";
 import { REAL_AI } from "~/renderer/desktop";
 import { workspaceStore } from "~/renderer/stores/workspace";
 
@@ -8,13 +8,13 @@ import { SecretForm } from "./SecretForm";
 
 const demoKey = () => new Secret(`demo-key-${crypto.randomUUID()}`);
 
-const saveKey = async (secret: Secret): Promise<string | null> => {
-  if (isBlankSecret(secret)) return "Paste a key first.";
+const saveKey = async (secret: Secret): Promise<SecretRefusal | null> => {
+  if (isBlankSecret(secret)) return { message: "Paste a key first.", wrongSecret: true };
   try {
     await workspaceStore().getState().addAiKey(secret);
     return null;
   } catch {
-    return "The key could not be stored, so nothing was saved.";
+    return { message: "The key could not be stored, so nothing was saved.", wrongSecret: false };
   }
 };
 
