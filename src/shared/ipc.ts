@@ -136,6 +136,10 @@ const ipc = {
     }),
     output: readOf(FileContentSchema),
   },
+  "lms.linkExport": {
+    input: v.strictObject({ school: SchoolSchema, submission: lmsRef<"submission">() }),
+    output: readOf(FileContentSchema),
+  },
   "lms.conversations": { input: BySchool, output: readOf(listOf(ConversationSchema)) },
   "lms.announcements": { input: ByCourse, output: readOf(listOf(AnnouncementSchema)) },
   "lms.observe": {

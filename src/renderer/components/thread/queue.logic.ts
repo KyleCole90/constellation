@@ -1,6 +1,6 @@
 import type { ChangeRecord, ChangeSummary } from "~/shared/domain/change";
 import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
-import { bySchoolName, type Course, type School } from "~/shared/domain/lms";
+import { bySchoolName, undraftableReason, type Course, type School } from "~/shared/domain/lms";
 import { formatDay } from "~/renderer/lib/utils";
 import {
   awaitsYou,
@@ -29,6 +29,8 @@ interface WorkRowOf<K extends "submission" | "conversation"> {
   summary: ChangeSummary | null;
   open: boolean;
   missing: boolean;
+  /** False when `undraftableReason` refuses the work, so opening it opens the hand form. */
+  draftable: boolean;
 }
 
 export const fromQueueRows = (rows: readonly QueueRow[]): readonly WorkRow[] =>
@@ -47,6 +49,7 @@ export const fromQueueRows = (rows: readonly QueueRow[]): readonly WorkRow[] =>
     summary: row.summary,
     open: row.open,
     missing: row.missing,
+    draftable: undraftableReason(row.submission.body) === null,
   }));
 
 export const fromConversationRows = (rows: readonly InboxRow[]): readonly WorkRow[] =>
@@ -65,6 +68,7 @@ export const fromConversationRows = (rows: readonly InboxRow[]): readonly WorkRo
     summary: row.summary,
     open: awaitsYou(row),
     missing: false,
+    draftable: true,
   }));
 
 /** A course's queue of messages: what is unread or already being worked on. */
@@ -243,9 +247,9 @@ export const neighbor = (
   return rows[index + delta] ?? null;
 };
 
-/** Moving on to a row nobody has drafted drafts it, which costs a model call, so the button says so. Opening a row any other way drafts nothing. */
+/** Moving on to a row nobody has drafted drafts it, which costs a model call, so the button says so. Opening a row any other way drafts nothing, and neither does one Claude can't read. */
 export const draftsNext = (next: WorkRow, aiDrafts: boolean): boolean =>
-  aiDrafts && next.change === null;
+  aiDrafts && next.change === null && next.draftable;
 
 export const nextLabel = (next: WorkRow, aiDrafts: boolean): string =>
   `${draftsNext(next, aiDrafts) ? "Draft next" : "Next"}: ${next.title}`;

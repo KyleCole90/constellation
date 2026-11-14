@@ -49,6 +49,7 @@ const row = (key: string, patch: Partial<WorkRow> = {}): WorkRow =>
     summary: null,
     open: true,
     missing: false,
+    draftable: true,
     ...patch,
   }) as WorkRow;
 const change = {} as ChangeRecord;
@@ -332,6 +333,10 @@ describe("nextLabel (#48)", () => {
     expect(nextLabel(row("Jean Tuttle"), false)).toBe("Next: Jean Tuttle");
     const drafted = row("Jean Tuttle", { change: {} as ChangeRecord });
     expect(nextLabel(drafted, true)).toBe("Next: Jean Tuttle");
+  });
+
+  it("is plain Next when the next work is one Claude can't read, which opens the hand form (#71)", () => {
+    expect(nextLabel(row("Shelly Cole", { draftable: false }), true)).toBe("Next: Shelly Cole");
   });
 });
 

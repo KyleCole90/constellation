@@ -291,6 +291,15 @@ const createFakeCanvasProvider = (
         ? { ok: true, value: result.value }
         : { ok: false, error: { kind: "not_found" } };
     },
+    linkExport: async (submission) => {
+      const result = await read(route("read", "GET docs.google.com export"), () =>
+        server.linkExport(submission),
+      );
+      if (!result.ok) return result;
+      return result.value
+        ? { ok: true, value: result.value }
+        : { ok: false, error: { kind: "not_found" } };
+    },
     conversations: () =>
       read(route("read", "GET /api/v1/conversations"), () => server.conversations(school.id)),
     announcements: (course) =>

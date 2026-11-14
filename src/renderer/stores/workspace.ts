@@ -68,10 +68,14 @@ import {
   isDemoSchool,
   passagesOf,
   undraftableReason,
+  googleExportOf,
+  linkReads,
+  snapshotOf,
   type Course,
   type FileContent,
   type School,
   type Submission,
+  type SubmissionBody,
 } from "~/shared/domain/lms";
 import type { SetupLive } from "~/shared/domain/setup";
 import type { Bridge } from "~/shared/ipc";
@@ -1336,12 +1340,62 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           };
         };
 
-        const draftFiles = async (
-          narrow: Narrow | null,
-        ): Promise<Result<readonly SubmittedFile[], string>> => {
+        /** A link reads as the first of `linkReads` the app can fetch, and the thread says which one Claude got. */
+        const linkFiles = async (
+          submission: Submission,
+          body: Extract<SubmissionBody, { kind: "url" }>,
+        ): Promise<Result<DraftFiles, string>> => {
+          const lms = provider(submission.school);
+          for (const source of linkReads(body)) {
+            switch (source) {
+              case "export": {
+                const what = googleExportOf(body.url)?.what ?? "linked file";
+                const exported = await lms?.linkExport(submission.ref);
+                if (exported?.ok)
+                  return {
+                    ok: true,
+                    value: {
+                      files: [
+                        { name: what, mediaType: "application/pdf", data: exported.value.data },
+                      ],
+                      read: `Read the whole ${what} from the link`,
+                    },
+                  };
+                break;
+              }
+              case "snapshot": {
+                const snapshot = snapshotOf(body);
+                const read = snapshot && (await lms?.file(submission.ref, snapshot.id));
+                if (snapshot && read?.ok)
+                  return {
+                    ok: true,
+                    value: {
+                      files: [
+                        {
+                          name: snapshot.name,
+                          mediaType: snapshot.mediaType,
+                          data: read.value.data,
+                        },
+                      ],
+                      read: `Saw only ${lms?.vendorLabel ?? "the LMS"}'s screenshot of the link's first screen, so a long doc may be cut off`,
+                    },
+                  };
+                break;
+              }
+            }
+          }
+          return {
+            ok: false,
+            error:
+              "The app couldn't read this link (it may not be shared publicly), so nothing was drafted. Open the link and grade it yourself.",
+          };
+        };
+
+        const draftFiles = async (narrow: Narrow | null): Promise<Result<DraftFiles, string>> => {
           const [submission] = narrow?.submissions ?? [];
           const body = submission?.body;
-          if (!submission || body?.kind !== "upload") return { ok: true, value: [] };
+          if (submission && body?.kind === "url") return linkFiles(submission, body);
+          if (!submission || body?.kind !== "upload") return NO_FILES;
           const lms = provider(submission.school);
           const files: SubmittedFile[] = [];
           for (const file of body.files) {
@@ -1359,7 +1413,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             // Main may have turned the file into text, so the type is what came back, not what the LMS listed.
             files.push({ name: file.name, mediaType: read.value.mediaType, data: read.value.data });
           }
-          return { ok: true, value: files };
+          return { ok: true, value: { files, read: null } };
         };
 
         const runThreadAgent = async (
@@ -1398,9 +1452,16 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               request === DRAFT_GRADE_REQUEST || request === FILL_GRADE_REQUEST
                 ? await draftFiles(narrow)
                 : NO_FILES;
+            if (files.ok && files.value.read)
+              say(thread, run, { type: "work", lines: [files.value.read], at: nowIso() });
             await runAgent(
               files.ok ? agent : declining(files.error),
-              { request, thread: { history }, scope, ...(files.ok ? { files: files.value } : {}) },
+              {
+                request,
+                thread: { history },
+                scope,
+                ...(files.ok ? { files: files.value.files } : {}),
+              },
               sinkFor(thread, run, request === FILL_GRADE_REQUEST),
               new AbortController().signal,
             );
@@ -2186,8 +2247,13 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
   return Object.assign(store, { syncFromStorage: () => syncFromStorage() });
 };
 
-const NO_FILES = { ok: true, value: [] } as const satisfies Result<
-  readonly SubmittedFile[],
+/** What a draft sends Claude besides the scope, and the line that tells the teacher what that was. */
+interface DraftFiles {
+  files: readonly SubmittedFile[];
+  read: string | null;
+}
+const NO_FILES = { ok: true, value: { files: [], read: null } } as const satisfies Result<
+  DraftFiles,
   string
 >;
 

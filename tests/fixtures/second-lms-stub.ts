@@ -118,6 +118,7 @@ export class SecondLmsStub {
       capabilities: CAPABILITIES,
       verify: () => authed(() => OK({ displayName: "Instructor", scopes: ["grades:write"] })),
       file: async () => ({ ok: false, error: { kind: "not_found" } }),
+      linkExport: async () => ({ ok: false, error: { kind: "not_found" } }),
       courses: () =>
         authed(() =>
           OK([

@@ -45,7 +45,7 @@ describe("drafting from a submitted file", () => {
     const { agent, asked } = spy();
     const { open } = await rigWith(agent);
     await open("Aaliyah Brooks");
-    await open("Priya Raman");
+    await open("Hannah Stroud");
     expect(asked).toEqual([]);
   });
 
@@ -68,6 +68,47 @@ describe("drafting from a submitted file", () => {
     expect(asked).toEqual([]);
     const said = JSON.stringify(rig.state().threads[QUEUE]?.messages ?? []);
     expect(said).toContain("couldn't download Reading Response 5.pdf");
+    expect(said).toContain("nothing was drafted");
+  });
+});
+
+describe("drafting from a link (#71)", () => {
+  const workLines = (rig: Awaited<ReturnType<typeof rigWith>>["rig"]) =>
+    (rig.state().threads[QUEUE]?.messages ?? []).flatMap((m) => (m.type === "work" ? m.lines : []));
+
+  it("hands Claude the public Google Doc's export, and says it read the whole doc", async () => {
+    const { agent, asked } = spy();
+    const { rig, open } = await rigWith(agent);
+    await open("Luis Cardenas");
+    const [input] = asked;
+    expect(input?.files?.map((file) => [file.name, file.mediaType])).toEqual([
+      ["Google Doc", "application/pdf"],
+    ]);
+    expect(new TextDecoder().decode(input?.files?.[0]?.data.slice(0, 8))).toBe("%PDF-1.4");
+    expect(workLines(rig)).toContain("Read the whole Google Doc from the link");
+  });
+
+  it("hands Claude the LMS's snapshot of a private doc, and says a long doc may be cut off", async () => {
+    const { agent, asked } = spy();
+    const { rig, open } = await rigWith(agent);
+    await open("Priya Raman");
+    const [input] = asked;
+    expect(input?.files?.map((file) => [file.name, file.mediaType])).toEqual([
+      ["snapshot.png", "image/png"],
+    ]);
+    expect(workLines(rig).join("\n")).toMatch(
+      /screenshot of the link's first screen, so a long doc may be cut off/,
+    );
+  });
+
+  it("drafts nothing from a private doc whose snapshot won't download, and says so", async () => {
+    const { agent, asked } = spy();
+    const { rig, open } = await rigWith(agent);
+    rig.server.setNoise({ rate5xx: 1 });
+    await open("Priya Raman");
+    expect(asked).toEqual([]);
+    const said = JSON.stringify(rig.state().threads[QUEUE]?.messages ?? []);
+    expect(said).toContain("couldn't read this link");
     expect(said).toContain("nothing was drafted");
   });
 });
