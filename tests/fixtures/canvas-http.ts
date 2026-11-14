@@ -205,8 +205,18 @@ export class CanvasHttp {
       ]);
     if (path === `/courses/${COURSE_ID}/users`)
       return json([MAYA, THEO].map((id) => ({ id, name: NAMES[id] })));
-    if (path === `/courses/${COURSE_ID}/students/submissions`)
-      return json([...this.submissions.values()].map((row) => this.#submissionJson(row)));
+    if (path === `/courses/${COURSE_ID}/students/submissions`) {
+      const rows = [...this.submissions.values()].map((row) => this.#submissionJson(row));
+      // Grouped, Canvas answers one entry per student holding that student's submissions.
+      return query.get("grouped") === "true"
+        ? json(
+            [...new Set(rows.map((row) => row.user_id))].map((user_id) => ({
+              user_id,
+              submissions: rows.filter((row) => row.user_id === user_id),
+            })),
+          )
+        : json(rows);
+    }
     const one = new RegExp(
       `^/courses/${COURSE_ID}/assignments/${ASSIGNMENT_ID}/submissions/(\\d+)$`,
     ).exec(path);

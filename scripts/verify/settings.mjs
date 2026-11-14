@@ -593,6 +593,23 @@ const onboarding = async (t, shot) => {
   );
   await backAndForthFromSetup(t, "setup");
   t.assert(
+    !/demo/i.test(await t.text('[data-testid="where-you-teach"]')),
+    "setup: the real school form offers no demo schools beside it",
+    await t.text('[data-testid="where-you-teach"]'),
+  );
+  t.assert(
+    (await t.text('[data-testid="demo-offer"]')).includes("Just looking?"),
+    "setup: demo schools are offered below the form, for a look around",
+  );
+  const privacyWords = await t.eval(
+    `document.querySelector('[data-testid="setup-privacy"]').textContent`,
+  );
+  t.assert(
+    !/whatever you choose|CONSTELLATION_|JavaScript|web demo/.test(privacyWords),
+    "setup: Privacy has no checkbox that does nothing and no developer words",
+    privacyWords,
+  );
+  t.assert(
     (await t.eval(
       `[...document.querySelectorAll('input[name="ai-source"]')].every((radio) => radio.closest("fieldset").disabled)`,
     )) === true,
@@ -690,6 +707,10 @@ const onboarding = async (t, shot) => {
     await t.text(`${ROW(NOWHERE)} [role="alert"]`),
   );
   await shot("unknown-address-rejected");
+  t.assert(
+    !(await t.has('[data-testid="demo-offer"]')),
+    "setup: once a real school is typed, the demo offer goes",
+  );
   await retype(t, ROW_ADDRESS(NOWHERE), "harvard");
   await t.waitFor(
     `${rowAlerts(ROW(NOWHERE))}.join().includes("isn't a web address")`,
@@ -720,9 +741,13 @@ const onboarding = async (t, shot) => {
 
   await t.eval(`(() => {
     window.__stages = [];
+    window.__courseReads = [];
     new MutationObserver(() => {
       const words = document.querySelector('[data-testid="connect-stage"]')?.innerText;
       if (words && window.__stages.at(-1) !== words) window.__stages.push(words);
+      const rows = [...document.querySelectorAll('[data-testid="course-reads"] li')];
+      const read = \`\${rows.filter((row) => row.dataset.read === "true").length}/\${rows.length}\`;
+      if (rows.length > 0 && window.__courseReads.at(-1) !== read) window.__courseReads.push(read);
     }).observe(document.body, { subtree: true, childList: true, characterData: true });
   })()`);
   await t.eval(`window.__faultLab.setNoise({ latencyMs: [900, 900] })`);
@@ -735,8 +760,8 @@ const onboarding = async (t, shot) => {
     JSON.stringify(fieldAfter?.value?.length),
   );
   await t.waitFor(
-    `document.querySelector('[data-testid="connect-stage"]')?.innerText === "Checking token"`,
-    "Lakeshore shows Checking token while it waits",
+    `document.querySelector('[data-testid="connect-stage"]')?.innerText === "Checking your token"`,
+    "Lakeshore shows Checking your token while it waits",
   );
   await shot("connecting-stage");
   t.assert(
@@ -756,14 +781,26 @@ const onboarding = async (t, shot) => {
   );
   const stages = await t.eval(`window.__stages`);
   t.assert(
-    stages.includes("Checking token") && stages.includes("Reading your courses"),
+    stages.includes("Checking your token") && stages.includes("Reading your courses"),
     "connecting showed real stages in order",
     stages.join(" > "),
   );
   t.assert(
-    stages.indexOf("Checking token") < stages.indexOf("Reading your courses"),
+    stages.indexOf("Checking your token") < stages.indexOf("Reading your courses"),
     "checking comes before reading",
     stages.join(" > "),
+  );
+  const found = Number(/(\d+) courses?/.exec(await t.text(ROW(LCC)))?.[1]);
+  const reads = await t.eval(`window.__courseReads`);
+  t.assert(
+    reads[0] === `0/${found}` && stages.includes(`Reading your ${found} courses`),
+    "connecting names each course while its first read runs",
+    `${stages.join(" > ")} | ${reads.join(" > ")}`,
+  );
+  t.assert(
+    (await t.text(ROW(LCC))).split(LCC).length === 2,
+    "a connected school shows its address once",
+    await t.text(ROW(LCC)),
   );
   t.assert(
     !(await t.eval(
@@ -1824,7 +1861,7 @@ const oneSchoolThenAdd = async (t, shot) => {
     `${addressAlert('[data-testid="where-you-teach"]')}.includes("isn't a web address")`,
     "an address with no dot is refused",
   );
-  await t.click("Use demo institutions and tokens");
+  await t.click("Try it with demo schools");
   await t.waitFor(
     `document.querySelectorAll("[data-host]").length === 2`,
     "the demo fill adds both demo schools",

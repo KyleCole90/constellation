@@ -64,7 +64,7 @@ const setup = async (t) => {
   await t.shot("focus-after-add-address");
   await t.click('[aria-label="Remove canvas.focus-check.edu"]');
 
-  await t.click("Use demo institutions and tokens");
+  await t.click("Try it with demo schools");
   await t.waitFor(`document.querySelectorAll("${ROWS}").length > 1`, "the demo fill adds rows");
   const hosts = await t.eval(
     `[...document.querySelectorAll("${ROWS}")].map((el) => el.dataset.host)`,

@@ -274,7 +274,7 @@ export const run = async (t) => {
 
   await t.waitText("Set up");
   await t.click("Set up");
-  await t.click("Use demo institutions and tokens");
+  await t.click("Try it with demo schools");
   await t.waitFor(
     `document.querySelectorAll("[data-host]").length > 0`,
     "the demo schools fill in",

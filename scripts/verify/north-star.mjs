@@ -123,7 +123,7 @@ const SETUP_LAYOUT = `(() => { const field = document.querySelector('[data-testi
 const finishWaitsForReads = async (t) => {
   await t.goto("/welcome");
   await t.click("Set up");
-  await t.click("Use demo institutions and tokens");
+  await t.click("Try it with demo schools");
   await t.waitFor(`document.querySelectorAll("[data-host]").length > 1`, "a row per demo school");
   const hosts = await t.eval(
     `[...document.querySelectorAll("[data-host]")].map((el) => el.dataset.host)`,

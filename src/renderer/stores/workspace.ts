@@ -139,6 +139,11 @@ const UNREADABLE_BACKUP_KEY = `${WORKSPACE_STORAGE_KEY}.unreadable`;
 
 export type ConnectStage = "saving" | "checking" | "reading";
 
+interface CourseRead {
+  readonly courses: readonly Course[];
+  readonly read: readonly LmsRef<"course">[];
+}
+
 interface WorkspaceActions extends SetupActions {
   /** Now in epoch ms, on the demo clock while every school is a demo school and on real time otherwise. */
   now(): number;
@@ -239,6 +244,8 @@ export type WorkspaceState = WorkspaceData &
     working: Readonly<Record<ThreadId, boolean>>;
     /** Schools with a sync in progress. Not persisted. */
     syncing: Readonly<Record<SchoolId, boolean>>;
+    /** A running sync's courses and the ones it has finished reading, so a first read shows progress. Not persisted. */
+    courseReads: Readonly<Record<SchoolId, CourseRead>>;
     /** False only on desktop with the Mac offline. Send is disabled then, and nothing queues (D28). Not persisted. */
     online: boolean;
     /** By course ref. Not persisted: the next read of the job restores it. */
@@ -856,7 +863,8 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           set({ syncing: { ...get().syncing, [school]: true } });
           const run = runSync(school).finally(() => {
             inFlight.delete(`sync:${school}`);
-            set({ syncing: { ...get().syncing, [school]: false } });
+            const { [school]: _done, ...courseReads } = get().courseReads;
+            set({ syncing: { ...get().syncing, [school]: false }, courseReads });
           });
           inFlight.set(`sync:${school}`, run);
           return run;
@@ -880,19 +888,28 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           };
           const courses = await writeback.laneRead(school, () => lms.courses());
           if (!courses.ok) return fail(courses.error);
-          const perCourse = await Promise.all(
-            courses.value.map((course) =>
-              Promise.all([
-                writeback.laneRead(school, () => lms.assignments(course.ref)),
-                writeback.laneRead(school, () => lms.students(course.ref)),
-                writeback.laneRead(school, () => lms.submissions(course.ref)),
-                writeback.laneRead(school, () => lms.announcements(course.ref)),
-              ]),
+          const progress = (read: readonly LmsRef<"course">[]) =>
+            set({
+              courseReads: { ...get().courseReads, [school]: { courses: courses.value, read } },
+            });
+          progress([]);
+          const [perCourse, conversations] = await Promise.all([
+            Promise.all(
+              courses.value.map(async (course) => {
+                const reads = await Promise.all([
+                  writeback.laneRead(school, () => lms.assignments(course.ref)),
+                  writeback.laneRead(school, () => lms.students(course.ref)),
+                  writeback.laneRead(school, () => lms.submissions(course.ref)),
+                  writeback.laneRead(school, () => lms.announcements(course.ref)),
+                ]);
+                progress([...(get().courseReads[school]?.read ?? []), course.ref]);
+                return reads;
+              }),
             ),
-          );
-          const conversations = lms.capabilities.messaging
-            ? await writeback.laneRead(school, () => lms.conversations())
-            : ({ ok: true, value: [] } as const);
+            lms.capabilities.messaging
+              ? writeback.laneRead(school, () => lms.conversations())
+              : ({ ok: true, value: [] } as const),
+          ]);
           if (!conversations.ok) return fail(conversations.error);
           const readThrough = get().prefs.readThrough ?? {};
           const seen = conversations.value.map((c) =>
@@ -1439,6 +1456,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           blanks: {},
           working: {},
           syncing: {},
+          courseReads: {},
           online: deps.connectivity?.online() ?? true,
           setupLive: {},
           setupOptions: {},
@@ -1948,6 +1966,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               blanks: {},
               working: {},
               syncing: {},
+              courseReads: {},
               setupLive: {},
               setupOptions: {},
               notice: "Demo data was reset.",
@@ -2016,6 +2035,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
         blanks: {},
         working: {},
         syncing: {},
+        courseReads: {},
         setupLive: {},
         setupOptions: {},
         notice,

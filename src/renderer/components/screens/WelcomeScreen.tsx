@@ -223,7 +223,10 @@ export function SetupScreen() {
   const router = useRouter();
   const institutions = useInstitutions({ includeSaved: true, draftsKey: "setup.drafts" });
   const enrollment = useWorkspace((state) => state.newSchoolEnrollment());
-  const demo = useWorkspace((state) => state.demoHosts().length > 0);
+  // Demo schools are for a look around, so the offer goes once a real school is added (as in Settings, #41).
+  const demoHosts = useWorkspace((state) => state.demoHosts());
+  const demo =
+    demoHosts.length > 0 && institutions.rows.every((row) => demoHosts.includes(row.host));
   const connected = useWorkspace(
     (state) =>
       state.schools.filter((school) => state.connections[school.id]?.status === "connected").length,
@@ -278,19 +281,7 @@ export function SetupScreen() {
           <Notice />
 
           <section data-testid="where-you-teach" className="flex flex-col gap-3">
-            <div className="flex items-baseline justify-between gap-4">
-              <SectionTitle number={1}>Where you teach</SectionTitle>
-              {demo && (
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="-mr-2.5"
-                  onClick={institutions.fillDemo}
-                >
-                  Use demo institutions and tokens
-                </Button>
-              )}
-            </div>
+            <SectionTitle number={1}>Where you teach</SectionTitle>
             <AddressField institutions={institutions} placeholder={placeholder} autoFocus />
             <InstitutionList institutions={institutions} />
             {institutions.rows.length === 0 && (
@@ -328,6 +319,18 @@ export function SetupScreen() {
                 : AI_WORDS[choice]}
           </span>
         </aside>
+
+        {demo && (
+          <p
+            data-testid="demo-offer"
+            className="flex items-center gap-1 text-meta text-muted-foreground"
+          >
+            Just looking?
+            <Button variant="link" size="sm" className="-ml-2.5" onClick={institutions.fillDemo}>
+              Try it with demo schools
+            </Button>
+          </p>
+        )}
 
         {/* Pinned to the bottom of the scroll, so Finish and why it waits stay on screen however long the list gets. */}
         <div className="sticky bottom-0 flex items-center justify-end gap-3 border-t border-border bg-background py-4">

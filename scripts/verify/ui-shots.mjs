@@ -58,7 +58,7 @@ export const run = async (t) => {
   await t.waitFor(`document.querySelector('input[name="ai-source"]')`, "setup page");
   await snap(t, "02-setup-finish-disabled");
 
-  await t.click("Use demo institutions and tokens");
+  await t.click("Try it with demo schools");
   await t.waitFor(`document.querySelectorAll("[data-host]").length > 0`, "demo rows");
   const hosts = await t.eval(
     `[...document.querySelectorAll("[data-host]")].map((el) => el.dataset.host)`,
