@@ -680,6 +680,8 @@ interface AgentRun {
   failed: boolean;
   /** Work this run handed to other threads. The run isn't over until they are. */
   started: Promise<unknown>[];
+  /** The teacher typed this run's request. Only such a run may set guidance, so a submission read by a Draft press can't plant one. */
+  typed: boolean;
 }
 const withoutReplies = (message: ThreadMessage): ThreadMessage => {
   if (message.type !== "agent") return message;
@@ -687,9 +689,14 @@ const withoutReplies = (message: ThreadMessage): ThreadMessage => {
   return rest;
 };
 
-const newRun = (change: ChangeId | null, held: ThreadMessage[] | null): AgentRun => ({
+const newRun = (
+  change: ChangeId | null,
+  held: ThreadMessage[] | null,
+  typed = false,
+): AgentRun => ({
   change,
   held,
+  typed,
   said: [],
   failed: false,
   started: [],
@@ -1370,6 +1377,8 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                 case "work":
                   return say(thread, run, { type: "work", lines: [effect.line], at: nowIso() });
                 case "guide":
+                  if (!run.typed)
+                    return logDropped(thread, "guide: only a typed request sets guidance");
                   return setGuidance(thread, effect.text);
                 case "spend": {
                   const current = get().threads[thread];
@@ -2076,7 +2085,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               thread,
               text,
               northStar ?? (scan && setupScope(scan)) ?? onScreen,
-              newRun(focus, null),
+              newRun(focus, null, true),
               onScreen ? target : undefined,
             );
           },
