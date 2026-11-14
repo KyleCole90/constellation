@@ -216,6 +216,14 @@ describe("main's Anthropic agent", () => {
     );
   });
 
+  it("tells Claude the review list is the rules' findings alone, so a scan summary names no finding the list lacks (#103)", async () => {
+    const api = transport(() => json(200, message([])));
+    await anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch })(INPUT);
+    expect(api.sent[0]?.body["system"]).toContain(
+      "the list shows exactly scope.scan.findings, and nothing you add joins it",
+    );
+  });
+
   it("hands Claude the thread's guidance, and tells it only guidance reaches a draft (#97)", async () => {
     const api = transport(() => json(200, message([])));
     await anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch })({
