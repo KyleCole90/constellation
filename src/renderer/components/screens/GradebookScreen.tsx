@@ -36,16 +36,24 @@ const STICKY_TOP = "sticky top-0 z-10 bg-card";
 const EDGE_LEFT = "group-data-[hidden-left]/book:shadow-pinned-column-left";
 const EDGE_RIGHT = "group-data-[hidden-right]/book:shadow-pinned-column-right";
 
-/** Marks which sides of a sideways scroller have content hidden past them. */
+/**
+ * Marks which sides of a sideways scroller have content hidden past them, and keeps columns snapping to the pinned
+ * Student column's edge. A long name widens that column, so a fixed snap padding would park the table scrolled in.
+ */
 const markHiddenEdges = (el: HTMLDivElement | null) => {
   if (!el) return;
   const mark = () => {
     el.toggleAttribute("data-hidden-left", el.scrollLeft > 0);
     el.toggleAttribute("data-hidden-right", el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
   };
-  mark();
+  const fit = () => {
+    const corner = el.querySelector<HTMLElement>("[data-corner]");
+    if (corner) el.style.scrollPaddingLeft = `${corner.offsetWidth}px`;
+    mark();
+  };
+  fit();
   el.addEventListener("scroll", mark, { passive: true });
-  const observer = new ResizeObserver(mark);
+  const observer = new ResizeObserver(fit);
   observer.observe(el);
   if (el.firstElementChild) observer.observe(el.firstElementChild);
   return () => {
@@ -284,7 +292,7 @@ export function GradebookScreen({ courseId }: { courseId: LmsRef<"course"> }) {
               ref={markHiddenEdges}
               data-testid="gradebook-scroll"
               data-scroll-x
-              className="group/book mx-4 min-h-0 snap-x snap-proximity scroll-pl-[188px] overflow-auto rounded-lg border border-border"
+              className="group/book mx-4 min-h-0 snap-x snap-proximity overflow-auto rounded-lg border border-border"
             >
               <table
                 data-testid="gradebook"
