@@ -51,13 +51,14 @@ export function SecretForm({
   const error = said && said.context === context ? said.text : null;
   const [busy, setBusy] = useState(false);
 
-  const run = async (secret: Secret) => {
+  const run = async (secret: Secret, fromField: boolean) => {
     setBusy(true);
     setSaid(null);
     const refusal = await onSubmit(secret);
     setBusy(false);
     setSaid(refusal === null ? null : { text: refusal.message, context });
-    if (input.current && (refusal === null || refusal.wrongSecret)) input.current.value = "";
+    if (fromField && input.current && (refusal === null || refusal.wrongSecret))
+      input.current.value = "";
     if (refusal) input.current?.focus();
   };
 
@@ -65,7 +66,7 @@ export function SecretForm({
     event.preventDefault();
     const field = input.current;
     if (!field || busy) return;
-    void run(new Secret(field.value));
+    void run(new Secret(field.value), true);
   };
 
   const attach = (element: HTMLInputElement | null) => {
@@ -97,7 +98,7 @@ export function SecretForm({
       variant="ghost-muted"
       size={layout === "inline" ? "md" : "lg"}
       disabled={busy}
-      onClick={() => void run(secondary.make())}
+      onClick={() => void run(secondary.make(), false)}
     >
       {secondary.label}
     </Button>
