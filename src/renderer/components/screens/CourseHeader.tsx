@@ -27,6 +27,7 @@ function SyncLine({ course }: { course: Course }) {
   const now = workspaceStore().getState().now();
   const at = connection?.lastSyncedAt ?? null;
   const error = connection?.syncError ?? null;
+  const vendor = useWorkspace((state) => state.vendorLabelFor(course.school) ?? "your school");
   const stale = isStale(at, now);
   return (
     <span data-testid="sync-line" className="flex min-w-0 items-center gap-1.5 text-meta">
@@ -36,7 +37,7 @@ function SyncLine({ course }: { course: Course }) {
           role="alert"
           className="min-w-0 truncate text-error-foreground"
         >
-          {syncFailureWords(error, at, now)}
+          {syncFailureWords(error, vendor, at, now)}
         </span>
       ) : (
         <span

@@ -10,6 +10,14 @@ export interface School {
   provider: ProviderKind;
 }
 
+/** A demo school runs on the fake LMS. A new provider has to pick a side here. */
+const DEMO_PROVIDER: Readonly<Record<ProviderKind, boolean>> = {
+  "fake-canvas": true,
+  canvas: false,
+};
+
+export const isDemoSchool = (school: School): boolean => DEMO_PROVIDER[school.provider];
+
 /** The one order schools take in every list and filter: by name. */
 export const bySchoolName = (a: School, b: School): number => a.name.localeCompare(b.name);
 

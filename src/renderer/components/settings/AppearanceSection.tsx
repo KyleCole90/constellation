@@ -11,7 +11,7 @@ export function AppearanceSection() {
       <SettingsCard>
         <SettingsRow
           title="Theme"
-          description="System follows this computer's light or dark setting. The choice applies to this browser."
+          description="System follows this computer's light or dark setting."
           control={
             <div
               role="radiogroup"

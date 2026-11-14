@@ -2,6 +2,7 @@ import { LoaderCircle } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import type { SchoolId } from "~/shared/domain/ids";
+import { isDemoSchool } from "~/shared/domain/lms";
 import { Secret } from "~/shared/providers/provider";
 import { useWorkspace, workspaceStore, type ConnectStage } from "~/renderer/stores/workspace";
 
@@ -23,6 +24,9 @@ export function TokenForm({
   aside?: ReactNode;
 }) {
   const enrollment = useWorkspace((state) => state.enrollmentFor(school));
+  const demo = useWorkspace((state) =>
+    state.schools.some((candidate) => candidate.id === school && isDemoSchool(candidate)),
+  );
   const [stage, setStage] = useState<ConnectStage | null>(null);
 
   if (!enrollment) return null;
@@ -47,7 +51,7 @@ export function TokenForm({
       submitLabel={submitLabel}
       busyLabel="Connecting"
       onSubmit={connect}
-      secondary={{ label: "Use a demo token", make: demoToken }}
+      {...(demo && { secondary: { label: "Use a demo token", make: demoToken } })}
       aside={aside}
       progress={
         <p

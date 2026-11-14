@@ -1,6 +1,7 @@
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { FIELD_LABEL } from "~/shared/domain/change";
+import { isDemoSchool } from "~/shared/domain/lms";
 import type { LmsRef, SchoolId } from "~/shared/domain/ids";
 import { faultLab, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
@@ -130,7 +131,8 @@ function OneShot({
 const Armed = () => <Badge tone="warning">Armed</Badge>;
 
 function ExpireFault() {
-  const schools = useWorkspace((state) => state.schools);
+  const allSchools = useWorkspace((state) => state.schools);
+  const schools = useMemo(() => allSchools.filter(isDemoSchool), [allSchools]);
   const [school, setSchool] = useState<SchoolId | null>(schools[0]?.id ?? null);
   const status = useWorkspace((state) =>
     school
@@ -172,18 +174,21 @@ function ExpireFault() {
 }
 
 function RegradeFault() {
+  const schools = useWorkspace((state) => state.schools);
   const caches = useWorkspace((state) => state.cache);
   const items = useMemo(
     () =>
-      Object.values(caches).flatMap((cache) =>
-        cache.submissions
+      schools.filter(isDemoSchool).flatMap((school) => {
+        const cache = caches[school.id];
+        if (!cache) return [];
+        return cache.submissions
           .filter((submission) => submission.workflow === "submitted")
           .map((submission): PickerItem => ({
             value: submission.ref,
             label: `${submission.studentName}, ${cache.assignments.find((a) => a.ref === submission.assignment)?.shortTitle ?? "assignment"}`,
-          })),
-      ),
-    [caches],
+          }));
+      }),
+    [schools, caches],
   );
   const [picked, setPicked] = useState<string | null>(null);
   const [text, setText] = useState("65");

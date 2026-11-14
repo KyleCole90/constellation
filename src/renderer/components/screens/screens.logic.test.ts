@@ -732,9 +732,9 @@ describe("sync age", () => {
     expect(isStale(at, start + 61 * 60_000)).toBe(true);
   });
 
-  it("a failed refresh says the old data is still what's showing", () => {
-    expect(syncFailureWords("unavailable", at, start + 2 * 3_600_000)).toBe(
-      "Couldn't refresh: the LMS isn't answering. Showing data from 2 hours ago.",
+  it("a failed refresh names the LMS in plain words and says the old data is still showing", () => {
+    expect(syncFailureWords("unavailable", "Canvas", at, start + 2 * 3_600_000)).toBe(
+      "Can't reach Canvas. Check your internet connection. Showing data from 2 hours ago.",
     );
   });
 });
