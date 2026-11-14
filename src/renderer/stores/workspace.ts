@@ -1346,12 +1346,18 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           const files: SubmittedFile[] = [];
           for (const file of body.files) {
             const read = await lms?.file(submission.ref, file.id);
+            if (read && !read.ok && read.error.kind === "rejected")
+              return {
+                ok: false,
+                error: `${file.name}: ${read.error.reason} Nothing was drafted. Grade it yourself.`,
+              };
             if (!read?.ok)
               return {
                 ok: false,
                 error: `The app couldn't download ${file.name} from ${lms?.vendorLabel ?? "the LMS"}, so nothing was drafted. Try again, or grade it yourself.`,
               };
-            files.push({ name: file.name, mediaType: file.mediaType, data: read.value.data });
+            // Main may have turned the file into text, so the type is what came back, not what the LMS listed.
+            files.push({ name: file.name, mediaType: read.value.mediaType, data: read.value.data });
           }
           return { ok: true, value: files };
         };

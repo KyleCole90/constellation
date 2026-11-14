@@ -2196,13 +2196,41 @@ const submissionTypes = async (t) => {
   await blocked("a link");
   await t.shot("submission-url");
 
+  const drafts = async (label) =>
+    t.assert(
+      await t.eval(`${draftButton}?.disabled === false`),
+      `${label}: Claude can draft it`,
+      await t.text(OPEN),
+    );
+
   await openCell("ENG 101", "Tomasz Wilk", "Reading Response 5");
+  const wilk = `${PANEL} [data-file="RR5 Wilk.docx"] [data-text]`;
   await t.waitFor(
-    `document.querySelector('${PANEL} [data-file="RR5 Wilk.docx"]')?.innerText.includes("DOCX, 18 KB")`,
-    "a Word file shows its name, type and size",
+    `document.querySelector('${wilk} h2')?.innerText === "Notes by Hand" && [...document.querySelectorAll('${wilk} p')].some((p) => p.innerText.includes("notes by hand remember more"))`,
+    "a Word file shows its heading and paragraphs as text",
+    15_000,
   );
-  await blocked("a Word file");
+  await drafts("a Word file");
   await t.shot("submission-docx");
+
+  await openCell("ENG 101", "Jonah Feld", "Reading Response 5");
+  await t.waitFor(
+    `[...document.querySelectorAll('${PANEL} [data-file="response5.txt"] [data-text] p')].some((p) => p.innerText.includes("depends on the subject"))`,
+    "a text file shows its paragraphs",
+    15_000,
+  );
+  await drafts("a text file");
+  await t.shot("submission-txt");
+
+  await openCell("ENG 101", "Keiko Morita", "Reading Response 5");
+  const morita = `${PANEL} [data-file="Morita RR5.docx"]`;
+  await t.waitFor(
+    `document.querySelector('${morita} [data-file-failed]')?.innerText.includes("Couldn't read this file.") && document.querySelector('${OPEN} [data-testid="draft-blocked"]')`,
+    "a damaged Word file says the app couldn't read it, and blocks the draft",
+    15_000,
+  );
+  await blocked("a damaged Word file");
+  await t.shot("submission-corrupt-docx");
 
   await openCell("ENG 101", "Aaliyah Brooks", "Reading Response 5");
   await t.waitFor(
@@ -2237,6 +2265,17 @@ const submissionTypes = async (t) => {
   );
   await t.click("Discard", { within: '[data-testid="card-actions"]' });
   await t.waitFor(`!document.querySelector(${JSON.stringify(CARD)})`, "PDF draft: discarded");
+
+  await openCell("ENG 101", "Tomasz Wilk", "Reading Response 5");
+  await draftWithClaude(t);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes("Tomasz Wilk, Reading Response 5")`,
+    "the Word upload drafts",
+    15_000,
+  );
+  await settled(t, "Word draft: agent finished");
+  await t.click("Discard", { within: '[data-testid="card-actions"]' });
+  await t.waitFor(`!document.querySelector(${JSON.stringify(CARD)})`, "Word draft: discarded");
 };
 
 export const run = async (t) => {

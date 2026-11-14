@@ -130,6 +130,27 @@ describe("the lms channels", () => {
     expect(await lms.server.stored()).toBe(stored);
   });
 
+  it("main hands back a Word upload as its words, and refuses one it can't read", async () => {
+    const lms = bridgedLms();
+    await lms.connect(LCC);
+    const fileOf = async (student: string, id: string) => {
+      const ref = lms.server.findSubmission(student, "Reading Response 5");
+      if (!ref) throw new Error(`No submission for ${student}.`);
+      return lms.provider(LCC).file(ref, id);
+    };
+    const wilk = await fileOf("Tomasz Wilk", "rr5-wilk-docx");
+    expect(wilk.ok && wilk.value.mediaType).toBe("text/markdown");
+    expect(wilk.ok && new TextDecoder().decode(wilk.value.data)).toMatch(
+      /^# Notes by Hand\n\nThe article claims/,
+    );
+    expect(await fileOf("Keiko Morita", "rr5-morita-docx")).toEqual({
+      ok: false,
+      error: { kind: "rejected", reason: "Couldn't read this file." },
+    });
+    const pdf = await fileOf("Maya Ortiz", "rr5-ortiz-pdf");
+    expect(pdf.ok && pdf.value.mediaType).toBe("application/pdf");
+  });
+
   it("an unpackaged app answers verify's reads", async () => {
     const lms = bridgedLms();
     await lms.connect(LCC);

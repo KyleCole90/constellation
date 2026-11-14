@@ -141,8 +141,13 @@ export const excerptNote = (body: SubmissionBody): string | null => {
   }
 };
 
-const CLAUDE_READS: Readonly<Record<string, "document" | "image">> = {
+/** How a file reaches the teacher and Claude: a PDF, a picture, or words. */
+export type FileView = "document" | "image" | "text";
+
+const CLAUDE_READS: Readonly<Record<string, FileView>> = {
   "application/pdf": "document",
+  "text/plain": "text",
+  "text/markdown": "text",
   "image/png": "image",
   "image/jpeg": "image",
   "image/gif": "image",
@@ -153,8 +158,24 @@ const MB = 1024 * 1024;
 const MAX_IMAGE_BYTES = 5 * MB;
 const MAX_CLAUDE_BYTES = 20 * MB;
 
-export const claudeBlockFor = (file: Pick<SubmissionFile, "mediaType">) =>
+export const claudeBlockFor = (file: Pick<SubmissionFile, "mediaType">): FileView | null =>
   CLAUDE_READS[file.mediaType] ?? null;
+
+/** Types main reads the words out of, so the app and Claude get them as Markdown text (#68). */
+const MAIN_READS_AS_TEXT = new Set([
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/rtf",
+  "text/rtf",
+  "text/plain",
+  "text/markdown",
+  "text/x-markdown",
+]);
+
+export const mainReadsAsText = (mediaType: string): boolean => MAIN_READS_AS_TEXT.has(mediaType);
+
+/** What the app can show of a listed file, once main has read it: null when it can't open it at all. */
+export const viewOf = (file: Pick<SubmissionFile, "mediaType">): FileView | null =>
+  claudeBlockFor(file) ?? (mainReadsAsText(file.mediaType) ? "text" : null);
 
 const sizeLabel = (bytes: number): string =>
   bytes < MB ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / MB).toFixed(1)} MB`;
@@ -191,16 +212,23 @@ export const undraftableReason = (body: SubmissionBody): string | null => {
   }
 };
 
-export const unreadableFiles = (files: readonly Omit<SubmissionFile, "id">[]): string | null => {
-  const unread = files.find((file) => claudeBlockFor(file) === null);
+/**
+ * `kindOf` defaults to what main can turn a listed file into. Main's own last check passes `claudeBlockFor`, since
+ * the bytes it sends Claude must already be what Claude reads.
+ */
+export const unreadableFiles = (
+  files: readonly Omit<SubmissionFile, "id">[],
+  kindOf: (file: Pick<SubmissionFile, "mediaType">) => FileView | null = viewOf,
+): string | null => {
+  const unread = files.find((file) => kindOf(file) === null);
   if (unread)
     return `Claude can't read ${unread.name} (${fileLabel(unread)}), so it can't draft this one. Grade it yourself.`;
-  const big = files.find(
-    (file) => claudeBlockFor(file) === "image" && file.bytes > MAX_IMAGE_BYTES,
-  );
+  const big = files.find((file) => kindOf(file) === "image" && file.bytes > MAX_IMAGE_BYTES);
   if (big)
     return `${big.name} is larger than the 5 MB picture the app sends to Claude. Grade it yourself.`;
-  if (files.reduce((sum, file) => sum + file.bytes, 0) > MAX_CLAUDE_BYTES)
+  // A Word file's size is mostly what main leaves out, so only the files sent as they are count.
+  const sent = files.filter((file) => kindOf(file) !== "text");
+  if (sent.reduce((sum, file) => sum + file.bytes, 0) > MAX_CLAUDE_BYTES)
     return "These files are larger than the 20 MB the app sends to Claude at once. Grade it yourself.";
   return null;
 };

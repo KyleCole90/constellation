@@ -14,7 +14,7 @@ import {
 } from "../shared/domain/change";
 import type { PickedPackage } from "../shared/domain/content";
 import type { ChangeId, LmsRef, Result, SchoolId } from "../shared/domain/ids";
-import type { FileContent, School } from "../shared/domain/lms";
+import { mainReadsAsText, type FileContent, type School } from "../shared/domain/lms";
 import { SendPermit } from "../shared/domain/permit";
 import type { Handlers } from "../shared/ipc";
 import { labSnapshot, type LabCommand } from "../shared/providers/fake-canvas/lab";
@@ -29,6 +29,7 @@ import type {
 } from "../shared/providers/provider";
 
 import { packageTerm } from "./cartridge";
+import { documentText } from "./document-text";
 import { jsonFile } from "./json-file";
 import { canvasSchoolAt, createCanvasProvider, type Fetch } from "./providers/canvas";
 
@@ -241,8 +242,19 @@ export const lmsHandlers = (options: {
     for (const field of appends) if (outcomes[field]?.status === "failed") press.sent.delete(field);
     return outcomes;
   };
-  /** A file's id names one upload, which Canvas never changes. */
-  const files = new Map<string, FileContent>();
+  /** A file's id names one upload, which Canvas never changes, so a file main can't read stays refused. */
+  const files = new Map<string, Result<FileContent, LmsError>>();
+  /** Word, RTF and text files reach the renderer and Claude as their words, in Markdown (#68). */
+  const asText = async (content: FileContent): Promise<Result<FileContent, LmsError>> => {
+    if (!mainReadsAsText(content.mediaType)) return { ok: true, value: content };
+    const text = await documentText(content.mediaType, content.data);
+    return text.ok
+      ? {
+          ok: true,
+          value: { mediaType: "text/markdown", data: new TextEncoder().encode(text.value) },
+        }
+      : { ok: false, error: { kind: "rejected", reason: text.error } };
+  };
   const readFile = async (
     school: School,
     submission: LmsRef<"submission">,
@@ -250,18 +262,19 @@ export const lmsHandlers = (options: {
   ): Promise<Result<FileContent, LmsError>> => {
     const key = `${school.id}\n${school.provider}\n${submission}\n${id}`;
     const kept = files.get(key);
-    if (kept) return { ok: true, value: kept };
+    if (kept) return kept;
     const read = await provider(school).file(submission, id);
     if (!read.ok) return read;
-    files.set(key, read.value);
+    const shown = await asText(read.value);
+    files.set(key, shown);
     let total = 0;
-    for (const value of files.values()) total += value.data.byteLength;
+    for (const value of files.values()) total += value.ok ? value.value.data.byteLength : 0;
     for (const [old, value] of files) {
       if (total <= FILE_CACHE_BYTES) break;
       files.delete(old);
-      total -= value.data.byteLength;
+      total -= value.ok ? value.value.data.byteLength : 0;
     }
-    return read;
+    return shown;
   };
   const term = async <T>(
     school: School,

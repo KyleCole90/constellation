@@ -24,6 +24,7 @@ import { cn } from "~/renderer/lib/utils";
 
 import { Button } from "../ui/button";
 import { ChangeCard, ChangeRow } from "./DraftCard";
+import { useRefusedFile } from "./SubmittedFile";
 import { AnswerLines, HandedOffBanner, HandoffGroup, ReplyChips } from "./northStar";
 import { boldRuns, buildTimeline, liveReplies, visibleMessages } from "./timeline.logic";
 import { focusIsFree } from "~/renderer/lib/lostFocus";
@@ -379,7 +380,8 @@ function OpenSubmission({
   const vendor = useWorkspace((state) => state.vendorLabelFor(submission.school) ?? "the LMS");
   const comment = submission.comments.findLast((c) => c.mine)?.text;
   const drafting = asked && working;
-  const blocked = undraftableReason(submission.body);
+  const refused = useRefusedFile(submission);
+  const blocked = undraftableReason(submission.body) ?? refused;
   const open = (fill: "draft" | "by-hand") => {
     if (working) return;
     setAsked(fill === "draft");

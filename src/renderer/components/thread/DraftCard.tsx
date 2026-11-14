@@ -25,6 +25,7 @@ import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspa
 
 import { ApproveButton } from "../ApproveButton";
 import { AfterQueue } from "./AfterQueue";
+import { useRefusedFile } from "./SubmittedFile";
 import { SchoolBadge } from "../SchoolBadge";
 import { StatusPill } from "../StatusPill";
 import { Button } from "../ui/button";
@@ -611,11 +612,13 @@ function DraftInsteadButton({ view }: { view: ChangeView }) {
   const working = useWorkspace((state) => state.working[threadId] ?? false);
   const target = record.content.kind === "grade" ? record.content.target : null;
   const submission = useWorkspace((state) => selectSubmission(state, target));
+  const refused = useRefusedFile(submission);
   const byHand =
     summary.canEdit &&
     summary.approvedAt === null &&
     record.activity.every((entry) => entry.actor !== "agent");
-  if (!ai || !byHand || !target || !submission || undraftableReason(submission.body)) return null;
+  if (!ai || !byHand || !target || !submission || undraftableReason(submission.body) || refused)
+    return null;
   const draft = () => {
     if (working) return;
     const state = workspaceStore().getState();
