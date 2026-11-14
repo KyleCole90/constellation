@@ -2,11 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { Check, Minus, Paperclip, Pencil, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
-import { OVERALL_RATIONALE } from "~/shared/agent/agent";
 import {
   finalGrade,
   sendsOnChord,
   latePenalty,
+  OVERALL_RATIONALE,
   rawScore,
   zeroPatch,
   type ChangeRecord,
