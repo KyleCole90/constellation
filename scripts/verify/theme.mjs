@@ -29,8 +29,7 @@ const SIDE_OF_FRAMES = `async (frames) => {
     const pixels = ctx.getImageData(0, 0, image.width, image.height).data;
     let sum = 0;
     for (let i = 0; i < pixels.length; i += 4) sum += 0.299 * pixels[i] + 0.587 * pixels[i + 1] + 0.114 * pixels[i + 2];
-    const [r, g, b] = pixels;
-    sides.push(r > 200 && g < 60 && b > 200 ? "old" : sum / (pixels.length / 4) > 128 ? "light" : "dark");
+    sides.push(sum / (pixels.length / 4) > 128 ? "light" : "dark");
   }
   return sides;
 }`;
@@ -172,36 +171,52 @@ const backgroundIs = (t, theme) =>
     return side === ${JSON.stringify(theme)};
   })()`);
 
-// The page about to reload turns magenta, so the frames it still shows can be told from the new page's.
-const OLD_PAGE = `new Promise((painted) => { document.documentElement.replaceChildren(); document.documentElement.style.background = "#f0f"; requestAnimationFrame(() => requestAnimationFrame(painted)); }).then(() => null)`;
-
+// A screencast started before a reload can miss the new page's first paints, and a page that then holds still sends no more frames.
+// The new page stops at its first script, before it can paint, and the screencast starts there, so every frame it sends is the new page's, from the first.
 const firstFrames = async (t, label, theme) => {
   const frames = [];
   const off = t.on("Page.screencastFrame", ({ data, sessionId }) => {
     frames.push(data);
     void t.cdp("Page.screencastFrameAck", { sessionId });
   });
-  await t.eval(OLD_PAGE);
+  await t.cdp("Debugger.enable");
+  const { identifier } = await t.cdp("Page.addScriptToEvaluateOnNewDocument", {
+    source: "debugger;",
+  });
+  const paused = new Promise((resolve) => {
+    const stop = t.on("Debugger.paused", () => resolve(stop()));
+  });
+  const reloaded = t.reload();
+  await paused;
+  await t.cdp("Page.removeScriptToEvaluateOnNewDocument", { identifier });
   await t.cdp("Page.startScreencast", {
     format: "png",
     maxWidth: 360,
     maxHeight: 225,
     everyNthFrame: 1,
   });
-  for (let waited = 0; frames.length === 0 && waited < 3000; waited += 20) await t.sleep(20);
-  await t.reload();
+  await t.cdp("Debugger.resume");
+  await t.cdp("Debugger.disable");
+  await reloaded;
   await t.waitFor(`document.querySelector("#root > *")`, `${label}: the app renders`);
+  for (let waited = 0; frames.length === 0 && waited < 3000; waited += 20) await t.sleep(20);
   await t.sleep(300);
   await t.cdp("Page.stopScreencast");
   off();
-  const painted = await t.eval(`(${SIDE_OF_FRAMES})(${JSON.stringify(frames)})`);
-  t.assert(painted.includes("old"), `${label}: the frames start on the page before the reload`);
-  const sides = painted.slice(painted.lastIndexOf("old") + 1);
-  t.assert(
-    sides.length >= 1 && sides.every((side) => side === theme),
-    `${label}: all ${sides.length} frames the new page paints are ${theme}`,
-    sides.join(" "),
-  );
+  if (frames.length === 0) {
+    t.assert(
+      false,
+      `${label}: captured no frames`,
+      "the screencast sent nothing in the 3 seconds after the app rendered, so the theme of its first frames is unknown",
+    );
+  } else {
+    const sides = await t.eval(`(${SIDE_OF_FRAMES})(${JSON.stringify(frames)})`);
+    t.assert(
+      sides.every((side) => side === theme),
+      `${label}: all ${sides.length} frames the new page paints are ${theme}`,
+      sides.join(" "),
+    );
+  }
   t.assert(await backgroundIs(t, theme), `${label}: the page background is ${theme}`);
 };
 
