@@ -8,6 +8,8 @@ const SIDEBAR = '[data-testid="sidebar"]';
 const PANEL = '[data-testid="thread-panel"]';
 const CHAT = '[data-testid="chat"]';
 const CARD = "[data-focused]";
+const OPEN = '[data-testid="grade-open"]';
+const QUEUE_STRIP = '[data-testid="pinned-queue"]';
 const PREVIEWING = "[data-focused][data-previewing]";
 const ACTIONS = '[data-testid="card-actions"]';
 
@@ -1576,8 +1578,22 @@ const gradebook = async (t) => {
   t.assert(held !== null, "this submission already has a grade in the LMS", String(held));
   await t.click(`[data-cell="${ref}"]`);
   await t.waitFor(
-    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes("Luis Cardenas")`,
+    `document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes("Luis Cardenas")`,
     "clicking a cell opens that submission in its grading thread",
+    15_000,
+  );
+  await t.sleep(300);
+  t.assert(
+    !(await t.has(CARD)) &&
+      !(await t.has('[data-testid="agent-working"]')) &&
+      (await t.text(OPEN)).includes(`${held} / `),
+    "a resubmitted cell opens on the student and the grade the LMS holds, and drafts nothing (#48, #39)",
+    await t.text(OPEN),
+  );
+  await t.click("Draft with Claude", { within: OPEN });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes("Luis Cardenas")`,
+    "Draft with Claude drafts Luis",
     15_000,
   );
   await settled(t, "Luis's draft is done");
@@ -1680,8 +1696,20 @@ const gradebook = async (t) => {
   );
   await t.click(`[data-cell="${ungraded}"]`);
   await t.waitFor(
+    `document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes("Not graded in")`,
+    "an ungraded cell opens on its submission, not graded yet",
+    15_000,
+  );
+  await t.sleep(300);
+  t.assert(
+    !(await t.has(CARD)) && !(await t.has('[data-testid="agent-working"]')),
+    "opening an ungraded cell starts no draft (#48)",
+  );
+  await shot(t, "gradebook-ungraded-open");
+  await t.click("Draft with Claude", { within: OPEN });
+  await t.waitFor(
     `document.querySelector(${JSON.stringify(CARD)})`,
-    "an ungraded cell opens its draft",
+    "Draft with Claude drafts it",
     15_000,
   );
   await settled(t, "the ungraded draft is done");
@@ -1696,6 +1724,52 @@ const gradebook = async (t) => {
     marks.join(" | "),
   );
   await shot(t, "gradebook-drafted");
+  await gradedWithoutThread(t);
+};
+
+/** A graded cell with no change opens on that student, with the grade and comment the LMS holds and the same two choices (#39). */
+const gradedWithoutThread = async (t) => {
+  await goTab(t, "ENG 101", "Gradebook");
+  const cell = await t.eval(
+    `[...document.querySelectorAll('[data-cell][data-target="view"]')].find((el) => el.querySelector("[data-grade]")?.innerText.trim())?.dataset.cell`,
+  );
+  t.assert(Boolean(cell), "the gradebook has a graded cell with no change");
+  const held = await lms(
+    t,
+    `(() => { const s = lms.submissions.find((s) => s.ref === ${JSON.stringify(cell)}); const a = lms.assignments.find((a) => a.ref === s.assignment); return { name: s.studentName, grade: s.grade, points: a.pointsPossible, comment: s.comments.filter((c) => c.mine).at(-1)?.text ?? null }; })()`,
+  );
+  await t.click(`[data-cell="${cell}"]`);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(held.name)})`,
+    "a graded cell with no change opens on that student (#39)",
+  );
+  const open = await t.text(OPEN);
+  t.assert(
+    open.includes(`${held.grade} / ${held.points} in `) &&
+      (held.comment === null || open.includes(held.comment)) &&
+      open.includes("Draft with Claude") &&
+      open.includes("Grade it yourself") &&
+      !open.includes("Draft again"),
+    "it shows the grade and comment the LMS holds, with Draft with Claude and Grade it yourself (#39)",
+    `${open} | ${JSON.stringify(held)}`,
+  );
+  const strip = await t.text(QUEUE_STRIP);
+  t.assert(
+    strip.includes(held.name) && !strip.includes("Nothing open"),
+    "the queue header names the student, not Nothing open (#39)",
+    strip,
+  );
+  await shot(t, "gradebook-graded-open");
+  await t.click("Grade it yourself", { within: OPEN });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(held.name)})`,
+    "Grade it yourself opens the form for that student",
+  );
+  t.assert(
+    (await t.text(QUEUE_STRIP)).includes(held.name),
+    "the header still names the student over the form (#39)",
+    await t.text(QUEUE_STRIP),
+  );
 };
 
 const overview = async (t) => {
@@ -1851,14 +1925,28 @@ const undatedWork = async (t) => {
   );
   await t.click('[data-stat="to-grade"]');
   await t.waitFor(
-    `document.querySelector('[data-section="needs-you"]')?.dataset.flash === "true"`,
-    "undated: To grade points at Needs you, which lists all of it, instead of one assignment's list (#48)",
+    `location.pathname === "/threads/t-queue" && document.querySelector('[data-testid="queue-list"]')`,
+    "undated: To grade opens the Grading list (#48)",
+  );
+  const rows = await t.eval(
+    `[...document.querySelectorAll('[data-testid="queue-list"] [data-row]')].map((row) => ({ text: row.innerText, open: !row.querySelector("input")?.disabled }))`,
+  );
+  const chip = await t.eval(
+    `[...document.querySelectorAll('[data-testid="pinned-queue"] button[aria-pressed="true"]')].map((b) => b.innerText)`,
   );
   t.assert(
-    !(await path(t)).startsWith("/threads/"),
-    "undated: To grade stays on the overview rather than opening one assignment",
+    rows.filter((row) => row.open).length === tile &&
+      rows.every((row) => row.text.includes("ENG 101")) &&
+      chip.some((label) => label.includes("ENG 101") && label.includes(String(tile))),
+    "undated: the list holds exactly the course's To grade count, under a chip that names ENG 101 (#48)",
+    JSON.stringify({ tile, rows, chip }),
   );
   await shot(t, "overview-to-grade");
+  await t.click("All", { within: '[data-testid="pinned-queue"]' });
+  await t.waitFor(
+    `document.querySelectorAll('[data-testid="queue-list"] [data-row]').length > ${tile}`,
+    "undated: All undoes the course filter",
+  );
 };
 
 const palette = async (t) => {

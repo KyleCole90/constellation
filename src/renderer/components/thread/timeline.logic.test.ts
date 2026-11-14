@@ -215,10 +215,12 @@ describe("walkStep", () => {
       ...patch,
     }) as ChangeSummary;
 
-  it("nothing open means open the next row", () => {
-    expect(walkStep({ busy: false, summary: null, panel: null, chordSends: false })).toBe(
-      "open-next",
-    );
+  it("nothing open means open the first row", () => {
+    expect(walkStep({ busy: false, summary: null, panel: null, opened: false })).toBe("open-first");
+  });
+
+  it("a submission open with nothing drafted waits, so the chord neither skips nor drafts it", () => {
+    expect(walkStep({ busy: false, summary: null, panel: null, opened: true })).toBe("none");
   });
 
   it("a draft with the panel elsewhere opens the review", () => {
@@ -227,41 +229,16 @@ describe("walkStep", () => {
         busy: false,
         summary: summary({ canApprove: true }),
         panel: "source",
-        chordSends: false,
+        opened: true,
       }),
     ).toBe("review");
   });
 
-  it("a draft on the card or under review stops at the Approve button and never approves", () => {
+  it("a draft on the card or under review stops at the Approve button and never approves, whoever wrote it", () => {
     for (const panel of [null, "writeback"] as const)
       expect(
-        walkStep({ busy: false, summary: summary({ canApprove: true }), panel, chordSends: false }),
+        walkStep({ busy: false, summary: summary({ canApprove: true }), panel, opened: true }),
       ).toBe("focus-approve");
-  });
-
-  it("a grade only you have edited approves and sends from the card or the preview", () => {
-    for (const panel of [null, "writeback"] as const)
-      expect(
-        walkStep({ busy: false, summary: summary({ canApprove: true }), panel, chordSends: true }),
-      ).toBe("approve-and-send");
-  });
-
-  it("a hand grade under the source or batch panel opens the review, because the card may be covered", () => {
-    for (const panel of ["source", "batch"] as const)
-      expect(
-        walkStep({ busy: false, summary: summary({ canApprove: true }), panel, chordSends: true }),
-      ).toBe("review");
-  });
-
-  it("a hand grade with blanks still opens the review", () => {
-    expect(
-      walkStep({
-        busy: false,
-        summary: summary({ canApprove: false }),
-        panel: null,
-        chordSends: true,
-      }),
-    ).toBe("review");
   });
 
   it("an approved change sends from the card or the preview", () => {
@@ -271,7 +248,7 @@ describe("walkStep", () => {
           busy: false,
           summary: summary({ canSend: true, tone: "ready" }),
           panel,
-          chordSends: false,
+          opened: true,
         }),
       ).toBe("send");
   });
@@ -282,7 +259,7 @@ describe("walkStep", () => {
         busy: false,
         summary: summary({ canSend: true, banner: "in-doubt" }),
         panel: "writeback",
-        chordSends: false,
+        opened: true,
       }),
     ).toBe("none");
   });
@@ -293,7 +270,7 @@ describe("walkStep", () => {
         busy: false,
         summary: summary({ sentAt: at(1) }),
         panel: "writeback",
-        chordSends: false,
+        opened: true,
       }),
     ).toBe("open-next");
   });
@@ -304,7 +281,7 @@ describe("walkStep", () => {
         busy: true,
         summary: summary({ sentAt: at(1) }),
         panel: "writeback",
-        chordSends: false,
+        opened: true,
       }),
     ).toBe("open-next");
   });
@@ -315,7 +292,7 @@ describe("walkStep", () => {
         busy: true,
         summary: summary({ canSend: true }),
         panel: "writeback",
-        chordSends: false,
+        opened: true,
       }),
     ).toBe("none");
     expect(
@@ -323,7 +300,7 @@ describe("walkStep", () => {
         busy: false,
         summary: summary({ tone: "working" }),
         panel: "writeback",
-        chordSends: false,
+        opened: true,
       }),
     ).toBe("none");
   });

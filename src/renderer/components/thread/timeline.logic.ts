@@ -128,34 +128,29 @@ export const boldRuns = (text: string): readonly { text: string; bold: boolean }
     .map((piece, index) => ({ text: piece, bold: index % 2 === 1 }))
     .filter((run) => run.text.length > 0);
 
-export type WalkStep =
-  | "open-next"
-  | "review"
-  | "focus-approve"
-  | "approve-and-send"
-  | "send"
-  | "none";
+export type WalkStep = "open-first" | "open-next" | "review" | "focus-approve" | "send" | "none";
 
 /**
- * Where ⌘↵ goes. On anything an agent touched it stops on Approve: the chord never approves it, and only pressing the
- * button does. Once approved, it sends. A grade only you have edited needs none of that, so one chord approves and sends it, unless `sendsOnChord` stops a zero or an empty comment.
+ * Where ⌘↵ goes. It stops on Approve: the chord never approves, whoever wrote the grade, and only pressing the button
+ * does. Once approved, it sends.
  * A change with a banner needs a decision, so the chord leaves it alone rather than guessing a recovery.
+ * A submission open with nothing drafted waits for the teacher's choice, so the chord neither skips it nor drafts.
  */
 export const walkStep = (input: {
   busy: boolean;
   summary: ChangeSummary | null;
   panel: "source" | "writeback" | "batch" | null;
-  chordSends: boolean;
+  /** Something is on screen, even with no change open. */
+  opened: boolean;
 }): WalkStep => {
-  const { busy, summary, panel, chordSends } = input;
+  const { busy, summary, panel, opened } = input;
   // Sent comes first. The sync that follows a send keeps busy set, and it shouldn't hold up moving on.
   if (summary?.sentAt) return "open-next";
   if (busy || summary?.tone === "working") return "none";
-  if (!summary) return "open-next";
+  if (!summary) return opened ? "none" : "open-first";
   // The source and batch panels can cover the card, and the chord approves or sends only what is on screen.
   const cardShows = panel === null || panel === "writeback";
   if (!cardShows) return "review";
-  if (chordSends && summary.canApprove) return "approve-and-send";
   if (summary.canApprove) return "focus-approve";
   if (summary.canSend && summary.banner === null) return "send";
   return panel === "writeback" ? "none" : "review";

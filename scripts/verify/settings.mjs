@@ -1422,10 +1422,14 @@ const openStudent = async (t, student) => {
   if (!(await t.has(LIST))) await t.click("Expand queue");
   await t.waitFor(`document.querySelector(${JSON.stringify(LIST)})`, "the queue list is showing");
   await t.click(student, { within: LIST });
+  const drafted = `document.querySelector("[data-focused]")?.innerText.includes(${JSON.stringify(student)})`;
   await t.waitFor(
-    `document.querySelector("[data-focused]")?.innerText.includes(${JSON.stringify(student)})`,
-    `${student}: draft appears`,
+    `${drafted} || document.querySelector('[data-testid="grade-open"]')?.innerText.includes(${JSON.stringify(student)})`,
+    `${student}: opens`,
   );
+  if (!(await t.eval(drafted)))
+    await t.click("Draft with Claude", { within: '[data-testid="grade-open"]' });
+  await t.waitFor(drafted, `${student}: draft appears`);
   await t.waitFor(
     `!document.querySelector('[data-testid="agent-working"]')`,
     `${student}: agent finished`,
@@ -2268,15 +2272,16 @@ const noKeyFlow = async (t, shot) => {
   await t.eval(`document.querySelector(${JSON.stringify(`${FORM} textarea`)}).focus()`);
   await t.type("Clear thesis. Cite the second source.");
   await t.key("Tab");
-  await t.waitFor(offersChord, "no key: a comment brings Approve and send back");
+  await t.waitFor(
+    `(document.querySelector(${JSON.stringify(chordButton)})?.innerText ?? "").trim() === "Approve"`,
+    "no key: a filled hand-typed form offers Approve, as an AI draft does (#51)",
+  );
   t.assert(
-    /^Approve and send\s*⌘↵$/.test(
-      await t.text(`${FORM} [data-testid="card-actions"] [data-approve]`),
-    ),
-    "no key: a filled hand-typed form offers Approve and send ⌘↵ on the card",
+    !(await t.eval(offersChord)),
+    "no key: a filled hand-typed form never offers Approve and send (#51)",
     await t.text(`${FORM} [data-testid="card-actions"]`),
   );
-  await shot("no-key-one-chord-card");
+  await shot("no-key-filled-card");
   await t.click("Preview", { within: FORM });
   await t.waitFor(
     `document.querySelector('[data-testid="thread-panel"] [data-approve]')`,
@@ -2309,8 +2314,24 @@ const noKeyFlow = async (t, shot) => {
   const before = await t.eval(`window.__faultLab.writes().length`);
   await t.key("Meta+Enter");
   await t.waitFor(
+    `document.activeElement?.hasAttribute("data-approve")`,
+    "no key: ⌘↵ on a filled hand grade stops on Approve (#51)",
+  );
+  await t.key("Enter");
+  await t.waitFor(
+    `document.body.innerText.includes("Undo approval")`,
+    "no key: Approve stops at Approved. Not sent (#51)",
+  );
+  t.assert(
+    (await t.eval(`window.__faultLab.writes().length`)) === before &&
+      !(await t.has(`${FORM} [data-testid="receipt"]`)),
+    "no key: Approve alone writes nothing to the LMS (#51)",
+  );
+  await shot("no-key-approved-not-sent");
+  await t.key("Meta+Enter");
+  await t.waitFor(
     `document.querySelector('${FORM} [data-testid="receipt"]')`,
-    "no key: one ⌘↵ approves and sends a grade only you typed",
+    "no key: ⌘↵ then sends the approved grade",
     20_000,
   );
   t.assert(
@@ -2319,9 +2340,9 @@ const noKeyFlow = async (t, shot) => {
   );
   t.assert(
     await t.eval(
-      `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).some((c) => c.state.tag === "sent" && c.state.approval.via === "chord")`,
+      `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).some((c) => c.state.tag === "sent" && c.state.approval.via === "button")`,
     ),
-    "no key: the approval is on record as the chord",
+    "no key: the approval is on record as the button",
   );
   await shot("no-key-sent");
 
@@ -2338,8 +2359,13 @@ const noKeyFlow = async (t, shot) => {
   );
   await t.click(`[data-row="${await rowWith(t, "Not started")}"] button`);
   await t.waitFor(
+    `document.querySelector('[data-testid="grade-open"]')`,
+    "with a key: opening a row offers Draft with Claude",
+  );
+  await t.click("Draft with Claude", { within: '[data-testid="grade-open"]' });
+  await t.waitFor(
     `document.querySelector(${JSON.stringify(FORM)})?.innerText.includes("AI draft. Not sent")`,
-    "with a key: opening a row writes an AI draft",
+    "with a key: Draft with Claude writes an AI draft",
   );
   t.assert(await t.has("[data-composer]"), "with a key: the draft has a composer");
   await shot("with-key-draft");

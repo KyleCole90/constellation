@@ -179,6 +179,8 @@ const discard = async (t) => {
   // With no panel animation to re-place the chat, a card that settles after the agent finishes must not move Discard out from under the press.
   await t.media({ "prefers-reduced-motion": "reduce" });
   await t.click(`[data-row="${row}"] button`);
+  await t.waitFor(`document.querySelector('[data-testid="grade-open"]')`, "the submission opens");
+  await t.click("Draft with Claude", { within: '[data-testid="grade-open"]' });
   await t.waitFor(`document.querySelector("[data-focused]")`, "a draft opens", 15_000);
   await t.waitFor(`!document.querySelector('[data-testid="agent-working"]')`, "the agent finished");
   await t.click("[data-edit-field]");
@@ -221,6 +223,7 @@ const approval = async (t) => {
   );
   await t.shot("focus-after-start-grading");
 
+  await pressNamed(t, '[data-testid="grade-open"]', "Draft with Claude");
   await openPreview(t);
   await press(t, APPROVE);
   await t.waitFor(`Boolean(${named(PANEL, "Undo approval")})`, "Approve approves");

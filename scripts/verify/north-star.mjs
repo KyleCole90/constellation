@@ -634,8 +634,17 @@ const nextUp = async (t) => {
   );
 
   await t.waitFor(
+    `document.querySelector('[data-testid="grade-open"]')`,
+    "a grade row's click opens the first submission in the list",
+  );
+  t.assert(
+    !(await t.has('[data-testid="agent-working"]')) && !(await t.has("[data-focused]")),
+    "a grade row's click drafts nothing until the teacher asks (#48)",
+  );
+  await t.click("Draft with Claude", { within: '[data-testid="grade-open"]' });
+  await t.waitFor(
     `[...document.querySelectorAll("button")].some((button) => button.hasAttribute("data-approve"))`,
-    "a grade row's click starts drafting the first submission in the list",
+    "Draft with Claude drafts the first submission in the list",
   );
   const draftFits = `(() => { const chat = document.querySelector('[data-testid="chat"]').getBoundingClientRect(); const card = document.querySelector("[data-focused]").getBoundingClientRect(); const bar = document.querySelector('[data-testid="card-actions"]').getBoundingClientRect(); const total = document.querySelector('[data-testid="draft-grade"]').getBoundingClientRect(); return card.top >= chat.top && total.bottom <= bar.top && bar.bottom <= chat.bottom + 1; })()`;
   await t.waitFor(draftFits, "the draft lands with its heading, total and main action all in view");

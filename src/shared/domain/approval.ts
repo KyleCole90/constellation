@@ -46,7 +46,7 @@ export interface Approval {
   changeId: ChangeId;
   fingerprint: Fingerprint;
   at: IsoTime;
-  via: "button" | "batch-button" | "guarded-button" | "chord";
+  via: "button" | "batch-button" | "guarded-button";
 }
 
 export interface ApprovalTarget {
@@ -66,18 +66,13 @@ export class ApprovalWitness {
   readonly #targets: ReadonlyMap<ChangeId, Fingerprint>;
   readonly #risks: ReadonlyMap<ChangeId, RiskKey>;
   readonly via: Approval["via"];
-  private constructor(targets: readonly ApprovalTarget[], chord = false) {
+  private constructor(targets: readonly ApprovalTarget[]) {
     this.#targets = new Map(targets.map((t) => [t.changeId, t.fingerprint]));
     this.#risks = new Map(
       targets.flatMap((t) => (t.risk === undefined ? [] : [[t.changeId, t.risk]])),
     );
-    this.via = chord
-      ? "chord"
-      : this.#risks.size > 0
-        ? "guarded-button"
-        : targets.length > 1
-          ? "batch-button"
-          : "button";
+    this.via =
+      this.#risks.size > 0 ? "guarded-button" : targets.length > 1 ? "batch-button" : "button";
   }
   covers(id: ChangeId, fingerprint: Fingerprint): boolean {
     return this.#targets.get(id) === fingerprint;
@@ -97,25 +92,5 @@ export class ApprovalWitness {
     if (!click.isTrusted || click.type !== "click" || targets.length === 0) return null;
     if (targets.length > 1 && targets.some((t) => t.risk !== undefined)) return null;
     return new ApprovalWitness(targets);
-  }
-  /**
-   * ⌘↵ on one grade that only you have edited. It is still a person pressing a key. `transition` refuses it for
-   * anything an agent touched, so an AI draft still needs the button. A held chord repeats, so a repeat mints nothing.
-   */
-  static fromChord(
-    press: {
-      isTrusted: boolean;
-      type: string;
-      key: string;
-      repeat: boolean;
-      metaKey: boolean;
-      ctrlKey: boolean;
-    },
-    target: ApprovalTarget,
-  ): ApprovalWitness | null {
-    if (!press.isTrusted || press.type !== "keydown" || press.key !== "Enter" || press.repeat)
-      return null;
-    if (!(press.metaKey || press.ctrlKey) || target.risk !== undefined) return null;
-    return new ApprovalWitness([target], true);
   }
 }

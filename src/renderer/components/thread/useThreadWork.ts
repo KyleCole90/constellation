@@ -1,15 +1,13 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
-import { sendsOnChord } from "~/shared/domain/change";
 import type { ChangeId, LmsRef, ThreadId } from "~/shared/domain/ids";
 import { selectConversation, selectThreadUi, summarizeFor } from "~/renderer/stores/selectors";
 import type { Thread } from "~/renderer/stores/types";
 import { useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
 import { isMod } from "../AppShell";
-import { approveByChord } from "../ApproveButton";
 import type { RationaleLink, ThreadActions } from "./context";
-import { batchChanges, moveCursor, nextOpen, runOf, type WorkRow } from "./queue.logic";
+import { batchChanges, draftsNext, moveCursor, nextOpen, runOf, type WorkRow } from "./queue.logic";
 import { walkStep } from "./timeline.logic";
 import { useChange } from "./useChange";
 
@@ -19,8 +17,13 @@ const store = () => workspaceStore().getState();
 const isAnswered = (conversation: LmsRef<"conversation">): boolean =>
   selectConversation(store(), conversation)?.messages.at(-1)?.mine === true;
 
-const openTarget = async (thread: ThreadId, row: WorkRow, focus = true): Promise<unknown> => {
-  if (row.kind === "submission") return store().openSubmission(thread, row.key, { focus });
+const openTarget = async (
+  thread: ThreadId,
+  row: WorkRow,
+  { focus = true, draft = false } = {},
+): Promise<unknown> => {
+  if (row.kind === "submission")
+    return store().openSubmission(thread, row.key, draft ? { focus, fill: "draft" } : { focus });
   return isAnswered(row.key) ? null : store().openConversation(thread, row.key, { focus });
 };
 
@@ -87,16 +90,17 @@ export const useThreadWork = (
 
   // The button that opened a row is gone once the row opens, so focus would fall to the body.
   const landOn = useRef<string | null>(null);
-  const openRow = useCallback(
-    (row: WorkRow) => {
+  const open = useCallback(
+    (row: WorkRow, draft: boolean) => {
       landOn.current = row.key;
       if (onOpen) onOpen(row);
       else setUi({ queueOpen: false, current: row.key, panel: "source" });
       store().focusChange(id, row.change?.id ?? null);
-      void openTarget(id, row);
+      void openTarget(id, row, { draft });
     },
     [id, setUi, onOpen],
   );
+  const openRow = useCallback((row: WorkRow) => open(row, false), [open]);
 
   const messageRow = useCallback(
     (row: WorkRow) => {
@@ -130,7 +134,7 @@ export const useThreadWork = (
     async (targets: readonly WorkRow[]) => {
       setDrafting(new Set(targets.map((row) => row.key)));
       for (const row of targets) {
-        await openTarget(id, row, false);
+        await openTarget(id, row, { focus: false, draft: true });
         setDrafting((left) => new Set([...left].filter((key) => key !== row.key)));
       }
     },
@@ -164,6 +168,9 @@ export const useThreadWork = (
     () => nextOpen(runOf(shown, ui.selected), currentKey),
     [shown, ui.selected, currentKey],
   );
+  const openNext = useCallback(() => {
+    if (next) open(next, draftsNext(next, store().aiOn() && store().online));
+  }, [next, open]);
   const actions = useMemo<ThreadActions>(
     () => ({
       threadId: id,
@@ -174,15 +181,30 @@ export const useThreadWork = (
       next,
       send,
       openRow,
+      openNext,
       messageRow,
       focus,
       draftRows,
       setUi,
     }),
-    [id, rows, batch, busy, drafting, next, send, openRow, messageRow, focus, draftRows, setUi],
+    [
+      id,
+      rows,
+      batch,
+      busy,
+      drafting,
+      next,
+      send,
+      openRow,
+      openNext,
+      messageRow,
+      focus,
+      draftRows,
+      setUi,
+    ],
   );
 
-  const walk = (press: KeyboardEvent) => {
+  const walk = () => {
     // A comment still being typed commits on blur, and that can change what the next step is.
     if (
       document.activeElement instanceof HTMLTextAreaElement ||
@@ -201,11 +223,14 @@ export const useThreadWork = (
         busy: working || (record ? busy.has(record.id) : false),
         summary,
         panel: ui.panel,
-        chordSends: record ? sendsOnChord(record) && state.online : false,
+        opened: currentKey !== null,
       })
     ) {
-      case "open-next":
+      case "open-first":
         if (next) openRow(next);
+        return;
+      case "open-next":
+        if (next) openNext();
         else
           document
             .querySelector<HTMLElement>(`[data-change="${thread.focus}"] [data-card-primary]`)
@@ -216,9 +241,6 @@ export const useThreadWork = (
         return;
       case "focus-approve":
         document.querySelector<HTMLButtonElement>("[data-approve]")?.focus();
-        return;
-      case "approve-and-send":
-        if (record && approveByChord(press, record)) send([record.id]);
         return;
       case "send":
         if (record) send([record.id]);
@@ -244,7 +266,7 @@ export const useThreadWork = (
     if (isMod(event) && key === "Enter") {
       // preventDefault also stops a focused Approve button turning this chord into a click.
       event.preventDefault();
-      walk(event);
+      walk();
     } else if (isMod(event) && key.toLowerCase() === "d") {
       event.preventDefault();
       toggleWriteback();

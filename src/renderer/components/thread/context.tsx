@@ -37,7 +37,10 @@ export interface ThreadActions {
   drafting: ReadonlySet<string>;
   next: WorkRow | null;
   send(ids: readonly ChangeId[]): void;
+  /** Opens the row on its submission or conversation. A submission with nothing drafted opens empty, so this never spends a model call. */
   openRow(row: WorkRow): void;
+  /** Opens `next`, and drafts it when its button says "Draft next". */
+  openNext(): void;
   /** Drafts a message to a missing row's student, leaving the grade alone. */
   messageRow(row: WorkRow): void;
   focus(id: ChangeId): void;

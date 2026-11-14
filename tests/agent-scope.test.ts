@@ -48,7 +48,9 @@ describe("what a turn sends Claude", () => {
     const { rig, sent } = await wire();
     const ref = rig.server.findSubmission("Maya Ortiz", "Essay 2");
     if (!ref) throw new Error("no submission");
-    const id: ChangeId | null = await rig.clock.run(rig.state().openSubmission(QUEUE, ref));
+    const id: ChangeId | null = await rig.clock.run(
+      rig.state().openSubmission(QUEUE, ref, { fill: "draft" }),
+    );
     if (!id) throw new Error("Nothing was drafted.");
     await rig.clock.run(rig.state().sendToAgent(QUEUE, "thesis should be 20"));
 

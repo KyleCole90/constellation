@@ -139,6 +139,11 @@ const longName = async (t) => {
   }
   await t.click(LONG_NAME, { within: LIST });
   await t.waitFor(
+    `document.querySelector('[data-testid="grade-open"]')`,
+    "long name: the submission opens",
+  );
+  await t.click("Draft with Claude", { within: '[data-testid="grade-open"]' });
+  await t.waitFor(
     `document.querySelector("[data-focused]")?.innerText.includes(${JSON.stringify(SUBJECT.long)})`,
     "long name: the draft appears",
   );

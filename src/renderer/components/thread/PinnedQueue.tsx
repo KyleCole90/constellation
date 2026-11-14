@@ -10,7 +10,9 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "re
 
 import { cn } from "~/renderer/lib/utils";
 import type { QueueFilter, RowKey, Thread, ThreadUi } from "~/renderer/stores/types";
-import { useAiOn } from "~/renderer/stores/workspace";
+import type { LmsRef } from "~/shared/domain/ids";
+import { selectSubmission } from "~/renderer/stores/selectors";
+import { useAiOn, useWorkspace } from "~/renderer/stores/workspace";
 
 import { SchoolBadge } from "../SchoolBadge";
 import { CompactStatus, StatusPill } from "../StatusPill";
@@ -342,6 +344,12 @@ export function PinnedQueue({
   const clear = rows.length > 0 && rows.every((row) => !row.open);
   const empty = rows.length === 0;
   const current = rows.find((row) => row.key === currentKey) ?? null;
+  // A graded submission with no change isn't a row, but it is still the one open.
+  const unlisted = useWorkspace((state) =>
+    current
+      ? null
+      : (selectSubmission(state, currentKey as LmsRef<"submission">)?.studentName ?? null),
+  );
   const nameFills = current !== null && nameFillsStrip(current.title);
   const where = current && !nameFills && rowLine(current, thread);
   // A row opened from outside the ticks has no place among them, so the header walks every row.
@@ -420,6 +428,10 @@ export function PinnedQueue({
                 </span>
               )}
             </>
+          ) : unlisted ? (
+            <span title={unlisted} className="min-w-0 truncate">
+              {unlisted}
+            </span>
           ) : (
             <span className="text-muted-foreground">Nothing open</span>
           )}
@@ -449,7 +461,7 @@ export function PinnedQueue({
     );
   }
 
-  const chips = queueChips(rows);
+  const chips = queueChips(rows, ui.queueFilter);
   const assignments = assignmentChoices(rows);
   const start = runOf(shown, ui.selected).find((row) => row.open);
   const showSchool = !thread.course && spansSchools(rows);

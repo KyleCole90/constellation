@@ -118,6 +118,7 @@ export type QueueFilter =
   | "attention"
   | "missing"
   | `school:${string}`
+  | `course:${string}`
   | `assignment:${string}`;
 
 /** A row's key: the LMS item a grading, inbox or announcement row is about, or a setup finding. */

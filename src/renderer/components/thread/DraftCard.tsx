@@ -4,7 +4,6 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "re
 
 import {
   finalGrade,
-  sendsOnChord,
   latePenalty,
   OVERALL_RATIONALE,
   rawScore,
@@ -573,7 +572,11 @@ export function UndoApprovalButton({ view, size }: { view: ChangeView; size: "md
   );
 }
 
-const REDRAFTS = "Opening it again starts a new draft.";
+/** Only a grade waits for the teacher to ask for a new draft. Opening anything else drafts again. */
+const afterDiscard = (view: ChangeView): string =>
+  view.record.content.kind === "grade"
+    ? "It stays undrafted until you ask for a new draft."
+    : "Opening it again starts a new draft.";
 
 /** Discarding asks nothing, because the toast it leaves can undo it. */
 export function DiscardButton({ view, size }: { view: ChangeView; size: "sm" | "lg" }) {
@@ -583,7 +586,7 @@ export function DiscardButton({ view, size }: { view: ChangeView; size: "sm" | "
     <Button
       variant="ghost"
       size={size}
-      title={REDRAFTS}
+      title={afterDiscard(view)}
       data-lands='[data-testid="queue-start"], [data-draft-reply]'
       onClick={() => discardChange(threadId, view.record.id)}
     >
@@ -603,12 +606,7 @@ function CardActions({
   panel: ThreadUi["panel"];
   extra?: React.ReactNode;
 }) {
-  const { send } = useThreadActions();
   const { record, summary } = view;
-  const online = useWorkspace((state) => state.online);
-  // A grade only you have edited skips the preview, as walkStep does, unless it is a zero or has no comment. Offline
-  // nothing sends, so it doesn't offer to.
-  const chord = sendsOnChord(record) && summary.canApprove && online;
   const approved = summary.approvedAt !== null && !summary.banner && summary.tone !== "working";
   // An open panel already has its own Preview tab.
   const preview = panel === null && <PreviewButton />;
@@ -623,17 +621,7 @@ function CardActions({
         {extra}
       </span>
       <span className="ml-auto flex items-center gap-btn-gap">
-        {chord ? (
-          <>
-            {preview}
-            <ApproveButton
-              targets={[record]}
-              label="Approve and send"
-              kbd={<Kbd variant="on-primary">⌘↵</Kbd>}
-              onApproved={() => send([record.id])}
-            />
-          </>
-        ) : summary.canApprove ? (
+        {summary.canApprove ? (
           <>
             {preview}
             <ApproveButton targets={[record]} label="Approve" primary />
@@ -1056,7 +1044,7 @@ function TextCard({
 }
 
 function Receipt({ view }: { view: ChangeView }) {
-  const { next, openRow, setUi, rows } = useThreadActions();
+  const { next, openNext, setUi, rows } = useThreadActions();
   const school = useWorkspace((state) => state.schools.find((s) => s.id === view.record.school));
   const drafts = useWorkspace((state) => state.aiOn() && state.online);
   return (
@@ -1086,7 +1074,7 @@ function Receipt({ view }: { view: ChangeView }) {
             variant="default"
             size="md"
             className="ml-auto min-w-0"
-            onClick={() => openRow(next)}
+            onClick={openNext}
           >
             <span className="truncate">{nextLabel(next, drafts)}</span>
             <Kbd variant="on-primary">⌘↵</Kbd>

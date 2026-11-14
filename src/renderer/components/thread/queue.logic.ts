@@ -111,6 +111,7 @@ const holdsFilter = (row: WorkRow, filter: QueueFilter): boolean => {
   if (filter === "all") return true;
   if (filter.startsWith("school:"))
     return row.school.id === (filter.slice("school:".length) as SchoolId);
+  if (filter.startsWith("course:")) return row.course.ref === filter.slice("course:".length);
   if (filter.startsWith("assignment:"))
     return row.assignment === filter.slice("assignment:".length);
   return SIMPLE_FILTERS.find((entry) => entry.filter === filter)?.holds(row) ?? true;
@@ -133,8 +134,24 @@ export interface QueueChip {
   count: number;
 }
 
-export const queueChips = (rows: readonly WorkRow[]): readonly QueueChip[] => {
+/** A course gets a chip only while it is the filter, as when a course's To grade opens the list, so the narrowing shows and All undoes it. */
+export const queueChips = (
+  rows: readonly WorkRow[],
+  active: QueueFilter = "all",
+): readonly QueueChip[] => {
   const open = rows.filter((row) => row.open);
+  const course = active.startsWith("course:")
+    ? rows.find((row) => holdsFilter(row, active))?.course
+    : undefined;
+  const perCourse: readonly QueueChip[] = course
+    ? [
+        {
+          filter: active,
+          label: course.code,
+          count: open.filter((row) => row.course.ref === course.ref).length,
+        },
+      ]
+    : [];
   const schools = spansSchools(rows)
     ? [...new Map(rows.map((row) => [row.school.id, row.school])).values()].sort(bySchoolName)
     : [];
@@ -151,7 +168,7 @@ export const queueChips = (rows: readonly WorkRow[]): readonly QueueChip[] => {
       count: held.length,
     };
   });
-  const narrowing = [...perSchool, ...perState].filter(
+  const narrowing = [...perCourse, ...perSchool, ...perState].filter(
     (chip) => chip.count > 0 && chip.count < open.length,
   );
   return narrowing.length > 0
@@ -176,7 +193,7 @@ export const assignmentChoices = (rows: readonly WorkRow[]): readonly QueueChip[
 };
 
 export const liveFilter = (rows: readonly WorkRow[], filter: QueueFilter): QueueFilter =>
-  [...queueChips(rows), ...assignmentChoices(rows)].some((chip) => chip.filter === filter)
+  [...queueChips(rows, filter), ...assignmentChoices(rows)].some((chip) => chip.filter === filter)
     ? filter
     : "all";
 
@@ -226,11 +243,14 @@ export const neighbor = (
   return rows[index + delta] ?? null;
 };
 
-/** The next row with work left after this one, wrapping, so Next never lands on something already sent. */
-/** Opening a row nobody has drafted starts a Claude draft, which costs a model call, so the button says so. */
-export const nextLabel = (next: WorkRow, aiDrafts: boolean): string =>
-  `${aiDrafts && next.change === null ? "Draft next" : "Next"}: ${next.title}`;
+/** Moving on to a row nobody has drafted drafts it, which costs a model call, so the button says so. Opening a row any other way drafts nothing. */
+export const draftsNext = (next: WorkRow, aiDrafts: boolean): boolean =>
+  aiDrafts && next.change === null;
 
+export const nextLabel = (next: WorkRow, aiDrafts: boolean): string =>
+  `${draftsNext(next, aiDrafts) ? "Draft next" : "Next"}: ${next.title}`;
+
+/** The next row with work left after this one, wrapping, so Next never lands on something already sent. */
 export const nextOpen = (rows: readonly WorkRow[], key: string | null): WorkRow | null => {
   const index = rows.findIndex((row) => row.key === key);
   const ordered = [...rows.slice(index + 1), ...rows.slice(0, Math.max(index, 0))];

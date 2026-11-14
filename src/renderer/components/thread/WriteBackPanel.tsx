@@ -57,7 +57,7 @@ function Flow({ index }: { index: number }) {
 
 // The footer shows only the next real step, so Send appears once there is an approval to send.
 function Footer({ view }: { view: ChangeView }) {
-  const { busy, next, openRow } = useThreadActions();
+  const { busy, next, openNext } = useThreadActions();
   const { record, summary } = view;
   const vendor = useWorkspace((state) => state.vendorLabelFor(record.school) ?? "the LMS");
   const host = useWorkspace((state) => state.schools.find((s) => s.id === record.school)?.host);
@@ -78,7 +78,7 @@ function Footer({ view }: { view: ChangeView }) {
           Written to {host} at {formatTime(summary.sentAt)}.
         </p>
         {next && (
-          <Button variant="default" size="lg" className="min-w-0" onClick={() => openRow(next)}>
+          <Button variant="default" size="lg" className="min-w-0" onClick={openNext}>
             <span className="truncate">{nextLabel(next, drafts)}</span>
             <Kbd variant="on-primary">⌘↵</Kbd>
           </Button>

@@ -31,6 +31,30 @@ const refOf = (student, short) =>
 const settled = (t, label) =>
   t.waitFor(`!document.querySelector('[data-testid="agent-working"]')`, label);
 
+const OPEN = '[data-testid="grade-open"]';
+const savedChanges = `Object.keys(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).length`;
+
+/** Opening spends nothing: the submission shows with the two choices, no agent runs, and no change is saved (#48). */
+const opensUndrafted = async (t, student, label) => {
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(student)})`,
+    `${label}: opens on the submission with Draft with Claude and Grade it yourself`,
+  );
+  const before = await t.eval(savedChanges);
+  await t.sleep(400);
+  t.assert(
+    !(await t.has('[data-testid="agent-working"]')) &&
+      !(await t.has(CARD)) &&
+      (await t.eval(savedChanges)) === before &&
+      /Draft with Claude/.test(await t.text(OPEN)) &&
+      /Grade it yourself/.test(await t.text(OPEN)),
+    `${label}: opening drafts nothing, so it spends no model call (#48)`,
+    await t.text(OPEN),
+  );
+};
+
+const draftWithClaude = (t) => t.click("Draft with Claude", { within: OPEN });
+
 const expandQueue = async (t) => {
   if (!(await t.has(LIST))) await t.click("Expand queue");
   await t.waitFor(`document.querySelector(${JSON.stringify(LIST)})`, "queue list is showing");
@@ -39,6 +63,15 @@ const expandQueue = async (t) => {
 const openStudent = async (t, student, short) => {
   await expandQueue(t);
   await t.click(`${student}`, { within: LIST });
+  const drafted = `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(`${student}, ${short}`)})`;
+  await t.waitFor(
+    `${drafted} || document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(student)})`,
+    `${student}: opens`,
+  );
+  if (!(await t.eval(drafted))) {
+    await opensUndrafted(t, student, student);
+    await draftWithClaude(t);
+  }
   await t.waitFor(
     `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(`${student}, ${short}`)})`,
     `${student}: draft appears`,
@@ -1521,9 +1554,17 @@ const keyboardAndClear = async (t) => {
   );
   await t.key("Enter");
   await t.waitFor(
-    `document.querySelector(${JSON.stringify(CARD)})`,
+    `document.querySelector(${JSON.stringify(OPEN)})`,
     "Enter opens the row under the cursor",
   );
+  await t.key("Meta+Enter");
+  await t.sleep(300);
+  t.assert(
+    (await t.has(OPEN)) && !(await t.has('[data-testid="agent-working"]')),
+    "⌘↵ on a submission with nothing drafted neither skips it nor drafts it (#48)",
+  );
+  await draftWithClaude(t);
+  await t.waitFor(`document.querySelector(${JSON.stringify(CARD)})`, "Draft with Claude drafts it");
   await settled(t, "first speech drafted");
   t.assert(
     !(await t.has(`${PANEL} .lucide-play`)) &&
@@ -1688,7 +1729,7 @@ const keyboardAndClear = async (t) => {
   await t.shot("announcement-retarget");
 };
 
-/** Issue #36: a draft that fails leaves the submission open, so "Draft this one", Draft again and a hand grade all work. */
+/** Issue #36: a draft that fails leaves the submission open, so "Draft this one", Draft with Claude and a hand grade all work. */
 const failedDraft = async (t) => {
   await t.goto("/threads/t-queue");
   await t.waitFor(
@@ -1704,9 +1745,15 @@ const failedDraft = async (t) => {
   );
   await t.eval(`window.__setAgentDown(true)`);
   await t.click(`[data-row="${row}"] button`);
+  await opensUndrafted(t, student, "failed draft");
+  await draftWithClaude(t);
   await t.waitFor(
-    `document.querySelector('[data-testid="grade-open"]')`,
-    "failed draft: the submission stays open with Draft again and Grade it yourself",
+    `document.querySelector('[data-testid="agent-working"]') || document.querySelector(${JSON.stringify(OPEN)})`,
+    "failed draft: the draft starts",
+  );
+  await t.waitFor(
+    `!document.querySelector('[data-testid="agent-working"]') && document.querySelector(${JSON.stringify(OPEN)})`,
+    "failed draft: the submission stays open with Draft with Claude and Grade it yourself",
     15_000,
   );
   t.assert(!(await t.has(CARD)), "failed draft: no card claims a draft");
@@ -1736,19 +1783,14 @@ const failedDraft = async (t) => {
     "failed draft: the list loads",
   );
   await expandQueue(t);
-  await t.eval(`window.__setAgentDown(true)`);
   await t.click(`[data-row="${row}"] button`);
-  await t.waitFor(
-    `document.querySelector('[data-testid="grade-open"]')`,
-    "failed draft: a second failure offers the same ways on",
-  );
-  await t.eval(`window.__setAgentDown(false)`);
-  await t.click("Draft again", { within: '[data-testid="grade-open"]' });
+  await opensUndrafted(t, student, "failed draft: reopened after a discard");
+  await draftWithClaude(t);
   await t.waitFor(
     `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(student)})`,
-    "Draft again drafts the same student",
+    "Draft with Claude drafts the same student",
   );
-  await settled(t, "Draft again: agent finished");
+  await settled(t, "Draft with Claude: agent finished");
   await t.click("Discard", { within: '[data-testid="card-actions"]' });
   await t.waitFor(`!document.querySelector(${JSON.stringify(CARD)})`, "the redraft is discarded");
   await t.goto(`/threads/t-queue`);
@@ -1759,8 +1801,8 @@ const failedDraft = async (t) => {
   await expandQueue(t);
   await t.eval(`window.__setAgentDown(true)`);
   await t.click(`[data-row="${row}"] button`);
-  await t.waitFor(`document.querySelector('[data-testid="grade-open"]')`, "failed again");
-  await t.click("Grade it yourself", { within: '[data-testid="grade-open"]' });
+  await opensUndrafted(t, student, "failed draft: reopened again");
+  await t.click("Grade it yourself", { within: OPEN });
   await t.waitFor(
     `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(student)}) && document.querySelector("[data-typed-score], [data-edit-field]")`,
     "Grade it yourself opens a blank form for the same student, with Claude still down",
@@ -1780,7 +1822,60 @@ const failedDraft = async (t) => {
     "the empty hand form's button is Approve, held until the blanks it names are filled (#48)",
     JSON.stringify(primary),
   );
+  await handApproveThenSend(t, student);
   await t.eval(`window.__setAgentDown(false)`);
+};
+
+/** A hand grade takes the same two steps as an AI draft: Approve stops at Approved. Not sent, and only Send writes to the LMS (#51). */
+const handApproveThenSend = async (t, student) => {
+  const scores = await t.eval(`document.querySelectorAll('${CARD} [data-typed-score]').length`);
+  for (let index = 0; index < scores; index++) {
+    await t.eval(
+      `(() => { const input = document.querySelectorAll('${CARD} [data-typed-score]')[${index}]; input.focus(); input.select(); })()`,
+    );
+    await t.type("1");
+    await t.key("Tab");
+  }
+  await t.eval(`document.querySelector(${JSON.stringify(`${CARD} textarea`)}).focus()`);
+  await t.type("Graded by hand.");
+  await t.key("Tab");
+  await t.waitFor(
+    `(() => { const b = document.querySelector('${CARD} [data-approve]'); return b && !b.disabled; })()`,
+    "hand form: Approve is ready once the blanks are filled",
+  );
+  const label = (await t.text(`${CARD} [data-approve]`)).trim();
+  t.assert(
+    label === "Approve",
+    "hand form: the button says Approve, not Approve and send (#51)",
+    label,
+  );
+  const writes = await lms(
+    t,
+    `lms.submissions.flatMap((s) => s.comments).filter((c) => c.mine).length`,
+  );
+  await t.click(`${CARD} [data-approve]`);
+  await t.waitFor(
+    `document.body.innerText.includes("Undo approval") && document.querySelector("[data-send]")`,
+    "hand form: Approve stops at Approved. Not sent, with Undo approval and Send (#51)",
+  );
+  await t.sleep(500);
+  const tag = await t.eval(
+    `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).find((c) => c.subject.startsWith(${JSON.stringify(student)}) && c.state.tag !== "discarded")?.state.tag ?? null`,
+  );
+  t.assert(
+    tag === "approved" &&
+      (await lms(t, `lms.submissions.flatMap((s) => s.comments).filter((c) => c.mine).length`)) ===
+        writes,
+    "hand form: nothing reaches the LMS on Approve (#51)",
+    String(tag),
+  );
+  await t.shot("hand-approved-not-sent");
+  await t.click("[data-send]");
+  await t.waitFor(
+    `document.querySelector('[data-testid="sent-banner"]') || document.querySelector('[data-testid="receipt"]')`,
+    "hand form: Send writes the hand grade",
+    20_000,
+  );
 };
 
 const discard = async (t) => {
@@ -1793,7 +1888,12 @@ const discard = async (t) => {
   const row = await t.eval(
     `[...document.querySelectorAll('${LIST} [data-row]')].find((row) => row.innerText.includes("Not started"))?.dataset.row`,
   );
+  const student = await t.eval(
+    `document.querySelector('[data-row="${row}"] button span[title]').title`,
+  );
   await t.click(`[data-row="${row}"] button`);
+  await opensUndrafted(t, student, "discard");
+  await draftWithClaude(t);
   await t.waitFor(
     `document.querySelector(${JSON.stringify(CARD)})`,
     "discard: a draft opens",
@@ -1807,8 +1907,8 @@ const discard = async (t) => {
   t.assert(
     (await t.eval(
       `[...document.querySelectorAll('[data-testid="card-actions"] button')].find((b) => b.innerText === "Discard")?.title`,
-    )) === "Opening it again starts a new draft.",
-    "Discard says that opening the row again starts a new draft",
+    )) === "It stays undrafted until you ask for a new draft.",
+    "Discard says the grade stays undrafted until the teacher asks again",
   );
   await t.click("Discard", { within: '[data-testid="card-actions"]' });
   await t.waitFor(
@@ -1846,6 +1946,9 @@ const discard = async (t) => {
     await t.text(QUEUE),
   );
   await t.shot("discard-done");
+  await t.click(`[data-row="${row}"] button`);
+  await opensUndrafted(t, student, "discard: reopened");
+  await t.shot("discard-reopened-undrafted");
 };
 
 const replyCard = (t) =>

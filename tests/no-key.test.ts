@@ -80,6 +80,13 @@ const open = async (rig: StoreRig, submission: Submission, thread = QUEUE): Prom
   if (!id) throw new Error("Nothing opened.");
   return id;
 };
+const draft = async (rig: StoreRig, submission: Submission): Promise<ChangeId> => {
+  const id = await rig.clock.run(
+    rig.state().openSubmission(QUEUE, submission.ref, { fill: "draft" }),
+  );
+  if (!id) throw new Error("Nothing drafted.");
+  return id;
+};
 const atNow = (rig: StoreRig) => new Date(rig.state().now()).toISOString() as IsoTime;
 const edit = (rig: StoreRig, id: ChangeId, patch: ChangePatch) =>
   rig.state().dispatchUser(id, { type: "edit", by: "you", patch, at: atNow(rig) });
@@ -587,7 +594,7 @@ describe("a form returned to blank", () => {
 });
 
 describe("adding and removing a key", () => {
-  it("adding one clears an untouched blank, and the next open runs the agent", async () => {
+  it("adding one clears an untouched blank, and the next draft runs the agent", async () => {
     const { rig, runs } = await noKeyRig();
     const { submission } = withRubric(rig);
     await open(rig, submission);
@@ -598,7 +605,7 @@ describe("adding and removing a key", () => {
     expect(rig.state().blanks).toEqual({});
     expect(rig.state().threads[QUEUE]?.focus).toBeNull();
 
-    const drafted = await open(rig, submission);
+    const drafted = await draft(rig, submission);
     expect(runs).toHaveLength(1);
     expect(saved(rig, drafted).activity[0]?.actor).toBe("agent");
     expect(summarize(saved(rig, drafted)).missing).toEqual([]);
@@ -625,7 +632,7 @@ describe("adding and removing a key", () => {
     const first = withRubric(rig);
     const second = pick(rig, (s) => ungraded(s) && s.ref !== first.submission.ref);
     await rig.clock.run(rig.state().addAiKey(KEY));
-    const drafted = await open(rig, first.submission);
+    const drafted = await draft(rig, first.submission);
     expect(runs).toHaveLength(1);
 
     await rig.clock.run(rig.state().turnOffAi());
@@ -661,13 +668,13 @@ describe("adding and removing a key", () => {
     ).toEqual(before);
   });
 
-  it("with aiAlways on and no key, opening still runs the agent", async () => {
+  it("with aiAlways on and no key, asking for a draft still runs the agent", async () => {
     const spy = spyAgent();
     const rig = await makeStoreRig({ agent: spy.agent });
     await rig.connectAll();
     expect(rig.state().aiSource).toBe("none");
 
-    const id = await open(rig, withRubric(rig).submission);
+    const id = await draft(rig, withRubric(rig).submission);
 
     expect(spy.runs).toHaveLength(1);
     expect(rig.state().changes[id]).toBeDefined();

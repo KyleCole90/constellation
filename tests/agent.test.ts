@@ -56,7 +56,7 @@ const opened = async (student = "Maya Ortiz", assignment = "Essay 2") => {
   await rig.connectAll();
   const submission = rig.server.findSubmission(student, assignment);
   if (!submission) throw new Error(`No submission for ${student}.`);
-  const id = await rig.state().openSubmission(QUEUE, submission);
+  const id = await rig.state().openSubmission(QUEUE, submission, { fill: "draft" });
   if (!id) throw new Error("Nothing was drafted.");
   return { rig, id };
 };
@@ -234,7 +234,7 @@ describe("the agent, going through the store", () => {
 });
 
 describe("drafting", () => {
-  it("opening a submission drafts from the bank, with rationale anchored to passages that exist", async () => {
+  it("a draft of a submission comes from the bank, with rationale anchored to passages that exist", async () => {
     const { rig, id } = await opened();
     const record = rig.state().changes[id];
     expect(record?.state).toEqual({ tag: "draft", approvalReset: null });
@@ -283,8 +283,8 @@ describe("drafting", () => {
     const ref = rig.server.findSubmission("Maya Ortiz", "Essay 2");
     if (!ref) throw new Error("no submission");
     const [a, b] = await Promise.all([
-      rig.state().openSubmission(QUEUE, ref),
-      rig.state().openSubmission(QUEUE, ref),
+      rig.state().openSubmission(QUEUE, ref, { fill: "draft" }),
+      rig.state().openSubmission(QUEUE, ref, { fill: "draft" }),
     ]);
     expect(a).toBe(b);
     expect(Object.keys(rig.state().changes)).toHaveLength(1);
@@ -296,11 +296,11 @@ describe("drafting", () => {
     const maya = rig.server.findSubmission("Maya Ortiz", "Essay 2");
     const luis = rig.server.findSubmission("Luis Cardenas", "Essay 2");
     if (!maya || !luis) throw new Error("no submission");
-    const drafted = await rig.state().openSubmission(QUEUE, maya, { focus: false });
+    const drafted = await rig.state().openSubmission(QUEUE, maya, { focus: false, fill: "draft" });
     expect(drafted).not.toBeNull();
     expect(rig.state().threads[QUEUE]?.focus).toBeNull();
 
-    const drafting = rig.state().openSubmission(QUEUE, luis, { focus: false });
+    const drafting = rig.state().openSubmission(QUEUE, luis, { focus: false, fill: "draft" });
     const asked = rig.state().openSubmission(QUEUE, luis);
     const [id] = await Promise.all([drafting, asked]);
     expect(rig.state().threads[QUEUE]?.focus).toBe(id);
