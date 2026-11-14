@@ -1,4 +1,4 @@
-import type { CourseShell } from "~/shared/domain/content";
+import { courseName, type CourseShell } from "~/shared/domain/content";
 import type { LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
 import type { Course, School, Student, Submission } from "~/shared/domain/lms";
 import { INBOX_THREAD } from "~/renderer/stores/selectors";
@@ -109,7 +109,7 @@ export const buildEntries = (input: {
     ...input.courses.map((course): PaletteEntry => ({
       key: `course:${course.ref}`,
       group: "Courses",
-      title: `${course.code} ${course.title}`,
+      title: courseName(course),
       hint: course.section ?? "",
       school: course.school,
       target: { kind: "course", course },
@@ -117,8 +117,8 @@ export const buildEntries = (input: {
     ...input.shells.map((shell): PaletteEntry => ({
       key: `setup:${shell.ref}`,
       group: "Courses",
-      title: `${shell.code} ${shell.title}`,
-      hint: `${shell.termName} setup`,
+      title: courseName(shell),
+      hint: shell.termName ? `${shell.termName} setup` : "Setup",
       school: shell.school,
       target: { kind: "setup", course: shell.ref },
     })),

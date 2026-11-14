@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ChangeRecord, ChangeSummary } from "~/shared/domain/change";
-import type { SourceCourse } from "~/shared/domain/content";
+import { courseName, titleBeyondCode, type SourceCourse } from "~/shared/domain/content";
 import type { ChangeId, IsoDate, LmsRef } from "~/shared/domain/ids";
 import type { Finding, FindingKey } from "~/shared/domain/scan";
 import type { CourseSetup, ReviewRow } from "~/shared/domain/setup";
@@ -9,7 +9,6 @@ import { draftOf, draftTerm, termName, type PlanDraft, type TermPlan } from "~/s
 
 import {
   batchOf,
-  courseName,
   dayMapWords,
   checkPlan,
   guessedEnd,
@@ -206,6 +205,33 @@ describe("checking the Dates form", () => {
     const breaks = [{ name: "Break", start: date("2026-10-01"), end: date("2026-10-02") }];
     expect(checkPlan(draft({ breaks }))).toEqual({ ok: true, value: { ...plan(), breaks } });
   });
+  it("with no due dates, a blank old term and no meeting days still make a plan, and nothing moves", () => {
+    const blankOld = { name: "Fall 2026", start: "", end: "", days: [] } as const;
+    const newTerm = { ...term("2026-08-01", "2026-12-01"), days: [] };
+    const checked = checkPlan(draft({ oldTerm: blankOld, newTerm }), true);
+    expect(checked).toEqual({
+      ok: true,
+      value: {
+        oldTerm: { ...newTerm, name: termName("Fall 2026") },
+        newTerm: { ...newTerm, name: termName("T") },
+        breaks: [],
+      },
+    });
+    expect(problemsOf(draft({ oldTerm: blankOld, newTerm }))).toEqual([
+      "Fill in the old term's dates.",
+    ]);
+  });
+  it("with due dates to move, asks for meeting days", () => {
+    const noDays = { ...term("2026-01-01", "2026-05-01"), days: [] };
+    expect(
+      problemsOf(
+        draft({
+          oldTerm: noDays,
+          newTerm: { ...noDays, start: date("2026-08-01"), end: date("2026-12-01") },
+        }),
+      ),
+    ).toEqual(["Pick at least one meeting day for the new term."]);
+  });
   it("reads a blank term name as no name, so nothing searches for it", () => {
     const checked = checkPlan(
       draft({ oldTerm: { ...term("2026-01-01", "2026-05-01"), name: " " } }),
@@ -289,9 +315,15 @@ describe("a package that leaves its end out", () => {
 });
 
 describe("destination and source lists", () => {
-  it("says a course's code and title once when they match", () => {
+  it("says a course's code and title once, as Canvas often repeats the code in the title", () => {
     expect(courseName({ code: "live-source", title: "live-source" })).toBe("live-source");
     expect(courseName({ code: "BIO 101", title: "Biology" })).toBe("BIO 101 Biology");
+    expect(courseName({ code: "Music Theory", title: "Music Theory -" })).toBe("Music Theory");
+    expect(courseName({ code: "EDF2005", title: "EDF2005 - Intro to Ed" })).toBe(
+      "EDF2005 Intro to Ed",
+    );
+    expect(courseName({ code: "EDF", title: "EDF2005 Intro" })).toBe("EDF EDF2005 Intro");
+    expect(titleBeyondCode({ code: "Music Theory", title: "Music Theory -" })).toBeNull();
   });
   it("warns only for a course with students or items", () => {
     expect(occupiedWords({ code: "BIO", studentCount: 0, itemCount: 0 })).toBeNull();

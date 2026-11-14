@@ -985,6 +985,25 @@ const previousCourseFlow = async (t) => {
     `/\\d+%/.test(document.querySelector(${JSON.stringify(id("copy-percent"))})?.innerText ?? "")`,
     `${code}: progress shows a percent`,
   );
+  const percents = [];
+  for (let read = 0; read < 6; read += 1) {
+    percents.push(
+      await t.eval(
+        `document.querySelector(${JSON.stringify(id("copy-percent"))})?.innerText ?? ""`,
+      ),
+    );
+    await t.sleep(150);
+  }
+  t.assert(
+    percents.every((text) => text === "" || /^\d+%$/.test(text.trim())),
+    `${code}: progress reads as a whole percent, never Canvas's raw fraction`,
+    JSON.stringify(percents),
+  );
+  const chat = await t.text('[data-testid="chat"]');
+  t.assert(
+    chat.includes("Starting the copy") && !/migration/i.test(chat),
+    `${code}: the progress lines say "Starting the copy", not Canvas's word "migration"`,
+  );
   await shot(t, "copy-progress");
 
   await t.reload();
@@ -1250,12 +1269,14 @@ const cartridgeFromConnected = async (t) => {
   await shot(t, "dates-package-settings");
   await fillOldTerm(t, "Spring 2026", "2026-01-20", "2026-05-08");
   t.assert(
-    !(await t.eval(enabled(id("review-copy")))),
-    `${code}: a package with no due dates needs its meeting days first`,
+    await t.eval(enabled(id("review-copy"))),
+    `${code}: a package with no due dates can be reviewed with no meeting days, since nothing moves`,
   );
+  const dayMap = await t.text(id("day-map"));
   t.assert(
-    (await t.text(id("day-map"))).includes("Each due date moves from an old meeting day"),
-    `${code}: the form says why it needs meeting days`,
+    dayMap.includes("nothing moves") && dayMap.includes("optional"),
+    `${code}: the form says the old term and meeting days are optional`,
+    dayMap,
   );
   await shot(t, "dates-days-why");
   await pickDaysIfBlank(t, "old", [1, 3]);

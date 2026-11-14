@@ -14,6 +14,7 @@ import {
   draftOf,
   draftTerm,
   isoDate,
+  NO_NEW_DAYS,
   planDays,
   planProblems,
   sameSpanEnd,
@@ -72,7 +73,13 @@ export const toggleNewDay = (
   return sorted([...days.filter((held) => held !== nearest), day]);
 };
 
-export const dayMapWords = (oldDays: readonly Weekday[], newDays: readonly Weekday[]): string => {
+export const dayMapWords = (
+  oldDays: readonly Weekday[],
+  newDays: readonly Weekday[],
+  undated = false,
+): string => {
+  if (undated)
+    return "Nothing has a due date, so nothing moves. The old term's dates and the meeting days are optional.";
   if (oldDays.length === 0 || newDays.length === 0)
     return "Each due date moves from an old meeting day to the matching new one, so pick the days the class meets.";
   const map = planDays(oldDays, newDays);
@@ -181,13 +188,22 @@ const filledTerm = (held: DraftTerm): TermDates | null => {
   return term && { ...term, name: termName(term.name) };
 };
 
-/** The plan, once every field is filled in and the dates make sense; otherwise what to fix. */
-export const checkPlan = (draft: PlanDraft): Result<TermPlan, readonly string[]> => {
-  const oldTerm = filledTerm(draft.oldTerm);
+/**
+ * The plan, once every field is filled in and the dates make sense; otherwise what to fix. With no due dates to move, a
+ * blank old term takes the new term's dates and days, so nothing moves and the teacher has nothing to make up.
+ */
+export const checkPlan = (
+  draft: PlanDraft,
+  undated = false,
+): Result<TermPlan, readonly string[]> => {
   const newTerm = filledTerm(draft.newTerm);
+  const unmoved = undated && draft.oldTerm.start === "" && draft.oldTerm.end === "";
+  const oldTerm = unmoved
+    ? newTerm && { ...newTerm, name: termName(draft.oldTerm.name) }
+    : filledTerm(draft.oldTerm);
   const breaks = draft.breaks.map((held) => (held.name.trim() ? filled(held) : null));
   const blanks = [
-    ...(oldTerm ? [] : ["Fill in the old term's dates."]),
+    ...(oldTerm || unmoved ? [] : ["Fill in the old term's dates."]),
     ...(newTerm ? [] : ["Fill in the new term's dates."]),
     ...breaks.flatMap((held, index) =>
       held ? [] : [`Finish break ${index + 1}: it needs a name, a start, and an end.`],
@@ -196,15 +212,12 @@ export const checkPlan = (draft: PlanDraft): Result<TermPlan, readonly string[]>
   const complete = breaks.filter((held) => held !== null);
   if (!oldTerm || !newTerm || complete.length < breaks.length) return { ok: false, error: blanks };
   const plan: TermPlan = { oldTerm, newTerm, breaks: complete };
-  const problems = planProblems(plan);
+  const noDays = !undated && oldTerm.days.length === 0 && newTerm.days.length === 0;
+  const problems = [...(noDays ? [NO_NEW_DAYS] : []), ...planProblems(plan)];
   return problems.length > 0 ? { ok: false, error: problems } : { ok: true, value: plan };
 };
 
 const count = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"}`;
-
-/** A course's code and title, said once when they're the same. */
-export const courseName = ({ code, title }: Pick<SourceCourse, "code" | "title">): string =>
-  code === title ? title : `${code} ${title}`;
 
 /** Null when the destination is empty. */
 export const occupiedWords = ({

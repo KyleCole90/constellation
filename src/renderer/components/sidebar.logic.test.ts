@@ -232,6 +232,10 @@ describe("setupGroupLabel", () => {
     expect(setupGroupLabel([{ termName: "Spring 2027" }])).toBe("1 Spring 2027 course to set up");
   });
 
+  it("leaves out a term with no name", () => {
+    expect(setupGroupLabel([{ termName: "" }])).toBe("1 course to set up");
+  });
+
   it("leaves the term out when they don't", () => {
     expect(setupGroupLabel([{ termName: "Spring 2027" }, { termName: "Summer 2027" }])).toBe(
       "2 courses to set up",

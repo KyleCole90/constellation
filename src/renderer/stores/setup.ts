@@ -134,7 +134,7 @@ const copyMarksOf = (job: Migration): readonly string[] => {
   const marks = COPY_MARKS.filter((mark) => job.completion >= mark).map(
     (mark) => `Copying, ${mark} percent`,
   );
-  return ["Creating the migration", ...(started ? ["Preparing the package"] : []), ...marks];
+  return ["Starting the copy", ...(started ? ["Preparing the package"] : []), ...marks];
 };
 
 export const createSetupActions = (host: SetupHost) => {

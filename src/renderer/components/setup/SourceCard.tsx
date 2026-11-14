@@ -1,15 +1,22 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 
-import type { CopySource, SamplePackage, SourceCourse } from "~/shared/domain/content";
+import {
+  courseName,
+  titleBeyondCode,
+  type CopySource,
+  type SamplePackage,
+  type SourceCourse,
+} from "~/shared/domain/content";
 import type { CourseSetup } from "~/shared/domain/setup";
 import { useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, Note, Refusal } from "./parts";
-import { courseName, sourceChoices } from "./setup.logic";
+import { sourceChoices } from "./setup.logic";
 
 function CourseChoice({ source, onChoose }: { source: SourceCourse; onChoose: () => void }) {
+  const rest = titleBeyondCode(source);
   return (
     <li data-row={source.ref}>
       <button
@@ -19,10 +26,8 @@ function CourseChoice({ source, onChoose }: { source: SourceCourse; onChoose: ()
         onClick={onChoose}
         className="flex min-h-row-table w-full cursor-pointer items-center gap-2 rounded-control border border-border pr-row-end pl-row-x text-left outline-none hover:bg-accent focus-visible:border-ring"
       >
-        {source.code !== source.title && (
-          <span className="flex-none text-meta font-medium">{source.code}</span>
-        )}
-        <span className="min-w-0 flex-1 truncate text-body">{source.title}</span>
+        {rest && <span className="flex-none text-meta font-medium">{source.code}</span>}
+        <span className="min-w-0 flex-1 truncate text-body">{rest ?? source.code}</span>
         {source.template && <Badge tone="info">Template</Badge>}
         <span className="flex-none text-meta text-muted-foreground">{source.termName}</span>
       </button>

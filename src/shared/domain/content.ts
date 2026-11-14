@@ -23,6 +23,28 @@ export const isComing = (
   today: IsoDate,
 ): boolean => !course.concluded && (course.startAt === null || course.startAt > today);
 
+/** Dashes, colons and the like a title can start or end with, which say nothing alone. */
+const LOOSE_ENDS = /^[\s\-\u2013\u2014:|\u00b7,]+|[\s\-\u2013\u2014:|\u00b7,]+$/g;
+
+/**
+ * What a course's title says beyond its code, or null when nothing. Canvas often holds the code in the title too, as
+ * code "Music Theory" with title "Music Theory -", so showing both would say it twice.
+ */
+export const titleBeyondCode = ({ code, title }: Pick<Course, "code" | "title">): string | null => {
+  const trimmed = title.replace(LOOSE_ENDS, "");
+  const prefix = code.trim();
+  const repeats =
+    prefix !== "" &&
+    trimmed.toLowerCase().startsWith(prefix.toLowerCase()) &&
+    !/\w/.test(trimmed.charAt(prefix.length));
+  const rest = repeats ? trimmed.slice(prefix.length).replace(LOOSE_ENDS, "") : trimmed;
+  return rest === "" ? null : rest;
+};
+
+/** A course's code and title, each said once. */
+export const courseName = (course: Pick<Course, "code" | "title">): string =>
+  [course.code, titleBeyondCode(course)].filter(Boolean).join(" ");
+
 interface DatedItem {
   ref: LmsRef<"item">;
   title: string;

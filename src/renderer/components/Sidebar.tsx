@@ -6,6 +6,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import type { LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
 import type { Course, School } from "~/shared/domain/lms";
+import { courseName, titleBeyondCode } from "~/shared/domain/content";
 import { shellContents } from "~/shared/domain/setup";
 import { cn } from "~/renderer/lib/utils";
 import {
@@ -255,7 +256,7 @@ function CourseGroup({
   const onCourse = onCoursePages(course.ref, pathname);
   const inCourse = isInCourse(course.ref, threads, activeThread, pathname);
   const open = choice ?? inCourse;
-  const name = `${course.code} ${course.title}`;
+  const name = courseName(course);
   const described = waiting.count > 0 ? `${name}. ${waiting.label}` : name;
   return (
     <div>
@@ -278,7 +279,7 @@ function CourseGroup({
         >
           <span className="text-meta font-medium whitespace-nowrap">{course.code}</span>
           <span className="min-w-0 flex-1 truncate text-meta text-secondary-label">
-            {course.title}
+            {titleBeyondCode(course)}
           </span>
           {waiting.count > 0 && (
             <CompactStatus
@@ -331,7 +332,7 @@ function OfferRow({
     >
       <button
         type="button"
-        title={`${shell.code} ${shell.title}, ${shell.termName}. ${words}.`}
+        title={`${[courseName(shell), shell.termName].filter(Boolean).join(", ")}. ${words}.`}
         onClick={() => start(shell.ref)}
         className={cn(ROW, "group/offer", thread ? "pl-5.25" : "", active && "row-selected")}
       >

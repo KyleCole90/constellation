@@ -470,6 +470,8 @@ describe("a reload", () => {
         .threads[thread]?.messages.flatMap((message) =>
           message.type === "work" ? message.lines : [],
         ) ?? [];
+    expect(lines).toContain("Starting the copy");
+    expect(lines.some((line) => /migration/i.test(line))).toBe(false);
     expect(lines.filter((line) => line === "Copying, 20 percent")).toHaveLength(1);
     expect(lines).toContain("Copying, 100 percent");
     expect(lines).toContain("Scanning tools");

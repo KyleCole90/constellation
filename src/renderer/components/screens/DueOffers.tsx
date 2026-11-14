@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 
+import type { CourseShell } from "~/shared/domain/content";
 import type { LmsRef } from "~/shared/domain/ids";
 import { cn } from "~/renderer/lib/utils";
 import { selectSetupOffers } from "~/renderer/stores/selectors";
@@ -17,6 +18,12 @@ const EDGE = "border-x border-transparent";
 export const SECTION_LABEL = `${EDGE} px-row-x pt-5 pb-2 section-title`;
 export const SECTION_LIST =
   "divide-y divide-border overflow-hidden rounded-lg border border-border";
+
+/** " for Spring 2027", or nothing when the courses have no term name. */
+const termsOf = (shells: readonly CourseShell[]): string => {
+  const names = [...new Set(shells.map((shell) => shell.termName))].filter(Boolean);
+  return names.length > 0 ? ` for ${names.join(" and ")}` : "";
+};
 
 export function DueOffers({ school = "all" }: { school?: SchoolFilter }) {
   const all = useWorkspace(selectSetupOffers);
@@ -48,8 +55,8 @@ export function DueOffers({ school = "all" }: { school?: SchoolFilter }) {
   return (
     <section data-testid="offer-banner" data-due-group="offers">
       <h2 className={SECTION_LABEL}>
-        {offers.length} new {offers.length === 1 ? "course" : "courses"} for{" "}
-        {[...new Set(offers.map(({ shell }) => shell.termName))].join(" and ")}
+        {offers.length} new {offers.length === 1 ? "course" : "courses"}
+        {termsOf(offers.map(({ shell }) => shell))}
       </h2>
       <ul className={SECTION_LIST}>
         {offers.map(({ shell, words, thread, cancellable }) => (
