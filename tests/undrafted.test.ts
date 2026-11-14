@@ -3,12 +3,16 @@ import { describe, expect, it } from "vite-plus/test";
 import { DRAFT_GRADE_REQUEST, type Agent, type AgentInput } from "~/shared/agent/agent";
 import type { LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
 import {
+  selectCourseWaiting,
   selectMessageSince,
+  selectQueueRows,
   selectSubmission,
   selectThreadChanges,
   selectUndrafted,
+  selectWhatsDue,
 } from "~/renderer/stores/selectors";
 
+import { clickWitness } from "./fixtures/changes";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 
 const QUEUE = "t-queue" as ThreadId;
@@ -131,5 +135,54 @@ describe("after Claude drafts no grade for a submission", () => {
     expect(selectMessageSince(rig.state(), selectSubmission(rig.state(), ref))?.id).not.toBe(
       second?.id,
     );
+  });
+});
+
+describe("once the message asking for a resubmit is sent (#98)", () => {
+  const send = async (rig: StoreRig, ref: LmsRef<"submission">) => {
+    const drafted = await message(rig, ref);
+    if (!drafted) throw new Error("no message");
+    rig.state().dispatchUser(drafted.id, {
+      type: "approve",
+      witness: clickWitness(drafted),
+      at: drafted.basis.readAt,
+    });
+    await rig.clock.run(rig.state().sendChanges([drafted.id]));
+    expect(rig.state().changes[drafted.id]?.state.tag).toBe("sent");
+  };
+  const rowOf = (rig: StoreRig, ref: LmsRef<"submission">) =>
+    selectQueueRows(rig.state()).find((row) => row.submission.ref === ref);
+  /** The grading list, the course's sidebar count and What's due, which must agree. */
+  const toGrade = (rig: StoreRig, ref: LmsRef<"submission">) => {
+    const course = rowOf(rig, ref)?.course.ref;
+    if (!course) throw new Error("no row");
+    return [
+      selectQueueRows(rig.state()).filter((row) => row.course.ref === course && row.open).length,
+      selectCourseWaiting(rig.state(), course).grade,
+      selectWhatsDue(rig.state(), rig.clock.now())
+        .flatMap((group) => group.items)
+        .filter((item) => item.course.ref === course)
+        .reduce((sum, item) => sum + item.toGrade, 0),
+    ];
+  };
+
+  it("the row says the student was asked, and leaves every to-grade count", async () => {
+    const { rig, ref } = await declined();
+    const [list = 0, course = 0, due = 0] = toGrade(rig, ref);
+    await send(rig, ref);
+    expect(rowOf(rig, ref)).toMatchObject({ open: false, change: null });
+    expect(rowOf(rig, ref)?.asked).not.toBeNull();
+    expect(toGrade(rig, ref)).toEqual([list - 1, course - 1, due - 1]);
+  });
+
+  it("the student's resubmission brings the row back to the teacher", async () => {
+    const { rig, ref } = await declined();
+    const before = toGrade(rig, ref);
+    await send(rig, ref);
+    rig.clock.advance(60_000);
+    rig.server.studentResubmits(ref);
+    await rig.clock.run(rig.state().syncSchool(LCC));
+    expect(rowOf(rig, ref)).toMatchObject({ open: true, asked: null });
+    expect(toGrade(rig, ref)).toEqual(before);
   });
 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { summarize, type ChangeRecord, type ChangeSummary } from "~/shared/domain/change";
 import type { School } from "~/shared/domain/lms";
-import type { LmsRef } from "~/shared/domain/ids";
+import type { IsoTime, LmsRef } from "~/shared/domain/ids";
 import type { RowKey } from "~/renderer/stores/types";
 
 import {
@@ -48,6 +48,7 @@ const row = (key: string, patch: Partial<WorkRow> = {}): WorkRow =>
     change: null,
     summary: null,
     open: true,
+    asked: null,
     missing: false,
     draftable: true,
     ...patch,
@@ -139,6 +140,12 @@ describe("queueChips", () => {
     const labels = queueChips(ROWS).map((chip) => chip.label);
     expect(labels).toContain(summarize(approved).label);
     expect(labels).toContain(rowStatus(row("none"), false).label);
+  });
+
+  it("a row whose student was asked to resubmit says so, and isn't Not started (#98)", () => {
+    const asked = row("asked", { open: false, asked: "2026-11-14T15:00:00.000Z" as IsoTime });
+    expect(rowStatus(asked, false).label).toMatch(/^Asked to resubmit · Nov 1[45]$/);
+    expect(keys(filterRows([row("none"), asked], "needs-draft"))).toEqual(["none"]);
   });
 });
 

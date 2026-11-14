@@ -86,13 +86,33 @@ const resubmittedSince = (submission: Submission, change: ChangeRecord): boolean
   submission.submittedAt !== null &&
   submission.submittedAt > change.state.at;
 
-/** Graded once the app has sent its grade, even before the sync after the send reads it back. */
-const gradeSent = (
+/** The grade change a row shows, unless the student turned the work in again after it was sent. */
+const liveChange = (
   submission: Submission,
   byTarget: ReadonlyMap<string, ChangeRecord>,
-): boolean => {
-  const change = byTarget.get(submission.ref);
-  return change?.state.tag === "sent" && !resubmittedSince(submission, change);
+): ChangeRecord | null => {
+  const known = byTarget.get(submission.ref) ?? null;
+  return known && resubmittedSince(submission, known) ? null : known;
+};
+
+const isMessageSince = (change: ChangeRecord, submission: Submission): boolean =>
+  change.content.kind === "message" &&
+  change.content.target === submission.ref &&
+  change.state.tag !== "discarded" &&
+  (submission.submittedAt === null || (change.activity[0]?.at ?? "") >= submission.submittedAt);
+
+const messagesOf = (state: WorkspaceData): readonly ChangeRecord[] =>
+  Object.values(state.changes).filter((change) => change.content.kind === "message");
+
+/** When the teacher's message about turned-in work went out, with no grade under way. The work waits on the student until they turn it in again. */
+const askedAt = (
+  submission: Submission,
+  change: ChangeRecord | null,
+  messages: readonly ChangeRecord[],
+): IsoTime | null => {
+  if (change || submission.workflow !== "submitted") return null;
+  const last = messages.findLast((message) => isMessageSince(message, submission));
+  return last?.state.tag === "sent" ? last.state.at : null;
 };
 
 const changesByTarget = (state: WorkspaceData): ReadonlyMap<string, ChangeRecord> => {
@@ -148,8 +168,10 @@ export interface QueueRow {
   school: School;
   change: ChangeRecord | null;
   summary: ChangeSummary | null;
-  /** False once its grade has been sent. The row stays so the queue shows what got done. */
+  /** False once its grade or a message asking the student to resubmit has been sent. The row stays so the queue shows what got done. */
   open: boolean;
+  /** When the message asking the student to resubmit went out. Null once they turn it in again. */
+  asked: IsoTime | null;
   /** Past due with nothing turned in. A grade still settles it, but it isn't work waiting to be read. */
   missing: boolean;
 }
@@ -162,18 +184,19 @@ export const selectQueueRows = memoByState(
     withMissing = false,
   ): readonly QueueRow[] => {
     const byTarget = changesByTarget(state);
+    const messages = messagesOf(state);
     const rows: QueueRow[] = [];
     for (const cache of caches(state)) {
       for (const submission of cache.submissions) {
         if (assignment && submission.assignment !== assignment) continue;
-        const known = byTarget.get(submission.ref) ?? null;
-        const change = known && resubmittedSince(submission, known) ? null : known;
+        const change = liveChange(submission, byTarget);
         const missing = submission.workflow === "missing";
         if (submission.workflow !== "submitted" && !(withMissing && missing) && !change) continue;
         const parent = cache.assignments.find((a) => a.ref === submission.assignment);
         const course = cache.courses.find((c) => c.ref === submission.course);
         const school = schoolOf(state, submission.school);
         if (!parent || !course || !school) continue;
+        const asked = askedAt(submission, change, messages);
         rows.push({
           submission,
           assignment: parent,
@@ -181,7 +204,8 @@ export const selectQueueRows = memoByState(
           school,
           change,
           summary: change && summarizeIn(state, change),
-          open: change?.state.tag !== "sent",
+          open: change?.state.tag !== "sent" && asked === null,
+          asked,
           missing,
         });
       }
@@ -239,6 +263,7 @@ const dueItems = (
   const dated: DatedItem[] = [];
   const undated: { item: DueItem; firstIn: string }[] = [];
   const byTarget = changesByTarget(state);
+  const messages = messagesOf(state);
   for (const cache of caches(state)) {
     for (const assignment of cache.assignments) {
       const course = cache.courses.find((c) => c.ref === assignment.course);
@@ -248,7 +273,12 @@ const dueItems = (
       const turnedIn = submissions.filter(
         (s) => s.workflow === "submitted" || s.workflow === "graded",
       );
-      const waiting = turnedIn.filter((s) => s.workflow === "submitted" && !gradeSent(s, byTarget));
+      const ungraded = turnedIn.flatMap((s) => {
+        if (s.workflow !== "submitted") return [];
+        const change = liveChange(s, byTarget);
+        return change?.state.tag === "sent" ? [] : [{ s, asked: askedAt(s, change, messages) }];
+      });
+      const waiting = ungraded.filter((entry) => entry.asked === null).map((entry) => entry.s);
       const counts = {
         assignment,
         course,
@@ -256,7 +286,7 @@ const dueItems = (
         toGrade: waiting.length,
         late: waiting.filter((s) => s.lateDays > 0).length,
         submitted: turnedIn.length,
-        graded: turnedIn.length - waiting.length,
+        graded: turnedIn.length - ungraded.length,
         missing: submissions.filter((s) => s.workflow === "missing").length,
         total: submissions.length,
       };
@@ -882,15 +912,7 @@ export const selectMessageSince = (
   state: WorkspaceData,
   submission: Submission | null,
 ): ChangeRecord | null =>
-  (submission &&
-    Object.values(state.changes).findLast(
-      (change) =>
-        change.content.kind === "message" &&
-        change.content.target === submission.ref &&
-        change.state.tag !== "discarded" &&
-        (submission.submittedAt === null ||
-          (change.activity[0]?.at ?? "") >= submission.submittedAt),
-    )) ??
+  (submission && messagesOf(state).findLast((change) => isMessageSince(change, submission))) ??
   null;
 
 export const selectSubmission = (
