@@ -279,15 +279,15 @@ const PreAttachment = v.object({
 });
 
 const PER_PAGE = 100;
-/** How many pages of one numbered list are out at once. Canvas throttles a token that asks for too much in parallel. */
+/** How many later pages are out at once across the school's lists. Canvas throttles a token that asks for too much in parallel. */
 const PARALLEL_PAGES = 8;
 /**
  * Students per page of a course's submissions. Canvas reads each submission slowly, and it pages ungrouped
  * submissions by bookmark, one page after another. Grouped by student it pages by number, so small pages read in parallel.
  */
 const STUDENTS_PER_PAGE = 3;
-/** A list longer than this many pages is a Canvas fault (a looping or endless `next`), not a course. */
-const MAX_PAGES = 100;
+/** A list longer than this many rows is a Canvas fault (a looping or endless `next`), not a course. */
+const MAX_ROWS = 10_000;
 
 /** `fetch` as the provider calls it. Main passes Electron's `net.fetch`, which uses the system's proxy and certificates. */
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
@@ -308,6 +308,21 @@ export const createCanvasProvider = (deps: {
 }): LmsProvider => {
   const { school, lease } = deps;
   const origin = `https://${school.host}`;
+
+  let free = PARALLEL_PAGES;
+  const waiting: (() => void)[] = [];
+  /** Runs `work` once one of the school's parallel page slots is free. */
+  const slot = async <T>(work: () => Promise<T>): Promise<T> => {
+    if (free > 0) free -= 1;
+    else await new Promise<void>((wake) => waiting.push(wake));
+    try {
+      return await work();
+    } finally {
+      const next = waiting.shift();
+      if (next) next();
+      else free += 1;
+    }
+  };
 
   const page = async (
     url: string,
@@ -359,6 +374,7 @@ export const createCanvasProvider = (deps: {
           ? { ok: true, value: { rows: parsed.output, link: result.value.link } }
           : unreadable("a list");
       };
+      const maxPages = Math.ceil(MAX_ROWS / perPage);
       const first = new URL(`${origin}/api/v1${path}`);
       first.searchParams.set("per_page", String(perPage));
       const head = await read(first.toString());
@@ -369,7 +385,7 @@ export const createCanvasProvider = (deps: {
       const count =
         last && URL.canParse(last) ? Number(new URL(last).searchParams.get("page")) : NaN;
       if (last && Number.isInteger(count) && count >= 1) {
-        if (count > MAX_PAGES) return unreadable("a page link");
+        if (count > maxPages) return unreadable("a page link");
         const urls = Array.from({ length: count - 1 }, (_, index) => {
           const url = new URL(last);
           url.searchParams.set("page", String(index + 2));
@@ -379,7 +395,7 @@ export const createCanvasProvider = (deps: {
         let at = 0;
         const worker = async () => {
           for (let index = at++; index < urls.length; index = at++) {
-            results[index] = await read(urls[index] ?? "");
+            results[index] = await slot(() => read(urls[index] ?? ""));
             if (!results[index]?.ok) at = urls.length;
           }
         };
@@ -393,7 +409,7 @@ export const createCanvasProvider = (deps: {
 
       let pages = 1;
       for (let next = linkTo(head.value.link, "next"); next !== null;) {
-        if (++pages > MAX_PAGES) return unreadable("a page link");
+        if (++pages > maxPages) return unreadable("a page link");
         const result = await read(next);
         if (!result.ok) return result;
         rows.push(...result.value.rows);
@@ -943,10 +959,16 @@ export const createCanvasProvider = (deps: {
           STUDENTS_PER_PAGE,
         );
         if (!students.ok) return students;
+        const seen = new Set<string>();
         return {
           ok: true,
           value: students.value
             .flatMap(({ submissions }) => submissions)
+            // A student in two sections can come back once per section.
+            .filter((row) => {
+              const key = `${row.assignment_id}:${row.user_id}`;
+              return !seen.has(key) && Boolean(seen.add(key));
+            })
             .map((row): Submission => ({
               ref: refs.submission(school.id, id, row.assignment_id, row.user_id),
               school: school.id,

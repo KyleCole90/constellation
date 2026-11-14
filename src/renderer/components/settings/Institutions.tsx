@@ -36,9 +36,8 @@ export interface InstitutionRow {
 
 const demoToken = () => `demo-${crypto.randomUUID()}`;
 
-/** A school's first read: syncing with no courses on hand yet. */
 const firstReadRunning = (state: WorkspaceState, school: SchoolId): boolean =>
-  Boolean(state.syncing[school]) && (state.cache[school]?.courses.length ?? 0) === 0;
+  Boolean(state.syncing[school]) && state.connections[school]?.lastSyncedAt === null;
 
 /** Where the add form has no row for a saved school, its card above is where it connects, so focus goes there. */
 const pointToCard = (school: School): string => {
