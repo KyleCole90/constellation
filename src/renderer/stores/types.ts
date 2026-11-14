@@ -160,6 +160,12 @@ export interface PendingHandoff {
 }
 
 /** Everything persisted under lms-app.v1. Parsed on load. */
+/** A draft that came back with no grade, for the submission as it was turned in then, and the next step Claude offered instead. */
+export interface Undrafted {
+  submittedAt: IsoTime | null;
+  offer: string | null;
+}
+
 export interface WorkspaceData {
   /** Empty until the person adds a school. Only `addSchool` grows it. */
   schools: readonly School[];
@@ -176,6 +182,8 @@ export interface WorkspaceData {
   prefs: UiPrefs;
   /** Work North Star handed to a thread that hasn't finished, so a reload can start it again. A workspace saved before this has none and still loads. */
   handoffs: Readonly<Record<string, PendingHandoff>>;
+  /** By submission ref: Claude read the work and drafted no grade. It holds until the student submits again. A workspace saved before this has none and still loads. */
+  undrafted: Readonly<Record<string, Undrafted>>;
   /** Real epoch ms of the last reset. The demo clock, which runs while every school is a demo school, is the seed time plus real time since this. */
   resetAt: number;
 }

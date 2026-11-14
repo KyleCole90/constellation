@@ -19,7 +19,12 @@ import { undraftableReason } from "~/shared/domain/lms";
 import { ratingLabel } from "~/shared/domain/preview";
 import { workLine } from "~/shared/domain/workName";
 import { cn } from "~/renderer/lib/utils";
-import { selectConversation, selectCourse, selectSubmission } from "~/renderer/stores/selectors";
+import {
+  selectConversation,
+  selectCourse,
+  selectSubmission,
+  selectUndrafted,
+} from "~/renderer/stores/selectors";
 import type { ThreadUi } from "~/renderer/stores/types";
 import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
@@ -613,11 +618,20 @@ function DraftInsteadButton({ view }: { view: ChangeView }) {
   const target = record.content.kind === "grade" ? record.content.target : null;
   const submission = useWorkspace((state) => selectSubmission(state, target));
   const refused = useRefusedFile(submission);
+  const undrafted = useWorkspace((state) => selectUndrafted(state, submission));
   const byHand =
     summary.canEdit &&
     summary.approvedAt === null &&
     record.activity.every((entry) => entry.actor !== "agent");
-  if (!ai || !byHand || !target || !submission || undraftableReason(submission.body) || refused)
+  if (
+    !ai ||
+    !byHand ||
+    !target ||
+    !submission ||
+    undraftableReason(submission.body) ||
+    refused ||
+    (untouched && undrafted)
+  )
     return null;
   const draft = () => {
     if (working) return;

@@ -1599,6 +1599,7 @@ const keyboardAndClear = async (t) => {
       `document.body.innerText.includes("Undo approval")`,
       `speech ${done}: Enter on the button approves`,
     );
+    if (done === 3) await t.eval(`window.__faultLab.setNoise({ latencyMs: [900, 900] })`);
     await t.key("Meta+Enter");
     await t.waitFor(
       `document.querySelector('[data-testid="sent-banner"]')`,
@@ -1624,9 +1625,36 @@ const keyboardAndClear = async (t) => {
   t.assert((await t.text(QUEUE)).includes("3 of 3 sent"), "progress reads 3 of 3");
   const onward = `${CARD} [data-card-primary]`;
   t.assert(
+    await t.eval(`document.querySelector('[data-connection="syncing"]') !== null`),
+    "the sync after the send is still reading the LMS",
+  );
+  await t.shot("clear-queue-next-while-syncing");
+  t.assert(
     /^Next in (?!COMM 110)[A-Z]+ \d+: \S/.test(await t.text(onward)),
-    "a clear queue's receipt offers the next course's work",
+    "a clear queue's receipt offers the next course's work, not the one just sent, before the sync reads it back (#78)",
     await t.text(onward),
+  );
+  await t.goto("/due");
+  await t.waitFor(
+    `document.querySelector('[data-testid="due-list"]')`,
+    "What's due opens mid-sync",
+  );
+  const summary = await t.text('[data-testid="due-summary"]');
+  const inLms = await t.eval(
+    `(async () => JSON.parse(await window.__faultLab.stored()).submissions.filter((s) => s.workflow === "submitted").length)()`,
+  );
+  t.assert(
+    (await t.has('[data-connection="syncing"]')) &&
+      summary.startsWith(`${inLms} submissions to grade`),
+    "What's due counts the grade just sent as graded while the sync is still reading it back (#78)",
+    `${summary} | LMS: ${inLms} to grade`,
+  );
+  await t.shot("due-while-syncing");
+  await t.eval(`window.__faultLab.setNoise({ latencyMs: [120, 240] })`);
+  await t.goto("/threads/t-c110-speech2");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(onward)})`,
+    "the clear queue's receipt is back",
   );
   for (const [width, height] of [
     [1440, 900],
@@ -1743,7 +1771,7 @@ const failedDraft = async (t) => {
   const student = await t.eval(
     `document.querySelector('[data-row="${row}"] button span[title]').title`,
   );
-  await t.eval(`window.__setAgentDown(true)`);
+  await t.eval(`window.__setAgentStandIn("down")`);
   await t.click(`[data-row="${row}"] button`);
   await opensUndrafted(t, student, "failed draft");
   await draftWithClaude(t);
@@ -1763,7 +1791,7 @@ const failedDraft = async (t) => {
     await t.eval(`document.querySelector("[data-composer]").placeholder`),
   );
   await t.shot("failed-draft");
-  await t.eval(`window.__setAgentDown(false)`);
+  await t.eval(`window.__setAgentStandIn(null)`);
   const replies = await ask(t, "Draft this one");
   t.assert(
     !replies.some((reply) => reply.text?.includes("Nothing is open")),
@@ -1799,7 +1827,7 @@ const failedDraft = async (t) => {
     "failed draft: the list loads",
   );
   await expandQueue(t);
-  await t.eval(`window.__setAgentDown(true)`);
+  await t.eval(`window.__setAgentStandIn("down")`);
   await t.click(`[data-row="${row}"] button`);
   await opensUndrafted(t, student, "failed draft: reopened again");
   await t.click("Grade it yourself", { within: OPEN });
@@ -1823,7 +1851,7 @@ const failedDraft = async (t) => {
     JSON.stringify(primary),
   );
   await handApproveThenSend(t, student);
-  await t.eval(`window.__setAgentDown(false)`);
+  await t.eval(`window.__setAgentStandIn(null)`);
 };
 
 /** A hand grade takes the same two steps as an AI draft: Approve stops at Approved. Not sent, and only Send writes to the LMS (#51). */
@@ -2327,6 +2355,56 @@ const submissionTypes = async (t) => {
   await t.waitFor(`!document.querySelector(${JSON.stringify(CARD)})`, "Word draft: discarded");
 };
 
+/** Issue #81: once Claude says it can't see the work, the next step it offered leads, and the unchanged submission offers no paid redraft, reload included. */
+const cantSee = async (t) => {
+  const OFFER = "Draft a message asking them to resubmit the link";
+  const openRow = async (label) => {
+    await t.goto("/threads/t-queue");
+    await t.waitFor(`document.querySelector(${JSON.stringify(QUEUE)})`, `${label}: the list loads`);
+    await expandQueue(t);
+  };
+  await openRow("can't see");
+  const row = await t.eval(
+    `[...document.querySelectorAll('${LIST} [data-row]')].find((row) => row.innerText.includes("Not started"))?.dataset.row`,
+  );
+  const student = await t.eval(
+    `document.querySelector('[data-row="${row}"] button span[title]').title`,
+  );
+  await t.eval(`window.__setAgentStandIn("cant-see")`);
+  await t.click(`[data-row="${row}"] button`);
+  await opensUndrafted(t, student, "can't see");
+  await draftWithClaude(t);
+  await t.waitFor(
+    `!document.querySelector('[data-testid="agent-working"]') && document.querySelector('${CHAT}')?.innerText.includes("I can't see the work")`,
+    "can't see: Claude answers with no grade",
+    15_000,
+  );
+  await t.eval(`window.__setAgentStandIn(null)`);
+  const buttons = () =>
+    t.eval(`[...document.querySelectorAll('${OPEN} button')].map((b) => b.innerText.trim())`);
+  const offered = async (label) => {
+    const shown = await buttons();
+    t.assert(
+      shown[0] === OFFER &&
+        !shown.includes("Draft with Claude") &&
+        shown.includes("Grade it yourself"),
+      `${label}: the offer Claude made leads, then Grade it yourself, and Draft with Claude is gone (#81)`,
+      JSON.stringify(shown),
+    );
+  };
+  t.assert(!(await t.has(CARD)), "can't see: no grade was drafted");
+  await offered("can't see");
+  await t.shot("cant-see-offer");
+  await t.reload();
+  await openRow("can't see, reloaded");
+  await t.click(`[data-row="${row}"] button`);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(student)})`,
+    "can't see, reloaded: opens on the student",
+  );
+  await offered("can't see, reloaded");
+};
+
 export const run = async (t) => {
   await setup(t);
   await pinnedQueue(t);
@@ -2352,4 +2430,5 @@ export const run = async (t) => {
   await handFormTypedBackToClaude(t);
   await failedDraft(t);
   await submissionTypes(t);
+  await cantSee(t);
 };

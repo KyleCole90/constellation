@@ -7,14 +7,14 @@ import "./index.css";
 import { reportError } from "./desktop";
 import { keepFocusOnThePage } from "./lib/lostFocus";
 import { router } from "./router";
-import { faultLab, setAgentDown, workspaceStore } from "./stores/workspace";
+import { faultLab, setAgentStandIn, workspaceStore } from "./stores/workspace";
 
 const start = async () => {
   window.addEventListener("error", (event) => reportError(event.error));
   window.addEventListener("unhandledrejection", (event) => reportError(event.reason));
   if (import.meta.env.DEV) {
     const lab = faultLab();
-    Object.assign(window, { __faultLab: lab, __setAgentDown: setAgentDown });
+    Object.assign(window, { __faultLab: lab, __setAgentStandIn: setAgentStandIn });
     const noise = sessionStorage.getItem("verify.noise");
     if (noise) {
       // oxlint-disable-next-line typescript/no-unsafe-argument -- TS review debt: parse verify.noise into a Noise patch
