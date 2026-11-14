@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vite-plus/test";
+import * as v from "valibot";
 
 import { canvasSchoolAt, createCanvasProvider, type Fetch } from "~/main/providers/canvas";
 import type { LmsRef, SchoolHost, SchoolId } from "~/shared/domain/ids";
@@ -83,6 +84,19 @@ const ok = (name: string, headers?: Record<string, string>): Reply => ({
   ...(headers ? { headers } : {}),
 });
 const SELF = { "/api/v1/users/self": ok("users-self.json") };
+/** `submissions.json` as Canvas groups it by student, one entry per student holding their submissions. */
+const GROUPED_SUBMISSIONS = (() => {
+  const rows = v.parse(
+    v.array(v.looseObject({ user_id: v.number() })),
+    JSON.parse(fixture("submissions.json")),
+  );
+  return JSON.stringify(
+    [...new Set(rows.map((row) => row.user_id))].map((user_id) => ({
+      user_id,
+      submissions: rows.filter((row) => row.user_id === user_id),
+    })),
+  );
+})();
 const COURSES =
   "/api/v1/courses?enrollment_type=teacher&include[]=total_students&include[]=concluded&state[]=available";
 
@@ -157,6 +171,68 @@ describe("Canvas reads", () => {
       "100",
       "100",
     ]);
+  });
+
+  it("reads a numbered list's later pages in parallel, and keeps them in page order", async () => {
+    const pages = ["courses-page-1.json", "courses-page-2.json", "courses-page-1.json"];
+    let open = 0;
+    let most = 0;
+    const requests: string[] = [];
+    const numbered: Fetch = async (url) => {
+      requests.push(url);
+      const page = Number(new URL(url).searchParams.get("page") ?? "1");
+      open += 1;
+      most = Math.max(most, open);
+      // Page 2 answers last, so a list built in answer order would be out of page order.
+      await new Promise((wake) => setTimeout(wake, page === 2 ? 20 : 1));
+      open -= 1;
+      return new Response(fixture(pages[page - 1] ?? "courses-page-1.json"), {
+        headers: {
+          link: `<${ORIGIN}/api/v1/courses?page=${page + 1}&per_page=100>; rel="next", <${ORIGIN}/api/v1/courses?page=3&per_page=100>; rel="last"`,
+        },
+      });
+    };
+    const provider = createCanvasProvider({
+      school: SCHOOL,
+      lease: leaseOf(TOKEN),
+      fetch: numbered,
+      now: () => Date.now(),
+      packageFile: async () => null,
+    });
+    const courses = await provider.courses();
+    expect(courses.ok && courses.value.map((course) => course.ref)).toEqual([
+      `${HOST}:course:2201`,
+      `${HOST}:course:2203`,
+      `${HOST}:course:2201`,
+    ]);
+    expect(requests).toHaveLength(3);
+    expect(most).toBe(2);
+  });
+
+  it.each([
+    ["names another host", `<https://elsewhere.example.com/api/v1/courses?page=2>; rel="last"`],
+    [
+      "names more pages than a course could have",
+      `<${ORIGIN}/api/v1/courses?page=101>; rel="last"`,
+    ],
+  ])("refuses a last page link that %s", async (_, link) => {
+    const canvas = canvasWith({ [COURSES]: ok("courses-page-1.json", { link }) });
+    const courses = await canvas.provider.courses();
+    expect(courses.ok || courses.error.kind).toBe("rejected");
+    expect(canvas.requests).toHaveLength(1);
+  });
+
+  it("fails a numbered list when one of its pages fails", async () => {
+    const canvas = canvasWith({
+      [COURSES]: ok("courses-page-1.json", {
+        link: `<${ORIGIN}/api/v1/courses?page=2&per_page=100>; rel="last"`,
+      }),
+      "/api/v1/courses?page=2": { status: 503, body: "" },
+    });
+    expect(await canvas.provider.courses()).toEqual({
+      ok: false,
+      error: { kind: "unavailable", status: 503 },
+    });
   });
 
   it("never follows a page link to another host, so the token stays with the school", async () => {
@@ -249,8 +325,8 @@ describe("Canvas reads", () => {
   it("reads submissions with plain-text bodies, rubric scores, and which comments are mine", async () => {
     const canvas = canvasWith({
       ...SELF,
-      "/api/v1/courses/2201/students/submissions?student_ids[]=all&include[]=submission_comments&include[]=rubric_assessment&include[]=user":
-        ok("submissions.json"),
+      "/api/v1/courses/2201/students/submissions?student_ids[]=all&grouped=true&include[]=submission_comments&include[]=rubric_assessment&include[]=user":
+        { body: GROUPED_SUBMISSIONS },
     });
     const submissions = await canvas.provider.submissions(COURSE);
     if (!submissions.ok) throw new Error(submissions.error.kind);
