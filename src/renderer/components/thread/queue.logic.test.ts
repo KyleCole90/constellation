@@ -304,6 +304,25 @@ describe("neighbor and nextOpen", () => {
   });
 });
 
+describe("a course's To grade in the Grading list (#48)", () => {
+  const music = { ref: "c-music", code: "MUS 101" } as WorkRow["course"];
+  const rows = [row("a", { course: music }), row("b", { course: music }), row("c")];
+
+  it("narrows the list to that course, with a chip that names it and All to undo it", () => {
+    const filter = liveFilter(rows, "course:c-music");
+    expect(filter).toBe("course:c-music");
+    expect(keys(filterRows(rows, filter))).toEqual(["a", "b"]);
+    expect(queueChips(rows, filter).map((chip) => [chip.label, chip.count])).toEqual([
+      ["All", 3],
+      ["MUS 101", 2],
+    ]);
+  });
+
+  it("shows no course chip unless the course is the filter", () => {
+    expect(queueChips(rows).some((chip) => chip.filter.startsWith("course:"))).toBe(false);
+  });
+});
+
 describe("nextLabel (#48)", () => {
   it("says a draft will start when Next would ask Claude for one", () => {
     expect(nextLabel(row("Jean Tuttle"), true)).toBe("Draft next: Jean Tuttle");

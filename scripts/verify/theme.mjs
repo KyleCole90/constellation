@@ -300,6 +300,12 @@ export const run = async (t) => {
   await inBothThemes(t, "grading-list");
   await t.click("Maya Ortiz", { within: '[data-testid="queue-list"]' });
   await t.waitFor(
+    `document.querySelector('[data-testid="grade-open"]')`,
+    "Maya's submission opens undrafted",
+  );
+  await inBothThemes(t, "grading-open");
+  await t.click("Draft with Claude", { within: '[data-testid="grade-open"]' });
+  await t.waitFor(
     `document.querySelector("[data-focused]")?.innerText.includes("Maya Ortiz, Essay 2") && !document.querySelector('[data-testid="agent-working"]')`,
     "Maya's draft is ready",
     30_000,

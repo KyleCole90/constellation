@@ -90,7 +90,7 @@ describe("a token passing through connect", () => {
     await rig.connect(LCC, SENTINEL);
     const ref = rig.state().cache[LCC]?.submissions.find((s) => s.workflow === "submitted")?.ref;
     if (!ref) throw new Error("Nothing to grade.");
-    await rig.clock.run(rig.state().openSubmission("t-queue" as never, ref));
+    await rig.clock.run(rig.state().openSubmission("t-queue" as never, ref, { fill: "draft" }));
     expectNoLeak(rig, SENTINEL);
   });
 });

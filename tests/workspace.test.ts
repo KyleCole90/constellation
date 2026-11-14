@@ -55,7 +55,7 @@ const openFor = async (
 ): Promise<ChangeId> => {
   const ref = rig.server.findSubmission(student, assignment);
   if (!ref) throw new Error(`No submission for ${student}.`);
-  const id = await rig.clock.run(rig.state().openSubmission(QUEUE, ref));
+  const id = await rig.clock.run(rig.state().openSubmission(QUEUE, ref, { fill: "draft" }));
   if (!id) throw new Error("Nothing was drafted.");
   return id;
 };
@@ -417,7 +417,7 @@ describe("a slow draft and a later click", () => {
     const maya = rig.server.findSubmission("Maya Ortiz", "Essay 2");
     const devon = await openFor(rig, "Devon Reyes", "Essay 2");
     if (!maya) throw new Error("No submission.");
-    const slow = rig.state().openSubmission(QUEUE, maya);
+    const slow = rig.state().openSubmission(QUEUE, maya, { fill: "draft" });
     rig.state().focusChange(QUEUE, devon);
     await rig.clock.run(slow);
     expect(rig.state().threads[QUEUE]?.focus).toBe(devon);
@@ -666,7 +666,7 @@ describe("messaging a missing student", () => {
   it("a message and a grade on the same submission are separate drafts, and her row shows the grade", async () => {
     const rig = await connected();
     const { ref, id } = await messageFiona(rig);
-    const grade = await rig.clock.run(rig.state().openSubmission(QUEUE, ref));
+    const grade = await rig.clock.run(rig.state().openSubmission(QUEUE, ref, { fill: "draft" }));
     expect(grade).not.toBe(id);
     expect(rig.state().changes[grade!]?.content.kind).toBe("grade");
     expect(await rig.clock.run(rig.state().openMessage(QUEUE, ref))).toBe(id);
@@ -682,7 +682,7 @@ describe("messaging a missing student", () => {
       selectQueueRows(rig.state(), assignment, true).map((row) => row.submission.studentName);
     const before = names();
     expect(before.at(-1)).toBe("Fiona Kerr");
-    const id = (await rig.clock.run(rig.state().openSubmission(QUEUE, ref)))!;
+    const id = (await rig.clock.run(rig.state().openSubmission(QUEUE, ref, { fill: "draft" })))!;
     approve(rig, id);
     await rig.clock.run(rig.state().sendChanges([id]));
     expect(fionaIn(rig, ref)?.workflow).toBe("graded");
@@ -840,7 +840,7 @@ describe("the demo script", () => {
             s.studentName !== DEMO_PARTIAL.student,
         )?.ref;
     if (!second) throw new Error("No second submission.");
-    const id = await rig.clock.run(rig.state().openSubmission(QUEUE, second));
+    const id = await rig.clock.run(rig.state().openSubmission(QUEUE, second, { fill: "draft" }));
     if (!id) throw new Error("Nothing drafted.");
     approve(rig, id);
     await rig.clock.run(rig.state().sendChanges([id]));
@@ -1574,7 +1574,9 @@ describe("missing work", () => {
       submission.course,
       rig.state().now(),
     )?.missing;
-    const id = await rig.clock.run(rig.state().openSubmission(QUEUE, submission.ref));
+    const id = await rig.clock.run(
+      rig.state().openSubmission(QUEUE, submission.ref, { fill: "draft" }),
+    );
     if (!id) throw new Error("Nothing was drafted.");
     const edited = rig.state().dispatchUser(id, {
       type: "edit",

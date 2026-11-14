@@ -176,7 +176,7 @@ describe("removeSchool", () => {
     const ref = rig.server.findSubmission("Maya Ortiz", "Essay 2");
     if (!ref) throw new Error("No submission.");
     const id = (await rig.clock.run(
-      rig.state().openSubmission("t-queue" as ThreadId, ref),
+      rig.state().openSubmission("t-queue" as ThreadId, ref, { fill: "draft" }),
     )) as ChangeId;
     const school = rig.state().changes[id]?.school;
     if (!school) throw new Error("Opening the submission saved no change.");
@@ -243,7 +243,9 @@ describe("a workspace saved by version 2", () => {
     await rig.state().addAiKey(new Secret(STORE_TOKEN));
     const ref = rig.server.findSubmission("Maya Ortiz", "Essay 2");
     if (!ref) throw new Error("No submission.");
-    const id = await rig.clock.run(rig.state().openSubmission("t-queue" as ThreadId, ref));
+    const id = await rig.clock.run(
+      rig.state().openSubmission("t-queue" as ThreadId, ref, { fill: "draft" }),
+    );
     return { rig, id: id as ChangeId };
   };
 

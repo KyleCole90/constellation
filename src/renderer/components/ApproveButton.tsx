@@ -10,7 +10,7 @@ import { Button } from "./ui/button";
 import { Dialog, DialogClose, DialogDescription, DialogPopup, DialogTitle } from "./ui/dialog";
 
 /**
- * The only place a witness is minted, by this button or by `approveByChord`. It fingerprints the records it was rendered with, so a draft that moved
+ * The only place a witness is minted. It fingerprints the records it was rendered with, so a draft that moved
  * after this render makes the click stale. A scripted click isn't trusted, so it mints nothing.
  * A risky change (a copy into a course with people or content) opens a dialog first, and the dialog's confirm button
  * is the trusted click that mints, carrying the risk the person typed the course code to face. A batch never includes one.
@@ -21,15 +21,6 @@ const approveAll = (targets: readonly ChangeRecord[], witness: ApprovalWitness):
   return targets
     .map((record) => dispatchUser(record.id, { type: "approve", witness, at }))
     .every((result) => result.ok);
-};
-
-/** ⌘↵ on a grade only you have edited. Pass the record as it is after the typed comment committed, which is what the card shows. */
-export const approveByChord = (press: KeyboardEvent, record: ChangeRecord): boolean => {
-  const witness = ApprovalWitness.fromChord(press, {
-    changeId: record.id,
-    fingerprint: fingerprintOf(record),
-  });
-  return witness !== null && approveAll([record], witness);
 };
 
 export function ApproveButton({

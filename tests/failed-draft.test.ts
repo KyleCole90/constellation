@@ -28,14 +28,14 @@ const downOnce = (): Agent => {
   };
 };
 
-/** Opens Maya's essay as a queue row does, with Claude down, so the draft fails. */
+/** Asks for a draft of Maya's essay with Claude down, so the draft fails. */
 const failedDraft = async () => {
   const rig = await makeStoreRig({ agent: downOnce() });
   await rig.connectAll();
   const ref = rig.server.findSubmission("Maya Ortiz", "Essay 2");
   if (!ref) throw new Error("no submission");
   rig.state().setThreadUi(QUEUE, { current: ref });
-  expect(await rig.clock.run(rig.state().openSubmission(QUEUE, ref))).toBeNull();
+  expect(await rig.clock.run(rig.state().openSubmission(QUEUE, ref, { fill: "draft" }))).toBeNull();
   expect(rig.state().threads[QUEUE]?.focus).toBeNull();
   return { rig, ref };
 };
@@ -58,14 +58,14 @@ describe("after a draft fails, the submission on screen is still the one open", 
 
   it("drafting again opens the same submission once Claude is back", async () => {
     const { rig, ref } = await failedDraft();
-    const id = await rig.clock.run(rig.state().openSubmission(QUEUE, ref));
+    const id = await rig.clock.run(rig.state().openSubmission(QUEUE, ref, { fill: "draft" }));
     expect(id).not.toBeNull();
     expect(focused(rig).content.target).toBe(ref);
   });
 
   it("with Claude still down, the teacher grades it by hand, and it sends the same way", async () => {
     const { rig, ref } = await failedDraft();
-    const id = await rig.clock.run(rig.state().openSubmission(QUEUE, ref, { manual: true }));
+    const id = await rig.clock.run(rig.state().openSubmission(QUEUE, ref, { fill: "by-hand" }));
     if (!id) throw new Error("no form opened");
     expect(focused(rig).content.target).toBe(ref);
     expect(focused(rig).activity[0]?.actor).toBe("you");

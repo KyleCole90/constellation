@@ -174,7 +174,10 @@ interface WorkspaceActions extends SetupActions {
   turnOffAi(): Promise<void>;
   scopeWordsFor(school: SchoolId): readonly string[];
   syncSchool(school: SchoolId): Promise<boolean>;
-  /** Drafts what isn't drafted yet and focuses it. With `focus: false` it drafts in the background and leaves the thread where it is. */
+  /**
+   * Focuses the submission's live change. With none, it spends nothing: a Claude draft costs a model call, so only `fill: "draft"` starts one, and
+   * `fill: "by-hand"` opens a blank form. With AI off, opening is the blank form. With `focus: false` it works in the background and leaves the thread where it is.
+   */
   openSubmission(
     thread: ThreadId,
     submission: LmsRef<"submission">,
@@ -469,7 +472,6 @@ export const REJECTION_TEXT: Readonly<Record<Rejection, string>> = {
   "stale-approval": "The draft changed after you clicked, so nothing was approved.",
   "needs-confirmation":
     "This copy lands on a course that already has people or content in it, so it needs the typed confirmation first.",
-  "needs-review": "The AI worked on this, so approve it from the preview.",
   "not-approved": "This change hasn't been approved.",
   "not-sendable": "This change can't be sent right now.",
   "not-sending": "This change isn't sending.",
@@ -594,9 +596,11 @@ const scopeOf = (state: WorkspaceData, thread: Thread): Omit<AgentScope, "change
 
 interface OpenOptions {
   focus?: boolean;
-  /** A blank form to fill in by hand, even with AI on, as when Claude can't be reached. */
-  manual?: boolean;
+  /** How to fill a target with no live change: a Claude draft, or a blank form to fill in by hand even with AI on. */
+  fill?: Fill;
 }
+
+type Fill = "draft" | "by-hand";
 
 /** One agent run. A run that opens something holds what it says until there is a change to file it under, so one student's lines never show under another's card. */
 interface AgentRun {
@@ -1337,7 +1341,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           request: string,
           narrow: Narrow,
           blank: Proposal,
-          { focus = true, manual = false }: OpenOptions = {},
+          { focus = true, fill }: OpenOptions,
         ): Promise<ChangeId | null> => {
           const { content } = blank;
           const slot = slotOf(content);
@@ -1349,11 +1353,12 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           }
           const running = inFlight.get(`open:${slot}`) as Promise<ChangeId | null> | undefined;
           if (running) return running;
+          if (get().aiOn() && fill === undefined) return null;
           if (!focus) background.add(slot);
           const run = (
-            get().aiOn() && !manual
+            get().aiOn() && fill === "draft"
               ? runThreadAgent(thread, request, narrow, newRun(null, []), content.target)
-              : openBlank(thread, blank, manual)
+              : openBlank(thread, blank, fill === "by-hand")
           )
             .then(() => existingChange(content, submittedAt)?.id ?? blankOn(content)?.id ?? null)
             .finally(() => {
@@ -1607,7 +1612,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   conversations: [],
                 },
                 blankGrade(submission, assignment),
-                options,
+                options ?? {},
               );
             }
             return null;
@@ -1630,7 +1635,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   assignments: [],
                 },
                 blankReply(conversation),
-                options,
+                { fill: "draft", ...options },
               );
             }
             return null;
@@ -1654,6 +1659,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   conversations: [],
                 },
                 blankMessage(submission, assignment),
+                { fill: "draft" },
               );
             }
             return null;
@@ -1669,6 +1675,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   topic === undefined ? DRAFT_ANNOUNCEMENT_REQUEST : draftAnnouncementAbout(topic),
                   { courses: [course], submissions: [], assignments: [], conversations: [] },
                   blankAnnouncement(course),
+                  { fill: "draft" },
                 );
             }
             return null;

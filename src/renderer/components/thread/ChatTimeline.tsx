@@ -10,8 +10,13 @@ import {
   type RefObject,
 } from "react";
 
-import type { LmsRef } from "~/shared/domain/ids";
-import { selectSubmission, selectThreadChanges } from "~/renderer/stores/selectors";
+import type { LmsRef, ThreadId } from "~/shared/domain/ids";
+import type { Submission } from "~/shared/domain/lms";
+import {
+  selectAssignment,
+  selectSubmission,
+  selectThreadChanges,
+} from "~/renderer/stores/selectors";
 import type { Thread, ThreadMessage, ThreadUi } from "~/renderer/stores/types";
 import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
@@ -356,6 +361,75 @@ const useArrivalFocus = (scroller: RefObject<HTMLDivElement | null>, focus: Thre
 };
 
 /**
+ * A submission open with nothing drafted. It says where the grade stands in the LMS, and drafting is a choice here, since a draft costs a model call.
+ * It stays while its own draft runs, so the button still holds focus when the card arrives and can hand it on.
+ */
+function OpenSubmission({
+  thread,
+  submission,
+  working,
+}: {
+  thread: ThreadId;
+  submission: Submission;
+  working: boolean;
+}) {
+  const ai = useAiOn();
+  const [asked, setAsked] = useState(false);
+  const assignment = useWorkspace((state) => selectAssignment(state, submission.assignment));
+  const vendor = useWorkspace((state) => state.vendorLabelFor(submission.school) ?? "the LMS");
+  const comment = submission.comments.findLast((c) => c.mine)?.text;
+  const drafting = asked && working;
+  const open = (fill: "draft" | "by-hand") => {
+    if (working) return;
+    setAsked(fill === "draft");
+    void workspaceStore().getState().openSubmission(thread, submission.ref, { fill });
+  };
+  if (working && !drafting) return null;
+  return (
+    <div data-testid="grade-open" className="flex flex-col gap-2">
+      <p className="text-body">
+        <span className="font-medium">{submission.studentName}</span>
+        {assignment && <span className="text-muted-foreground">, {assignment.shortTitle}</span>}
+      </p>
+      <p data-testid="current-grade" className="text-meta text-secondary-label">
+        {submission.grade === null
+          ? `Not graded in ${vendor} yet.`
+          : `${submission.grade}${assignment ? ` / ${assignment.pointsPossible}` : ""} in ${vendor} now.`}
+      </p>
+      {comment && (
+        <p
+          data-testid="current-comment"
+          className="border-l border-input pl-3 text-meta text-muted-foreground"
+        >
+          {comment}
+        </p>
+      )}
+      <div className="flex gap-btn-gap">
+        {ai && (
+          <Button
+            variant="default"
+            aria-disabled={drafting}
+            data-lands="[data-card-primary]"
+            onClick={() => open("draft")}
+          >
+            {drafting ? "Drafting" : "Draft with Claude"}
+          </Button>
+        )}
+        {!drafting && (
+          <Button
+            variant={ai ? "outline" : "default"}
+            data-lands="[data-typed-score], [data-card-primary]"
+            onClick={() => open("by-hand")}
+          >
+            Grade it yourself
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * `lead` sits above the chat in the same scroll, and `trail` below it. `scoped` keeps other changes out entirely, for a screen that lists them already.
  * `screen` is for a thread whose changes all live in its own screen: the chat is its words alone, every message of them, and `stickOn` says when to follow the bottom.
  * `quotedAbove` says the lead ends with the message a reply answers, so a card with only work logs between it and the lead doesn't quote that message again.
@@ -400,11 +474,10 @@ export function ChatTimeline({
   useArrivalFocus(scroller, thread.focus);
   /** The course an announcement thread with nothing drafted yet would post to. */
   const toAnnounce = thread.kind === "announcement" && thread.focus === null ? thread.course : null;
-  /** The submission on screen with no draft open, as after a draft that failed or a Discard. */
-  const toGrade = useWorkspace((state) => {
-    const current = thread.focus === null ? ui.current : null;
-    return selectSubmission(state, current as LmsRef<"submission"> | null)?.ref ?? null;
-  });
+  /** The submission on screen with no draft open: just opened, or after a draft that failed or a Discard. */
+  const toGrade = useWorkspace((state) =>
+    selectSubmission(state, thread.focus === null ? (ui.current as LmsRef<"submission">) : null),
+  );
 
   return (
     <div
@@ -473,27 +546,13 @@ export function ChatTimeline({
             </Button>
           </div>
         )}
-        {toGrade && !working && (
-          <div data-testid="grade-open" className="flex gap-btn-gap">
-            {ai && (
-              <Button
-                variant="default"
-                onClick={() => void workspaceStore().getState().openSubmission(thread.id, toGrade)}
-              >
-                Draft again
-              </Button>
-            )}
-            <Button
-              variant={ai ? "outline" : "default"}
-              onClick={() =>
-                void workspaceStore()
-                  .getState()
-                  .openSubmission(thread.id, toGrade, { manual: true })
-              }
-            >
-              Grade it yourself
-            </Button>
-          </div>
+        {toGrade && (
+          <OpenSubmission
+            key={toGrade.ref}
+            thread={thread.id}
+            submission={toGrade}
+            working={working}
+          />
         )}
         {working && (
           <div

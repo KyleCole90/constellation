@@ -36,19 +36,16 @@ function Section({
   name,
   title,
   action,
-  flash = false,
   children,
 }: {
   name: string;
   title: string;
   action?: ReactNode;
-  flash?: boolean;
   children: ReactNode;
 }) {
   return (
     <section
       data-section={name}
-      data-flash={flash}
       className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-border"
     >
       <div className="flex flex-none items-center justify-between border-b border-border bg-card px-row-x py-card-head-y">
@@ -250,8 +247,6 @@ export function CourseOverviewScreen({ courseId }: { courseId: LmsRef<"course"> 
   const ai = useAiOn();
   const threads = overview ? withoutChatThreads(overview.threads, ai) : [];
   const open = threads.filter((thread) => !isSettled(thread));
-  // Each press of To grade flashes Needs you again; the key restarts the animation.
-  const [pointed, setPointed] = useState(0);
   return (
     <CoursePage courseId={courseId} actions={<SaveTemplateButton course={courseId} />}>
       {(course) =>
@@ -263,18 +258,7 @@ export function CourseOverviewScreen({ courseId }: { courseId: LmsRef<"course"> 
                   label="To grade"
                   testId="to-grade"
                   value={overview.toGrade}
-                  onClick={() => {
-                    // One assignment's list holds the whole count. Otherwise Needs you lists each assignment with its share.
-                    const grading = overview.assignments.filter((item) => item.toGrade > 0);
-                    if (grading.length === 1 && grading[0]) {
-                      links.assignment(grading[0].assignment);
-                      return;
-                    }
-                    setPointed((count) => count + 1);
-                    document
-                      .querySelector('[data-section="needs-you"]')
-                      ?.scrollIntoView({ block: "start" });
-                  }}
+                  onClick={() => links.courseToGrade(course)}
                 />
                 <Stat
                   label="Due this week"
@@ -309,7 +293,7 @@ export function CourseOverviewScreen({ courseId }: { courseId: LmsRef<"course"> 
               </div>
               <div className="grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start gap-3">
                 <div className="flex min-w-0 flex-col gap-3">
-                  <Section key={pointed} name="needs-you" title="Needs you" flash={pointed > 0}>
+                  <Section name="needs-you" title="Needs you">
                     {overview.needsYou.length === 0 ? (
                       <Nothing>Nothing is waiting on you here.</Nothing>
                     ) : (

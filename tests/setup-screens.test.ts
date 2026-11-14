@@ -46,6 +46,7 @@ const threadActions = (rigThread: ThreadActions["threadId"]): ThreadActions => (
   next: null,
   send: () => undefined,
   openRow: () => undefined,
+  openNext: () => undefined,
   messageRow: () => undefined,
   focus: () => undefined,
   draftRows: async () => undefined,

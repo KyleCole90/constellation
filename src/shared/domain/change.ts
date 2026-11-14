@@ -691,21 +691,10 @@ export type Rejection =
   | "field-already-landed"
   | "stale-approval"
   | "needs-confirmation"
-  | "needs-review"
   | "not-approved"
   | "not-sendable"
   | "not-sending"
   | "not-conflicted";
-
-/**
- * A grade no agent drafted, edited, or explained. Only this may be approved by the chord, without the preview.
- * A zero or a grade with no comment stops at the preview first, since one keystroke shouldn't send either. An excuse has neither by design.
- */
-export const sendsOnChord = ({ content, rationale, activity }: ChangeRecord): boolean =>
-  content.kind === "grade" &&
-  rationale.length === 0 &&
-  activity.every(({ actor }) => actor !== "agent") &&
-  (content.excused || (finalGrade(content) !== 0 && Boolean(content.comment?.trim())));
 
 /** The activity entries that put your words in the change. Approving, undoing and resolving a conflict are yours too, but write nothing. */
 const YOUR_WORDS: ReadonlySet<string> = new Set(["Started", "Edited", "Edited, approval reset"]);
@@ -1083,7 +1072,6 @@ export function transition(
       const risk = riskOf(record);
       if (risk !== null && !event.witness.acknowledges(record.id, risk))
         return fail("needs-confirmation");
-      if (event.witness.via === "chord" && !sendsOnChord(record)) return fail("needs-review");
       return ok(
         {
           ...record,

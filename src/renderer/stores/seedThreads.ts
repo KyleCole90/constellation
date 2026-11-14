@@ -52,7 +52,7 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
       },
       {
         type: "agent",
-        text: "Everything that needs a grade is in the list above, oldest due date first. Open one and I'll draft rubric scores and feedback beside it. Nothing goes to the LMS until you approve it.",
+        text: "Everything that needs a grade is in the list above, oldest due date first. Open one to read it, then ask me for a draft or grade it yourself. Nothing goes to the LMS until you approve it.",
         at: queueAt,
       },
     ],

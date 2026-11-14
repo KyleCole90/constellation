@@ -7,6 +7,29 @@ const CHAT = '[data-testid="chat"]';
 const CARD = "[data-focused]";
 const START = '[data-testid="queue-start"]';
 const NEXT_ARROW = '[aria-label="Next in queue"]';
+const OPEN = '[data-testid="grade-open"]';
+/** The student on screen, drafted or not. */
+const shows = (title) =>
+  `(document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(title)}) || document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(title)}))`;
+const draftOffered = `[...document.querySelectorAll(${JSON.stringify(`${OPEN} button`)})].some((b) => b.innerText === "Draft with Claude")`;
+const draftIfOffered = async (t) => {
+  if (await t.eval(draftOffered)) await t.click("Draft with Claude", { within: OPEN });
+};
+/** Opening drafted nothing, so this asks for the draft the way the teacher does (#48). */
+const draftShown = async (t, title, what) => {
+  if (await t.has(OPEN)) {
+    t.assert(
+      !(await t.has('[data-testid="agent-working"]')),
+      `${what}: opening ${title} started no draft (#48)`,
+    );
+    await t.click("Draft with Claude", { within: OPEN });
+  }
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(title)})`,
+    `${what}: ${title} is drafted`,
+  );
+  await settled(t, `${what}: agent finished`);
+};
 const QUIET = JSON.stringify({ rate429: 0, rate5xx: 0, rateLost: 0, latencyMs: [20, 60] });
 
 const openTitles = `[...document.querySelectorAll('[data-row]')].filter((row) => !row.querySelector("input").disabled).map((row) => row.querySelector("button span[title]").innerText)`;
@@ -136,11 +159,8 @@ export const run = async (t) => {
   await t.shot("grading-list-filtered");
 
   await t.click(START);
-  await t.waitFor(
-    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(run[0])})`,
-    "Start grading opens the first submission in the filter",
-  );
-  await settled(t, "first submission drafted");
+  await t.waitFor(shows(run[0]), "Start grading opens the first submission in the filter");
+  await draftShown(t, run[0], "filtered");
   t.assert(!(await t.has(START)), "Start grading goes once a submission is open");
 
   await gradeByChord(t, "filtered");
@@ -186,10 +206,10 @@ const startOnTicked = async (t) => {
   await t.shot("grading-list-ticked", null);
   await t.click(START);
   await t.waitFor(
-    `document.querySelector(${JSON.stringify(CARD)})`,
-    "ticked: Start grading opens a card",
+    `document.querySelector(${JSON.stringify(CARD)}) || document.querySelector(${JSON.stringify(OPEN)})`,
+    "ticked: Start grading opens a submission",
   );
-  const opened = await t.text(CARD);
+  const opened = await t.text((await t.has(CARD)) ? CARD : OPEN);
   await t.shot("grading-list-ticked-start", null);
   t.assert(
     opened.includes(titles[1]),
@@ -197,11 +217,7 @@ const startOnTicked = async (t) => {
     `opened ${opened.split("\n")[0]}; ticked ${titles[1]}, ${titles[3]}`,
   );
   const place = () => t.text('[data-testid="queue-progress"]');
-  const cardShows = (title, label) =>
-    t.waitFor(
-      `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(title)})`,
-      label,
-    );
+  const cardShows = (title, label) => t.waitFor(shows(title), label);
   t.assert(
     (await place()) === "1 of 2",
     "ticked: the header counts the ticked rows",
@@ -209,6 +225,11 @@ const startOnTicked = async (t) => {
   );
   await t.click(NEXT_ARROW);
   await cardShows(titles[3], "ticked: the header arrow goes to the other ticked row");
+  await t.sleep(300);
+  t.assert(
+    (await t.has(OPEN)) && !(await t.has('[data-testid="agent-working"]')) && !(await t.has(CARD)),
+    "ticked: the header arrow opens the row without starting a draft (#48)",
+  );
   t.assert((await place()) === "2 of 2", "ticked: the header places the second", await place());
   t.assert(
     await t.eval(`document.querySelector(${JSON.stringify(NEXT_ARROW)}).disabled`),
@@ -222,15 +243,15 @@ const startOnTicked = async (t) => {
   await t.click('[aria-label="Previous in queue"]');
   await cardShows(titles[1], "ticked: the header's Previous walks back to the first ticked row");
   t.assert((await place()) === "1 of 2", "ticked: Previous restores the place", await place());
-  await settled(t, "ticked: first ticked row drafted");
+  await draftShown(t, titles[1], "ticked");
   await gradeByChord(t, "ticked");
   const offered = await t.eval(
     `[...document.querySelectorAll('button')].find((b) => /^(Draft next|Next):/.test(b.innerText))?.innerText ?? ""`,
   );
   await t.shot("grading-list-ticked-next", null);
   t.assert(
-    offered.split("\n")[0] === `Next: ${titles[3]}`,
-    "ticked: Next skips to the other ticked row, already drafted, so it starts no draft",
+    offered.split("\n")[0] === `Draft next: ${titles[3]}`,
+    "ticked: Next skips to the other ticked row, which the arrow left undrafted, so it says it drafts (#48)",
     `${offered}; ticked ${titles[1]}, ${titles[3]}`,
   );
   t.assert(
@@ -308,6 +329,8 @@ const missingWork = async (t) => {
   await messageMissing(t);
 
   await t.click("Fiona Kerr", { within: QUEUE });
+  await t.waitFor(shows("Fiona Kerr"), "opening her shows her");
+  await draftIfOffered(t);
   await t.waitFor(
     `document.querySelector(${JSON.stringify(`${CARD} textarea`)})?.value.includes("recorded a zero")`,
     "opening her drafts a zero that says why",
@@ -383,24 +406,41 @@ const openLastMissing = async (t, thread, what) => {
   );
   const name = (await t.text(`${LAST} button span[title]`)).trim();
   await t.click(`${LAST} button`);
+  await t.waitFor(shows(name), `${what}: opening ${name} shows ${name}`);
+  await draftIfOffered(t);
   await t.waitFor(
     `document.querySelector(${JSON.stringify(FORM)})?.innerText.includes(${JSON.stringify(name)})`,
-    `${what}: opening ${name} shows a form`,
+    `${what}: ${name} has a form`,
   );
   return name;
 };
 
-/** The submission panel can cover the card, so the first ⌘↵ may only open the preview. */
-const chordSends = async (t, what) => {
+/** A hand grade takes the same steps as an AI draft: ⌘↵ reviews and stops at Approve, the button approves, and ⌘↵ sends (#51). */
+const approveThenSend = async (t, what) => {
   await t.key("Meta+Enter");
   await t.waitFor(
-    `document.querySelector(${JSON.stringify(RECEIPT)}) || document.querySelector('[data-testid="writeback-scroll"]')`,
-    `${what}: ⌘↵ reviews or sends`,
+    `document.querySelector('[data-testid="writeback-scroll"]')`,
+    `${what}: ⌘↵ reviews`,
   );
-  if (!(await t.has(RECEIPT))) await t.key("Meta+Enter");
+  await t.key("Meta+Enter");
+  await t.waitFor(
+    `document.activeElement?.hasAttribute("data-approve")`,
+    `${what}: ⌘↵ stops at Approve, and approves nothing`,
+  );
+  t.assert(
+    !(await t.pageText()).includes("Undo approval") && !(await t.has(RECEIPT)),
+    `${what}: nothing is approved or sent by the chord (#51)`,
+  );
+  await t.key("Enter");
+  await t.waitFor(
+    `document.body.innerText.includes("Undo approval")`,
+    `${what}: Enter on Approve approves, and stops at Approved. Not sent (#51)`,
+  );
+  t.assert(!(await t.has(RECEIPT)), `${what}: Approve alone sends nothing (#51)`);
+  await t.key("Meta+Enter");
   await t.waitFor(
     `document.querySelector(${JSON.stringify(RECEIPT)})`,
-    `${what}: one ⌘↵ approves and sends it`,
+    `${what}: ⌘↵ sends it`,
     20_000,
   );
 };
@@ -419,13 +459,13 @@ const footerKeepsPairRight = async (t) => {
     const footer = await t.eval(FOOTER_ROW);
     t.assert(
       footer.panel && footer.sameRow && footer.approveRight >= footer.barRight - 1,
-      `AI off at ${width}: with the submission panel open the actions share one row, Approve and send at the right edge`,
+      `AI off at ${width}: with the submission panel open the actions share one row, Approve at the right edge`,
       JSON.stringify(footer),
     );
   }
 };
 
-/** With AI off nothing drafts the zero, so one Zero click fills every criterion. A zero stops at the preview; a commented 1 sends on one ⌘↵. */
+/** With AI off nothing drafts the zero, so one Zero click fills every criterion. Every hand grade, a zero or a commented 1, is approved and then sent. */
 const missingZeroAiOff = async (t) => {
   await openLastMissing(t, "t-e101-essay2", "AI off");
   t.assert(await t.has(`${FORM} [data-criterion]`), "AI off: Essay 2 is graded on a rubric");
@@ -439,7 +479,7 @@ const missingZeroAiOff = async (t) => {
     (await t.text(`${FORM} [data-testid="draft-grade"]`)).includes("0"),
     "AI off: the total reads 0",
   );
-  const offersChord = `Boolean(document.querySelector(${JSON.stringify(`${FORM} [data-testid="card-actions"] [data-approve]`)})?.innerText.startsWith("Approve and send"))`;
+  const offersChord = `Boolean([...document.querySelectorAll("button")].some((b) => b.innerText.startsWith("Approve and send")))`;
   await settled(t, "AI off zero");
   await t.shot("grading-list-missing-zero-card", null);
   t.assert(!(await t.eval(offersChord)), "AI off: a zero offers no Approve and send on the card");
@@ -472,10 +512,18 @@ const missingZeroAiOff = async (t) => {
   );
   await t.type("1");
   await t.key("Enter");
-  await t.waitFor(offersChord, "AI off: a commented 1 offers Approve and send again");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(`${FORM} [data-criterion] [data-typed-score]`)})?.value === "1"`,
+    "AI off: the score reads 1",
+  );
+  await settled(t, "AI off commented 1");
+  t.assert(
+    !(await t.eval(offersChord)),
+    "AI off: a commented 1 offers Approve, never Approve and send (#51)",
+  );
   await footerKeepsPairRight(t);
   await t.shot("grading-list-missing-one-ai-off", null);
-  await chordSends(t, "AI off");
+  await approveThenSend(t, "AI off");
 };
 
 /** A documented absence is excused instead of zeroed, drops the agent's zero note, and goes through the same approval. */
@@ -534,6 +582,8 @@ const lateWaiveAndOverride = async (t) => {
   await t.waitFor(late, "the bibliography lists a late submission");
   const name = await t.eval(`${late}.querySelector("button span[title]").innerText.trim()`);
   await t.eval(`${late}.querySelector("button").click()`);
+  await t.waitFor(shows(name), "the late submission opens");
+  await draftIfOffered(t);
   await t.waitFor(
     `document.querySelector(${JSON.stringify(FORM)})?.innerText.includes("Late penalty")`,
     "the late draft shows its penalty",

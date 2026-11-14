@@ -60,6 +60,21 @@ export const useWorkLinks = () => {
         store().setThreadUi(thread, { queueOpen: true });
         toThread(thread);
       },
+      /** Everything left to grade in one course, in the Grading list. */
+      courseToGrade: (course: Course) => {
+        const state = store();
+        const list = Object.values(state.threads).find((thread) => thread.kind === "queue");
+        if (!list) return;
+        state.setThreadUi(list.id, {
+          queueOpen: true,
+          queueFilter: `course:${course.ref}`,
+          current: null,
+          panel: null,
+          selected: [],
+        });
+        state.focusChange(list.id, null);
+        toThread(list.id);
+      },
       startGrading: (assignment: Assignment) => {
         const state = store();
         const thread = gradingThread(assignment);

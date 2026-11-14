@@ -26,7 +26,9 @@ const submissionOf = (rig: StoreRig, student: string): LmsRef<"submission"> => {
 };
 
 const draft = async (rig: StoreRig, student: string): Promise<ChangeId> => {
-  const id = await rig.clock.run(rig.state().openSubmission(QUEUE, submissionOf(rig, student)));
+  const id = await rig.clock.run(
+    rig.state().openSubmission(QUEUE, submissionOf(rig, student), { fill: "draft" }),
+  );
   if (!id) throw new Error(`No draft for ${student}.`);
   return id;
 };
@@ -163,7 +165,9 @@ describe("a grade sent for work on an assignment not yet due", () => {
         candidate.assignment.shortTitle === "Speech 3 Outline",
     );
     if (!row) throw new Error("No row for Emil.");
-    const id = await rig.clock.run(rig.state().openSubmission(QUEUE, row.submission.ref));
+    const id = await rig.clock.run(
+      rig.state().openSubmission(QUEUE, row.submission.ref, { fill: "draft" }),
+    );
     const record = id && rig.state().changes[id];
     if (!id || !record) throw new Error("No draft.");
     rig.state().dispatchUser(id, {

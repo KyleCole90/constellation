@@ -305,7 +305,9 @@ describe("an AI-drafted grade, end to end", () => {
     const ref = rig.server.findSubmission("Maya Ortiz", "Essay 2");
     if (!ref) throw new Error("no submission");
 
-    const id: ChangeId | null = await rig.clock.run(rig.state().openSubmission(QUEUE, ref));
+    const id: ChangeId | null = await rig.clock.run(
+      rig.state().openSubmission(QUEUE, ref, { fill: "draft" }),
+    );
     if (!id) throw new Error("Nothing was drafted.");
 
     expect(api.sent[0]?.body["messages"]).toEqual([
@@ -348,7 +350,7 @@ describe("offline", () => {
     await rig.connectAll();
     const ref = rig.server.findSubmission("Maya Ortiz", "Essay 2");
     if (!ref) throw new Error("no submission");
-    await rig.clock.run(rig.state().openSubmission(QUEUE, ref));
+    await rig.clock.run(rig.state().openSubmission(QUEUE, ref, { fill: "draft" }));
     expect(asked).toEqual([]);
     expect(JSON.stringify(rig.state().threads[QUEUE]?.messages)).toContain("You're offline");
     expect(rig.state().threads[QUEUE]?.spend).toBeUndefined();
