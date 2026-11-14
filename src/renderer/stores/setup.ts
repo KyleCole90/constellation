@@ -18,6 +18,7 @@ import type {
   CopySource,
   CourseContent,
   Migration,
+  PackageTerm,
   SamplePackage,
   SourceCourse,
 } from "~/shared/domain/content";
@@ -84,7 +85,11 @@ export interface SetupActions {
   restoreSetup(cancelled: CancelledSetup): string | null;
   loadSetupOptions(school: SchoolId): Promise<void>;
   chooseSource(course: CourseRef, source: CopySource | null): string | null;
-  chooseCartridgeFile(course: CourseRef, file: { name: string; size: number }): string | null;
+  /** `hint` is what main read from the package itself. A sample package's listed term, which names the term too, wins over it. */
+  chooseCartridgeFile(
+    course: CourseRef,
+    file: { name: string; size: number; hint?: PackageTerm | null },
+  ): string | null;
   /** True where main's own file picker chooses the package, so the page shows a button rather than a file input. */
   picksPackage(school: SchoolId): boolean;
   /** Opens main's file picker and chooses the package it answers. Null when chosen or cancelled, else the refusal. */
@@ -646,7 +651,7 @@ export const createSetupActions = (host: SetupHost) => {
         kind: "cartridge",
         name: file.name,
         kb: Math.ceil(file.size / 1024),
-        hint: known?.hint ?? null,
+        hint: known?.hint ?? file.hint ?? null,
       });
     },
 
@@ -662,6 +667,7 @@ export const createSetupActions = (host: SetupHost) => {
         ? actions.chooseCartridgeFile(course, {
             name: picked.value.name,
             size: picked.value.kb * 1024,
+            hint: picked.value.hint,
           })
         : null;
     },

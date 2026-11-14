@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
@@ -48,6 +49,11 @@ const DEV_ORIGIN = app.isPackaged
   : (DEV_URL ?? process.env.CONSTELLATION_VERIFY_ORIGIN);
 /** Set by `npm run verify`: only the fake LMS's schools and the rules agent, so a run never reaches Canvas or Anthropic. */
 const FAKE_ONLY = !app.isPackaged && process.env.CONSTELLATION_LMS === "fake";
+/**
+ * Set by verify, and by a walker driving the app over CDP: a file holding the path "Choose a .imscc file" answers in
+ * place of the native dialog, which CDP can't reach. An empty or missing file is a cancel. A packaged app never reads it.
+ */
+const PICKED_PACKAGE_FILE = app.isPackaged ? undefined : process.env.CONSTELLATION_PICKED_PACKAGE;
 /** Only the unpackaged app takes CDP. A packaged app quits before it opens a window (`npm run smoke:packaged`). */
 /**
  * Baked in by `CONSTELLATION_UPDATES=on npm run build`, which only the release workflow runs. Every other build bakes
@@ -133,6 +139,8 @@ const start = async () => {
     pressedAt: () => pressedAt,
     // Main reads the file itself, so the renderer never names a path.
     choosePackage: async () => {
+      if (PICKED_PACKAGE_FILE)
+        return (await readFile(PICKED_PACKAGE_FILE, "utf8").catch(() => "")).trim() || null;
       const { canceled, filePaths } = await dialog.showOpenDialog(window, {
         title: "Choose a course export",
         properties: ["openFile"],

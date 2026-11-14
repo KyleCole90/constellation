@@ -98,7 +98,7 @@ runTermSetupContract("Canvas over HTTP", httpTermHarness(false));
 runTermSetupContract("Canvas over HTTP, term dates hidden", httpTermHarness(true));
 
 describe("Canvas term setup reads", () => {
-  it("names the shell and its source as Canvas does, with the dates a shift needs", async () => {
+  it("names the shell and its source as Canvas does, with the dates and meeting days a shift needs", async () => {
     const { shell, source } = await shellAndSource(canvasOver(new CanvasTermHttp()));
     expect(shell).toMatchObject({
       code: "ENG-101",
@@ -113,7 +113,8 @@ describe("Canvas term setup reads", () => {
       ref: `${TERM_HOST}:course:${SOURCE_ID}`,
       startAt: "2026-08-24",
       endAt: "2026-12-11",
-      meetingDays: [],
+      // Essay 1 is due on a Thursday, so the class reads as meeting Thursdays until the teacher says otherwise.
+      meetingDays: [4],
       dated: [{ title: "Essay 1", dueAt: "2026-09-10T23:59:00.000Z" }],
     });
   });
@@ -521,7 +522,7 @@ describe("main's .imscc picker", () => {
     return path;
   };
 
-  it("hands the renderer a name and size only, and uploads main's own file", async () => {
+  it("hands the renderer a name, size and the package's own term, and uploads main's own file", async () => {
     const path = onDisk(PACKAGE, PACKAGE_BYTES);
     const { http, lms, provider } = setUp(path);
     await lms.vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TERM_TOKEN) });
@@ -529,7 +530,11 @@ describe("main's .imscc picker", () => {
       setupOf(provider).pickPackage?.() ?? Promise.reject(new Error("no picker")),
     );
     if (!picked) throw new Error("the picker chose nothing");
-    expect(picked).toEqual({ name: PACKAGE, kb: Math.ceil(PACKAGE_BYTES.byteLength / 1024) });
+    expect(picked).toEqual({
+      name: PACKAGE,
+      kb: Math.ceil(PACKAGE_BYTES.byteLength / 1024),
+      hint: null,
+    });
     expect(JSON.stringify(picked)).not.toContain(path);
 
     const { shell, content } = await importOf(provider);
@@ -553,9 +558,30 @@ describe("main's .imscc picker", () => {
     expect(await setupOf(cancelled.provider).pickPackage?.()).toEqual({ ok: true, value: null });
   });
 
-  it("a demo school has no picker: the page's file input names its package", () => {
-    const lms = bridgedLms();
+  it("reads the old term from the package's course settings and due dates", async () => {
+    const fixture = (name: string) =>
+      onDisk(name, readFileSync(new URL(`../fixtures/imscc/${name}`, import.meta.url)));
+    const pick = (path: string) =>
+      setupOf(setUp(path).provider).pickPackage?.() ?? Promise.reject(new Error("no picker"));
+    expect(await unwrap(pick(fixture("comm110-lakeshore-fall2026-export.imscc")))).toMatchObject({
+      hint: { name: "", start: "2026-08-24", end: "2026-12-11", days: [2, 4] },
+    });
+    // A real export often leaves the end blank; the teacher types only what's missing.
+    expect(await unwrap(pick(fixture("damaged-export.imscc")))).toMatchObject({
+      hint: { start: "2026-01-20", end: "", days: [] },
+    });
+    expect(await unwrap(pick(onDisk("not-a-zip.imscc", new Uint8Array([1, 2, 3]))))).toMatchObject({
+      hint: null,
+    });
+  });
+
+  it("a demo school picks through main's picker too, so the desktop app has one import path", async () => {
+    const path = onDisk(PACKAGE, PACKAGE_BYTES);
+    const lms = bridgedLms({ choosePackage: async () => path });
     for (const school of FAKE_SCHOOLS)
-      expect(lms.provider(school.id).termSetup?.pickPackage).toBeUndefined();
+      expect(await lms.provider(school.id).termSetup?.pickPackage?.()).toMatchObject({
+        ok: true,
+        value: { name: PACKAGE },
+      });
   });
 });

@@ -39,7 +39,7 @@ import type {
 } from "~/shared/domain/lms";
 import { longDate } from "~/shared/domain/preview";
 import { applySplice } from "~/shared/domain/splice";
-import { dateOfTime, type Weekday } from "~/shared/domain/term";
+import { dateOfTime, meetingDaysOf, type Weekday } from "~/shared/domain/term";
 import { revealSecret, type Credential, type FieldOutcomes } from "~/shared/providers/provider";
 
 import {
@@ -815,26 +815,27 @@ export class FakeCanvasServer implements FaultLab {
       .filter((source) => source.school === school)
       .map((source): SourceCourse => {
         const ref = refs.course(school, source.canvasId);
-        const items = this.#state.term.content[ref]?.items ?? [];
+        const dated = (this.#state.term.content[ref]?.items ?? []).flatMap((item) =>
+          item.dueAt === null
+            ? []
+            : [
+                {
+                  ref: refs.item(school, source.canvasId, item.type, item.id),
+                  title: item.title,
+                  dueAt: item.dueAt,
+                },
+              ],
+        );
         return {
           ref,
           code: source.code,
           title: source.title,
           termName: source.termName,
           ...this.#dates(source),
-          meetingDays: [...source.days],
+          // As real Canvas: it keeps no meeting pattern, so the days come from the due dates.
+          meetingDays: meetingDaysOf(dated.map((item) => dateOfTime(item.dueAt))),
           template: source.template,
-          dated: items.flatMap((item) =>
-            item.dueAt === null
-              ? []
-              : [
-                  {
-                    ref: refs.item(school, source.canvasId, item.type, item.id),
-                    title: item.title,
-                    dueAt: item.dueAt,
-                  },
-                ],
-          ),
+          dated,
         };
       })
       .sort((a, b) => Number(b.template) - Number(a.template));

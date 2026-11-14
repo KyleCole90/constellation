@@ -376,6 +376,25 @@ describe("what a fix says", () => {
     ).toMatchObject({ item: null, fix: null });
   });
 
+  it("an unpublished placeholder page is manual, so nothing offers to publish it", () => {
+    const found = RULES["unpublished-item"](
+      course({
+        items: [
+          item({ title: "Test ", body: "<p>test</p>", published: false }),
+          item({ title: "Blank", body: "<p>&nbsp;</p>", published: false }),
+          item({ title: "Answer key", body: "<p>1. B</p>", published: false }),
+        ],
+      }),
+      CTX,
+    );
+    expect(found.map((finding) => [finding.quote, finding.fix === null])).toEqual([
+      ["Test ", true],
+      ["Blank", true],
+      ["Answer key", false],
+    ]);
+    expect(found[0]?.why).toMatch(/placeholder/);
+  });
+
   it("an unpublished module is manual", () => {
     expect(
       RULES["unpublished-item"](course({ modules: [module_({ published: false })] }), CTX)[0],

@@ -14,6 +14,7 @@ import {
   type CourseContent,
   type CourseShell,
   type Migration,
+  type PackageTerm,
   type PickedPackage,
   type SamplePackage,
   type SourceCourse,
@@ -224,6 +225,14 @@ const TermDatesSchema: v.GenericSchema<TermDates> = v.object({
   days: v.array(WeekdaySchema),
 });
 
+const DraftDateSchema = v.union([IsoDateSchema, v.literal("")]);
+const PackageTermSchema: v.GenericSchema<PackageTerm> = v.object({
+  name: text,
+  start: DraftDateSchema,
+  end: DraftDateSchema,
+  days: v.array(WeekdaySchema),
+});
+
 export const CourseShellSchema: v.GenericSchema<CourseShell> = v.object({
   ref: lmsRef<"course">(),
   school: SchoolIdSchema,
@@ -319,6 +328,7 @@ export const MigrationSchema: v.GenericSchema<Migration> = v.object({
 export const PickedPackageSchema: v.GenericSchema<PickedPackage> = v.object({
   name: text,
   kb: count,
+  hint: nullable(PackageTermSchema),
 });
 
 export const SamplePackageSchema: v.GenericSchema<SamplePackage> = v.object({
@@ -390,7 +400,7 @@ export const ChangeContentSchema: v.GenericSchema<ChangeContent> = v.variant("ki
         kind: v.literal("cartridge"),
         name: text,
         kb: count,
-        hint: nullable(TermDatesSchema),
+        hint: nullable(PackageTermSchema),
       }),
     ]),
     plan: TermPlanSchema,

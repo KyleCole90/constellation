@@ -98,6 +98,8 @@ const { ELECTRON_RUN_AS_NODE: _, ...APP_ENV } = {
   CONSTELLATION_WINDOW: "hidden",
   CONSTELLATION_LMS: "fake",
 };
+/** What main's .imscc picker answers in this launch, in place of the native dialog. */
+const pickedPackageFile = (profile) => join(profile, "picked-package.txt");
 const launch = (port, profile, origin) =>
   WEB
     ? spawn(
@@ -122,7 +124,14 @@ const launch = (port, profile, origin) =>
           "--use-mock-keychain",
           ROOT,
         ],
-        { stdio: "ignore", env: { ...APP_ENV, CONSTELLATION_VERIFY_ORIGIN: origin } },
+        {
+          stdio: "ignore",
+          env: {
+            ...APP_ENV,
+            CONSTELLATION_VERIFY_ORIGIN: origin,
+            CONSTELLATION_PICKED_PACKAGE: pickedPackageFile(profile),
+          },
+        },
       );
 
 const stop = (child) =>
@@ -374,6 +383,8 @@ const main = async () => {
           ? Promise.resolve("{}")
           : readFile(join(profile, "vault.json"), "utf8").catch(() => "{}"),
       shots: SHOTS,
+      /** Makes main's "Choose a .imscc file" pick `path` next, or cancel with null. */
+      pickPackage: (path) => writeFile(pickedPackageFile(profile), path ?? ""),
       sleep,
       consoleEntries,
       cdp: send,

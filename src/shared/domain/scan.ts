@@ -392,6 +392,20 @@ const missingStatement: ScanRule = (content) => {
     });
 };
 
+/** What a page reads as, without its markup. */
+const pageWords = (body: string): string =>
+  body
+    .replaceAll(/<[^>]*>/g, " ")
+    .replaceAll("&nbsp;", " ")
+    .replaceAll(/\s+/g, " ")
+    .trim();
+
+/** A page that says nothing, or only its own title, as a sandbox's "Test" page does. Publishing it would only show students that. */
+const isPlaceholder = (item: ContentItem): boolean => {
+  const words = pageWords(item.body).toLowerCase();
+  return item.type === "page" && (words === "" || words === item.title.trim().toLowerCase());
+};
+
 const unpublishedItem: ScanRule = (content) => [
   ...content.items
     .filter((item) => !item.published)
@@ -400,8 +414,12 @@ const unpublishedItem: ScanRule = (content) => [
         key: keyOf("unpublished-item", item.ref),
         type: "unpublished-item",
         quote: item.title,
-        why: "Students cannot see this yet.",
-        fix: setFix(item, { set: "item-published" }),
+        ...(isPlaceholder(item)
+          ? {
+              why: "This page looks like a placeholder, so publishing it would show students nothing. Delete it in the LMS, or dismiss this.",
+              fix: null,
+            }
+          : { why: "Students cannot see this yet.", fix: setFix(item, { set: "item-published" }) }),
       }),
     ),
   ...content.modules
