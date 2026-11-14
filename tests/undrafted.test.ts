@@ -194,4 +194,40 @@ describe("once the message asking for a resubmit is sent (#98)", () => {
     expect(rowOf(rig, ref)).toMatchObject({ open: true, asked: null });
     expect(toGrade(rig, ref)).toEqual(before);
   });
+
+  /** Another computer, or this one after a reinstall: nothing local, only what the LMS holds. */
+  const freshCopy = async (rig: StoreRig) => {
+    rig.store.setState({ changes: {}, undrafted: {} });
+    await rig.clock.run(rig.state().syncSchool(LCC));
+  };
+
+  it("a copy with nothing local reads the asked state from the LMS (#102)", async () => {
+    const { rig, ref } = await declined();
+    await send(rig, ref);
+    const counts = toGrade(rig, ref);
+    const asked = rowOf(rig, ref)?.asked;
+    await freshCopy(rig);
+    expect(rowOf(rig, ref)).toMatchObject({ open: false, change: null });
+    expect(rowOf(rig, ref)?.asked?.slice(0, 16)).toBe(asked?.slice(0, 16));
+    expect(toGrade(rig, ref)).toEqual(counts);
+  });
+
+  it("the message names the assignment, so the LMS can tell which work it was about", async () => {
+    const { rig, ref } = await declined();
+    const drafted = await message(rig, ref);
+    const content = drafted?.content;
+    if (content?.kind !== "message") throw new Error("no message");
+    expect(`${content.subject}\n${content.body}`).toContain("Essay 2");
+  });
+
+  it("a resubmission after the message reopens the row on a fresh copy too", async () => {
+    const { rig, ref } = await declined();
+    const before = toGrade(rig, ref);
+    await send(rig, ref);
+    rig.clock.advance(60_000);
+    rig.server.studentResubmits(ref);
+    await freshCopy(rig);
+    expect(rowOf(rig, ref)).toMatchObject({ open: true, asked: null });
+    expect(toGrade(rig, ref)).toEqual(before);
+  });
 });

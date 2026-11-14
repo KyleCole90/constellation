@@ -16,6 +16,7 @@ import { firstName } from "~/shared/domain/workName";
 import {
   selectAssignment,
   selectSubmission,
+  selectAskedAt,
   selectMessageSince,
   selectUndrafted,
   selectThreadChanges,
@@ -399,7 +400,10 @@ function OpenSubmission({
   const ask = useChange(useWorkspace((state) => selectMessageSince(state, submission)?.id ?? null));
   const askSent = ask?.summary.sentAt != null;
   const asking = ask !== null && !askSent;
-  const askable = ai && undrafted !== null && ask === null;
+  // Another computer, or the LMS itself, sent the message, so this copy has no change for it.
+  const askedElsewhere =
+    useWorkspace((state) => selectAskedAt(state, submission)) !== null && ask === null;
+  const askable = ai && undrafted !== null && ask === null && !askedElsewhere;
   const open = (fill: "draft" | "by-hand") => {
     if (working) return;
     setAsked(fill === "draft");
@@ -440,6 +444,12 @@ function OpenSubmission({
           Your message to {submission.studentName} was sent.
         </p>
       )}
+      {askedElsewhere && (
+        <p data-testid="message-sent" className="text-meta text-secondary-label">
+          You asked {firstName(submission.studentName)} to resubmit. This waits on them until they
+          turn it in again.
+        </p>
+      )}
       <div className="flex flex-wrap gap-btn-gap">
         {asking && (
           <Button
@@ -465,7 +475,7 @@ function OpenSubmission({
         )}
         {ai && !undrafted && (
           <Button
-            variant="default"
+            variant={askedElsewhere ? "outline" : "default"}
             disabled={blocked !== null}
             aria-disabled={drafting}
             data-lands="[data-card-primary]"
@@ -476,7 +486,11 @@ function OpenSubmission({
         )}
         {!drafting && (
           <Button
-            variant={asking || askable || (ai && !blocked && !undrafted) ? "outline" : "default"}
+            variant={
+              asking || askable || askedElsewhere || (ai && !blocked && !undrafted)
+                ? "outline"
+                : "default"
+            }
             data-lands="[data-typed-score], [data-card-primary]"
             onClick={() => open("by-hand")}
           >

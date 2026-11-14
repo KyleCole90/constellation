@@ -431,10 +431,12 @@ describe("Canvas reads", () => {
     });
   });
 
-  it("reads course conversations oldest message first, without marking them read", async () => {
+  it("reads course conversations oldest message first, sent ones too, without marking them read", async () => {
     const canvas = canvasWith({
       ...SELF,
       "/api/v1/conversations": ok("conversations.json"),
+      "/api/v1/conversations?scope=sent": ok("conversations-sent.json"),
+      "/api/v1/conversations/7103?auto_mark_as_read=false": ok("conversation-7103.json"),
       "/api/v1/conversations/7101?auto_mark_as_read=false": ok("conversation-7101.json"),
       "/api/v1/conversations/7102?auto_mark_as_read=false": ok("conversation-7102.json"),
     });
@@ -448,6 +450,7 @@ describe("Canvas reads", () => {
           course: COURSE,
           subject: "Question about Essay 1",
           from: "Avery Sample",
+          students: [`${HOST}:student:6401`],
           unread: true,
           messages: [
             {
@@ -463,6 +466,24 @@ describe("Canvas reads", () => {
               author: "Avery Sample",
               text: "Can I write about a recent event?",
               at: "2027-01-20T16:00:00.000Z",
+            },
+          ],
+        },
+        {
+          ref: `${HOST}:conversation:7103`,
+          school: HOST,
+          course: COURSE,
+          subject: "Your Essay 1 link isn't working",
+          from: "Avery Sample",
+          students: [`${HOST}:student:6401`],
+          unread: false,
+          messages: [
+            {
+              id: "802",
+              mine: true,
+              author: "Sample Instructor",
+              text: "Hi Avery, the link you turned in for Essay 1 opens an error page. Could you resubmit it?",
+              at: "2027-01-21T10:00:00.000Z",
             },
           ],
         },

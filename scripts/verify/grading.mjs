@@ -2489,8 +2489,8 @@ const cantSee = async (t) => {
     onward,
   );
   t.assert(
-    !/review it to approve and send/i.test(await t.text(CHAT)),
-    "resubmit: under the Sent card, Claude's line no longer tells the teacher to approve and send it (#81)",
+    !/approve and send|edit anything|before you send/i.test(await t.text(CHAT)),
+    "resubmit: under the Sent card, no line of Claude's still tells the teacher to edit, approve or send it (#81)",
     (await t.text(CHAT)).slice(-400),
   );
   await t.shot("cant-see-message-sent");
@@ -2556,6 +2556,39 @@ const cantSee = async (t) => {
     `document.querySelector('[data-testid="message-sent"]')`,
     "second link: the first submission still says its message was sent, never a draft (#91)",
   );
+
+  await t.eval(
+    `(() => { const saved = JSON.parse(localStorage.getItem("lms-app.v1")); saved.state.changes = {}; saved.state.undrafted = {}; localStorage.setItem("lms-app.v1", JSON.stringify(saved)); })()`,
+  );
+  await t.reload();
+  await openRow("fresh copy");
+  const fresh = await t.text(`${LIST} [data-row="${row}"]`);
+  t.assert(
+    fresh.includes("Asked to resubmit") && !fresh.includes("Not started"),
+    "fresh copy: with nothing saved locally, the row still says the student was asked, from the LMS (#102)",
+    fresh,
+  );
+  t.assert(
+    toGradeBefore !== null && (await toGradeIn()) === toGradeBefore - 1,
+    "fresh copy: To grade leaves out the asked work, as on the copy that sent the message (#102)",
+    `${toGradeBefore} -> ${await toGradeIn()}`,
+  );
+  await t.shot("cant-see-fresh-copy-row");
+  await openOn(row, student, "fresh copy, opened");
+  await t.waitFor(
+    `document.querySelector('[data-testid="message-sent"]')?.innerText.includes("resubmit")`,
+    "fresh copy, opened: the submission says the student was asked to resubmit (#102)",
+  );
+  const freshShown = await t.eval(
+    `[...document.querySelectorAll('${OPEN} button')].map((b) => ({ label: b.innerText.trim(), leads: b.classList.contains("bg-primary") }))`,
+  );
+  t.assert(
+    !freshShown.some((b) => b.label.startsWith("Draft a message")) &&
+      !freshShown.some((b) => b.leads),
+    "fresh copy, opened: no paid button leads, and nothing offers a second message (#102)",
+    JSON.stringify(freshShown),
+  );
+  await t.shot("cant-see-fresh-copy-open");
 };
 
 /** A preference typed in chat is the thread's guidance: it shows above the composer, survives a reload, reaches the next Draft press, and clears (#97). */
