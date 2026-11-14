@@ -37,6 +37,7 @@ const WHICH_ASSIGNMENT = "Which assignment? These have the most to grade.";
 const WHICH_MISSING = "Which assignment? These have the most missing work.";
 const MISSING_ASK =
   /\b(?:who|which\s+students?|anyone|anybody)\b.*(?:\bmissing\b|(?:\bnot|n['’]?t|\bnever|\byet\s+to)\s+(?:yet\s+)?(?:submit|turn|hand))/i;
+const BEHIND_ASK = /\bbehind\b|\bstruggling\b|\bat[\s-]risk\b|\bfailing\b/i;
 const DESTRUCTIVE_ASK = /\b(delete|remove|erase|wipe)\b/i;
 const CANT_DELETE =
   "I can't delete anything in your courses. Every change I make is a draft you approve before students see it.";
@@ -551,6 +552,42 @@ function* gradingSummary({ scope }: Ask): Generator<AgentEffect, void> {
   ]);
 }
 
+/** Behind is what the roster calls Watch or At risk, or any missing work, from the same gradebook totals. */
+function* behind(ask: Ask): Generator<AgentEffect, void> {
+  const { scope, northStar } = ask;
+  const named = specificCourses(ask);
+  const books = northStar.grades.filter(
+    (book) => named.length === 0 || named.some((course) => course.ref === book.course),
+  );
+  const where = named.length > 0 ? ` in ${boldCodes(named)}` : "";
+  yield work("Checked the gradebook");
+  const rows = books
+    .flatMap((book) =>
+      book.students
+        .filter((s) => s.standing === "Watch" || s.standing === "At risk" || s.missing > 0)
+        .map((student) => ({ course: book.course, ...student })),
+    )
+    .sort((a, b) => b.missing - a.missing || (a.percent ?? 101) - (b.percent ?? 101));
+  if (rows.length === 0) {
+    yield say(
+      `No one is behind${where}. Every graded student is at 80% or above, with nothing missing.`,
+    );
+    return;
+  }
+  yield say(
+    `${rows.length} ${plural(rows.length, "student is", "students are")} behind${where}: under 80% or missing work.`,
+    rows.map((row): AnswerLine => ({
+      source: { kind: "course", ref: row.course },
+      title: row.name,
+      detail: [
+        codeOf(scope, row.course),
+        row.percent === null ? "no grades yet" : `${row.percent}%`,
+        ...(row.missing > 0 ? [`${row.missing} missing`] : []),
+      ].join(", "),
+    })),
+  );
+}
+
 interface Found {
   isAssignment: boolean;
   words: ReadonlySet<string>;
@@ -871,6 +908,7 @@ const INTENTS: readonly Intent[] = [
       (lastAgentText(ask) === WHICH_MISSING && titledAssignments(ask).length > 0),
     run: missingWork,
   },
+  { matches: ({ request }) => BEHIND_ASK.test(request), run: behind },
   {
     matches: ({ request }) => /\b(due|deadlines?|coming\s+up|upcoming)\b/i.test(request),
     run: whatsDue,

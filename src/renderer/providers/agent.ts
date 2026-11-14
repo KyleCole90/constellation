@@ -24,7 +24,8 @@ const withChange = (raw: unknown, scope: AgentScope): unknown => {
 
 /**
  * North Star's scope holds every record of the term, which the parser and the rules agent's search still use. Claude
- * reads only the work that waits on the teacher, without bodies; reading or grading one is a handoff to a course thread.
+ * reads only the work that waits on the teacher, without bodies, and whether each assignment has a rubric, not its
+ * criteria; reading or grading one is a handoff to a course thread. Grades come as the gradebook's totals instead.
  */
 const forClaude = (scope: AgentScope): unknown =>
   scope.northStar
@@ -33,6 +34,7 @@ const forClaude = (scope: AgentScope): unknown =>
         submissions: scope.submissions
           .filter((s) => s.workflow === "submitted" || s.workflow === "missing")
           .map(({ body: _body, ...rest }) => rest),
+        assignments: scope.assignments.map((a) => ({ ...a, rubric: a.rubric !== null })),
       }
     : scope;
 

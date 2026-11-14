@@ -1845,6 +1845,29 @@ const missingWork = async (t) => {
   await shot(t, "missing-work-row");
 };
 
+// Issue #57: the chat said it couldn't see grades while the roster showed them.
+const whoIsBehind = async (t) => {
+  await backHome(t);
+  await t.click(COMPOSER);
+  await askFromHome(t, "Who's falling behind in ENG 101?");
+  const answer = await t.text('[data-testid="chat"]');
+  t.assert(
+    answer.includes("7 students are behind in ENG 101") && !/can.t see grades/i.test(answer),
+    "the chat answers who is behind from the grades",
+    answer,
+  );
+  const luis = `[...document.querySelectorAll('[data-testid="sources"] [data-source="course"]')].find((link) => link.innerText.includes("Luis Cardenas"))`;
+  t.assert(
+    (await t.eval(`${luis}?.innerText ?? ""`)).includes("69%"),
+    "the answer gives the student's gradebook total",
+    await t.text('[data-testid="sources"]'),
+  );
+  await shot(t, "who-is-behind");
+  await t.click("Luis Cardenas", { within: '[data-testid="sources"]' });
+  const row = `[...document.querySelectorAll("[data-roster]")].find((r) => r.innerText.includes("Luis Cardenas"))?.innerText ?? ""`;
+  await t.waitFor(`(${row}).includes("69%")`, "the course's roster shows the same total");
+};
+
 const COMPOSER_VALUE = `document.querySelector(${JSON.stringify(COMPOSER)})?.value`;
 
 const composerTextSurvivesLeaving = async (t) => {
@@ -2276,6 +2299,7 @@ export const run = async (t) => {
   await focusStaysHome(t);
   await typingKeepsFocus(t);
   await missingWork(t);
+  await whoIsBehind(t);
   await composerTextSurvivesLeaving(t);
   await settlesChats(t);
   await railReachesChats(t);
