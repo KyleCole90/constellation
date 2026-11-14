@@ -216,6 +216,19 @@ describe("main's Anthropic agent", () => {
     );
   });
 
+  it("hands Claude the thread's guidance, and tells it only guidance reaches a draft (#97)", async () => {
+    const api = transport(() => json(200, message([])));
+    await anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch })({
+      ...INPUT,
+      guidance: "Score more strictly.",
+    });
+    const [turn] = (api.sent[0]?.body["messages"] ?? []) as [{ content: string }];
+    expect(turn.content).toContain("<guidance>\nScore more strictly.\n</guidance>");
+    expect(api.sent[0]?.body["system"]).toContain(
+      'never say a preference will hold unless you record it with "guide"',
+    );
+  });
+
   it("forwards only its own tools, and a tool's input can't rename the effect", async () => {
     const api = transport(() =>
       json(

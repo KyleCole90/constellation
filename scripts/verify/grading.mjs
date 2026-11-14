@@ -2390,6 +2390,11 @@ const cantSee = async (t) => {
       15_000,
     );
     await t.eval(`window.__setAgentStandIn(null)`);
+    t.assert(
+      !(await t.has(`${CHAT} [data-testid="replies"]`)),
+      `${label}: none of Claude's chips sit over the app's resubmit button, offering the same thing another way (#81)`,
+      await t.text(CHAT),
+    );
   };
   const offered = async (label, name) => {
     const shown = await buttons();
@@ -2475,6 +2480,11 @@ const cantSee = async (t) => {
     `resubmit: the way on never names only ${student}, so it can't read as pointing back at the message just sent (#81)`,
     onward,
   );
+  t.assert(
+    !/review it to approve and send/i.test(await t.text(CHAT)),
+    "resubmit: under the Sent card, Claude's line no longer tells the teacher to approve and send it (#81)",
+    (await t.text(CHAT)).slice(-400),
+  );
   await t.shot("cant-see-message-sent");
 
   await openOn(row, student, "resubmit, sent");
@@ -2526,6 +2536,63 @@ const cantSee = async (t) => {
   );
 };
 
+/** A preference typed in chat is the thread's guidance: it shows above the composer, survives a reload, reaches the next Draft press, and clears (#97). */
+const preference = async (t) => {
+  const STRICTER = "Be a bit stricter with grades from now on";
+  const GUIDANCE = '[data-testid="thread-guidance"]';
+  await t.goto("/threads/t-queue");
+  await t.waitFor(`document.querySelector(${JSON.stringify(QUEUE)})`, "preference: the list loads");
+  await expandQueue(t);
+  const row = await t.eval(
+    `[...document.querySelectorAll('${LIST} [data-row]')].filter((row) => row.innerText.includes("Not started")).at(-1)?.dataset.row`,
+  );
+  t.assert(row, "preference: a submission nobody has started");
+  const student = await t.eval(
+    `document.querySelector('[data-row="${row}"] button span[title]').title`,
+  );
+  await t.click(`[data-row="${row}"] button`);
+  await opensUndrafted(t, student, "preference");
+  await ask(t, STRICTER);
+  t.assert(
+    (await t.text(GUIDANCE)).includes(STRICTER),
+    "preference: the thread shows the guidance every later draft follows, above the composer",
+    await t.text("main"),
+  );
+  await t.shot("guidance-set");
+  await t.reload();
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(GUIDANCE)})?.innerText.includes(${JSON.stringify(STRICTER)})`,
+    "preference: the guidance survives a reload",
+  );
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(student)})`,
+    "preference: back on the student after the reload",
+  );
+  await draftWithClaude(t);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})`,
+    "preference: the draft appears",
+  );
+  await settled(t, "preference: agent finished");
+  t.assert(
+    (await t.text(CHAT)).includes(`Followed this thread's guidance: ${STRICTER}`),
+    "preference: the Draft press heard the guidance and says so under the draft (#97)",
+    (await t.text(CHAT)).slice(-400),
+  );
+  await t.shot("guidance-draft");
+  await t.click(`${GUIDANCE} [data-clear-guidance]`);
+  await t.waitFor(
+    `!document.querySelector(${JSON.stringify(GUIDANCE)})`,
+    "preference: Clear removes it",
+  );
+  t.assert(
+    (await t.eval(
+      `JSON.parse(localStorage.getItem("lms-app.v1")).state.threads["t-queue"].guidance ?? null`,
+    )) === null,
+    "preference: cleared for good, so later drafts hear none",
+  );
+};
+
 export const run = async (t) => {
   await setup(t);
   await pinnedQueue(t);
@@ -2552,4 +2619,5 @@ export const run = async (t) => {
   await failedDraft(t);
   await submissionTypes(t);
   await cantSee(t);
+  await preference(t);
 };

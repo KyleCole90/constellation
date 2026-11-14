@@ -56,6 +56,7 @@ export const createBridgeAgent = (bridge: Bridge, online = isOnline): Agent => (
       answer = await bridge.invoke("agent.run", {
         request,
         history: thread.history.map((line) => ({ ...line })),
+        ...(thread.guidance ? { guidance: thread.guidance } : {}),
         scope: plain,
         files: files.map((file) => ({ ...file })),
       });

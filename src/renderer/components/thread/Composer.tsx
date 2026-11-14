@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
 import type { LmsRef } from "~/shared/domain/ids";
@@ -89,6 +89,26 @@ export function Composer({
               {example}
             </button>
           ))}
+        </div>
+      )}
+      {thread.guidance && (
+        <div
+          data-testid="thread-guidance"
+          className="mb-2 flex items-center gap-2 text-meta text-secondary-label"
+        >
+          <SlidersHorizontal className="size-3.5 flex-none text-muted-foreground" />
+          <span className="min-w-0 flex-1">
+            <span className="font-medium text-foreground">Every draft here: </span>
+            {thread.guidance}
+          </span>
+          <Button
+            variant="ghost-muted"
+            size="meta"
+            data-clear-guidance
+            onClick={() => workspaceStore().getState().clearGuidance(thread.id)}
+          >
+            Clear
+          </Button>
         </div>
       )}
       <div className="composer-shell rounded-[20px] border border-input bg-card py-2 pr-2 pl-4 focus-within:border-ring/60">

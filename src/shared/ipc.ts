@@ -75,6 +75,7 @@ const ByCourse = v.strictObject({ school: SchoolSchema, course: lmsRef<"course">
 const AgentRunInput = v.strictObject({
   request: v.pipe(v.string(), v.minLength(1)),
   history: v.array(v.strictObject({ role: v.picklist(["user", "agent"]), text: v.string() })),
+  guidance: v.optional(v.string()),
   scope: v.unknown(),
   files: v.array(
     v.strictObject({ name: v.string(), mediaType: v.string(), data: v.instance(Uint8Array) }),

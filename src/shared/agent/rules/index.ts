@@ -395,6 +395,8 @@ const findCriterion = (rubric: readonly RubricScore[], phrase: string): RubricSc
 };
 
 const say = (text: string): AgentEffect => ({ type: "say", text });
+/** How a teacher states a preference for the drafts still to come, as opposed to a change to the one open. */
+const STANDING_PREFERENCE = /\b(from now on|stricter|harsher|tougher|gentler|more lenient)\b/i;
 const decline = (text: string): AgentEffect => ({ type: "decline", text });
 const edit = (change: ChangeRecord, patch: ChangePatch, why: string): Edit => ({
   type: "edit",
@@ -630,6 +632,13 @@ export const createRuleAgent = (): Agent => ({
     }
     if (asksToAct(request)) {
       yield decline(OUT_OF_SCOPE);
+      return;
+    }
+    if (!scope.scan && STANDING_PREFERENCE.test(request)) {
+      yield { type: "guide", text: request.trim() };
+      yield say(
+        "I'll follow that in every draft in this thread. It shows above the message box, where you can clear it.",
+      );
       return;
     }
     const change = scope.changes.find((c) => c.id === scope.focus);
