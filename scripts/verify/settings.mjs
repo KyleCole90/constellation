@@ -158,7 +158,7 @@ const assertSafeField = async (t, selector, tag) => {
   t.assert(toggles === 0, `${tag}: no reveal toggle`, String(toggles));
 };
 
-const assertRejected = async (t, selector, scope, reason, typed, tag, timeout) => {
+const assertRejected = async (t, selector, scope, reason, typed, tag, { timeout, kept } = {}) => {
   await t.waitFor(
     `document.querySelector(${JSON.stringify(`${scope} [role="alert"]`)})?.innerText.includes(${JSON.stringify(reason)})`,
     `${tag}: says "${reason}"`,
@@ -167,12 +167,14 @@ const assertRejected = async (t, selector, scope, reason, typed, tag, timeout) =
   const words = await t.text(`${scope} [role="alert"]`);
   t.assert(!words.includes(typed), `${tag}: the message does not echo the input`, words);
   const field = await fieldState(t, selector);
-  t.assert(field?.value === "", `${tag}: the field is empty`);
+  if (kept) t.assert(field?.value === typed, `${tag}: the token is still filled in`);
+  else t.assert(field?.value === "", `${tag}: the field is empty`);
   t.assert(field?.focused === true, `${tag}: the field has focus`);
 };
 
 const enter = async (t, selector, secret) => {
   await t.click(selector);
+  await t.eval(`document.querySelector(${JSON.stringify(selector)}).select()`);
   await t.type(secret);
 };
 
@@ -693,7 +695,7 @@ const onboarding = async (t, shot) => {
     "Couldn't find a school",
     SECRETS.unreachable,
     "an unknown address",
-    20_000,
+    { timeout: 20_000, kept: true },
   );
   t.assert(
     (await t.eval(rowStatus(NOWHERE))) !== "connected" &&
@@ -750,13 +752,30 @@ const onboarding = async (t, shot) => {
       if (rows.length > 0 && window.__courseReads.at(-1) !== read) window.__courseReads.push(read);
     }).observe(document.body, { subtree: true, childList: true, characterData: true });
   })()`);
-  await t.eval(`window.__faultLab.setNoise({ latencyMs: [900, 900] })`);
+  await t.eval(`window.__faultLab.setNoise({ rate5xx: 1 })`);
   await enter(t, ROW_FIELD(LCC), SECRETS.lcc);
+  await t.click(`${ROW(LCC)} button[type="submit"]`);
+  await assertRejected(
+    t,
+    ROW_FIELD(LCC),
+    ROW(LCC),
+    "Canvas is down for maintenance right now. Try again in a few minutes. Your token is still filled in.",
+    SECRETS.lcc,
+    "setup: Canvas down for maintenance",
+    { timeout: 30_000, kept: true },
+  );
+  t.assert(
+    (await t.eval(rowStatus(LCC))) !== "connected" && (await t.eval(storedHosts)).length === 0,
+    "setup: an outage saves nothing",
+  );
+  await shot("setup-maintenance");
+  await t.eval(`window.__faultLab.setNoise({ rate5xx: 0, latencyMs: [900, 900] })`);
   await t.click(`${ROW(LCC)} button[type="submit"]`);
   const fieldAfter = await fieldState(t, ROW_FIELD(LCC));
   t.assert(
-    !fieldAfter || fieldAfter.value === "",
-    "the field is empty straight after submit",
+    fieldAfter?.value === SECRETS.lcc &&
+      (await t.eval(`document.querySelector(${JSON.stringify(ROW_FIELD(LCC))}).readOnly`)),
+    "setup: Connect again retries the kept token, read-only while it checks",
     JSON.stringify(fieldAfter?.value?.length),
   );
   await t.waitFor(
@@ -1086,10 +1105,10 @@ const connections = async (t, shot) => {
     t,
     DIALOG_FIELD,
     DIALOG,
-    "could not be reached",
+    "down for maintenance",
     SECRETS.unreachable,
-    "a school that can't be reached",
-    30_000,
+    "a school down for maintenance",
+    { timeout: 30_000, kept: true },
   );
   t.assert(
     (await t.text(`${DIALOG} [role="alert"]`)).includes("current token is still in use"),
