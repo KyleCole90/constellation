@@ -11,6 +11,7 @@ import { Button } from "../ui/button";
 import { Kbd } from "../ui/kbd";
 import { DiscardButton, SendButton, UndoApprovalButton } from "./DraftCard";
 import { useThreadActions } from "./context";
+import { nextLabel } from "./queue.logic";
 import { RecoveryBanner } from "./RecoveryBanner";
 import { SendPreview } from "./SendPreview";
 import { useEditDraft, type ChangeView } from "./useChange";
@@ -61,6 +62,7 @@ function Footer({ view }: { view: ChangeView }) {
   const vendor = useWorkspace((state) => state.vendorLabelFor(record.school) ?? "the LMS");
   const host = useWorkspace((state) => state.schools.find((s) => s.id === record.school)?.host);
   const online = useWorkspace((state) => state.online);
+  const drafts = useWorkspace((state) => state.aiOn() && state.online);
   const sending = busy.has(record.id) || summary.tone === "working";
   const base =
     "flex flex-none flex-wrap items-center justify-end gap-x-btn-gap gap-y-2 border-t border-border bg-card px-card py-3";
@@ -77,7 +79,7 @@ function Footer({ view }: { view: ChangeView }) {
         </p>
         {next && (
           <Button variant="default" size="lg" className="min-w-0" onClick={() => openRow(next)}>
-            <span className="truncate">Next: {next.title}</span>
+            <span className="truncate">{nextLabel(next, drafts)}</span>
             <Kbd variant="on-primary">⌘↵</Kbd>
           </Button>
         )}

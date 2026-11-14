@@ -1323,7 +1323,7 @@ const announcements = async (t) => {
     !(await t.has(`${CARD} [data-card-line]`)),
     "an untitled announcement's heading already says its kind and course",
   );
-  await t.click("See what's left", { within: ACTIONS });
+  await t.click("Preview", { within: ACTIONS });
   t.assert(
     (await t.text('[data-testid="still-missing"]')).includes("Title"),
     "and an empty title can't be approved",
@@ -1842,11 +1842,23 @@ const undatedWork = async (t) => {
     JSON.stringify({ listed, waiting }),
   );
   await shot(t, "overview-undated");
+  const tile = Number((await t.text('[data-stat="to-grade"]')).match(/\d+/)?.[0]);
+  const shares = listed.reduce((sum, entry) => sum + Number(entry.split("|")[1]), 0);
+  t.assert(
+    waiting.length > 1 && shares === tile,
+    "undated: the work to grade spans assignments, and Needs you's shares add up to the To grade count",
+    JSON.stringify({ tile, shares, listed }),
+  );
   await t.click('[data-stat="to-grade"]');
   await t.waitFor(
-    `location.pathname.startsWith("/threads/") && document.querySelector('[data-testid="pinned-queue"]')`,
-    "undated: To grade opens the grading queue",
+    `document.querySelector('[data-section="needs-you"]')?.dataset.flash === "true"`,
+    "undated: To grade points at Needs you, which lists all of it, instead of one assignment's list (#48)",
   );
+  t.assert(
+    !(await path(t)).startsWith("/threads/"),
+    "undated: To grade stays on the overview rather than opening one assignment",
+  );
+  await shot(t, "overview-to-grade");
 };
 
 const palette = async (t) => {

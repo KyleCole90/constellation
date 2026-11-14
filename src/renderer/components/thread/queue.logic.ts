@@ -227,6 +227,10 @@ export const neighbor = (
 };
 
 /** The next row with work left after this one, wrapping, so Next never lands on something already sent. */
+/** Opening a row nobody has drafted starts a Claude draft, which costs a model call, so the button says so. */
+export const nextLabel = (next: WorkRow, aiDrafts: boolean): string =>
+  `${aiDrafts && next.change === null ? "Draft next" : "Next"}: ${next.title}`;
+
 export const nextOpen = (rows: readonly WorkRow[], key: string | null): WorkRow | null => {
   const index = rows.findIndex((row) => row.key === key);
   const ordered = [...rows.slice(index + 1), ...rows.slice(0, Math.max(index, 0))];

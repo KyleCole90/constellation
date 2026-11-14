@@ -12,8 +12,16 @@ describe("composerHints", () => {
   it("a graded draft's examples touch only the comment, so none offers a score the agent didn't give", () => {
     for (const rubric of [[score], null])
       expect(
-        composerHints({ kind: "grading", content: grade(rubric), canEdit: true }).examples,
+        composerHints({ kind: "grading", content: grade(rubric), canEdit: true, drafted: true })
+          .examples,
       ).toEqual(["Drop the last sentence", "Make it warmer"]);
+  });
+
+  it("a form filled in by hand offers no corrections of Claude's words (#48)", () => {
+    expect(
+      composerHints({ kind: "grading", content: grade(null), canEdit: true, drafted: false })
+        .examples,
+    ).toEqual([]);
   });
 
   it("a change that can't be edited offers no examples the agent would have to refuse", () => {
@@ -24,8 +32,12 @@ describe("composerHints", () => {
 
   it("a reply doesn't suggest rubric changes", () => {
     expect(
-      composerHints({ kind: "messages", content: { kind: "reply" } as never, canEdit: true })
-        .examples,
+      composerHints({
+        kind: "messages",
+        content: { kind: "reply" } as never,
+        canEdit: true,
+        drafted: true,
+      }).examples,
     ).toEqual(["Make it shorter", "Make it warmer"]);
   });
 
