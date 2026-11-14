@@ -1634,7 +1634,28 @@ const keyboardAndClear = async (t) => {
     "a clear queue's receipt offers the next course's work, not the one just sent, before the sync reads it back (#78)",
     await t.text(onward),
   );
+  await t.goto("/due");
+  await t.waitFor(
+    `document.querySelector('[data-testid="due-list"]')`,
+    "What's due opens mid-sync",
+  );
+  const summary = await t.text('[data-testid="due-summary"]');
+  const inLms = await t.eval(
+    `(async () => JSON.parse(await window.__faultLab.stored()).submissions.filter((s) => s.workflow === "submitted").length)()`,
+  );
+  t.assert(
+    (await t.has('[data-connection="syncing"]')) &&
+      summary.startsWith(`${inLms} submissions to grade`),
+    "What's due counts the grade just sent as graded while the sync is still reading it back (#78)",
+    `${summary} | LMS: ${inLms} to grade`,
+  );
+  await t.shot("due-while-syncing");
   await t.eval(`window.__faultLab.setNoise({ latencyMs: [120, 240] })`);
+  await t.goto("/threads/t-c110-speech2");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(onward)})`,
+    "the clear queue's receipt is back",
+  );
   for (const [width, height] of [
     [1440, 900],
     [1280, 720],
