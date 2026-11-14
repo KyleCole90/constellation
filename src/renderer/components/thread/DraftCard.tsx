@@ -19,7 +19,7 @@ import { workLine } from "~/shared/domain/workName";
 import { cn } from "~/renderer/lib/utils";
 import { selectConversation, selectCourse, selectSubmission } from "~/renderer/stores/selectors";
 import type { ThreadUi } from "~/renderer/stores/types";
-import { useWorkspace } from "~/renderer/stores/workspace";
+import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
 import { ApproveButton } from "../ApproveButton";
 import { AfterQueue } from "./AfterQueue";
@@ -597,6 +597,31 @@ export function DiscardButton({ view, size }: { view: ChangeView; size: "sm" | "
   );
 }
 
+/** A grade form opened by hand and left untouched can still go back to Claude. It spends a model call only on click. */
+function DraftInsteadButton({ record }: { record: ChangeRecord }) {
+  const { threadId } = useThreadActions();
+  const ai = useAiOn();
+  const untouched = useWorkspace((state) => state.blanks[record.id] !== undefined);
+  const working = useWorkspace((state) => state.working[threadId] ?? false);
+  if (!ai || !untouched || record.content.kind !== "grade") return null;
+  const { target } = record.content;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-disabled={working}
+      data-draft-instead
+      data-lands="[data-card-primary]"
+      onClick={() => {
+        if (!working)
+          void workspaceStore().getState().openSubmission(threadId, target, { fill: "draft" });
+      }}
+    >
+      {working ? "Drafting" : "Draft with Claude"}
+    </Button>
+  );
+}
+
 function CardActions({
   view,
   panel,
@@ -608,6 +633,7 @@ function CardActions({
 }) {
   const { record, summary } = view;
   const approved = summary.approvedAt !== null && !summary.banner && summary.tone !== "working";
+  const online = useWorkspace((state) => state.online);
   // An open panel already has its own Preview tab.
   const preview = panel === null && <PreviewButton />;
   return (
@@ -616,8 +642,14 @@ function CardActions({
       data-action-bar
       className="sticky bottom-0 z-[1] -mx-card -mb-card flex flex-wrap items-center justify-between gap-btn-gap rounded-b-card border-t border-border bg-card px-card py-3 shadow-action-bar"
     >
+      {approved && !online && (
+        <p data-send-offline className="w-full text-right text-meta text-muted-foreground">
+          You're offline. Send when you're back.
+        </p>
+      )}
       <span className="flex items-center gap-btn-gap">
         <DiscardButton view={view} size="sm" />
+        <DraftInsteadButton record={record} />
         {extra}
       </span>
       <span className="ml-auto flex items-center gap-btn-gap">

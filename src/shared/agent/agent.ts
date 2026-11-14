@@ -150,7 +150,6 @@ export const draftAnnouncementAbout = (topic: string): string =>
 export const SCAN_COURSE_REQUEST = "Look over this course for the new term.";
 
 export interface Agent {
-  readonly label: string;
   /** Yields unknown, so a real model's output must pass the parser. The rule agent goes through it too. */
   run(input: AgentInput, signal: AbortSignal): AsyncIterable<unknown>;
 }

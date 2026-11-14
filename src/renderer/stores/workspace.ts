@@ -236,7 +236,6 @@ interface WorkspaceActions extends SetupActions {
   setPrefs(patch: Partial<UiPrefs>): void;
   setThreadUi(thread: ThreadId, patch: Partial<ThreadUi>): void;
   vendorLabelFor(school: SchoolId): string | null;
-  agentLabel(): string;
   dismissNotice(): void;
   resetDemoData(): Promise<void>;
 }
@@ -1076,7 +1075,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             });
           }
           const record = made.value;
-          saveChanges({ ...get().changes, [record.id]: record });
+          // The draft takes the place of a form the teacher opened by hand and left untouched.
+          const { [blankOn(record.content)?.id ?? record.id]: _replaced, ...blanks } = get().blanks;
+          saveChanges({ ...get().changes, [record.id]: record }, { blanks });
           focusIfWanted(thread, record.id, record.content);
           fileHeld(thread, run, record.id);
         };
@@ -1962,7 +1963,6 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             });
           },
           vendorLabelFor: (school) => provider(school)?.vendorLabel ?? null,
-          agentLabel: () => agent.label,
           dismissNotice: () => set({ notice: null }),
 
           resetDemoData: async () => {
@@ -2091,7 +2091,6 @@ export const setAgentDown = (down: boolean): void => {
   agentDown = down;
 };
 const downable = (agent: Agent): Agent => ({
-  label: agent.label,
   async *run(input, signal) {
     if (agentDown)
       yield { type: "decline", text: "Claude couldn't be reached, so nothing was drafted." };

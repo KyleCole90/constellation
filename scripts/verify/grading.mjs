@@ -1870,11 +1870,83 @@ const handApproveThenSend = async (t, student) => {
     String(tag),
   );
   await t.shot("hand-approved-not-sent");
+  await network(t, true);
+  await t.waitFor("navigator.onLine === false", "hand form: the Mac goes offline");
+  await t.waitFor(
+    `document.querySelector('${CARD} [data-send-offline]')?.innerText === "You're offline. Send when you're back." && document.querySelector("[data-send]").disabled`,
+    "hand form: offline, Send is held with the reason beside it (#59)",
+  );
+  await t.shot("hand-approved-offline");
+  await network(t, false);
+  await t.waitFor(
+    `navigator.onLine && !document.querySelector("[data-send-offline]") && !document.querySelector("[data-send]").disabled`,
+    "hand form: back online, Send is ready and the reason is gone",
+  );
   await t.click("[data-send]");
   await t.waitFor(
     `document.querySelector('[data-testid="sent-banner"]') || document.querySelector('[data-testid="receipt"]')`,
     "hand form: Send writes the hand grade",
     20_000,
+  );
+};
+
+const network = async (t, offline) => {
+  await t.cdp("Network.enable");
+  await t.cdp("Network.emulateNetworkConditions", {
+    offline,
+    latency: 0,
+    downloadThroughput: -1,
+    uploadThroughput: -1,
+  });
+};
+
+/** Grade it yourself isn't one-way: an untouched hand form offers Draft with Claude, which spends a model call only on click (#59). */
+const handFormBackToClaude = async (t) => {
+  await t.goto("/threads/t-queue");
+  await t.waitFor(`document.querySelector(${JSON.stringify(QUEUE)})`, "hand form: the list loads");
+  await expandQueue(t);
+  const row = await t.eval(
+    `[...document.querySelectorAll('${LIST} [data-row]')].find((row) => row.innerText.includes("Not started"))?.dataset.row`,
+  );
+  const student = await t.eval(
+    `document.querySelector('[data-row="${row}"] button span[title]').title`,
+  );
+  await t.click(`[data-row="${row}"] button`);
+  await opensUndrafted(t, student, "hand form");
+  await t.click("Grade it yourself", { within: OPEN });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(student)}) && document.querySelector("[data-typed-score], [data-edit-field]")`,
+    "hand form: Grade it yourself opens a blank form",
+  );
+  const placeholder = await t.eval(`document.querySelector("[data-composer]").placeholder`);
+  t.assert(
+    placeholder === "Ask Claude to fill in or change this grade",
+    "hand form: the chat box doesn't ask to correct a draft that doesn't exist (#59)",
+    placeholder,
+  );
+  const before = await t.eval(savedChanges);
+  await t.sleep(400);
+  t.assert(
+    !(await t.has('[data-testid="agent-working"]')) && (await t.eval(savedChanges)) === before,
+    "hand form: offering Draft with Claude spends nothing until it is clicked (#59)",
+  );
+  await t.shot("hand-form");
+  await t.click("Draft with Claude", { within: '[data-testid="card-actions"]' });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(student)}) && document.querySelector("[data-composer]").placeholder.startsWith("Correct the draft")`,
+    "hand form: Draft with Claude replaces the form with Claude's draft for the same student (#59)",
+    15_000,
+  );
+  await settled(t, "hand form: agent finished");
+  t.assert(
+    !(await t.has("[data-draft-instead]")),
+    "hand form: a drafted card offers no second Draft with Claude",
+  );
+  await t.shot("hand-form-drafted");
+  await t.click("Discard", { within: '[data-testid="card-actions"]' });
+  await t.waitFor(
+    `!document.querySelector(${JSON.stringify(CARD)})`,
+    "hand form: the draft is discarded",
   );
 };
 
@@ -2037,5 +2109,6 @@ export const run = async (t) => {
   await keyboardAndClear(t);
   await discard(t);
   await replyDiscard(t);
+  await handFormBackToClaude(t);
   await failedDraft(t);
 };

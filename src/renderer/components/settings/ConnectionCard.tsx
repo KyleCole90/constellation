@@ -77,7 +77,11 @@ export function ConnectionCard({ school }: { school: School }) {
         <SchoolBadge school={school} />
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-title">{school.name}</h3>
-          <p className="truncate text-meta text-muted-foreground">{school.host}</p>
+          {school.host !== school.name && (
+            <p data-school-host className="truncate text-meta text-muted-foreground">
+              {school.host}
+            </p>
+          )}
         </div>
         <Badge tone={view.badge} icon={view.icon} data-testid="connection-status">
           {view.label}

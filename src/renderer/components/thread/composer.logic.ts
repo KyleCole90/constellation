@@ -25,7 +25,7 @@ export const composerHints = (input: HintInput): ComposerHints => {
 };
 
 const hintsFor = (input: HintInput): ComposerHints => {
-  const { kind, content, canEdit, setupStep, conversation, submission } = input;
+  const { kind, content, canEdit, setupStep, conversation, submission, drafted } = input;
   if (kind === "north-star" || kind === "north-star-chat")
     return { placeholder: "Ask what's due, find something, or start work", examples: [] };
   if (kind === "setup")
@@ -40,7 +40,9 @@ const hintsFor = (input: HintInput): ComposerHints => {
     return { placeholder: "This one is closed for edits. Ask about something else.", examples: [] };
   if (content?.kind === "grade")
     return {
-      placeholder: "Correct the draft: a score, a sentence, the tone",
+      placeholder: drafted
+        ? "Correct the draft: a score, a sentence, the tone"
+        : "Ask Claude to fill in or change this grade",
       examples: ["Drop the last sentence", "Make it warmer"],
     };
   if (content?.kind === "reply" || content?.kind === "message")

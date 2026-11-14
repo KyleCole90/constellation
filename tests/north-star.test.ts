@@ -152,7 +152,6 @@ describe("a handoff from North Star", () => {
     const clock = new VirtualClock();
     const rules = createRuleAgent();
     const slow: Agent = {
-      label: rules.label,
       async *run(input, signal) {
         await clock.sleep(1000);
         yield* rules.run(input, signal);
@@ -808,7 +807,6 @@ describe("the handoff parser", () => {
 
   it("a course thread's agent can't reach the sink with one", async () => {
     const agent: Agent = {
-      label: "test double",
       async *run(input) {
         const course = input.scope.courses[0];
         yield {
@@ -1293,7 +1291,6 @@ describe("what North Star answers", () => {
 
   it("keeps a real rule break as a refusal, apart from an ordinary no", async () => {
     const agent: Agent = {
-      label: "rule breaker",
       async *run() {
         yield { type: "approve", change: "anything" };
       },

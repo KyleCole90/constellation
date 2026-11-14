@@ -43,7 +43,6 @@ const forClaude = (scope: AgentScope): unknown =>
  * still goes through `parseAgentEffect`, like the rules agent's output (docs/electron-spec.md, D26).
  */
 export const createBridgeAgent = (bridge: Bridge, online = isOnline): Agent => ({
-  label: "Claude, with your Anthropic key",
   async *run({ request, thread, scope }) {
     // A draft opened offline gets the reason at once; nothing is asked, retried or kept for later.
     if (!online()) {

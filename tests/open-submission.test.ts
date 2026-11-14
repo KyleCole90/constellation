@@ -12,7 +12,6 @@ const spyAgent = () => {
   const inner = createRuleAgent();
   const runs: string[] = [];
   const agent: Agent = {
-    label: inner.label,
     run: (input, signal) => {
       runs.push(input.request);
       return inner.run(input, signal);
@@ -57,6 +56,19 @@ describe("opening a submission with AI on spends nothing until the teacher asks"
     if (!id) throw new Error("no form opened");
     expect(runs).toEqual([]);
     expect(rig.state().blanks[id]?.content.target).toBe(ref);
+  });
+
+  it("Draft with Claude from an untouched hand form drafts once and replaces the form (#59)", async () => {
+    const { rig, ref, runs } = await maya();
+    const form = await open(rig, ref, "by-hand");
+    if (!form) throw new Error("no form opened");
+
+    const id = await open(rig, ref, "draft");
+    expect(runs).toHaveLength(1);
+    expect(id).not.toBeNull();
+    expect(id).not.toBe(form);
+    expect(rig.state().threads[QUEUE]?.focus).toBe(id);
+    expect(rig.state().blanks).toEqual({});
   });
 
   it("a discarded draft stays discarded on reopen, until the teacher asks again", async () => {
