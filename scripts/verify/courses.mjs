@@ -1801,9 +1801,12 @@ const overview = async (t) => {
     "a failed sync says so",
     15_000,
   );
+  const failed = await t.text('[data-testid="sync-failed"]');
+  t.assert(failed.includes("Showing data from"), "and says the data is the old data", failed);
   t.assert(
-    (await t.text('[data-testid="sync-failed"]')).includes("Showing data from"),
-    "and says the data is the old data",
+    failed.startsWith("Can't reach Canvas. Check your internet connection."),
+    "in plain words that name the LMS",
+    failed,
   );
   t.assert((await count(t, "[data-roster]")) === roster, "the old data stays on screen");
   await shot(t, "failed-sync");

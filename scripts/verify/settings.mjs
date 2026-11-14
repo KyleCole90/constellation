@@ -1642,6 +1642,85 @@ const reloadStays = async (t) => {
   await assertNoLeak(t, "after a reload");
 };
 
+const REAL_SCHOOL = {
+  id: "verify-real",
+  abbr: "VR",
+  name: "Verify Real Canvas",
+  host: "verify-real.instructure.com",
+  provider: "canvas",
+};
+
+/** A real school can't connect under verify, so it joins the saved workspace the way a reload would find it. */
+const withSchools = async (t, saved, pick) => {
+  await t.eval(`(() => {
+    const stored = JSON.parse(${JSON.stringify(saved)});
+    stored.state.schools = (${pick})(stored.state.schools, ${JSON.stringify(REAL_SCHOOL)});
+    localStorage.setItem("lms-app.v1", JSON.stringify(stored));
+  })()`);
+  await t.reload();
+};
+
+const realSchoolSettings = async (t, shot) => {
+  const saved = await t.eval(`localStorage.getItem("lms-app.v1")`);
+  const bodyHas = (text) =>
+    t.eval(
+      `document.querySelector(${JSON.stringify(BODY)})?.innerText.includes(${JSON.stringify(text)})`,
+    );
+
+  await withSchools(t, saved, `(demo, real) => [real]`);
+  await t.goto("/settings");
+  await t.waitFor(
+    `document.querySelector('${CARD(REAL_SCHOOL.id)}')`,
+    "the real school's card shows",
+  );
+  const nav = await t.text(NAV);
+  t.assert(!nav.includes("Demo"), "with only a real school, Settings has no Demo section", nav);
+  await shot("real-school-settings");
+
+  await t.goto("/settings?section=demo");
+  await t.waitFor(`document.querySelector('${BODY} h2')`, "a Demo link opens Settings");
+  t.assert(!(await bodyHas("Failure lab")), "a Demo link shows no Failure lab for a real school");
+  t.assert(await t.has(CARD(REAL_SCHOOL.id)), "a Demo link opens Connections instead");
+  await shot("real-school-demo-link");
+
+  await openSection(t, "Appearance");
+  t.assert(!(await bodyHas("browser")), "Appearance doesn't talk about a browser");
+  await shot("real-school-appearance");
+
+  await openSection(t, "Connections");
+  await t.click("Connect", { within: CARD(REAL_SCHOOL.id) });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(DIALOG_FIELD)})`,
+    "the token dialog opens",
+  );
+  const dialog = await t.text(DIALOG);
+  t.assert(
+    !dialog.includes("Use a demo token"),
+    "a real school isn't offered a demo token",
+    dialog,
+  );
+  await shot("real-school-token-dialog");
+  await t.key("Escape");
+
+  await withSchools(t, saved, `(demo, real) => [real, ...demo]`);
+  await openSection(t, "Demo");
+  const target = await t.text('[aria-label="School to expire"]');
+  t.assert(
+    target !== REAL_SCHOOL.name,
+    "beside a demo school, the Failure lab expires only demo schools",
+    target,
+  );
+  await shot("mixed-schools-demo");
+
+  await t.eval(`localStorage.setItem("lms-app.v1", ${JSON.stringify(saved)})`);
+  await t.reload();
+  await openSection(t, "Connections");
+  await t.waitFor(
+    `${cardStatus("lcc")} === "connected" && ${cardStatus("rsu")} === "connected"`,
+    "the demo workspace comes back",
+  );
+};
+
 let seededComments = null;
 
 const assertWiped = async (t, tag) => {
@@ -2311,6 +2390,7 @@ export const run = async (t) => {
   await expireFlow(t, shot);
   await failureLab(t, shot);
   await reloadStays(t);
+  await realSchoolSettings(t, shot);
   await openSection(t, "Connections");
   await assertLayout(t, 1440, 900, "1440x900");
   await assertLayout(t, 1180, 800, "1180x800");
