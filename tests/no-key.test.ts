@@ -13,14 +13,18 @@ import {
 } from "~/shared/domain/change";
 import type { ChangeId, IsoTime, LmsRef, ThreadId } from "~/shared/domain/ids";
 import type { Assignment, Submission } from "~/shared/domain/lms";
+import { planWork } from "~/renderer/components/screens/due.logic";
 import { visibleMessages } from "~/renderer/components/thread/timeline.logic";
 import { Secret } from "~/shared/providers/provider";
 import {
   selectCourseOverview,
+  selectDueExtras,
   selectGradebook,
   selectQueueRows,
   selectThreadChanges,
   selectThreadStatus,
+  selectWhatsDue,
+  selectWorkStages,
 } from "~/renderer/stores/selectors";
 import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 
@@ -388,6 +392,35 @@ describe("a partly filled grade", () => {
     await approveAndSend(rig, id);
     expect(onServer(rig, submission)?.grade).toBe(7);
     expect(onServer(rig, submission)?.rubricScores).toBeNull();
+  });
+
+  it("What's due counts the one approved grade waiting, not the assignment's submissions (#93)", async () => {
+    const { rig } = await noKeyRig();
+    const { submission, assignment } = withRubric(rig);
+    const id = await open(rig, submission);
+    editOk(rig, id, {
+      kind: "grade",
+      rubricPoints: Object.fromEntries(
+        criteriaOf(assignment).map((criterion) => [criterion.ref, 1]),
+      ),
+    });
+    expect(approve(rig, id).ok).toBe(true);
+
+    const now = rig.state().now();
+    const step = planWork({
+      groups: selectWhatsDue(rig.state(), now),
+      extras: selectDueExtras(rig.state()),
+      stages: selectWorkStages(rig.state()),
+      expired: [],
+      now,
+    }).steps.find((entry) => entry.key === `grade:${assignment.ref}`);
+    const toGrade = selectQueueRows(rig.state(), assignment.ref).filter((row) => row.open).length;
+    expect(toGrade).toBeGreaterThan(1);
+    expect(step).toMatchObject({
+      verb: "Review",
+      detail: expect.stringMatching(new RegExp(`^${toGrade} submissions`)),
+      why: "1 grade is waiting on you before it reaches students.",
+    });
   });
 
   it("forged as approved in storage does not post", async () => {

@@ -288,10 +288,9 @@ const whatsDue = async (t) => {
     (await t.text('[data-due-group="next"] [data-slot=button]')).trim() === "Review and approve",
     "its button says what happens next",
   );
-  t.assert(
-    (await t.text('[data-due-group="next"] p:nth-of-type(3)')).trim().length > 0,
-    "the next step says why it's first",
-  );
+  const why = (await t.text('[data-due-group="next"] p:nth-of-type(3)')).trim();
+  const promised = /^(\d+) grades? (?:is|are) waiting on you before/.exec(why);
+  t.assert(promised, "the next step says how many grades wait on the teacher (#93)", why);
   t.assert(
     (await count(t, '[data-due-group="next"] [data-slot=button]')) === 1,
     "the next step has one button",
@@ -364,6 +363,14 @@ const whatsDue = async (t) => {
   );
   await t.click('[aria-label="Expand queue"]');
   t.assert((await count(t, "[data-row]")) > 0, "the thread lists that assignment's submissions");
+  const waiting = await t.eval(
+    `[...document.querySelectorAll('[data-testid="queue-list"] [data-row]')].filter((row) => /Not sent|Needs approval again|Ready to send/.test(row.innerText)).length`,
+  );
+  t.assert(
+    Number(promised?.[1]) === waiting,
+    "What's due promised as many grades as the queue holds waiting (#93)",
+    `${why} / ${waiting} waiting`,
+  );
 
   await t.click("What's due", { within: SIDEBAR });
   const future = await t.eval(
