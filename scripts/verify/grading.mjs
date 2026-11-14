@@ -295,11 +295,13 @@ const pinnedQueue = async (t) => {
     await cardStatus(),
   );
   await t.shot("ai-draft-untouched");
-  await t.click('[aria-label="Raise Thesis and claim"]');
-  await t.click('[aria-label="Lower Thesis and claim"]');
+  await t.click(`${CARD} [data-edit-field]`);
+  await t.eval(`document.activeElement.setSelectionRange(1e6, 1e6)`);
+  await t.type(" Well done.");
+  await t.eval(`document.activeElement?.blur()`);
   await t.waitFor(
     `${STATUS} === "AI draft, edited by you. Not sent"`,
-    "once you change a score, the card says the AI draft has your edits",
+    "once you edit the comment, the card says the AI draft has your edits",
   );
   await t.shot("ai-draft-edited-by-you");
   await assertLayout(t, 1180, 800, "1180x800 draft");
@@ -631,6 +633,14 @@ const correction = async (t) => {
   t.assert(
     (await t.eval(`document.querySelector('${CARD} [data-criterion]').dataset.flash`)) === "true",
     "the corrected row highlights briefly",
+  );
+  const reasons = await t.eval(
+    `[...document.querySelectorAll('${CARD} [data-criterion]')].map((row) => Boolean(row.querySelector("[data-rationale]")))`,
+  );
+  t.assert(
+    JSON.stringify(reasons) === "[false,true,true,true]",
+    "the corrected score's old reason goes, and the other criteria keep theirs (#47)",
+    JSON.stringify(reasons),
   );
   await t.shot("composer-correction");
 
@@ -1555,7 +1565,7 @@ const keyboardAndClear = async (t) => {
     );
     if (done < 3) {
       await t.waitFor(
-        `[...document.querySelectorAll('${CARD} button')].some((b) => b.innerText.startsWith("Next:"))`,
+        `[...document.querySelectorAll('${CARD} button')].some((b) => /^(Draft next|Next):/.test(b.innerText))`,
         `speech ${done}: receipt offers Next`,
       );
       await t.key("Meta+Enter");
@@ -1756,6 +1766,20 @@ const failedDraft = async (t) => {
     "Grade it yourself opens a blank form for the same student, with Claude still down",
   );
   await t.shot("failed-draft-by-hand");
+  t.assert(
+    !(await t.has("[data-composer-examples]")),
+    "the hand form offers no corrections of Claude's words (#48)",
+  );
+  const primary = await t.eval(
+    `(() => { const button = document.querySelector('${CARD} [data-card-primary]'); return { text: button?.innerText.trim(), disabled: button?.disabled, note: document.querySelector('${CARD} [data-card-missing]')?.innerText }; })()`,
+  );
+  t.assert(
+    primary.text === "Approve" &&
+      primary.disabled &&
+      /^Fill in .+ to approve\.$/.test(primary.note),
+    "the empty hand form's button is Approve, held until the blanks it names are filled (#48)",
+    JSON.stringify(primary),
+  );
   await t.eval(`window.__setAgentDown(false)`);
 };
 

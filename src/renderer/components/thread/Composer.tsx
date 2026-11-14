@@ -55,6 +55,7 @@ export function Composer({
     setupStep,
     conversation,
     submission,
+    drafted: focused?.record.activity.some(({ actor }) => actor === "agent") ?? false,
   });
 
   const correcting = !batching && setupStep === undefined && (focused?.summary.canEdit ?? false);

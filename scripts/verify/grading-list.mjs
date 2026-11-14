@@ -25,7 +25,7 @@ const gradeByChord = async (t, what) => {
   await t.waitFor(`document.body.innerText.includes("Undo approval")`, `${what}: Enter approves`);
   await t.key("Meta+Enter");
   await t.waitFor(
-    `[...document.querySelectorAll('button')].some((b) => b.innerText.startsWith("Next:"))`,
+    `[...document.querySelectorAll('button')].some((b) => /^(Draft next|Next):/.test(b.innerText))`,
     `${what}: the receipt offers Next`,
   );
 };
@@ -145,11 +145,11 @@ export const run = async (t) => {
 
   await gradeByChord(t, "filtered");
   const offered = await t.eval(
-    `[...document.querySelectorAll('button')].find((b) => b.innerText.startsWith("Next:")).innerText`,
+    `[...document.querySelectorAll('button')].find((b) => /^(Draft next|Next):/.test(b.innerText)).innerText`,
   );
   t.assert(
-    offered.split("\n")[0] === `Next: ${run[1]}`,
-    "Next stays inside the assignment the teacher filtered to",
+    offered.split("\n")[0] === `Draft next: ${run[1]}`,
+    "Next stays inside the assignment the teacher filtered to, and says it starts a draft (#48)",
     `${offered}; filtered ${JSON.stringify(run)}`,
   );
   await t.shot("grading-list-next-in-filter");
@@ -225,12 +225,12 @@ const startOnTicked = async (t) => {
   await settled(t, "ticked: first ticked row drafted");
   await gradeByChord(t, "ticked");
   const offered = await t.eval(
-    `[...document.querySelectorAll('button')].find((b) => b.innerText.startsWith("Next:"))?.innerText ?? ""`,
+    `[...document.querySelectorAll('button')].find((b) => /^(Draft next|Next):/.test(b.innerText))?.innerText ?? ""`,
   );
   await t.shot("grading-list-ticked-next", null);
   t.assert(
     offered.split("\n")[0] === `Next: ${titles[3]}`,
-    "ticked: Next skips to the other ticked row",
+    "ticked: Next skips to the other ticked row, already drafted, so it starts no draft",
     `${offered}; ticked ${titles[1]}, ${titles[3]}`,
   );
   t.assert(

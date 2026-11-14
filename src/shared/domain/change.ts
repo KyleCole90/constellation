@@ -624,6 +624,14 @@ export interface Rationale {
   why: string;
   anchors: readonly PassageAnchor[];
 }
+/** `Rationale.field` for a score with no rubric criterion behind it. */
+export const OVERALL_RATIONALE = "overall";
+
+const scoreFor = (content: ChangeContent, field: string): number | null | undefined => {
+  if (content.kind !== "grade") return undefined;
+  if (field === OVERALL_RATIONALE) return content.points;
+  return content.rubric?.find((score) => score.criterion === field)?.points;
+};
 
 export interface ChangeRecord {
   id: ChangeId;
@@ -1052,6 +1060,10 @@ export function transition(
               ? commentOf(content)
               : base.agentComment,
           landed: base.landed.filter((field) => !moved.includes(field)),
+          // A reason explains one score, so it goes when that score changes.
+          rationale: base.rationale.filter(
+            ({ field }) => scoreFor(base.content, field) === scoreFor(content, field),
+          ),
           state: { tag: "draft", approvalReset },
         },
         event.at,

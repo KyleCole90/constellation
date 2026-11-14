@@ -2164,7 +2164,7 @@ const noKeyFlow = async (t, shot) => {
     "no key: the row opens again after the reload",
   );
 
-  await t.click("See what's left", { within: FORM });
+  await t.click("Preview", { within: '[data-testid="thread-panel"]' });
   await t.waitFor(
     `document.querySelector(${JSON.stringify(FOOTER_NOTE)})`,
     "no key: the preview says what's left",
@@ -2183,8 +2183,8 @@ const noKeyFlow = async (t, shot) => {
 
   for (let index = 0; index < scores; index++) {
     t.assert(
-      (await t.text(`${FORM} [data-card-primary]`)).includes("See what's left"),
-      `no key: the form still leads to what's left with ${scores - index} blank`,
+      (await t.text(`${FORM} [data-card-missing]`)).startsWith("Fill in "),
+      `no key: the form still names what's left with ${scores - index} blank`,
       await t.text(`${FORM} [data-card-primary]`),
     );
     await t.eval(`document.querySelectorAll('[data-typed-score]')[${index}].focus()`);

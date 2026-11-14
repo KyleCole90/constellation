@@ -6,8 +6,7 @@ export interface ComposerHints {
   examples: readonly string[];
 }
 
-/** What the agent can actually do from here, so an example never promises something it would refuse. */
-export const composerHints = (input: {
+interface HintInput {
   kind: ThreadKind;
   content: ChangeContent | null;
   canEdit: boolean;
@@ -15,7 +14,17 @@ export const composerHints = (input: {
   conversation?: "unanswered" | "answered" | undefined;
   /** A submission is on screen with no draft open, as after a draft that failed. */
   submission?: boolean;
-}): ComposerHints => {
+  /** Claude wrote the open draft. A form you fill in by hand has no sentence or tone of Claude's to correct. */
+  drafted?: boolean;
+}
+
+/** What the agent can actually do from here, so an example never promises something it would refuse. */
+export const composerHints = (input: HintInput): ComposerHints => {
+  const hints = hintsFor(input);
+  return input.drafted === true ? hints : { ...hints, examples: [] };
+};
+
+const hintsFor = (input: HintInput): ComposerHints => {
   const { kind, content, canEdit, setupStep, conversation, submission } = input;
   if (kind === "north-star" || kind === "north-star-chat")
     return { placeholder: "Ask what's due, find something, or start work", examples: [] };

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 
-import { OVERALL_RATIONALE } from "~/shared/agent/agent";
-import type { ChangeRecord } from "~/shared/domain/change";
+import { OVERALL_RATIONALE, type ChangeRecord } from "~/shared/domain/change";
 import type { LmsRef } from "~/shared/domain/ids";
 import { excerptNote, type Conversation, type Submission } from "~/shared/domain/lms";
 import { cn, formatDayTime } from "~/renderer/lib/utils";

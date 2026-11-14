@@ -133,8 +133,6 @@ export const DRAFT_MESSAGE_REQUEST = "Draft a message to this student about this
 export const draftAnnouncementAbout = (topic: string): string =>
   `Draft an announcement for this course about ${topic}.`;
 export const SCAN_COURSE_REQUEST = "Look over this course for the new term.";
-/** `Rationale.field` for a score with no rubric criterion behind it. */
-export const OVERALL_RATIONALE = "overall";
 
 export interface Agent {
   readonly label: string;

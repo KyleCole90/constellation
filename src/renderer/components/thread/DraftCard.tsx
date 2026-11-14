@@ -2,11 +2,11 @@ import { Link } from "@tanstack/react-router";
 import { Check, Minus, Paperclip, Pencil, Plus } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
-import { OVERALL_RATIONALE } from "~/shared/agent/agent";
 import {
   finalGrade,
   sendsOnChord,
   latePenalty,
+  OVERALL_RATIONALE,
   rawScore,
   zeroPatch,
   type ChangeRecord,
@@ -30,6 +30,7 @@ import { Button } from "../ui/button";
 import { Kbd } from "../ui/kbd";
 import { criterionHue, criterionNumbers } from "./anchors.logic";
 import { useRationale, useThreadActions } from "./context";
+import { nextLabel } from "./queue.logic";
 import {
   discardChange,
   useAgentFlash,
@@ -41,7 +42,7 @@ import {
 } from "./useChange";
 import { useCommitOnLeave } from "./useCommitOnLeave";
 import { parseScore, stepScore } from "./score.logic";
-import { approvalResetWords } from "./writeback.logic";
+import { approvalResetWords, missingWords } from "./writeback.logic";
 
 const cardHeadId = (id: ChangeId): string => `card-head-${id}`;
 
@@ -643,6 +644,19 @@ function CardActions({
             <UndoApprovalButton view={view} size="md" />
             <SendButton view={view} size="md" />
           </>
+        ) : summary.missing.length > 0 ? (
+          <>
+            {preview}
+            <Button
+              data-card-primary
+              aria-describedby={cardHeadId(record.id)}
+              variant="default"
+              size="md"
+              disabled
+            >
+              Approve
+            </Button>
+          </>
         ) : (
           <ReviewButton view={view} />
         )}
@@ -663,6 +677,11 @@ function CardNotes({ summary, error }: { summary: ChangeSummary; error: string |
       {summary.banner && summary.reason && (
         <p data-card-reason className="text-meta text-error-foreground">
           {summary.reason}
+        </p>
+      )}
+      {summary.missing.length > 0 && (
+        <p data-card-missing className="text-meta text-muted-foreground">
+          {missingWords(summary.missing)}
         </p>
       )}
       {error && <p className="text-meta text-error-foreground">{error}</p>}
@@ -1039,6 +1058,7 @@ function TextCard({
 function Receipt({ view }: { view: ChangeView }) {
   const { next, openRow, setUi, rows } = useThreadActions();
   const school = useWorkspace((state) => state.schools.find((s) => s.id === view.record.school));
+  const drafts = useWorkspace((state) => state.aiOn() && state.online);
   return (
     <>
       <CardHead view={view} />
@@ -1068,7 +1088,7 @@ function Receipt({ view }: { view: ChangeView }) {
             className="ml-auto min-w-0"
             onClick={() => openRow(next)}
           >
-            <span className="truncate">Next: {next.title}</span>
+            <span className="truncate">{nextLabel(next, drafts)}</span>
             <Kbd variant="on-primary">⌘↵</Kbd>
           </Button>
         ) : view.record.content.kind === "announcement" ? (

@@ -16,6 +16,7 @@ import {
   parseThreadSearch,
   nameFillsStrip,
   neighbor,
+  nextLabel,
   nextOpen,
   runOf,
   queueChips,
@@ -300,6 +301,18 @@ describe("neighbor and nextOpen", () => {
 
   it("nextOpen is null once no other row has work left", () => {
     expect(nextOpen([row("a"), row("b", { open: false })], "a")).toBeNull();
+  });
+});
+
+describe("nextLabel (#48)", () => {
+  it("says a draft will start when Next would ask Claude for one", () => {
+    expect(nextLabel(row("Jean Tuttle"), true)).toBe("Draft next: Jean Tuttle");
+  });
+
+  it("is plain Next when nothing would be drafted", () => {
+    expect(nextLabel(row("Jean Tuttle"), false)).toBe("Next: Jean Tuttle");
+    const drafted = row("Jean Tuttle", { change: {} as ChangeRecord });
+    expect(nextLabel(drafted, true)).toBe("Next: Jean Tuttle");
   });
 });
 
