@@ -4,7 +4,14 @@ import type { ChangeRecord, ChangeSummary } from "~/shared/domain/change";
 import type { ChangeId, IsoTime } from "~/shared/domain/ids";
 import type { ThreadMessage } from "~/renderer/stores/types";
 
-import { boldRuns, buildTimeline, settledText, visibleMessages, walkStep } from "./timeline.logic";
+import {
+  boldRuns,
+  buildTimeline,
+  liveReplies,
+  settledText,
+  visibleMessages,
+  walkStep,
+} from "./timeline.logic";
 
 const at = (minute: number) => `2026-10-30T10:0${minute}:00.000Z` as IsoTime;
 const work = (minute: number, line: string): ThreadMessage => ({
@@ -213,6 +220,26 @@ describe("settledText", () => {
 
   it("leaves nothing when the whole line was the instruction", () => {
     expect(settledText("Press Approve, then Send.")).toBe("");
+  });
+
+  it("drops every step before sending, not only approving (#81, walk 11)", () => {
+    expect(
+      settledText(
+        "I drafted a message asking Natalie for a working link. You can review it and edit it before you send it.",
+      ),
+    ).toBe("I drafted a message asking Natalie for a working link.");
+  });
+});
+
+describe("liveReplies", () => {
+  it("leaves out a chip that repeats an action the app shows as a button (#81, walk 11)", () => {
+    const message: ThreadMessage = {
+      type: "agent",
+      text: "Recorded: be a bit stricter.",
+      at: at(1),
+      replies: ["Clear the stricter setting", "Approve and send it", "Why that score?"],
+    };
+    expect(liveReplies(message, [message])).toEqual(["Why that score?"]);
   });
 });
 

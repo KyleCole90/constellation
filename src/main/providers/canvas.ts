@@ -193,6 +193,11 @@ const ConversationDetail = v.object({
   subject: v.nullish(v.string(), ""),
   workflow_state: v.string(),
   context_code: v.nullish(v.string(), null),
+  /** A message sent to a course's students can carry the account as its `context_code`; the course is here. */
+  audience_contexts: v.nullish(
+    v.object({ courses: v.nullish(v.record(v.string(), v.unknown()), {}) }),
+    null,
+  ),
   participants: v.array(v.object({ id: Id, name: v.string() })),
   /** Newest first. */
   messages: v.array(v.object({ id: Id, author_id: Id, body: v.string(), created_at: Time })),
@@ -1024,8 +1029,11 @@ export const createCanvasProvider = (deps: {
     const detail = await one(`/conversations/${id}?auto_mark_as_read=false`, ConversationDetail);
     if (!detail.ok) return detail;
     const row = detail.value;
-    const courseCode = /^course_(\d+)$/.exec(row.context_code ?? "")?.[1];
-    if (courseCode === undefined) return { ok: true, value: null };
+    const audience = Object.keys(row.audience_contexts?.courses ?? {});
+    const courseCode =
+      /^course_(\d+)$/.exec(row.context_code ?? "")?.[1] ??
+      (audience.length === 1 ? audience[0] : undefined);
+    if (courseCode === undefined || !/^\d+$/.test(courseCode)) return { ok: true, value: null };
     const names = new Map(row.participants.map((person) => [person.id, person.name]));
     return {
       ok: true,
@@ -1035,6 +1043,9 @@ export const createCanvasProvider = (deps: {
         course: refs.course(school.id, Number(courseCode)),
         subject: row.subject,
         from: row.participants.find((person) => person.id !== mine)?.name ?? "",
+        students: row.participants
+          .filter((person) => person.id !== mine)
+          .map((person) => refs.student(school.id, person.id)),
         unread: row.workflow_state === "unread",
         messages: row.messages.toReversed().map((message) => ({
           id: String(message.id),
@@ -1180,11 +1191,15 @@ export const createCanvasProvider = (deps: {
     conversations: async () => {
       const mine = await me();
       if (!mine.ok) return mine;
-      const rows = await list("/conversations", ConversationRow);
-      if (!rows.ok) return rows;
+      // A conversation the teacher started and nobody answered sits in "sent", not the inbox.
+      const inbox = await list("/conversations", ConversationRow);
+      if (!inbox.ok) return inbox;
+      const sent = await list("/conversations?scope=sent", ConversationRow);
+      if (!sent.ok) return sent;
+      const ids = new Set([...inbox.value, ...sent.value].map((row) => row.id));
       const out: Conversation[] = [];
-      for (const row of rows.value) {
-        const read = await conversation(row.id, mine.value);
+      for (const id of ids) {
+        const read = await conversation(id, mine.value);
         if (!read.ok) return read;
         if (read.value) out.push(read.value);
       }

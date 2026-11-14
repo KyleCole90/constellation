@@ -22,15 +22,16 @@ import {
   type SetupStage,
 } from "~/shared/domain/setup";
 import { workName } from "~/shared/domain/workName";
-import type {
-  Announcement,
-  Assignment,
-  Conversation,
-  ConversationMessage,
-  Course,
-  School,
-  Student,
-  Submission,
+import {
+  askedInLms,
+  type Announcement,
+  type Assignment,
+  type Conversation,
+  type ConversationMessage,
+  type Course,
+  type School,
+  type Student,
+  type Submission,
 } from "~/shared/domain/lms";
 
 import type { SchoolCache, Thread, ThreadMessage, Undrafted, WorkspaceData } from "./types";
@@ -104,15 +105,22 @@ const isMessageSince = (change: ChangeRecord, submission: Submission): boolean =
 const messagesOf = (state: WorkspaceData): readonly ChangeRecord[] =>
   Object.values(state.changes).filter((change) => change.content.kind === "message");
 
-/** When the teacher's message about turned-in work went out, with no grade under way. The work waits on the student until they turn it in again. */
+/**
+ * When the teacher's message about turned-in work went out, with no grade under way. The work waits on the student until they turn it in again.
+ * The LMS's own conversations say so on every computer; this copy's sent message says so before the next sync reads it back.
+ */
 const askedAt = (
   submission: Submission,
   change: ChangeRecord | null,
   messages: readonly ChangeRecord[],
+  cache: SchoolCache,
+  assignment: Assignment,
 ): IsoTime | null => {
   if (change || submission.workflow !== "submitted") return null;
   const last = messages.findLast((message) => isMessageSince(message, submission));
-  return last?.state.tag === "sent" ? last.state.at : null;
+  const local = last?.state.tag === "sent" ? last.state.at : null;
+  const lms = askedInLms(cache.conversations, submission, assignment);
+  return local && lms ? (local > lms ? local : lms) : (local ?? lms);
 };
 
 const changesByTarget = (state: WorkspaceData): ReadonlyMap<string, ChangeRecord> => {
@@ -196,7 +204,7 @@ export const selectQueueRows = memoByState(
         const course = cache.courses.find((c) => c.ref === submission.course);
         const school = schoolOf(state, submission.school);
         if (!parent || !course || !school) continue;
-        const asked = askedAt(submission, change, messages);
+        const asked = askedAt(submission, change, messages, cache, parent);
         rows.push({
           submission,
           assignment: parent,
@@ -276,7 +284,9 @@ const dueItems = (
       const ungraded = turnedIn.flatMap((s) => {
         if (s.workflow !== "submitted") return [];
         const change = liveChange(s, byTarget);
-        return change?.state.tag === "sent" ? [] : [{ s, asked: askedAt(s, change, messages) }];
+        return change?.state.tag === "sent"
+          ? []
+          : [{ s, asked: askedAt(s, change, messages, cache, assignment) }];
       });
       const waiting = ungraded.filter((entry) => entry.asked === null).map((entry) => entry.s);
       const counts = {
@@ -914,6 +924,20 @@ export const selectMessageSince = (
 ): ChangeRecord | null =>
   (submission && messagesOf(state).findLast((change) => isMessageSince(change, submission))) ??
   null;
+
+/** When the student was asked to resubmit this work, by this copy or, as the LMS shows, any other. Null once they turn it in again or a grade is under way. */
+export const selectAskedAt = (state: WorkspaceData, submission: Submission): IsoTime | null => {
+  const cache = state.cache[submission.school];
+  const assignment = cache?.assignments.find((a) => a.ref === submission.assignment);
+  if (!cache || !assignment) return null;
+  return askedAt(
+    submission,
+    liveChange(submission, changesByTarget(state)),
+    messagesOf(state),
+    cache,
+    assignment,
+  );
+};
 
 export const selectSubmission = (
   state: WorkspaceData,

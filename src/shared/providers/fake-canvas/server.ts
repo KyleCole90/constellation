@@ -361,6 +361,9 @@ const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): 
       course: courseRef,
       subject: message.subject,
       from: message.from,
+      students: state.students
+        .filter((student) => student.course === courseRef && student.name === message.from)
+        .map((student) => student.ref),
       unread: !message.answer,
       messages: [
         ...message.history.map((entry, i) => ({
@@ -1191,6 +1194,7 @@ export class FakeCanvasServer implements FaultLab {
           course: student.course,
           subject: content.subject,
           from: student.name,
+          students: [student.ref],
           unread: false,
           messages: [{ id, mine: true, author: SEED.instructor, text: content.body, at }],
         });

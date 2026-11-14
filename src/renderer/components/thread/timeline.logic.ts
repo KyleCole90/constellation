@@ -37,20 +37,29 @@ export const visibleMessages = (
       : messages
     : messages.filter((message) => message.type === "notice");
 
+/** The actions the app shows as its own buttons: a card's Approve, Send and Discard, guidance's Clear, Undo. A chip naming one would be a second control for it. */
+const APP_ACTION = /\b(approve|send|discard|clear|undo)\b/i;
+
+/** The last message's chips, without any that repeat an action the app already shows. */
 export const liveReplies = (
   message: ThreadMessage,
   messages: readonly ThreadMessage[],
 ): readonly string[] =>
-  message.type === "agent" && message === messages.at(-1) ? (message.replies ?? []) : [];
+  message.type === "agent" && message === messages.at(-1)
+    ? (message.replies ?? []).filter((reply) => !APP_ACTION.test(reply))
+    : [];
 
-/** Claude's words about a change already sent, without the sentences telling the teacher to approve or send it, which no longer apply. */
+/** Every step before a send, which reads as stale once it's sent. */
+const BEFORE_SENDING = /\b(approve|edit|send|press)\b/i;
+
+/** Claude's words about a change already sent, without the sentences telling the teacher to review, edit, approve or send it, which no longer apply. */
 export const settledText = (text: string): string =>
   text
     .split("\n")
     .map((line) =>
       line
         .split(/(?<=[.!?]["”’)]?)\s+/)
-        .filter((sentence) => !/\bapprove\b/i.test(sentence))
+        .filter((sentence) => !BEFORE_SENDING.test(sentence))
         .join(" "),
     )
     .join("\n")

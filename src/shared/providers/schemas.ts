@@ -201,6 +201,7 @@ export const ConversationSchema: v.GenericSchema<Conversation> = v.object({
   course: lmsRef<"course">(),
   subject: text,
   from: text,
+  students: v.array(lmsRef<"student">()),
   unread: v.boolean(),
   messages: v.array(
     v.object({ id: text, mine: v.boolean(), author: text, text, at: IsoTimeSchema }),

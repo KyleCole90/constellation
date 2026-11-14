@@ -286,6 +286,8 @@ export interface Conversation {
   course: LmsRef<"course">;
   subject: string;
   from: string;
+  /** Everyone in it besides the teacher, so a message can be matched to the student it went to. */
+  students: readonly LmsRef<"student">[];
   unread: boolean;
   messages: readonly ConversationMessage[];
 }
@@ -302,3 +304,51 @@ export interface Announcement {
   body: string;
   postedAt: IsoTime;
 }
+
+/** Words too common in assignment titles to tell one assignment from another ("Create a …", "Your own …"). */
+const TITLE_FILLER = new Set(["a", "an", "the", "of", "and", "to", "your", "my", "own", "create"]);
+const wordsOf = (text: string): readonly string[] =>
+  text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+
+/** Every telling word of the assignment's title appears in the text, so the text is about that assignment. */
+const namesAssignment = (text: string, assignment: Pick<Assignment, "title">): boolean => {
+  const telling = wordsOf(assignment.title).filter((word) => !TITLE_FILLER.has(word));
+  const words = new Set(wordsOf(text));
+  return telling.length > 0 && telling.every((word) => words.has(word));
+};
+
+/** A message about a submission names its assignment, so the LMS can say later what it was about. */
+export const namingAssignment = <M extends { subject: string; body: string }>(
+  message: M,
+  assignment: Pick<Assignment, "title">,
+): M =>
+  namesAssignment(`${message.subject}\n${message.body}`, assignment)
+    ? message
+    : { ...message, body: `${message.body.trimEnd()}\n\nAssignment: ${assignment.title}` };
+
+/**
+ * When the teacher last wrote to the student about this assignment since they turned it in, read from the LMS's own
+ * conversations: one the teacher started, with that student, in that course, naming the assignment.
+ */
+export const askedInLms = (
+  conversations: readonly Conversation[],
+  submission: Submission,
+  assignment: Pick<Assignment, "title">,
+): IsoTime | null => {
+  let last: IsoTime | null = null;
+  for (const conversation of conversations) {
+    const opening = conversation.messages[0];
+    if (
+      !opening?.mine ||
+      conversation.course !== submission.course ||
+      // A cache saved before `students` existed lacks it until the next sync.
+      !(conversation.students ?? []).includes(submission.student) ||
+      !namesAssignment(`${conversation.subject}\n${opening.text}`, assignment)
+    )
+      continue;
+    const at = opening.at;
+    if ((submission.submittedAt === null || at >= submission.submittedAt) && (!last || at > last))
+      last = at;
+  }
+  return last;
+};

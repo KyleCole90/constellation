@@ -66,6 +66,7 @@ import {
   awaitsReply,
   bySchoolName,
   isDemoSchool,
+  namingAssignment,
   passagesOf,
   undraftableReason,
   googleExportOf,
@@ -1111,6 +1112,18 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           for (const message of held) post(thread, change ? { ...message, change } : message);
         };
 
+        /** A message names the assignment it's about, so a sync on any computer can tell from the LMS that the student was asked. */
+        const named = (content: ChangeContent): ChangeContent => {
+          if (content.kind !== "message") return content;
+          const { target } = content;
+          const cache = Object.values(get().cache);
+          const submission = cache.flatMap((c) => c.submissions).find((s) => s.ref === target);
+          const assignment = cache
+            .flatMap((c) => c.assignments)
+            .find((a) => a.ref === submission?.assignment);
+          return assignment ? namingAssignment(content, assignment) : content;
+        };
+
         const recordFrom = async (
           proposal: Proposal,
           by: ActivityActor,
@@ -1136,7 +1149,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               school: proposal.school,
               course: proposal.course,
               subject: proposal.subject,
-              content: fitContent(proposal.content, lms.capabilities),
+              content: named(fitContent(proposal.content, lms.capabilities)),
               basis: { readAt: at, remote: remote.value },
               at,
               by,
