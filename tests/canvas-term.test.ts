@@ -31,6 +31,8 @@ import {
   TERM_HOST,
   TERM_TOKEN,
 } from "./fixtures/canvas-term-http";
+import { termName } from "~/shared/domain/term";
+
 import { approved, clickWitness, newDraft, sending } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";
 import { DurableLedger } from "./fixtures/ledger";
@@ -328,7 +330,7 @@ const PACKAGE_BYTES = readFileSync(new URL(`../fixtures/imscc/${PACKAGE}`, impor
 const packageBlob = () => new Blob([PACKAGE_BYTES]);
 const importOf = async (provider: LmsProvider) => {
   const { shell, source } = await shellAndSource(provider);
-  const hint = { ...termOf(source), name: "Spring 2026", days: [] };
+  const hint = { ...termOf(source), name: termName("Spring 2026"), days: [] };
   return { shell, content: cartridgeContent(shell, PACKAGE, hint, 1) };
 };
 
@@ -564,7 +566,7 @@ describe("main's .imscc picker", () => {
     const pick = (path: string) =>
       setupOf(setUp(path).provider).pickPackage?.() ?? Promise.reject(new Error("no picker"));
     expect(await unwrap(pick(fixture("comm110-lakeshore-fall2026-export.imscc")))).toMatchObject({
-      hint: { name: "", start: "2026-08-24", end: "2026-12-11", days: [2, 4] },
+      hint: { name: null, start: "2026-08-24", end: "2026-12-11", days: [2, 4] },
     });
     // A real export often leaves the end blank; the teacher types only what's missing.
     expect(await unwrap(pick(fixture("damaged-export.imscc")))).toMatchObject({

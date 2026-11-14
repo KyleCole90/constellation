@@ -7,6 +7,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { GRADE_DRAFTS, type GradeDraft } from "~/shared/agent/rules/drafts";
 import { FINDING_TYPES } from "~/shared/domain/scan";
 import { SEED, type SeedPiece } from "~/shared/providers/fake-canvas/seed";
+import { termName } from "~/shared/domain/term";
 import { HOSTS, PACKAGES, SOURCES } from "~/shared/providers/fake-canvas/seed-term";
 
 import { permitFor } from "./fixtures/provider-contract";
@@ -143,7 +144,11 @@ describe("the new-term seed", () => {
       source.term.name,
     );
     const types = await typesAfterCopying(school, (shell) =>
-      copyContent(shell, found, planFor(source.term, shell)),
+      copyContent(
+        shell,
+        found,
+        planFor({ ...source.term, name: termName(source.term.name) }, shell),
+      ),
     );
     expect([...FINDING_TYPES].filter((type) => !types.has(type))).toEqual([]);
   });

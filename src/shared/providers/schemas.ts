@@ -37,7 +37,14 @@ import type {
   Student,
   Submission,
 } from "../domain/lms";
-import { isoDate, type TermDates, type TermPlan, type Weekday } from "../domain/term";
+import {
+  isoDate,
+  termName,
+  type TermDates,
+  type TermName,
+  type TermPlan,
+  type Weekday,
+} from "../domain/term";
 
 import type { AccountInfo, FieldOutcomes } from "./provider";
 
@@ -218,8 +225,9 @@ export const RemoteStateSchema: v.GenericSchema<RemoteState> = v.variant("kind",
 
 // ---- Term setup reads ----
 
+const TermNameSchema = nullable(brand<TermName>((raw) => termName(raw) !== null));
 const TermDatesSchema: v.GenericSchema<TermDates> = v.object({
-  name: text,
+  name: TermNameSchema,
   start: IsoDateSchema,
   end: IsoDateSchema,
   days: v.array(WeekdaySchema),
@@ -227,10 +235,11 @@ const TermDatesSchema: v.GenericSchema<TermDates> = v.object({
 
 const DraftDateSchema = v.union([IsoDateSchema, v.literal("")]);
 const PackageTermSchema: v.GenericSchema<PackageTerm> = v.object({
-  name: text,
+  name: TermNameSchema,
   start: DraftDateSchema,
   end: DraftDateSchema,
   days: v.array(WeekdaySchema),
+  dated: v.array(v.object({ title: text, due: IsoDateSchema })),
 });
 
 export const CourseShellSchema: v.GenericSchema<CourseShell> = v.object({
@@ -335,7 +344,7 @@ export const SamplePackageSchema: v.GenericSchema<SamplePackage> = v.object({
   name: text,
   kb: count,
   note: text,
-  hint: nullable(TermDatesSchema),
+  hint: nullable(PackageTermSchema),
 });
 
 // ---- Writes ----

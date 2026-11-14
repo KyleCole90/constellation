@@ -418,12 +418,14 @@ export const createCanvasProvider = (deps: {
       return { ok: true, value: rows };
     });
 
-  /** One object: the same request as a list of one, since Canvas pages only arrays. */
+  /** One object: the same request as a list of one, since Canvas pages only arrays. It takes a page slot, so a course's many pages read in parallel without flooding Canvas. */
   const one = async <T extends v.GenericSchema>(path: string, schema: T): Read<v.InferOutput<T>> =>
     lease.use(async (credential) => {
       if (!credential) return { ok: false, error: { kind: "auth_expired" } };
       const secret = credential.kind === "bearer" ? credential.token : credential.access;
-      const result = await revealSecret(secret, (token) => page(`${origin}/api/v1${path}`, token));
+      const result = await revealSecret(secret, (token) =>
+        slot(() => page(`${origin}/api/v1${path}`, token)),
+      );
       if (!result.ok) return result;
       const parsed = v.safeParse(schema, result.value.body);
       return parsed.success ? { ok: true, value: parsed.output } : unreadable("an answer");

@@ -308,9 +308,11 @@ export const createSetupActions = (host: SetupHost) => {
     const term = termOf(setup.school);
     const copyContent = copyContentOf(copy);
     if (!term || !copyContent) return { ok: false, error: "That school isn't connected." };
-    const jobs = await laneRead(setup.school, () => term.migrations(setup.course));
+    const [jobs, content] = await Promise.all([
+      laneRead(setup.school, () => term.migrations(setup.course)),
+      laneRead(setup.school, () => term.courseContent(setup.course)),
+    ]);
     if (!jobs.ok) return { ok: false, error: noteFailure(setup.school, jobs.error) };
-    const content = await laneRead(setup.school, () => term.courseContent(setup.course));
     if (!content.ok) return { ok: false, error: noteFailure(setup.school, content.error) };
     lastContent.set(setup.course, content.value);
     return {

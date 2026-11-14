@@ -18,12 +18,22 @@ import {
   type ScanContext,
 } from "~/shared/domain/scan";
 import { spliceState } from "~/shared/domain/splice";
-import type { TermPlan } from "~/shared/domain/term";
+import { termName, type TermPlan } from "~/shared/domain/term";
 
 const d = (text: string): IsoDate => text as IsoDate;
 const PLAN: TermPlan = {
-  oldTerm: { name: "Fall 2026", start: d("2026-08-24"), end: d("2026-12-11"), days: [2, 4] },
-  newTerm: { name: "Spring 2027", start: d("2027-01-19"), end: d("2027-05-07"), days: [1, 3] },
+  oldTerm: {
+    name: termName("Fall 2026"),
+    start: d("2026-08-24"),
+    end: d("2026-12-11"),
+    days: [2, 4],
+  },
+  newTerm: {
+    name: termName("Spring 2027"),
+    start: d("2027-01-19"),
+    end: d("2027-05-07"),
+    days: [1, 3],
+  },
   breaks: [{ name: "Spring break", start: d("2027-03-08"), end: d("2027-03-12") }],
 };
 const CTX: ScanContext = {
@@ -318,6 +328,23 @@ describe("what a fix says", () => {
     expect(found.map((finding) => finding.fix)).toEqual([null]);
   });
 
+  it("an old term with no name, as an .imscc gives, flags no item for its name", () => {
+    const plan: TermPlan = { ...PLAN, oldTerm: { ...PLAN.oldTerm, name: null } };
+    const content = course({
+      items: [item({ title: "Essay-1", body: "Welcome to the course." }), item({ title: "Test" })],
+    });
+    expect(RULES["old-term-name"](content, { ...CTX, plan })).toEqual([]);
+  });
+
+  it("an old term name with no new name to put in its place is fixed by hand", () => {
+    const plan: TermPlan = { ...PLAN, newTerm: { ...PLAN.newTerm, name: null } };
+    const found = RULES["old-term-name"](
+      course({ items: [item({ body: "Welcome to Fall 2026." })] }),
+      { ...CTX, plan },
+    );
+    expect(found.map((finding) => [finding.quote, finding.fix])).toEqual([["Fall 2026", null]]);
+  });
+
   it("an old course link with no replacement is manual", () => {
     const content = course({
       items: [
@@ -471,7 +498,12 @@ describe("a rescan after a fix lands", () => {
   it("does not shift a year-less date again between same-season terms, once it knows what it wrote", () => {
     const spring: TermPlan = {
       ...PLAN,
-      oldTerm: { name: "Spring 2026", start: d("2026-01-20"), end: d("2026-05-08"), days: [2, 4] },
+      oldTerm: {
+        name: termName("Spring 2026"),
+        start: d("2026-01-20"),
+        end: d("2026-05-08"),
+        days: [2, 4],
+      },
       newTerm: { ...PLAN.newTerm, days: [2, 4] },
     };
     const ctx = { ...CTX, plan: spring };
@@ -485,7 +517,12 @@ describe("a rescan after a fix lands", () => {
   it("still knows what it wrote after a fix lands right beside it", () => {
     const spring: TermPlan = {
       ...PLAN,
-      oldTerm: { name: "Spring 2026", start: d("2026-01-20"), end: d("2026-05-08"), days: [2, 4] },
+      oldTerm: {
+        name: termName("Spring 2026"),
+        start: d("2026-01-20"),
+        end: d("2026-05-08"),
+        days: [2, 4],
+      },
       newTerm: { ...PLAN.newTerm, days: [2, 4] },
     };
     const ctx = { ...CTX, plan: spring };
@@ -501,8 +538,8 @@ describe("a rescan after a fix lands", () => {
   it("does not read the new term's name as the old one when the new name contains it", () => {
     const plan: TermPlan = {
       ...PLAN,
-      oldTerm: { ...PLAN.oldTerm, name: "Spring 2027" },
-      newTerm: { ...PLAN.newTerm, name: "Spring 2027 Online" },
+      oldTerm: { ...PLAN.oldTerm, name: termName("Spring 2027") },
+      newTerm: { ...PLAN.newTerm, name: termName("Spring 2027 Online") },
     };
     const ctx = { ...CTX, plan };
     expect(

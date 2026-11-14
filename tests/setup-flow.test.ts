@@ -6,7 +6,7 @@ import { riskOf, summarize, type ChangeRecord } from "~/shared/domain/change";
 import type { CopySource, CourseShell } from "~/shared/domain/content";
 import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
 import { reviewRows, stageOf, type CourseSetup, type SetupStage } from "~/shared/domain/setup";
-import type { TermDates, TermPlan } from "~/shared/domain/term";
+import { draftOf, type TermDates, type TermPlan } from "~/shared/domain/term";
 import {
   selectChangesShown,
   selectCourse,
@@ -125,10 +125,12 @@ const pickSource = async (
     };
   }
   const sample = options.samples.find((entry) => entry.note.includes(pick.sample));
-  if (!sample?.hint) throw new Error(`No sample from ${pick.sample}.`);
+  const { name, start, end, days } = sample?.hint ?? {};
+  if (!sample?.hint || !start || !end || !days)
+    throw new Error(`No dated sample from ${pick.sample}.`);
   return {
     source: { kind: "cartridge", name: sample.name, kb: sample.kb, hint: sample.hint },
-    term: sample.hint,
+    term: { name: name ?? null, start, end, days },
   };
 };
 
@@ -361,8 +363,8 @@ describe("the whole setup", () => {
     const [source] = (await optionsOf(rig, LCC)).sources;
     if (!source) throw new Error("No source course.");
     const typed = planFor(termOf(source), shell);
-    rig.state().editDates(ref, typed);
-    expect(setupOf(rig, ref).draft).toEqual(typed);
+    rig.state().editDates(ref, draftOf(typed));
+    expect(setupOf(rig, ref).draft).toEqual(draftOf(typed));
     rig.state().chooseSource(ref, null);
     expect(setupOf(rig, ref).draft).toBeNull();
   });

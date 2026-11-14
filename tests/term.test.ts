@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { DatedItem } from "~/shared/domain/content";
-import type { IsoDate, IsoTime, LmsRef } from "~/shared/domain/ids";
+import type { IsoDate } from "~/shared/domain/ids";
 import {
   findDateMentions,
   isoDate,
@@ -13,6 +12,7 @@ import {
   shiftDate,
   shiftOptionsOf,
   shiftPreview,
+  termName,
   weekdayOf,
   type DateShiftOptions,
   type TermPlan,
@@ -22,8 +22,18 @@ import {
 const d = (text: string): IsoDate => text as IsoDate;
 const SPRING_BREAK = { name: "Spring break", start: d("2027-03-08"), end: d("2027-03-12") };
 const PLAN: TermPlan = {
-  oldTerm: { name: "Fall 2026", start: d("2026-08-24"), end: d("2026-12-11"), days: [2, 4] },
-  newTerm: { name: "Spring 2027", start: d("2027-01-19"), end: d("2027-05-07"), days: [1, 3] },
+  oldTerm: {
+    name: termName("Fall 2026"),
+    start: d("2026-08-24"),
+    end: d("2026-12-11"),
+    days: [2, 4],
+  },
+  newTerm: {
+    name: termName("Spring 2027"),
+    start: d("2027-01-19"),
+    end: d("2027-05-07"),
+    days: [1, 3],
+  },
   breaks: [SPRING_BREAK],
 };
 const OPTIONS = shiftOptionsOf(PLAN);
@@ -59,14 +69,9 @@ describe("the worked case", () => {
   });
 
   it("shiftPreview shows both what the LMS will do and where the break move puts it", () => {
-    const item: DatedItem = {
-      ref: "item:1" as LmsRef<"item">,
-      title: "Essay 2",
-      dueAt: "2026-10-13T23:59:00Z" as IsoTime,
-    };
-    expect(shiftPreview([item], PLAN)).toEqual([
+    expect(shiftPreview([{ title: "Essay 2", due: d("2026-10-13") }], PLAN)).toEqual([
       {
-        item,
+        title: "Essay 2",
         from: "2026-10-13",
         shifted: "2027-03-08",
         date: "2027-03-15",

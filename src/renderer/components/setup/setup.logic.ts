@@ -1,5 +1,5 @@
 import { riskOf, type ChangeRecord, type ChangeSummary } from "~/shared/domain/change";
-import type { CourseShell, SourceCourse } from "~/shared/domain/content";
+import type { CourseShell, PackageTerm, SourceCourse } from "~/shared/domain/content";
 import type { ChangeId, IsoDate, LmsRef, Result } from "~/shared/domain/ids";
 import { longDate, quoteWords } from "~/shared/domain/preview";
 import type { FindingKey, FindingType } from "~/shared/domain/scan";
@@ -11,10 +11,15 @@ import {
   type ReviewRow,
 } from "~/shared/domain/setup";
 import {
+  draftOf,
+  draftTerm,
   isoDate,
   planDays,
   planProblems,
+  sameSpanEnd,
+  termName,
   type DraftDate,
+  type DraftTerm,
   type PlanDraft,
   type TermDates,
   type TermPlan,
@@ -77,30 +82,46 @@ export const dayMapWords = (oldDays: readonly Weekday[], newDays: readonly Weekd
     : `${moved.map((day) => `${DAY_NAME[day]} becomes ${DAY_NAME[map[day]]}`).join(", ")}.`;
 };
 
+/**
+ * A package that leaves its end out ends where a term as long as the new one would, and never before its last due day.
+ * The shift is then a whole number of days, so each due date keeps its week of the term. Null when there's nothing to guess.
+ */
+export const guessedEnd = (
+  hint: PackageTerm | null,
+  newTerm: Pick<DraftTerm, "start" | "end">,
+): IsoDate | null => {
+  if (!hint || hint.end !== "" || hint.start === "" || newTerm.start === "" || newTerm.end === "")
+    return null;
+  const end = sameSpanEnd(hint.start, newTerm.start, newTerm.end);
+  const last = hint.dated.at(-1)?.due;
+  return last && last > end ? last : end;
+};
+
 /** What was last typed wins, then a plan already confirmed. Otherwise the source or its hint fills the old term, and the course fills the new one. */
 export const initialPlan = (
   setup: Pick<CourseSetup, "plan" | "draft" | "shell" | "source">,
   source: SourceCourse | null,
 ): PlanDraft => {
   if (setup.draft) return setup.draft;
-  if (setup.plan) return setup.plan;
+  if (setup.plan) return draftOf(setup.plan);
   const hint = setup.source?.kind === "cartridge" ? setup.source.hint : null;
-  const oldTerm: TermDates<DraftDate> = source
+  const newDates: Pick<DraftTerm, "start" | "end"> = {
+    start: setup.shell.startAt ?? "",
+    end: setup.shell.endAt ?? "",
+  };
+  const oldTerm: DraftTerm = source
     ? {
         name: source.termName,
         start: source.startAt ?? "",
         end: source.endAt ?? "",
         days: source.meetingDays,
       }
-    : (hint ?? { name: "", start: "", end: "", days: [] });
+    : hint
+      ? { ...draftTerm(hint), end: guessedEnd(hint, newDates) ?? hint.end }
+      : { name: "", start: "", end: "", days: [] };
   return {
     oldTerm,
-    newTerm: {
-      name: setup.shell.termName,
-      start: setup.shell.startAt ?? "",
-      end: setup.shell.endAt ?? "",
-      days: oldTerm.days,
-    },
+    newTerm: { name: setup.shell.termName, ...newDates, days: oldTerm.days },
     breaks: [],
   };
 };
@@ -108,7 +129,7 @@ export const initialPlan = (
 /** Null when the old term matches what the package says of its own term, or it says nothing. Every shifted date leans on the old term. */
 export const packageTermWords = (
   source: CourseSetup["source"],
-  oldTerm: TermDates<DraftDate>,
+  oldTerm: DraftTerm,
 ): string | null => {
   const hint = source?.kind === "cartridge" ? source.hint : null;
   if (!hint) return null;
@@ -144,11 +165,15 @@ const filled = <T extends { start: DraftDate; end: DraftDate }>(
   const end = isoDate(held.end);
   return start && end ? { ...held, start, end } : null;
 };
+const filledTerm = (held: DraftTerm): TermDates | null => {
+  const term = filled(held);
+  return term && { ...term, name: termName(term.name) };
+};
 
 /** The plan, once every field is filled in and the dates make sense; otherwise what to fix. */
 export const checkPlan = (draft: PlanDraft): Result<TermPlan, readonly string[]> => {
-  const oldTerm = filled(draft.oldTerm);
-  const newTerm = filled(draft.newTerm);
+  const oldTerm = filledTerm(draft.oldTerm);
+  const newTerm = filledTerm(draft.newTerm);
   const breaks = draft.breaks.map((held) => (held.name.trim() ? filled(held) : null));
   const blanks = [
     ...(oldTerm ? [] : ["Fill in the old term's dates."]),
@@ -165,6 +190,10 @@ export const checkPlan = (draft: PlanDraft): Result<TermPlan, readonly string[]>
 };
 
 const count = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** A course's code and title, said once when they're the same. */
+export const courseName = ({ code, title }: Pick<SourceCourse, "code" | "title">): string =>
+  code === title ? title : `${code} ${title}`;
 
 /** Null when the destination is empty. */
 export const occupiedWords = ({

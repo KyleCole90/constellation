@@ -121,6 +121,16 @@ describe("main's Anthropic agent", () => {
     expect(scope).toEqual({ focus: null, submissions: [{ body: planted }] });
   });
 
+  it("tells Claude the teacher's time zone, so it never writes a due time in UTC", async () => {
+    const api = transport(() => json(200, message([])));
+    await anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch })(INPUT);
+    const [turn] = (api.sent[0]?.body["messages"] ?? []) as [{ content: string }];
+    expect(turn.content).toContain(
+      `<time_zone>${Intl.DateTimeFormat().resolvedOptions().timeZone}</time_zone>`,
+    );
+    expect(api.sent[0]?.body["system"]).toContain("never write UTC");
+  });
+
   it("forwards only its own tools, and a tool's input can't rename the effect", async () => {
     const api = transport(() =>
       json(

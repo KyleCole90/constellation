@@ -386,32 +386,38 @@ export const canvasTermSetup = (client: CanvasClient) => {
     const [id] = idsIn(courseRef, "course", 1) ?? [];
     if (id === undefined) return Promise.resolve(NOT_FOUND);
     return (async () => {
-      const row = await course(id);
+      // A publish check waits on this read, so its requests go out together rather than one after another.
+      const [row, pages, assignments, topics, files, modules, tools, jobs, profile] =
+        await Promise.all([
+          course(id),
+          list(`/courses/${id}/pages`, PageRow),
+          list(`/courses/${id}/assignments`, AssignmentItem),
+          list(`/courses/${id}/discussion_topics?only_announcements=true`, TopicItem),
+          list(`/courses/${id}/files`, FileItem),
+          list(`/courses/${id}/modules`, ModuleRow),
+          list(`/courses/${id}/external_tools`, ToolRow),
+          migrationRows(id),
+          one("/users/self/profile", Profile),
+        ]);
       if (!row.ok) return row;
-      const pages = await list(`/courses/${id}/pages`, PageRow);
       if (!pages.ok) return pages;
-      const assignments = await list(`/courses/${id}/assignments`, AssignmentItem);
       if (!assignments.ok) return assignments;
-      const topics = await list(
-        `/courses/${id}/discussion_topics?only_announcements=true`,
-        TopicItem,
-      );
       if (!topics.ok) return topics;
-      const files = await list(`/courses/${id}/files`, FileItem);
       if (!files.ok) return files;
-      const modules = await list(`/courses/${id}/modules`, ModuleRow);
       if (!modules.ok) return modules;
-      const tools = await list(`/courses/${id}/external_tools`, ToolRow);
       if (!tools.ok) return tools;
-      const jobs = await migrationRows(id);
       if (!jobs.ok) return jobs;
-      const profile = await one("/users/self/profile", Profile);
       if (!profile.ok) return profile;
+      const reads = await Promise.all(
+        pages.value.map(
+          async (page) =>
+            [page.page_id, await one(`/courses/${id}/pages/${page.page_id}`, PageBody)] as const,
+        ),
+      );
       const bodies = new Map<number, string>();
-      for (const page of pages.value) {
-        const read = await one(`/courses/${id}/pages/${page.page_id}`, PageBody);
+      for (const [pageId, read] of reads) {
         if (!read.ok) return read;
-        bodies.set(page.page_id, read.value.body);
+        bodies.set(pageId, read.value.body);
       }
 
       /** Canvas marks no item as copied, so an item made while a copy into this course ran came with it. */

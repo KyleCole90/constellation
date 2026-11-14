@@ -108,7 +108,8 @@ const longTime = (at: IsoTime): string =>
   });
 const span = ({ start, end }: { start: IsoDate; end: IsoDate }): string =>
   start === end ? longDate(start) : `${longDate(start)} to ${longDate(end)}`;
-const termWords = (term: TermDates): string => `${term.name}, ${span(term)}`;
+const termWords = (term: TermDates): string =>
+  term.name === null ? span(term) : `${term.name}, ${span(term)}`;
 const breakWords = (held: TermBreak): string => `${held.name}, ${span(held)}`;
 
 const scored = (points: number | null): number => {
@@ -161,7 +162,12 @@ const copyBody = ({ source, plan, shift }: CourseCopyContent, remote: RemoteStat
       : null;
   return {
     kind: "copy",
-    source: source.kind === "course" ? `${source.label} (${source.termName})` : source.name,
+    source:
+      source.kind === "cartridge"
+        ? source.name
+        : source.termName
+          ? `${source.label} (${source.termName})`
+          : source.label,
     oldTerm: termWords(plan.oldTerm),
     newTerm: termWords(plan.newTerm),
     days,

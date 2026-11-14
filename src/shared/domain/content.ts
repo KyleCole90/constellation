@@ -1,7 +1,7 @@
 import type { IsoDate, IsoTime, LmsRef } from "./ids";
 import type { Course } from "./lms";
 import type { Splice } from "./splice";
-import type { DateShiftOptions, DraftDate, TermDates, TermPlan, Weekday } from "./term";
+import type { DateShiftOptions, DraftDate, DueDay, TermDates, TermPlan, Weekday } from "./term";
 
 // ---- What a provider returns for a new term. Neutral, with no wire types. ----
 
@@ -23,7 +23,7 @@ export const isComing = (
   today: IsoDate,
 ): boolean => !course.concluded && (course.startAt === null || course.startAt > today);
 
-export interface DatedItem {
+interface DatedItem {
   ref: LmsRef<"item">;
   title: string;
   dueAt: IsoTime;
@@ -46,8 +46,11 @@ export type CopySource =
   | { kind: "course"; ref: LmsRef<"course">; label: string; termName: string }
   | { kind: "cartridge"; name: string; kb: number; hint: PackageTerm | null };
 
-/** What a package says about its own term. A real export may leave out its end date, or have no due dates to read days from. */
-export type PackageTerm = TermDates<DraftDate>;
+/**
+ * What a package says about its own term, and the due days it holds, as written in the course's own time zone. A real
+ * export may leave out its end date, or have no due dates to read days from.
+ */
+export type PackageTerm = TermDates<DraftDate> & { dated: readonly DueDay[] };
 
 /** A package main's file picker chose: its name, size and own term cross to the renderer, never its path or bytes. */
 export type PickedPackage = Pick<SamplePackage, "name" | "kb"> & { hint: PackageTerm | null };
@@ -56,7 +59,7 @@ export interface SamplePackage {
   name: string;
   kb: number;
   note: string;
-  hint: TermDates | null;
+  hint: PackageTerm | null;
 }
 
 const CONTENT_ITEM_TYPES = ["syllabus", "page", "announcement", "assignment", "file"] as const;

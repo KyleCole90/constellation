@@ -2,7 +2,8 @@ import { open, type FileHandle } from "node:fs/promises";
 import { inflateRawSync } from "node:zlib";
 
 import type { IsoDate } from "../shared/domain/ids";
-import { isoDate, meetingDaysOf, type DraftDate, type TermDates } from "../shared/domain/term";
+import type { PackageTerm } from "../shared/domain/content";
+import { isoDate, meetingDaysOf, type DueDay } from "../shared/domain/term";
 
 const END_OF_DIRECTORY = 0x06054b50;
 const DIRECTORY_ENTRY = 0x02014b50;
@@ -69,29 +70,39 @@ const textOf = async (file: FileHandle, entry: Entry): Promise<string> => {
 const dayIn = (xml: string, tag: string): IsoDate | null =>
   isoDate(new RegExp(`<${tag}>(\\d{4}-\\d{2}-\\d{2})`).exec(xml)?.[1] ?? "");
 
+/** An assignment's `<title>`, with the entities Canvas writes for markup characters read back. */
+const titleIn = (xml: string): string =>
+  (/<title>([^<]*)<\/title>/.exec(xml)?.[1] ?? "")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&apos;", "'")
+    .replaceAll("&amp;", "&");
+
 /**
- * What a Canvas export says about the term it came from: the course's start and end from its settings, and meeting
- * days from its assignments' due dates. Null when the package says none of it, or can't be read.
+ * What a Canvas export says about the term it came from: the course's start and end from its settings, and its
+ * assignments' due days, which give the meeting days. Null when the package says none of it, or can't be read.
  */
-export const packageTerm = async (path: string): Promise<TermDates<DraftDate> | null> => {
+export const packageTerm = async (path: string): Promise<PackageTerm | null> => {
   let file: FileHandle | null = null;
   try {
     file = await open(path, "r");
     const entries = await entriesOf(file);
     const settings = entries.find((entry) => entry.name === COURSE_SETTINGS);
     const xml = settings ? await textOf(file, settings) : "";
-    const due: IsoDate[] = [];
+    const dated: DueDay[] = [];
     for (const entry of entries) {
-      const day = entry.name.endsWith("/assignment_settings.xml")
-        ? dayIn(await textOf(file, entry), "due_at")
-        : null;
-      if (day) due.push(day);
+      if (!entry.name.endsWith("/assignment_settings.xml")) continue;
+      const assignment = await textOf(file, entry);
+      const due = dayIn(assignment, "due_at");
+      if (due) dated.push({ title: titleIn(assignment), due });
     }
-    const term: TermDates<DraftDate> = {
-      name: "",
+    const term: PackageTerm = {
+      name: null,
       start: dayIn(xml, "start_at") ?? "",
       end: dayIn(xml, "conclude_at") ?? "",
-      days: meetingDaysOf(due),
+      days: meetingDaysOf(dated.map(({ due }) => due)),
+      dated: dated.sort((a, b) => a.due.localeCompare(b.due)),
     };
     return term.start || term.end || term.days.length > 0 ? term : null;
   } catch {

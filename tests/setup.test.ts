@@ -19,7 +19,7 @@ import {
   type SetupLive,
   type SetupStage,
 } from "~/shared/domain/setup";
-import type { TermPlan } from "~/shared/domain/term";
+import { draftOf, termName, type TermPlan } from "~/shared/domain/term";
 
 import {
   AT,
@@ -37,8 +37,18 @@ const d = (text: string): IsoDate => text as IsoDate;
 const id = (text: string): ChangeId => text as ChangeId;
 const k = (text: string): FindingKey => text as FindingKey;
 const PLAN: TermPlan = {
-  oldTerm: { name: "Fall 2026", start: d("2026-08-24"), end: d("2026-12-11"), days: [2, 4] },
-  newTerm: { name: "Spring 2027", start: d("2027-01-19"), end: d("2027-05-07"), days: [1, 3] },
+  oldTerm: {
+    name: termName("Fall 2026"),
+    start: d("2026-08-24"),
+    end: d("2026-12-11"),
+    days: [2, 4],
+  },
+  newTerm: {
+    name: termName("Spring 2027"),
+    start: d("2027-01-19"),
+    end: d("2027-05-07"),
+    days: [1, 3],
+  },
   breaks: [],
 };
 const SOURCE: CopySource = {
@@ -217,12 +227,12 @@ describe("stageOf", () => {
   it("a copy drafted from other dates than the form holds is out of date until reviewed again", () => {
     const moved = { ...PLAN, newTerm: { ...PLAN.newTerm, end: d("2027-05-14") } };
     const copy = mapOf(chain.approved("copy"));
-    expect(stageOf(setup({ draft: moved }), copy, undefined)).toEqual({
+    expect(stageOf(setup({ draft: draftOf(moved) }), copy, undefined)).toEqual({
       tag: "approve-copy",
       copy: "copy",
       stale: true,
     });
-    expect(stageOf(setup({ draft: PLAN }), copy, undefined)).toEqual({
+    expect(stageOf(setup({ draft: draftOf(PLAN) }), copy, undefined)).toEqual({
       tag: "approve-copy",
       copy: "copy",
       stale: false,

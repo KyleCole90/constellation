@@ -1,5 +1,4 @@
-import type { DatedItem } from "./content";
-import { type IsoDate, type IsoTime } from "./ids";
+import { type Brand, type IsoDate, type IsoTime } from "./ids";
 
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export interface DateShiftOptions {
@@ -9,8 +8,13 @@ export interface DateShiftOptions {
   newEnd: IsoDate;
   substitutions: Readonly<Partial<Record<Weekday, Weekday>>>;
 }
+/** A term's name, never blank. Only `termName` makes one, so a scan can't search text for an empty name. */
+export type TermName = Brand<string, "TermName">;
+export const termName = (text: string): TermName | null =>
+  text.trim() === "" ? null : (text as TermName);
 export interface TermDates<D extends DraftDate = IsoDate> {
-  name: string;
+  /** Null when the term has none: a Canvas export carries no term name, and a course can have no term. */
+  name: TermName | null;
   start: D;
   end: D;
   days: readonly Weekday[];
@@ -20,22 +24,45 @@ export interface TermBreak<D extends DraftDate = IsoDate> {
   start: D;
   end: D;
 }
-export interface TermPlan<D extends DraftDate = IsoDate> {
-  oldTerm: TermDates<D>;
-  newTerm: TermDates<D>;
-  breaks: readonly TermBreak<D>[];
+export interface TermPlan {
+  oldTerm: TermDates;
+  newTerm: TermDates;
+  breaks: readonly TermBreak[];
 }
 /** A date field as the Dates form holds it: a day, or `""` until the person fills it in. */
 export type DraftDate = IsoDate | "";
+/** A term as the Dates form holds it: the name as typed, and dates that may be blank. */
+export type DraftTerm = Omit<TermDates<DraftDate>, "name"> & { name: string };
 /** The Dates form as typed. Only `checkPlan` turns it into a `TermPlan`. */
-export type PlanDraft = TermPlan<DraftDate>;
+export interface PlanDraft {
+  oldTerm: DraftTerm;
+  newTerm: DraftTerm;
+  breaks: readonly TermBreak<DraftDate>[];
+}
+export const draftTerm = ({ name, start, end, days }: TermDates<DraftDate>): DraftTerm => ({
+  name: name ?? "",
+  start,
+  end,
+  days,
+});
+/** A confirmed plan back in the form, to edit again. */
+export const draftOf = (plan: TermPlan): PlanDraft => ({
+  ...plan,
+  oldTerm: draftTerm(plan.oldTerm),
+  newTerm: draftTerm(plan.newTerm),
+});
 export interface BreakMove {
   date: IsoDate;
   movedFrom: TermBreak | null;
   outsideTerm: boolean;
 }
+/** One item's due day, which is all a shift reads. */
+export interface DueDay {
+  title: string;
+  due: IsoDate;
+}
 export interface ShiftRow extends BreakMove {
-  item: DatedItem;
+  title: string;
   from: IsoDate;
   /** Before any break move: what the LMS itself will produce. */
   shifted: IsoDate;
@@ -52,6 +79,9 @@ const weekdayAt = (day: number): number => floorMod7(day + EPOCH_WEEKDAY);
 const roundHalfAway = (value: number): number => Math.sign(value) * Math.round(Math.abs(value));
 const byNumber = (a: number, b: number): number => a - b;
 
+/** The day that ends a span as long as `from` to `to`, starting at `start`. */
+export const sameSpanEnd = (start: IsoDate, from: IsoDate, to: IsoDate): IsoDate =>
+  dateAt(dayNumber(start) + dayNumber(to) - dayNumber(from));
 export const weekdayOf = (date: IsoDate): Weekday => weekdayAt(dayNumber(date)) as Weekday;
 /** The weekdays the old due dates fall on, which is where a class's work is usually due. The person confirms or changes them. */
 export const meetingDaysOf = (dates: readonly IsoDate[]): readonly Weekday[] =>
@@ -145,12 +175,11 @@ export const meetingDayInside = (date: IsoDate, plan: TermPlan): IsoDate | null 
     : firstMeeting(termEnd, termStart, -1, plan);
 };
 
-export const shiftPreview = (items: readonly DatedItem[], plan: TermPlan): readonly ShiftRow[] => {
+export const shiftPreview = (items: readonly DueDay[], plan: TermPlan): readonly ShiftRow[] => {
   const options = shiftOptionsOf(plan);
-  return items.map((item) => {
-    const from = dateOfTime(item.dueAt);
-    const shifted = shiftDate(from, options);
-    return { item, from, shifted, ...moveOutOfBreak(shifted, plan) };
+  return items.map(({ title, due }) => {
+    const shifted = shiftDate(due, options);
+    return { title, from: due, shifted, ...moveOutOfBreak(shifted, plan) };
   });
 };
 

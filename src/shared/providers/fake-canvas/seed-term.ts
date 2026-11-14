@@ -1,6 +1,6 @@
 import type { ContentItemType, SchoolPolicy } from "~/shared/domain/content";
 import { isoTime, type IsoDate, type IsoTime } from "~/shared/domain/ids";
-import type { TermBreak, TermDates, Weekday } from "~/shared/domain/term";
+import { termName, type TermBreak, type TermDates, type Weekday } from "~/shared/domain/term";
 
 import { SEED } from "./seed";
 
@@ -39,6 +39,10 @@ export interface RawBody {
   tools: RawTool[];
 }
 
+/** A Canvas term, which always has a name. */
+type SeedTerm = Omit<TermDates, "name"> & { name: string };
+const hintOf = (term: SeedTerm): TermDates => ({ ...term, name: termName(term.name) });
+
 export interface ShellSeed {
   school: string;
   canvasId: number;
@@ -46,7 +50,7 @@ export interface ShellSeed {
   title: string;
   section: string | null;
   modality: string | null;
-  term: TermDates;
+  term: SeedTerm;
   students: readonly string[];
   body: RawBody;
 }
@@ -55,7 +59,7 @@ export interface SourceSeed {
   canvasId: number;
   code: string;
   title: string;
-  term: TermDates;
+  term: SeedTerm;
   template: boolean;
   body: RawBody;
 }
@@ -92,19 +96,19 @@ const DAY_WORDS: Readonly<Record<Weekday, string>> = {
   6: "Saturdays",
 };
 
-export const FALL_2026 = (days: readonly Weekday[]): TermDates => ({
+export const FALL_2026 = (days: readonly Weekday[]): SeedTerm => ({
   name: "Fall 2026",
   start: date("2026-08-24"),
   end: date("2026-12-11"),
   days,
 });
-const SPRING_2026 = (days: readonly Weekday[]): TermDates => ({
+const SPRING_2026 = (days: readonly Weekday[]): SeedTerm => ({
   name: "Spring 2026",
   start: date("2026-01-20"),
   end: date("2026-05-08"),
   days,
 });
-export const SPRING_2027 = (days: readonly Weekday[]): TermDates => ({
+export const SPRING_2027 = (days: readonly Weekday[]): SeedTerm => ({
   name: "Spring 2027",
   start: date("2027-01-19"),
   end: date("2027-05-07"),
@@ -183,7 +187,7 @@ interface ComposeArgs {
   host: string;
   courseId: number;
   code: string;
-  term: TermDates;
+  term: SeedTerm;
   /** The term before this one. A syllabus still points at its pages. */
   priorCourseId: number;
   foreign: string;
@@ -505,7 +509,7 @@ export const PACKAGES: readonly PackageSeed[] = [
     name: "comm110-lakeshore-fall2026-export.imscc",
     kb: 2840,
     note: "COMM 110 as exported from Lakeshore at the end of Fall 2026.",
-    hint: FALL_2026(TUE_THU),
+    hint: hintOf(FALL_2026(TUE_THU)),
     host: HOSTS["lcc"] ?? "",
     courseId: 48240,
     issues: [
@@ -530,7 +534,7 @@ export const PACKAGES: readonly PackageSeed[] = [
     name: "eng210-northgate-spring2026-export.imscc",
     kb: 4120,
     note: "ENG 210 from Northgate College, Spring 2026. Northgate is not connected here.",
-    hint: SPRING_2026(TUE_THU),
+    hint: hintOf(SPRING_2026(TUE_THU)),
     host: NORTHGATE_HOST,
     courseId: 7731,
     issues: [
