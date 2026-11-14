@@ -44,10 +44,20 @@ describe("drafting from a submitted file", () => {
   it("opens work Claude can't read for the teacher to grade, without asking Claude", async () => {
     const { agent, asked } = spy();
     const { open } = await rigWith(agent);
-    await open("Tomasz Wilk");
     await open("Aaliyah Brooks");
     await open("Priya Raman");
     expect(asked).toEqual([]);
+  });
+
+  it("hands Claude a text upload, as the file came back", async () => {
+    const { agent, asked } = spy();
+    const { open } = await rigWith(agent);
+    await open("Jonah Feld");
+    const [input] = asked;
+    expect(input?.files?.map((file) => [file.name, file.mediaType])).toEqual([
+      ["response5.txt", "text/plain"],
+    ]);
+    expect(new TextDecoder().decode(input?.files?.[0]?.data)).toContain("depends on the subject");
   });
 
   it("drafts nothing when the file doesn't download, and says so", async () => {

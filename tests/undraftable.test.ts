@@ -19,6 +19,22 @@ describe("which submissions Claude may draft", () => {
     ],
     ["a PDF", { kind: "upload", title: "", files: [file("essay.pdf", "application/pdf")] }],
     ["a picture", { kind: "upload", title: "", files: [file("notes.jpg", "image/jpeg")] }],
+    [
+      "a Word document, which main reads as text",
+      {
+        kind: "upload",
+        title: "",
+        files: [
+          file(
+            "rr5.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            30 * 1024 * 1024,
+          ),
+        ],
+      },
+    ],
+    ["a text file", { kind: "upload", title: "", files: [file("rr5.txt", "text/plain")] }],
+    ["an RTF file", { kind: "upload", title: "", files: [file("rr5.rtf", "text/rtf")] }],
     ["nothing, which is missing work", { kind: "none" }],
   ])("drafts %s", (_name, body) => {
     expect(undraftableReason(body)).toBeNull();
@@ -33,18 +49,13 @@ describe("which submissions Claude may draft", () => {
     ["work elsewhere", { kind: "elsewhere", title: "", what: "a quiz" }, "This is a quiz"],
     ["an upload with no file", { kind: "upload", title: "", files: [] }, "No file came"],
     [
-      "a Word document",
+      "a Pages document",
       {
         kind: "upload",
         title: "",
-        files: [
-          file(
-            "rr5.docx",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-          ),
-        ],
+        files: [file("rr5.pages", "application/octet-stream")],
       },
-      "Claude can't read rr5.docx (DOCX, 4 KB)",
+      "Claude can't read rr5.pages (PAGES, 4 KB)",
     ],
     [
       "a picture over 5 MB",

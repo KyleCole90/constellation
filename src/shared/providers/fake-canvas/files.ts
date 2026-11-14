@@ -85,6 +85,59 @@ const pngOf = (width: number, height: number, shade: (x: number, y: number) => n
   ]);
 };
 
+const u16le = (n: number) => [n & 0xff, (n >>> 8) & 0xff];
+const u32le = (n: number) => [...u16le(n & 0xffff), ...u16le(n >>> 16)];
+
+/** A zip of stored (uncompressed) ASCII entries, which is all a test document needs. */
+const zipOf = (entries: Readonly<Record<string, string>>): Uint8Array<ArrayBuffer> => {
+  const local: number[] = [];
+  const directory: number[] = [];
+  for (const [name, text] of Object.entries(entries)) {
+    const path = ascii(name);
+    const data = ascii(text);
+    const sum = crc32(data);
+    const sizes = [...u32le(sum), ...u32le(data.length), ...u32le(data.length)];
+    const offset = local.length;
+    local.push(...u32le(0x04034b50), 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...sizes);
+    local.push(...u16le(path.length), 0, 0, ...path, ...data);
+    directory.push(...u32le(0x02014b50), 20, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...sizes);
+    directory.push(...u16le(path.length), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    directory.push(...u32le(offset), ...path);
+  }
+  const count = u16le(Object.keys(entries).length);
+  return new Uint8Array([
+    ...local,
+    ...directory,
+    ...u32le(0x06054b50),
+    0,
+    0,
+    0,
+    0,
+    ...count,
+    ...count,
+    ...u32le(directory.length),
+    ...u32le(local.length),
+    0,
+    0,
+  ]);
+};
+
+const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+const escapeXml = (text: string) =>
+  text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+
+/** A Word document as Word writes one: a Heading 1 paragraph styled through `word/styles.xml`, then body text. */
+const docxOf = (heading: string, paragraphs: readonly string[]): Uint8Array<ArrayBuffer> => {
+  const paragraph = (text: string, style?: string) =>
+    `<w:p>${style ? `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>` : ""}<w:r><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`;
+  return zipOf({
+    "[Content_Types].xml":
+      '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/></Types>',
+    "word/styles.xml": `<?xml version="1.0" encoding="UTF-8"?><w:styles ${W}><w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:outlineLvl w:val="0"/></w:pPr></w:style></w:styles>`,
+    "word/document.xml": `<?xml version="1.0" encoding="UTF-8"?><w:document ${W}><w:body>${paragraph(heading, "Heading1")}${paragraphs.map((text) => paragraph(text)).join("")}</w:body></w:document>`,
+  });
+};
+
 const notebook = (x: number, y: number): number => {
   if (x === 40) return 150;
   if (y % 24 === 0) return 190;
@@ -110,6 +163,17 @@ const FILES: Readonly<Record<string, () => Uint8Array<ArrayBuffer>>> = {
     ]),
   "rr5-reyes-png": () => pngOf(560, 200, notebook),
   "rr5-raman-snapshot": () => pngOf(600, 260, webSnapshot),
+  "rr5-wilk-docx": () =>
+    docxOf("Notes by Hand", [
+      "The article claims that students who take notes by hand remember more than students who type. I was skeptical, because I type faster than I write and I thought more notes would mean more learning.",
+      "This week I wrote my history notes by hand. I wrote less, but I had to decide what mattered before I wrote it down, and that choice is what I remembered on Thursday's quiz.",
+      "I agree with the author's main point, but I think the reason is choosing, not the pen. Typing slowly and summarizing would probably work too.",
+    ]),
+  "rr5-feld-txt": () =>
+    ascii(
+      "Reading Response 5\n\nThe article says handwriting helps memory because it forces you to slow down. I think that's true for me in math, where copying a worked example by hand makes me notice each step.\n\nIn English class it's different. When I type I can keep up with the discussion, and I'd rather have the whole conversation than a few lines.\n\nSo my answer is that it depends on the subject.\n",
+    ),
+  "rr5-morita-docx": () => ascii("PK\u0003\u0004 this upload was cut off partway through"),
 };
 
 export const fixtureFile = (id: string, mediaType: string): FileContent | null => {

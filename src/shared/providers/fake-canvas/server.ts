@@ -219,14 +219,12 @@ const whatChanged = (content: TextFixContent | SetContent): string => {
   }
 };
 
-const filesOf = (
-  files: readonly { id: string; name: string; mediaType: string; bytes?: number }[],
-) =>
+const filesOf = (files: readonly { id: string; name: string; mediaType: string }[]) =>
   files.map((file) => ({
     id: file.id,
     name: file.name,
     mediaType: file.mediaType,
-    bytes: fixtureBytes(file.id) ?? file.bytes ?? 0,
+    bytes: fixtureBytes(file.id) ?? 0,
   }));
 
 const bodyOf = (assignment: SeedAssignment, student: number, index: number): SubmissionBody => {

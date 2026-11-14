@@ -142,11 +142,35 @@ describe("main's Anthropic agent", () => {
     expect(turn.content[2]).toMatchObject({ type: "text" });
   });
 
-  it("drafts nothing from a file Claude can't read, without asking it", async () => {
+  it("hands Claude the words main read out of a Word file as a text document, titled with its name", async () => {
+    const api = transport(() => json(200, message([])));
+    await anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch })({
+      ...INPUT,
+      files: [
+        {
+          name: "RR5 Wilk.docx",
+          mediaType: "text/markdown",
+          data: new TextEncoder().encode("# Notes by Hand\n\nCafé notes."),
+        },
+      ],
+    });
+    const [turn] = (api.sent[0]?.body["messages"] ?? []) as [{ content: unknown[] }];
+    expect(turn.content[0]).toEqual({
+      type: "document",
+      source: { type: "text", media_type: "text/plain", data: "# Notes by Hand\n\nCafé notes." },
+      title: "RR5 Wilk.docx",
+    });
+  });
+
+  it.each([
+    ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    ["application/rtf"],
+    ["application/octet-stream"],
+  ])("drafts nothing from %s bytes main never read, without asking Claude", async (mediaType) => {
     const api = transport(() => json(200, message([])));
     const answer = await anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch })({
       ...INPUT,
-      files: [{ name: "rr5.docx", mediaType: "application/msword", data: new Uint8Array(8) }],
+      files: [{ name: "rr5.docx", mediaType, data: new Uint8Array(8) }],
     });
     expect(answer).toMatchObject({ ok: false });
     expect(!answer.ok && answer.reason).toContain("Nothing was drafted.");

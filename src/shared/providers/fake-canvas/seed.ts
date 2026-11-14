@@ -16,7 +16,6 @@ interface SeedFile {
   id: string;
   name: string;
   mediaType: string;
-  bytes?: number;
 }
 type SeedWork =
   | { kind: "upload"; files: readonly SeedFile[] }
@@ -161,11 +160,25 @@ export const SEED: SeedData = {
                   name: "RR5 Wilk.docx",
                   mediaType:
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                  bytes: 18_432,
                 },
               ],
             },
             "4": { kind: "elsewhere", what: "an annotated document in Canvas" },
+            "5": {
+              kind: "upload",
+              files: [{ id: "rr5-feld-txt", name: "response5.txt", mediaType: "text/plain" }],
+            },
+            "6": {
+              kind: "upload",
+              files: [
+                {
+                  id: "rr5-morita-docx",
+                  name: "Morita RR5.docx",
+                  mediaType:
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                },
+              ],
+            },
           },
         },
         {
