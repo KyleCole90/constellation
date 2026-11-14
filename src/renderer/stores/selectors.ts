@@ -80,6 +80,21 @@ const IN_PROGRESS = new Set<ChangeRecord["state"]["tag"]>([
 const isOpenChange = (change: ChangeRecord): boolean => IN_PROGRESS.has(change.state.tag);
 
 /** The change a screen should show for a target: the live one if any, otherwise the last one sent. */
+/** A student who submitted again after the send is new work, not the grade we already sent. */
+const resubmittedSince = (submission: Submission, change: ChangeRecord): boolean =>
+  change.state.tag === "sent" &&
+  submission.submittedAt !== null &&
+  submission.submittedAt > change.state.at;
+
+/** Graded once the app has sent its grade, even before the sync after the send reads it back. */
+const gradeSent = (
+  submission: Submission,
+  byTarget: ReadonlyMap<string, ChangeRecord>,
+): boolean => {
+  const change = byTarget.get(submission.ref);
+  return change?.state.tag === "sent" && !resubmittedSince(submission, change);
+};
+
 const changesByTarget = (state: WorkspaceData): ReadonlyMap<string, ChangeRecord> => {
   const byTarget = new Map<string, ChangeRecord>();
   for (const change of Object.values(state.changes)) {
@@ -152,13 +167,7 @@ export const selectQueueRows = memoByState(
       for (const submission of cache.submissions) {
         if (assignment && submission.assignment !== assignment) continue;
         const known = byTarget.get(submission.ref) ?? null;
-        // A student who submitted again after the send is new work, not the grade we already sent.
-        const change =
-          known?.state.tag === "sent" &&
-          submission.submittedAt !== null &&
-          submission.submittedAt > known.state.at
-            ? null
-            : known;
+        const change = known && resubmittedSince(submission, known) ? null : known;
         const missing = submission.workflow === "missing";
         if (submission.workflow !== "submitted" && !(withMissing && missing) && !change) continue;
         const parent = cache.assignments.find((a) => a.ref === submission.assignment);
@@ -229,22 +238,25 @@ const dueItems = (
 ): { dated: readonly DatedItem[]; undated: readonly DueItem[] } => {
   const dated: DatedItem[] = [];
   const undated: { item: DueItem; firstIn: string }[] = [];
+  const byTarget = changesByTarget(state);
   for (const cache of caches(state)) {
     for (const assignment of cache.assignments) {
       const course = cache.courses.find((c) => c.ref === assignment.course);
       const school = schoolOf(state, assignment.school);
       if (!course || !school) continue;
       const submissions = cache.submissions.filter((s) => s.assignment === assignment.ref);
-      const waiting = submissions.filter((s) => s.workflow === "submitted");
+      const turnedIn = submissions.filter(
+        (s) => s.workflow === "submitted" || s.workflow === "graded",
+      );
+      const waiting = turnedIn.filter((s) => s.workflow === "submitted" && !gradeSent(s, byTarget));
       const counts = {
         assignment,
         course,
         school,
         toGrade: waiting.length,
         late: waiting.filter((s) => s.lateDays > 0).length,
-        submitted: submissions.filter((s) => s.workflow === "submitted" || s.workflow === "graded")
-          .length,
-        graded: submissions.filter((s) => s.workflow === "graded").length,
+        submitted: turnedIn.length,
+        graded: turnedIn.length - waiting.length,
         missing: submissions.filter((s) => s.workflow === "missing").length,
         total: submissions.length,
       };
@@ -526,7 +538,7 @@ const courseOverview = memoByState(
     return {
       course: parent,
       school,
-      toGrade: submissions.filter((s) => s.workflow === "submitted").length,
+      toGrade: assignments.reduce((sum, item) => sum + item.toGrade, 0),
       needsApproval: Object.values(state.changes).filter(
         (c) => c.course === course && summarizeIn(state, c).canApprove,
       ).length,

@@ -788,6 +788,27 @@ describe("the sync after a send", () => {
         ?.comments ?? [];
     expect(comments.some((comment) => comment.text.includes("Jordan Pike"))).toBe(true);
   });
+  it("counts the sent grade as graded before the sync reads it back", async () => {
+    const rig = await connected();
+    const id = await openFor(rig, "Maya Ortiz");
+    const target = rig.state().changes[id]?.content.target;
+    const assignment = rig
+      .state()
+      .cache[LCC]?.submissions.find((submission) => submission.ref === target)?.assignment;
+    const toGrade = () =>
+      selectWhatsDue(rig.state(), rig.state().now())
+        .flatMap((group) => group.items)
+        .find((item) => item.assignment.ref === assignment)?.toGrade ?? 0;
+    const before = toGrade();
+    approve(rig, id);
+    let landed: number | null = null;
+    await rig.clock.run(
+      rig.state().sendChanges([id], () => {
+        landed = toGrade();
+      }),
+    );
+    expect(landed).toBe(before - 1);
+  });
 });
 
 describe("the demo script", () => {
