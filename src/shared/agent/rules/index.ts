@@ -25,6 +25,7 @@ import {
   DRAFT_GRADE_REQUEST,
   DRAFT_MESSAGE_REQUEST,
   DRAFT_REPLY_REQUEST,
+  FILL_GRADE_REQUEST,
   SCAN_COURSE_REQUEST,
   type Agent,
   type AgentEffect,
@@ -139,6 +140,58 @@ const missingDraft = (assignment: Assignment): GradeDraft => ({
   attach: false,
 });
 
+const gradeDraftFor = (submission: Submission, assignment: Assignment): GradeDraft =>
+  submission.body.kind === "none"
+    ? missingDraft(assignment)
+    : (findBankDraft(submission) ?? genericDraft(assignment, submission));
+
+/** Fills only what the teacher left blank, so a score or comment they typed stays theirs. */
+async function* fillGrade({ scope }: AgentInput): AsyncGenerator<unknown, void> {
+  const change = scope.changes.find((c) => c.id === scope.focus);
+  const content = change?.content;
+  const submission = scope.submissions.find((s) => s.ref === content?.target);
+  const assignment = scope.assignments.find((a) => a.ref === submission?.assignment);
+  if (!change || content?.kind !== "grade" || !submission || !assignment) {
+    yield { type: "say", text: "Open the grade you started, and I'll fill in the rest." };
+    return;
+  }
+  const draft = gradeDraftFor(submission, assignment);
+  const blank = (content.rubric ?? []).filter((score) => score.points === null);
+  const patch = {
+    kind: "grade",
+    ...(blank.length > 0
+      ? {
+          rubricPoints: Object.fromEntries(
+            blank.map((score) => [score.criterion, draft.scores?.[score.name] ?? 0]),
+          ),
+        }
+      : {}),
+    ...(!content.rubric && content.points === null && draft.score !== null
+      ? { points: draft.score }
+      : {}),
+    ...(content.comment?.trim()
+      ? {}
+      : { comment: draft.comment.replaceAll("{first}", first(submission.studentName)) }),
+  };
+  if (Object.keys(patch).length === 1) {
+    yield { type: "say", text: "Everything is filled in already. Tell me what to change." };
+    return;
+  }
+  yield { type: "work", line: "Read the submission and kept what you entered" };
+  yield { type: "edit", change: change.id, patch, why: "Filled in what was blank." };
+  for (const score of blank) {
+    const why = draft.why[score.name];
+    if (why)
+      yield {
+        type: "annotate",
+        change: change.id,
+        field: score.criterion,
+        why,
+        quotes: draft.anchors[score.name] ?? [],
+      };
+  }
+}
+
 async function* draftGrade(input: AgentInput): AsyncGenerator<unknown, void> {
   const { scope } = input;
   const submission = scope.submissions[0];
@@ -149,9 +202,7 @@ async function* draftGrade(input: AgentInput): AsyncGenerator<unknown, void> {
     return;
   }
   const empty = submission.body.kind === "none";
-  const draft = empty
-    ? missingDraft(assignment)
-    : (findBankDraft(submission) ?? genericDraft(assignment, submission));
+  const draft = gradeDraftFor(submission, assignment);
   yield {
     type: "work",
     line: empty
@@ -566,6 +617,7 @@ export const createRuleAgent = (): Agent => ({
     const { request, scope } = input;
     if (scope.northStar) return yield* northStarStream(input, scope.northStar);
     if (request === DRAFT_GRADE_REQUEST) return yield* draftGrade(input);
+    if (request === FILL_GRADE_REQUEST) return yield* fillGrade(input);
     if (request === DRAFT_REPLY_REQUEST) return yield* draftReply(scope.conversations[0]);
     if (request === DRAFT_MESSAGE_REQUEST) return yield* draftMessage(scope);
     const about = ANNOUNCEMENT_ABOUT.exec(request)?.[1];

@@ -193,8 +193,17 @@ const discard = async (t) => {
   await t.media({});
   await settle(t);
   await focusIs(t, OFF_SIDEBAR, "after Discard, focus stays in the thread");
-  await focusIs(t, '[data-testid="queue-start"]', "after Discard, focus lands on Start grading");
+  await focusIs(
+    t,
+    '[data-testid="grade-open"] button',
+    "after Discard, focus lands on Draft with Claude for the same student (#66)",
+  );
   await t.shot("focus-after-discard");
+  await t.goto("/threads/t-queue?view=list");
+  await t.waitFor(
+    `document.querySelector('[data-testid="queue-start"]')`,
+    "the grading list opens",
+  );
 };
 
 const named = (scope, text) =>

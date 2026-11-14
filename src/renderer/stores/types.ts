@@ -103,6 +103,8 @@ export type Thread = ThreadSubject & {
   settledAt?: IsoTime;
   /** What Claude's runs in this thread used and cost, summed. Absent until a run reports one. */
   spend?: { tokens: number; usd: number };
+  /** For diagnosis, never shown: the last things the parser set aside from Claude's runs here, and why. */
+  dropped?: readonly { text: string; at: IsoTime }[];
 };
 
 export type OnboardingStep = "welcome" | "setup" | "done";

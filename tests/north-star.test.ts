@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseAgentEffect, type Agent, type AgentScope } from "~/shared/agent/agent";
+import {
+  parseAgentEffect,
+  type Agent,
+  type AgentScope,
+  type AgentViolation,
+} from "~/shared/agent/agent";
 import { createRuleAgent } from "~/shared/agent/rules";
 import { northStarStream } from "~/shared/agent/rules/northStar";
 import { planWork, sittingsOf } from "~/renderer/components/screens/due.logic";
@@ -29,6 +34,13 @@ import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
+
+/** What the parser kept, and the parts it set aside. */
+const parsed = (raw: unknown, scope: AgentScope) => {
+  const dropped: AgentViolation[] = [];
+  const result = parseAgentEffect(raw, scope, (violation) => void dropped.push(violation));
+  return { result, dropped };
+};
 
 const LCC = "lcc" as SchoolId;
 const RSU = "rsu" as SchoolId;
@@ -822,7 +834,14 @@ describe("the handoff parser", () => {
     const thread = "t-e101-ann" as ThreadId;
     const count = Object.keys(rig.state().threads).length;
     await ask(rig, "hand this off", thread);
-    expect(messagesOf(rig, thread, "refusal")).toHaveLength(1);
+    expect(messagesOf(rig, thread, "refusal")).toEqual([]);
+    expect(messagesOf(rig, thread, "agent").at(-1)).toMatchObject({
+      text: "Claude couldn't start that work, so nothing was started.",
+      replies: ["Try again"],
+    });
+    expect(threadOf(rig, thread).dropped).toEqual([
+      { text: "handoff: aimed outside the thread at handoff", at: expect.any(String) },
+    ]);
     expect(messagesOf(rig, thread, "handed-off")).toEqual([]);
     expect(Object.keys(rig.state().threads)).toHaveLength(count);
   });
@@ -900,26 +919,26 @@ describe("the handoff parser", () => {
     });
   });
 
-  it("refuses replies that aren't an array of real texts, and keeps ones that are", async () => {
+  it("drops replies that aren't an array of real texts and keeps the answer, and keeps ones that are", async () => {
     const rig = await connected();
     for (const replies of ["HUM 150", [""], ["  "], ["HUM 150", 150], [null], {}, null]) {
-      expect(parseAgentEffect({ type: "say", text: "Which?", replies }, scopeOf(rig))).toEqual({
-        ok: false,
-        error: { kind: "malformed", detail: "say replies" },
+      expect(parsed({ type: "say", text: "Which?", replies }, scopeOf(rig))).toEqual({
+        result: { ok: true, value: { type: "say", text: "Which?" } },
+        dropped: [{ kind: "malformed", detail: "say replies" }],
       });
     }
     expect(
-      parseAgentEffect(
-        { type: "say", text: "Which?", replies: ["HUM 150", "All my courses"] },
-        scopeOf(rig),
-      ),
+      parsed({ type: "say", text: "Which?", replies: ["HUM 150", "All my courses"] }, scopeOf(rig)),
     ).toEqual({
-      ok: true,
-      value: { type: "say", text: "Which?", replies: ["HUM 150", "All my courses"] },
+      result: {
+        ok: true,
+        value: { type: "say", text: "Which?", replies: ["HUM 150", "All my courses"] },
+      },
+      dropped: [],
     });
   });
 
-  it("refuses a line whose source doesn't exist, and keeps one that does", async () => {
+  it("drops a line whose source doesn't exist, and keeps the answer and the lines that do", async () => {
     const rig = await connected();
     const assignment = allOf(rig, "assignments")[0];
     for (const source of [
@@ -928,17 +947,16 @@ describe("the handoff parser", () => {
       { kind: "announcement", ref: "lcc:announcement:0" },
       { kind: "conversation", ref: "lcc:conversation:0" },
       { kind: "grade" },
-      "due",
     ]) {
-      expect(
-        parseAgentEffect(
-          { type: "say", text: "See this.", lines: [{ source, title: "It" }] },
-          scopeOf(rig),
-        ).ok,
-      ).toBe(false);
+      const { result, dropped } = parsed(
+        { type: "say", text: "See this.", lines: [{ source, title: "It" }] },
+        scopeOf(rig),
+      );
+      expect(result).toEqual({ ok: true, value: { type: "say", text: "See this." } });
+      expect(dropped).toEqual([{ kind: "out-of-scope", target: expect.any(String) }]);
     }
     expect(
-      parseAgentEffect(
+      parsed(
         {
           type: "say",
           text: "See this.",
@@ -949,54 +967,69 @@ describe("the handoff parser", () => {
               detail: "Due soon",
               extra: 1,
             },
+            { source: { kind: "course", ref: "lcc:course:0" }, title: "Gone" },
             { source: { kind: "due" }, title: "All" },
           ],
         },
         scopeOf(rig),
       ),
     ).toEqual({
-      ok: true,
-      value: {
-        type: "say",
-        text: "See this.",
-        lines: [
-          { source: { kind: "assignment", ref: assignment?.ref }, title: "It", detail: "Due soon" },
-          { source: { kind: "due" }, title: "All" },
-        ],
+      result: {
+        ok: true,
+        value: {
+          type: "say",
+          text: "See this.",
+          lines: [
+            {
+              source: { kind: "assignment", ref: assignment?.ref },
+              title: "It",
+              detail: "Due soon",
+            },
+            { source: { kind: "due" }, title: "All" },
+          ],
+        },
       },
+      dropped: [{ kind: "out-of-scope", target: "lcc:course:0" }],
     });
   });
 
-  it("refuses a line with no title, or that isn't a line", async () => {
+  it("drops a line with no title, or that isn't a line, and keeps the answer", async () => {
     const rig = await connected();
     for (const lines of [
-      "due",
       [{ kind: "due" }],
       [{ source: { kind: "due" } }],
       [{ source: { kind: "due" }, title: " " }],
       [{ source: { kind: "due" }, title: "All", detail: 3 }],
+      ["due"],
     ]) {
-      expect(parseAgentEffect({ type: "say", text: "See this.", lines }, scopeOf(rig))).toEqual({
-        ok: false,
-        error: { kind: "malformed", detail: "say lines" },
+      expect(parsed({ type: "say", text: "See this.", lines }, scopeOf(rig))).toEqual({
+        result: { ok: true, value: { type: "say", text: "See this." } },
+        dropped: [{ kind: "malformed", detail: "say line" }],
       });
     }
+    expect(parsed({ type: "say", text: "See this.", lines: "due" }, scopeOf(rig))).toEqual({
+      result: { ok: true, value: { type: "say", text: "See this." } },
+      dropped: [{ kind: "malformed", detail: "say lines" }],
+    });
   });
 
-  it("refuses an announcement source outside North Star", async () => {
+  it("drops an announcement source outside North Star", async () => {
     const rig = await connected();
     const post = allOf(rig, "announcements")[0];
     const { northStar: _dropped, ...courseScope } = scopeOf(rig);
     expect(
-      parseAgentEffect(
+      parsed(
         {
           type: "say",
           text: "See this.",
           lines: [{ source: { kind: "announcement", ref: post?.ref }, title: "It" }],
         },
         courseScope,
-      ).ok,
-    ).toBe(false);
+      ),
+    ).toEqual({
+      result: { ok: true, value: { type: "say", text: "See this." } },
+      dropped: [{ kind: "out-of-scope", target: post?.ref }],
+    });
   });
 });
 
@@ -1289,7 +1322,7 @@ describe("what North Star answers", () => {
     expect(Object.keys(rig.state().changes)).toEqual([]);
   });
 
-  it("keeps a real rule break as a refusal, apart from an ordinary no", async () => {
+  it("logs a real rule break for diagnosis without showing the teacher an agent error", async () => {
     const agent: Agent = {
       async *run() {
         yield { type: "approve", change: "anything" };
@@ -1297,8 +1330,11 @@ describe("what North Star answers", () => {
     };
     const rig = await connected({ agent });
     await ask(rig, "do it");
-    expect(messagesOf(rig, chatOf(rig), "refusal")).toHaveLength(1);
+    expect(messagesOf(rig, chatOf(rig), "refusal")).toEqual([]);
     expect(messagesOf(rig, chatOf(rig), "declined")).toEqual([]);
+    expect(threadOf(rig, chatOf(rig)).dropped?.map((entry) => entry.text)).toEqual([
+      'approve: asked to "approve", which no tool allows',
+    ]);
   });
 
   it("falls back to the next work, in the plan's order", async () => {
@@ -1357,17 +1393,21 @@ describe("what North Star answers", () => {
     });
   });
 
-  it("refuses an answer line that links a draft outside the scope", async () => {
+  it("drops an answer line that links a draft outside the scope, and keeps the no", async () => {
     const scope = scopeOf(await connected());
-    const parsed = parseAgentEffect(
-      {
-        type: "decline",
-        text: "No.",
-        lines: [{ source: { kind: "change", ref: "not-a-draft" }, title: "A draft" }],
-      },
-      scope,
-    );
-    expect(parsed).toMatchObject({ ok: false, error: { kind: "out-of-scope" } });
+    expect(
+      parsed(
+        {
+          type: "decline",
+          text: "No.",
+          lines: [{ source: { kind: "change", ref: "not-a-draft" }, title: "A draft" }],
+        },
+        scope,
+      ),
+    ).toEqual({
+      result: { ok: true, value: { type: "decline", text: "No." } },
+      dropped: [{ kind: "out-of-scope", target: "not-a-draft" }],
+    });
   });
 
   it("offers what it can do when the plan is empty", async () => {

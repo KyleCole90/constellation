@@ -147,6 +147,9 @@ export const DRAFT_MESSAGE_REQUEST = "Draft a message to this student about this
 /** The same ask with what the person said it should be about, in their words. */
 export const draftAnnouncementAbout = (topic: string): string =>
   `Draft an announcement for this course about ${topic}.`;
+/** "Draft with Claude" on a grade the teacher has started by hand: what they entered stays. */
+export const FILL_GRADE_REQUEST =
+  "Fill in the rest of this grade. Keep the scores and comment I already entered.";
 export const SCAN_COURSE_REQUEST = "Look over this course for the new term.";
 
 export interface Agent {
@@ -394,11 +397,12 @@ const parsePatch = (raw: unknown, record: ChangeRecord): Result<ChangePatch, Age
   }
 };
 
-const parseLines = (
-  raw: unknown,
-  scope: AgentScope,
-): Result<readonly AnswerLine[], AgentViolation> => {
-  if (!Array.isArray(raw)) return { ok: false, error: { kind: "malformed", detail: "say lines" } };
+/** A line that points at nothing in scope is dropped, and the answer it hangs from still stands. */
+const parseLines = (raw: unknown, scope: AgentScope, drop: Drop): readonly AnswerLine[] => {
+  if (!Array.isArray(raw)) {
+    drop({ kind: "malformed", detail: "say lines" });
+    return [];
+  }
   const lines: AnswerLine[] = [];
   for (const entry of raw as readonly unknown[]) {
     if (
@@ -406,24 +410,25 @@ const parseLines = (
       !isRecord(entry["source"]) ||
       !isText(entry["title"]) ||
       (entry["detail"] !== undefined && !isText(entry["detail"]))
-    )
-      return { ok: false, error: { kind: "malformed", detail: "say lines" } };
+    ) {
+      drop({ kind: "malformed", detail: "say line" });
+      continue;
+    }
     const source = parseSource(entry["source"], scope);
-    if (!source)
-      return {
-        ok: false,
-        error: {
-          kind: "out-of-scope",
-          target: clip(entry["source"]["ref"] ?? entry["source"]["kind"]),
-        },
-      };
+    if (!source) {
+      drop({
+        kind: "out-of-scope",
+        target: clip(entry["source"]["ref"] ?? entry["source"]["kind"]),
+      });
+      continue;
+    }
     lines.push({
       source,
       title: entry["title"],
       ...(entry["detail"] === undefined ? {} : { detail: entry["detail"] }),
     });
   }
-  return { ok: true, value: lines };
+  return lines;
 };
 
 const parseSource = (raw: Record<string, unknown>, scope: AgentScope): Source | null => {
@@ -463,31 +468,35 @@ const parseSource = (raw: Record<string, unknown>, scope: AgentScope): Source | 
 const parseDecline = (
   raw: Record<string, unknown>,
   scope: AgentScope,
+  drop: Drop,
 ): Result<AgentEffect, AgentViolation> => {
   if (!isText(raw["text"])) return fail({ kind: "malformed", detail: "decline text" });
-  if (raw["lines"] === undefined)
-    return { ok: true, value: { type: "decline", text: raw["text"] } };
-  const lines = parseLines(raw["lines"], scope);
-  return lines.ok
-    ? { ok: true, value: { type: "decline", text: raw["text"], lines: lines.value } }
-    : fail(lines.error);
+  const lines = raw["lines"] === undefined ? [] : parseLines(raw["lines"], scope, drop);
+  return {
+    ok: true,
+    value: { type: "decline", text: raw["text"], ...(lines.length > 0 ? { lines } : {}) },
+  };
 };
 
 const parseSay = (
   raw: Record<string, unknown>,
   scope: AgentScope,
+  drop: Drop,
 ): Result<AgentEffect, AgentViolation> => {
   if (!isText(raw["text"])) return fail({ kind: "malformed", detail: "say text" });
   const replies = raw["replies"];
-  if (replies !== undefined && !isTextList(replies))
-    return fail({ kind: "malformed", detail: "say replies" });
-  const answers = replies === undefined ? {} : { replies };
-  if (raw["lines"] === undefined)
-    return { ok: true, value: { type: "say", text: raw["text"], ...answers } };
-  const lines = parseLines(raw["lines"], scope);
-  return lines.ok
-    ? { ok: true, value: { type: "say", text: raw["text"], lines: lines.value, ...answers } }
-    : fail(lines.error);
+  const goodReplies = replies === undefined || isTextList(replies);
+  if (!goodReplies) drop({ kind: "malformed", detail: "say replies" });
+  const lines = raw["lines"] === undefined ? [] : parseLines(raw["lines"], scope, drop);
+  return {
+    ok: true,
+    value: {
+      type: "say",
+      text: raw["text"],
+      ...(lines.length > 0 ? { lines } : {}),
+      ...(goodReplies && replies !== undefined ? { replies } : {}),
+    },
+  };
 };
 
 const parseHandoffWork = (
@@ -557,9 +566,11 @@ const parseHandoff = (
   };
 };
 
+/** A reason stands on its own words. A quote that isn't in the submission loses only its highlight. */
 const parseAnnotate = (
   raw: Record<string, unknown>,
   scope: AgentScope,
+  drop: Drop,
 ): Result<AgentEffect, AgentViolation> => {
   const record = scope.changes.find((c) => c.id === raw["change"]);
   if (!record) return fail({ kind: "out-of-scope", target: clip(raw["change"]) });
@@ -568,16 +579,22 @@ const parseAnnotate = (
   const { target } = record.content;
   const submission = scope.submissions.find((s) => s.ref === target);
   if (!submission) return fail({ kind: "out-of-scope", target });
-  if (!isText(raw["field"]) || !isText(raw["why"]) || !Array.isArray(raw["quotes"]))
-    return fail({ kind: "malformed", detail: "annotate" });
+  if (!isText(raw["field"])) return fail({ kind: "malformed", detail: "annotate field" });
+  if (!isText(raw["why"])) return fail({ kind: "malformed", detail: "annotate why" });
+  const listed: readonly unknown[] = Array.isArray(raw["quotes"]) ? raw["quotes"] : [];
+  if (!Array.isArray(raw["quotes"])) drop({ kind: "malformed", detail: "annotate quotes" });
   const passages = passagesOf(submission);
   const quotes: { paragraph: number; quote: string }[] = [];
-  for (const entry of raw["quotes"] as readonly unknown[]) {
-    if (!isRecord(entry) || !isText(entry["quote"]) || !Number.isInteger(entry["paragraph"]))
-      return fail({ kind: "malformed", detail: "quote" });
+  for (const entry of listed) {
+    if (!isRecord(entry) || !isText(entry["quote"]) || !Number.isInteger(entry["paragraph"])) {
+      drop({ kind: "malformed", detail: "quote" });
+      continue;
+    }
     const paragraph = entry["paragraph"] as number;
-    if (!passages[paragraph]?.includes(entry["quote"]))
-      return fail({ kind: "quote-not-found", quote: clip(entry["quote"]) });
+    if (!passages[paragraph]?.includes(entry["quote"])) {
+      drop({ kind: "quote-not-found", quote: clip(entry["quote"]) });
+      continue;
+    }
     quotes.push({ paragraph, quote: entry["quote"] });
   }
   return {
@@ -586,17 +603,24 @@ const parseAnnotate = (
   };
 };
 
-/** Allowlist parse. `{ type: "approve" }` is an unknown-effect and shows in the thread as refused. Output is rebuilt, so extra keys never pass through. */
+/** Hears what a parse set aside from an effect it still kept. */
+type Drop = (violation: AgentViolation) => void;
+
+/**
+ * Allowlist parse. `{ type: "approve" }` is an unknown-effect. Output is rebuilt, so extra keys never pass through.
+ * A bad part of an otherwise good effect (a line, a reply list, a quote) is dropped through `drop`, and the rest is kept.
+ */
 export const parseAgentEffect = (
   raw: unknown,
   scope: AgentScope,
+  drop: Drop = () => {},
 ): Result<AgentEffect, AgentViolation> => {
   if (!isRecord(raw)) return fail({ kind: "malformed", detail: "effect is not an object" });
   switch (raw["type"]) {
     case "say":
-      return parseSay(raw, scope);
+      return parseSay(raw, scope, drop);
     case "decline":
-      return parseDecline(raw, scope);
+      return parseDecline(raw, scope, drop);
     case "work":
       return isText(raw["line"])
         ? { ok: true, value: { type: "work", line: raw["line"] } }
@@ -642,7 +666,7 @@ export const parseAgentEffect = (
       };
     }
     case "annotate":
-      return parseAnnotate(raw, scope);
+      return parseAnnotate(raw, scope, drop);
     case "finding":
       return parseFinding(raw, scope);
     case "handoff":
@@ -679,25 +703,30 @@ const parseFinding = (
   };
 };
 
+/** For diagnosis, never for the teacher: it names the agent's mistake, not what the teacher can do. */
 export const describeViolation = (violation: AgentViolation): string => {
   switch (violation.kind) {
     case "unknown-effect":
-      return `The agent asked to "${violation.seen}", which it is not allowed to do. Only the Approve and Send buttons can act on the LMS.`;
+      return `asked to "${violation.seen}", which no tool allows`;
     case "malformed":
-      return `The agent produced something unreadable (${violation.detail}), so it was ignored.`;
+      return `unreadable ${violation.detail}`;
     case "out-of-scope":
-      return "The agent aimed at something outside this thread, so it was ignored.";
+      return `aimed outside the thread at ${violation.target}`;
     case "out-of-range":
-      return `The agent proposed a value out of range (${violation.detail}), so it was ignored.`;
+      return `value out of range: ${violation.detail}`;
     case "quote-not-found":
-      return `The agent cited a passage that is not in the text it was given ("${violation.quote}"), so it was ignored.`;
+      return `quote not in the text: "${violation.quote}"`;
   }
 };
 
 export interface AgentSink {
   /** Awaited, so the next yield parses against a scope that includes this effect. */
   effect(effect: AgentEffect): void | Promise<void>;
-  refuse(violation: AgentViolation): void;
+  /**
+   * Something the parser set aside: a whole effect, or a bad part of one it kept. `effect` is the type the agent wrote,
+   * or null when the run itself broke.
+   */
+  refuse(violation: AgentViolation, effect: string | null): void;
 }
 
 /** The only way agent output reaches the app. A model that throws reads like any other bad output. */
@@ -710,11 +739,12 @@ export const runAgent = async (
   try {
     for await (const raw of agent.run(input, signal)) {
       if (signal.aborted) return;
-      const parsed = parseAgentEffect(raw, input.scope);
+      const type = isRecord(raw) ? clip(raw["type"]) : "not an object";
+      const parsed = parseAgentEffect(raw, input.scope, (part) => sink.refuse(part, type));
       if (parsed.ok) await sink.effect(parsed.value);
-      else sink.refuse(parsed.error);
+      else sink.refuse(parsed.error, type);
     }
   } catch {
-    sink.refuse({ kind: "malformed", detail: "the agent stopped unexpectedly" });
+    sink.refuse({ kind: "malformed", detail: "the agent stopped unexpectedly" }, null);
   }
 };

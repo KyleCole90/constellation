@@ -1950,6 +1950,64 @@ const handFormBackToClaude = async (t) => {
   );
 };
 
+/** A hand form the teacher has typed into still offers Draft with Claude, which keeps what they typed, and Discard stays on the student (#66). */
+const handFormTypedBackToClaude = async (t) => {
+  await t.goto("/threads/t-queue");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(QUEUE)})`,
+    "typed hand form: the list loads",
+  );
+  await expandQueue(t);
+  const row = await t.eval(
+    `[...document.querySelectorAll('${LIST} [data-row]')].find((row) => row.innerText.includes("Not started"))?.dataset.row`,
+  );
+  const student = await t.eval(
+    `document.querySelector('[data-row="${row}"] button span[title]').title`,
+  );
+  await t.click(`[data-row="${row}"] button`);
+  await opensUndrafted(t, student, "typed hand form");
+  await t.click("Grade it yourself", { within: OPEN });
+  const typed = `${CARD} [data-typed-score]`;
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(typed)})`,
+    "typed hand form: the hand form opens",
+  );
+  await t.eval(
+    `(() => { const input = document.querySelector(${JSON.stringify(typed)}); input.focus(); input.select(); })()`,
+  );
+  await t.type("3");
+  await t.key("Enter");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(typed)})?.value === "3"`,
+    "typed hand form: the score reads 3",
+  );
+  await t.waitFor(
+    `document.querySelector('[data-testid="card-actions"] [data-draft-instead]')?.innerText.trim() === "Fill the rest with Claude"`,
+    "typed hand form: Claude stays on offer, to fill only the rest (#66)",
+  );
+  await t.shot("hand-form-typed");
+  await t.click("Fill the rest with Claude", { within: '[data-testid="card-actions"]' });
+  await t.waitFor(
+    `document.querySelector('[data-testid="agent-working"]') === null && [...document.querySelectorAll(${JSON.stringify(typed)})].every((input) => input.value !== "") && document.querySelector("[data-edit-field]")?.value.trim()`,
+    "typed hand form: Claude fills in what was blank",
+    15_000,
+  );
+  await settled(t, "typed hand form: agent finished");
+  t.assert(
+    (await t.eval(`document.querySelector(${JSON.stringify(typed)}).value`)) === "3",
+    "typed hand form: the score the teacher typed is still 3 (#66)",
+    await t.eval(`document.querySelector(${JSON.stringify(typed)}).value`),
+  );
+  await t.shot("hand-form-typed-filled");
+  await t.click("Discard", { within: '[data-testid="card-actions"]' });
+  await opensUndrafted(
+    t,
+    student,
+    "typed hand form: Discard stays on the student, undrafted (#66)",
+  );
+  await t.shot("hand-form-typed-discarded");
+};
+
 const discard = async (t) => {
   await t.goto("/threads/t-queue");
   await t.waitFor(
@@ -2003,24 +2061,13 @@ const discard = async (t) => {
     await t.sleep(250);
   }
   await t.click("Discard", { within: '[data-testid="card-actions"]' });
-  await t.waitFor(
-    `!document.querySelector(${JSON.stringify(CARD)}) && document.querySelector(${JSON.stringify(LIST)})`,
-    "a discarded grade hands the thread back to the list, with no student header over an empty pane",
-  );
+  await opensUndrafted(t, student, "a discarded grade stays on the student, undrafted (#66)");
   t.assert(
-    (await t.eval("location.search")) === "?view=list",
-    "after the discard the URL names the list",
+    (await t.eval("location.search")).startsWith("?row="),
+    "after the discard the URL still names the student's row (#66)",
     await t.eval("location.search"),
   );
-  t.assert(
-    !(await t.text(QUEUE)).match(/\b\d+ of \d+(?!\d| sent)/),
-    "the list no longer claims a place in it",
-    await t.text(QUEUE),
-  );
   await t.shot("discard-done");
-  await t.click(`[data-row="${row}"] button`);
-  await opensUndrafted(t, student, "discard: reopened");
-  await t.shot("discard-reopened-undrafted");
 };
 
 const replyCard = (t) =>
@@ -2110,5 +2157,6 @@ export const run = async (t) => {
   await discard(t);
   await replyDiscard(t);
   await handFormBackToClaude(t);
+  await handFormTypedBackToClaude(t);
   await failedDraft(t);
 };
