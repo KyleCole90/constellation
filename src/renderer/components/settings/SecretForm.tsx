@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent, type ReactNode, type RefCallback } from "react";
 
 import { cn } from "~/renderer/lib/utils";
-import { Secret } from "~/shared/providers/provider";
+import { Secret, type SecretRefusal } from "~/shared/providers/provider";
 
 import { Button } from "../ui/button";
 
@@ -9,9 +9,10 @@ const FIELD =
   "rounded-control border border-input bg-background px-field-x font-mono text-body text-foreground outline-none placeholder:text-tertiary-label focus-visible:ring-2 focus-visible:ring-ring";
 
 /**
- * The only place the app takes a secret from a person. The input stays uncontrolled and is emptied in the same
- * tick as the submit, before anything is awaited, so the value never reaches React state and is never rendered again.
- * `onSubmit` answers with a message safe to show, or null when it worked.
+ * The only place the app takes a secret from a person. The input stays uncontrolled, so the value never reaches React
+ * state and is never rendered. It stays in the field, read-only, while `onSubmit` runs, and is emptied once the secret
+ * is taken or proved wrong; any other refusal leaves it there to try again.
+ * `onSubmit` answers with a refusal safe to show, or null when it worked.
  * `inputRef` lets a demo fill write the field directly, so a filled value never passes through React state either.
  * An error speaks to the `context` it was raised under, so a new context retires it.
  * The inline layout puts the field, `aside`, and the buttons on one line, for a row in a list. While busy, `progress`
@@ -34,7 +35,7 @@ export function SecretForm({
   fieldLabel: string;
   submitLabel: string;
   busyLabel: string;
-  onSubmit: (secret: Secret) => Promise<string | null>;
+  onSubmit: (secret: Secret) => Promise<SecretRefusal | null>;
   secondary?: { label: string; make: () => Secret };
   aside?: ReactNode;
   progress?: ReactNode;
@@ -50,22 +51,22 @@ export function SecretForm({
   const error = said && said.context === context ? said.text : null;
   const [busy, setBusy] = useState(false);
 
-  const run = async (secret: Secret) => {
+  const run = async (secret: Secret, fromField: boolean) => {
     setBusy(true);
     setSaid(null);
-    const problem = await onSubmit(secret);
+    const refusal = await onSubmit(secret);
     setBusy(false);
-    setSaid(problem === null ? null : { text: problem, context });
-    if (problem) input.current?.focus();
+    setSaid(refusal === null ? null : { text: refusal.message, context });
+    if (fromField && input.current && (refusal === null || refusal.wrongSecret))
+      input.current.value = "";
+    if (refusal) input.current?.focus();
   };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const field = input.current;
     if (!field || busy) return;
-    const secret = new Secret(field.value);
-    field.value = "";
-    void run(secret);
+    void run(new Secret(field.value), true);
   };
 
   const attach = (element: HTMLInputElement | null) => {
@@ -97,7 +98,7 @@ export function SecretForm({
       variant="ghost-muted"
       size={layout === "inline" ? "md" : "lg"}
       disabled={busy}
-      onClick={() => void run(secondary.make())}
+      onClick={() => void run(secondary.make(), false)}
     >
       {secondary.label}
     </Button>

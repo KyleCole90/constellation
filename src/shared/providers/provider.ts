@@ -119,6 +119,12 @@ export const revealSecret = <T>(secret: Secret, use: (raw: string) => T): T =>
 export const isBlankSecret = (secret: Secret): boolean =>
   revealSecret(secret, (raw) => raw.trim() === "");
 
+/** Why a secret didn't take, in words safe to show. `wrongSecret` only when the secret itself is proved bad; any other failure leaves it in the field to try again. */
+export interface SecretRefusal {
+  message: string;
+  wrongSecret: boolean;
+}
+
 export type Credential =
   | { kind: "bearer"; token: Secret }
   | {

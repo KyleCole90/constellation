@@ -107,7 +107,10 @@ describe("addSchool", () => {
     const result = await add(rig, "nowhere.example.edu", SENTINEL);
     expect(result).toEqual({
       ok: false,
-      error: expect.stringContaining("nowhere.example.edu") as string,
+      error: {
+        message: expect.stringContaining("nowhere.example.edu") as string,
+        wrongSecret: false,
+      },
     });
     expect(JSON.stringify(result)).not.toContain(SENTINEL);
     expect(rig.state().schools).toEqual([]);
@@ -130,15 +133,25 @@ describe("addSchool", () => {
     const result = await add(rig, LCC_HOST);
     expect(result).toEqual({
       ok: false,
-      error: "That token was refused. Generate a new one and try again.",
+      error: {
+        message: "That token was refused. Generate a new one and try again.",
+        wrongSecret: true,
+      },
     });
     await expectNoTrace(rig, LCC);
   });
 
-  it("an LMS that can't be reached leaves nothing behind", async () => {
+  it("a school down for maintenance says so, keeps the pasted token, and leaves nothing behind", async () => {
     const rig = await makeStoreRig();
     rig.server.setNoise({ rate5xx: 1 });
-    expect((await add(rig, LCC_HOST)).ok).toBe(false);
+    expect(await add(rig, LCC_HOST)).toEqual({
+      ok: false,
+      error: {
+        message:
+          "Canvas is down for maintenance right now. Try again in a few minutes. Your token is still filled in.",
+        wrongSecret: false,
+      },
+    });
     await expectNoTrace(rig, LCC);
   });
 

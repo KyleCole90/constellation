@@ -98,6 +98,7 @@ import {
   type ProviderDescriptor,
   type Read,
   type Secret,
+  type SecretRefusal,
   type Vault,
 } from "~/shared/providers/provider";
 import { OFFLINE_SEND_REASON, desktopBridge, isOnline, onConnectivity } from "~/renderer/desktop";
@@ -177,7 +178,7 @@ interface WorkspaceActions extends SetupActions {
     school: SchoolId,
     secret: Secret,
     onStage?: (stage: ConnectStage) => void,
-  ): Promise<Result<AccountInfo, string>>;
+  ): Promise<Result<AccountInfo, SecretRefusal>>;
   /**
    * Finds the school at this address and connects it through the same path as `connect`. A failure leaves no trace:
    * no school, no connection record, nothing in the vault. A host already added reconnects that school.
@@ -186,7 +187,7 @@ interface WorkspaceActions extends SetupActions {
     host: SchoolHost,
     secret: Secret,
     onStage?: (stage: ConnectStage) => void,
-  ): Promise<Result<School, string>>;
+  ): Promise<Result<School, SecretRefusal>>;
   /** Forgets the token and drops the school with its connection and cache. Refuses, with false, once the school has a saved change. */
   removeSchool(school: SchoolId): Promise<boolean>;
   disconnect(school: SchoolId): Promise<void>;
@@ -488,6 +489,37 @@ const initialData = (backend: Backend, resetAt: number): WorkspaceData => ({
   handoffs: {},
   resetAt,
 });
+
+const notAvailable: SecretRefusal = { message: "That school isn't available.", wrongSecret: false };
+
+/** Only a refused token is the token's fault. Anything else leaves it filled in, since Canvas shows a token only once. */
+const verifyRefusal = (error: LmsError, vendor: string): SecretRefusal => {
+  const kept = (problem: string): SecretRefusal => ({
+    message: `${problem} Your token is still filled in.`,
+    wrongSecret: false,
+  });
+  switch (error.kind) {
+    case "auth_expired":
+      return {
+        message: "That token was refused. Generate a new one and try again.",
+        wrongSecret: true,
+      };
+    case "unavailable":
+      if (error.status === 503)
+        return kept(`${vendor} is down for maintenance right now. Try again in a few minutes.`);
+      return error.status === null
+        ? kept(`${vendor} didn't answer. Check your internet connection and try again.`)
+        : kept(`${vendor} is having trouble right now. Try again in a few minutes.`);
+    case "rate_limited":
+      return kept(`${vendor} asked us to slow down. Try again in a minute.`);
+    case "forbidden":
+    case "not_found":
+    case "rejected":
+    case "lost_response":
+    case "unsupported":
+      return kept(`${vendor} couldn't check the token right now. Try again in a few minutes.`);
+  }
+};
 
 export const expiredNoticeText = (school: string): string =>
   `Your ${school} connection expired. Reconnect to keep sending.`;
@@ -1549,16 +1581,16 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           target: School,
           secret: Secret,
           onStage?: (stage: ConnectStage) => void,
-        ): Promise<Result<AccountInfo, string>> => {
+        ): Promise<Result<AccountInfo, SecretRefusal>> => {
           const school = target.id;
           const known = schoolById(school) !== undefined;
           const descriptor = backend.descriptors[target.provider];
           const lms = providerOf(target);
-          if (!descriptor || !lms) return { ok: false, error: "That school isn't available." };
+          if (!descriptor || !lms) return { ok: false, error: notAvailable };
           if (descriptor.enrollment.kind === "paste-token") {
             const { validate } = descriptor.enrollment;
             const invalid = revealSecret(secret, (raw) => validate(raw));
-            if (invalid) return { ok: false, error: invalid };
+            if (invalid) return { ok: false, error: { message: invalid, wrongSecret: true } };
           }
           const before = get().connections[school]?.status ?? "disconnected";
           const previous =
@@ -1574,7 +1606,10 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           } catch (error) {
             return {
               ok: false,
-              error: error instanceof Error ? error.message : "The token could not be stored.",
+              error: {
+                message: error instanceof Error ? error.message : "The token could not be stored.",
+                wrongSecret: false,
+              },
             };
           }
           onStage?.("checking");
@@ -1582,13 +1617,10 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           if (!account.ok) {
             const kept = previous !== null && (await restoreToken(school, previous));
             if (!kept) await deps.vault.forget(school);
-            const reason =
-              account.error.kind === "auth_expired"
-                ? "That token was refused. Generate a new one and try again."
-                : "The LMS could not be reached, so nothing was saved.";
+            const refusal = verifyRefusal(account.error, descriptor.label);
             if (!known) {
               providers.delete(school);
-              return { ok: false, error: reason };
+              return { ok: false, error: refusal };
             }
             patchConnection(school, {
               status: kept ? before : previous ? "expired" : "disconnected",
@@ -1599,8 +1631,11 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               ok: false,
               error:
                 kept && before === "connected"
-                  ? `${reason} Your current token is still in use.`
-                  : reason,
+                  ? {
+                      ...refusal,
+                      message: `${refusal.message} Your current token is still in use.`,
+                    }
+                  : refusal,
             };
           }
           if (!schoolById(school))
@@ -1686,9 +1721,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
 
           connect: async (school, secret, onStage) => {
             const target = schoolById(school);
-            return target
-              ? enroll(target, secret, onStage)
-              : { ok: false, error: "That school isn't available." };
+            return target ? enroll(target, secret, onStage) : { ok: false, error: notAvailable };
           },
 
           addSchool: async (host, secret, onStage) => {
@@ -1698,7 +1731,10 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             if (!target)
               return {
                 ok: false,
-                error: `Couldn't find a school at ${host}. Check it against your browser's address bar when you sign in to your school's LMS, or ask your school's IT help desk for it.`,
+                error: {
+                  message: `Couldn't find a school at ${host}. Check it against your browser's address bar when you sign in to your school's LMS, or ask your school's IT help desk for it.`,
+                  wrongSecret: false,
+                },
               };
             const result = await enroll(target, secret, onStage);
             return result.ok ? { ok: true, value: target } : result;

@@ -1271,7 +1271,10 @@ describe("replacing a token", () => {
     rig.server.expireToken(LCC);
     await rig.connect(LCC, "working-token-long-enough-to-pass");
     const result = await rig.connect(LCC, "older-token-that-was-revoked-long-ago");
-    expect(result).toMatchObject({ ok: false, error: expect.stringContaining("still in use") });
+    expect(result).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining("still in use") as string, wrongSecret: true },
+    });
     expect(rig.state().connections[LCC]?.status).toBe("connected");
     expect(await rig.clock.run(rig.state().syncSchool(LCC))).toBe(true);
   });
@@ -1280,7 +1283,10 @@ describe("replacing a token", () => {
     const rig = await connected();
     rig.server.setNoise({ rate5xx: 1 });
     const result = await rig.connect(LCC, "another-token-long-enough-to-pass");
-    expect(result).toMatchObject({ ok: false, error: expect.stringContaining("still in use") });
+    expect(result).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining("still in use") as string, wrongSecret: false },
+    });
     rig.server.setNoise({ rate5xx: 0 });
     expect(rig.state().connections[LCC]?.status).toBe("connected");
     expect(await rig.clock.run(rig.state().syncSchool(LCC))).toBe(true);

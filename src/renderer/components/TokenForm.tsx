@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 
 import type { SchoolId } from "~/shared/domain/ids";
 import { isDemoSchool } from "~/shared/domain/lms";
-import { Secret } from "~/shared/providers/provider";
+import { Secret, type SecretRefusal } from "~/shared/providers/provider";
 import { useWorkspace, workspaceStore, type ConnectStage } from "~/renderer/stores/workspace";
 
 import { STAGE_WORDS } from "./settings/connection.logic";
@@ -37,7 +37,7 @@ export function TokenForm({
       </p>
     );
 
-  const connect = async (secret: Secret): Promise<string | null> => {
+  const connect = async (secret: Secret): Promise<SecretRefusal | null> => {
     const result = await workspaceStore().getState().connect(school, secret, setStage);
     setStage(null);
     if (!result.ok) return result.error;
