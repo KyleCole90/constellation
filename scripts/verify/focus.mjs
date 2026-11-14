@@ -249,7 +249,7 @@ const approval = async (t) => {
   await focusIs(t, PANEL, "after Send, focus stays on the preview, not the body");
   await t.shot("focus-after-send");
 
-  await pressNamed(t, PANEL, "Next:");
+  await pressNamed(t, PANEL, "Draft next:");
   await openPreview(t);
   await press(t, APPROVE);
   await t.waitFor(`Boolean(${named(PANEL, "Undo approval")})`, "the next draft is approved");
