@@ -200,6 +200,14 @@ describe("main's Anthropic agent", () => {
     expect(api.sent[0]?.body["system"]).toContain("never write UTC");
   });
 
+  it("tells Claude a course's LMS term is the admins', so a scan never asks the teacher to set it (#88)", async () => {
+    const api = transport(() => json(200, message([])));
+    await anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch })(INPUT);
+    expect(api.sent[0]?.body["system"]).toContain(
+      "a teacher can't change it, so never flag it, compare it with the plan, or ask the teacher to set it",
+    );
+  });
+
   it("forwards only its own tools, and a tool's input can't rename the effect", async () => {
     const api = transport(() =>
       json(

@@ -178,16 +178,7 @@ function Breaks({
   );
 }
 
-function ShiftPreview({
-  name,
-  dated,
-  plan,
-}: {
-  name: string;
-  dated: readonly DueDay[];
-  plan: TermPlan;
-}) {
-  if (dated.length === 0) return <Note>{name} has no due dates to move.</Note>;
+function ShiftPreview({ dated, plan }: { dated: readonly DueDay[]; plan: TermPlan }) {
   return (
     <table className="w-full text-left text-meta">
       <caption className="pt-1 pb-label-gap text-left section-title">
@@ -231,18 +222,9 @@ const sourceRefOf = (setup: CourseSetup) =>
   setup.source?.kind === "course" ? setup.source.ref : null;
 
 /** What the copy will shift, from the source course's read or the package's own. Null when a package's dates weren't read. */
-const datedOf = (
-  setup: CourseSetup,
-  source: SourceCourse | null,
-): { name: string; dated: readonly DueDay[] } | null => {
-  if (setup.source?.kind === "cartridge")
-    return setup.source.hint && { name: setup.source.name, dated: setup.source.hint.dated };
-  return (
-    source && {
-      name: source.code,
-      dated: source.dated.map(({ title, dueAt }) => ({ title, due: dateOfTime(dueAt) })),
-    }
-  );
+const datedOf = (setup: CourseSetup, source: SourceCourse | null): readonly DueDay[] | null => {
+  if (setup.source?.kind === "cartridge") return setup.source.hint?.dated ?? null;
+  return source && source.dated.map(({ title, dueAt }) => ({ title, due: dateOfTime(dueAt) }));
 };
 
 /** Inside the copy card: where each due date lands under the dates the copy was drafted from, which is what the approval covers. */
@@ -252,11 +234,12 @@ export function CopyDates({ setup }: { setup: CourseSetup }) {
       state.setupOptions[setup.school]?.sources.find((entry) => entry.ref === sourceRefOf(setup)) ??
       null,
   );
-  const dates = datedOf(setup, source);
-  if (!dates || !setup.plan) return null;
+  const dated = datedOf(setup, source);
+  // With nothing dated there is no table, and Dates already said nothing moves.
+  if (!dated?.length || !setup.plan) return null;
   return (
     <section data-testid="copy-dates" className="border-b border-border px-card py-3">
-      <ShiftPreview {...dates} plan={setup.plan} />
+      <ShiftPreview dated={dated} plan={setup.plan} />
     </section>
   );
 }
@@ -285,8 +268,8 @@ function DatesForm({
   };
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
-  const dates = datedOf(setup, source);
-  const undated = dates?.dated.length === 0;
+  const dated = datedOf(setup, source);
+  const undated = dated?.length === 0;
   const checked = checkPlan(plan, undated);
   const problems = checked.ok ? [] : checked.error;
   const unchanged = confirmed && JSON.stringify(plan) === JSON.stringify(setup.plan);
@@ -306,6 +289,7 @@ function DatesForm({
   const changeSource = () =>
     setRefused(workspaceStore().getState().chooseSource(setup.course, null));
   const sourceName = setup.source?.kind === "course" ? setup.source.label : setup.source?.name;
+  const vendor = useWorkspace((state) => state.vendorLabelFor(setup.school) ?? "The LMS");
 
   return (
     <Card
@@ -345,6 +329,10 @@ function DatesForm({
           }
         />
       </div>
+      <Note testId="term-name-note">
+        Term names only change the course's own text, where the scan offers to swap the old name for
+        the new one. {vendor} keeps the course in the term your school set.
+      </Note>
       <p data-testid="day-map" className="text-body">
         {dayMapWords(plan.oldTerm.days, plan.newTerm.days, undated)}
       </p>
@@ -355,11 +343,11 @@ function DatesForm({
           term. Change it if the old term was longer or shorter.
         </Note>
       )}
-      {setup.source?.kind === "cartridge" && !dates ? (
+      {setup.source?.kind === "cartridge" && !dated ? (
         <Note>This package's due dates move by the same rule when it's imported.</Note>
-      ) : dates && checked.ok && !unchanged ? (
-        // Unchanged since the review, the copy card below shows this same table.
-        <ShiftPreview {...dates} plan={checked.value} />
+      ) : dated && dated.length > 0 && checked.ok && !unchanged ? (
+        // Unchanged since the review, the copy card below shows this same table. With nothing dated, the day map says so.
+        <ShiftPreview dated={dated} plan={checked.value} />
       ) : null}
       {packageTerm && (
         <p data-testid="package-term-warning" role="alert" className={WARNING_CLASS}>
