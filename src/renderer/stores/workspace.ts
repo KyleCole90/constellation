@@ -62,6 +62,7 @@ import {
 import {
   awaitsReply,
   bySchoolName,
+  isDemoSchool,
   passagesOf,
   type Course,
   type School,
@@ -672,16 +673,6 @@ const keepLocalFocus = (persisted: unknown, current: WorkspaceState): WorkspaceS
     }),
   );
   return { ...next, threads };
-};
-
-/**
- * The fake LMS seeds its dates around the demo epoch, so a workspace of only demo schools keeps that clock. One real
- * school puts the whole app on real time, so nothing it stamps or counts for that school is ever off. A new provider
- * has to pick a side here.
- */
-const ON_DEMO_CLOCK: Readonly<Record<School["provider"], boolean>> = {
-  "fake-canvas": true,
-  canvas: false,
 };
 
 export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
@@ -2000,9 +1991,11 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
     ),
   );
 
+  // The fake LMS seeds its dates around the demo epoch, so a workspace of only demo schools keeps that clock. One real
+  // school puts the whole app on real time, so nothing it stamps or counts for that school is ever off.
   clock.now = () => {
     const { schools, resetAt } = store.getState();
-    return schools.every((school) => ON_DEMO_CLOCK[school.provider])
+    return schools.every(isDemoSchool)
       ? backend.epoch + (deps.realNow() - resetAt)
       : deps.realNow();
   };

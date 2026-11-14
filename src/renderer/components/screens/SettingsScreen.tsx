@@ -16,8 +16,8 @@ import { AddressField, InstitutionList, useInstitutions } from "../settings/Inst
 import { SettingsSection } from "../settings/layout";
 import { PrivacySection } from "../settings/Privacy";
 import {
-  SETTINGS_SECTIONS,
   parseSettingsSection,
+  settingsSections,
   type SettingsSectionId,
 } from "../settings/sections.logic";
 
@@ -77,7 +77,8 @@ const BODY: Readonly<Record<SettingsSectionId, () => React.JSX.Element>> = {
 };
 
 export function SettingsScreen() {
-  const section = parseSettingsSection(useSearch({ strict: false }));
+  const sections = settingsSections(useWorkspace((state) => state.schools));
+  const section = parseSettingsSection(useSearch({ strict: false }), sections);
   const Body = BODY[section];
   const nav = useRef<HTMLElement>(null);
   // Back and Forward change the section without a click, so focus in the list follows the section on screen.
@@ -95,7 +96,7 @@ export function SettingsScreen() {
           aria-label="Settings sections"
           className="flex w-40 flex-none flex-col gap-0.5 border-r border-border p-2 max-xl:w-32"
         >
-          {SETTINGS_SECTIONS.map(({ id, label }) => {
+          {sections.map(({ id, label }) => {
             const Icon = ICONS[id];
             return (
               <Link
