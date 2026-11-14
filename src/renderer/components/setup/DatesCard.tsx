@@ -25,11 +25,12 @@ import {
   dayMapWords,
   checkPlan,
   guessedEnd,
-  initialPlan,
+  formPlan,
   occupiedWords,
   packageTermWords,
   toggleDay,
   toggleNewDay,
+  typedPlan,
   WEEKDAYS,
 } from "./setup.logic";
 import { FIELD_CLASS, WARNING_CLASS } from "./styles";
@@ -269,10 +270,18 @@ function DatesForm({
   source: SourceCourse | null;
   confirmed: boolean;
 }) {
-  const plan = initialPlan(setup, source);
+  // The setup keeps the course as it was when setup began, and each sync reads it again, dates the teacher set since included.
+  const shell =
+    useWorkspace((state) =>
+      state.newCourses[setup.school]?.find((entry) => entry.ref === setup.course),
+    ) ?? setup.shell;
+  const plan = formPlan({ ...setup, shell }, source);
   const setPlan = (change: (current: PlanDraft) => PlanDraft) => {
     const state = workspaceStore().getState();
-    state.editDates(setup.course, change(initialPlan(state.setups[setup.course] ?? setup, source)));
+    state.editDates(
+      setup.course,
+      change(typedPlan({ ...(state.setups[setup.course] ?? setup), shell }, source)),
+    );
   };
   const [busy, setBusy] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
