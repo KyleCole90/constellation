@@ -352,7 +352,7 @@ const PreAttachment = v.object({
 });
 
 const PER_PAGE = 100;
-/** How many later pages are out at once across the school's lists. Canvas throttles a token that asks for too much in parallel. */
+/** How many requests are out at once across the school's lists. Canvas throttles a token that asks for too much in parallel. */
 const PARALLEL_PAGES = 8;
 /**
  * Students per page of a course's submissions. Canvas reads each submission slowly, and it pages ungrouped
@@ -450,7 +450,7 @@ export const createCanvasProvider = (deps: {
       const maxPages = Math.ceil(MAX_ROWS / perPage);
       const first = new URL(`${origin}/api/v1${path}`);
       first.searchParams.set("per_page", String(perPage));
-      const head = await read(first.toString());
+      const head = await slot(() => read(first.toString()));
       if (!head.ok) return head;
       const rows = [...head.value.rows];
 

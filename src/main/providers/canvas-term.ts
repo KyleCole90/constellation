@@ -239,14 +239,14 @@ export const canvasTermSetup = (client: CanvasClient) => {
 
   /** What a copy would land on top of: everything a course lists, without reading any bodies. */
   const itemCount = async (id: number): Read<number> => {
+    const lists = await Promise.all([
+      list(`/courses/${id}/pages`, PageRow),
+      list(`/courses/${id}/assignments`, DatedRow),
+      list(`/courses/${id}/discussion_topics?only_announcements=true`, TopicItem),
+      list(`/courses/${id}/files`, FileItem),
+    ]);
     let count = 0;
-    for (const [path, row] of [
-      [`/courses/${id}/pages`, PageRow],
-      [`/courses/${id}/assignments`, DatedRow],
-      [`/courses/${id}/discussion_topics?only_announcements=true`, TopicItem],
-      [`/courses/${id}/files`, FileItem],
-    ] as const) {
-      const rows = await list(path, row);
+    for (const rows of lists) {
       if (!rows.ok) return rows;
       count += rows.value.length;
     }
@@ -265,12 +265,16 @@ export const canvasTermSetup = (client: CanvasClient) => {
     const rows = await teacherCourses("state[]=unpublished");
     if (!rows.ok) return rows;
     const today = dateOfTime(isoTime(client.now()));
+    const shells = readable(rows.value).filter(
+      (row) =>
+        row.workflow_state === "unpublished" &&
+        isComing({ ...row, startAt: datesOf(row).start }, today),
+    );
+    const counted = await Promise.all(
+      shells.map(async (row) => ({ row, count: await itemCount(row.id) })),
+    );
     const out: CourseShell[] = [];
-    for (const row of readable(rows.value)) {
-      const { start } = datesOf(row);
-      if (row.workflow_state !== "unpublished" || !isComing({ ...row, startAt: start }, today))
-        continue;
-      const count = await itemCount(row.id);
+    for (const { row, count } of counted) {
       if (!count.ok) return count;
       out.push(shellOf(row, count.value));
     }

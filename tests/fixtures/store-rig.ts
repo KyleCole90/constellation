@@ -28,6 +28,7 @@ export interface StoreRigOptions {
   vault?: Vault;
   clock?: VirtualClock;
   subscribeStorage?: (onChange: () => void) => void;
+  subscribeFocus?: (onFocus: () => void) => void;
   locks?: Pick<LockManager, "request">;
   connectivity?: { online(): boolean; subscribe(onChange: () => void): void };
   /** These seeded schools join as real Canvas, served by the same fake. */
@@ -80,6 +81,7 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
     aiAlways: !options.noKey,
     ...(options.agent ? { agent: options.agent } : {}),
     ...(options.subscribeStorage ? { subscribeStorage: options.subscribeStorage } : {}),
+    ...(options.subscribeFocus ? { subscribeFocus: options.subscribeFocus } : {}),
     ...(options.connectivity ? { connectivity: options.connectivity } : {}),
     ...(options.timer ? { timer: options.timer } : {}),
   });

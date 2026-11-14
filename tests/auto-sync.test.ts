@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { SchoolId } from "~/shared/domain/ids";
 
-import { nextSyncDelay, SYNC_EVERY_MS } from "~/renderer/stores/autoSync";
+import { FRESHEN_EVERY_MS, nextSyncDelay, SYNC_EVERY_MS } from "~/renderer/stores/autoSync";
 
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 
@@ -145,5 +145,46 @@ describe("automatic sync", () => {
     expect(shellCodes(second)).toContain("BIO 105");
     expect(courseReads(second, LCC)).toBe(1);
     expect(courseReads(second, RSU)).toBe(1);
+  });
+
+  it("coming back to the window syncs, so a course made in Canvas shows without Sync now", async () => {
+    let focus = () => {};
+    const first = await makeStoreRig();
+    await first.connectAll();
+    const second = await relaunch(first, { subscribeFocus: (onFocus) => (focus = onFocus) });
+    expect(courseReads(second, LCC)).toBe(1);
+
+    second.server.createShell(LCC, "BIO 105", "Biology");
+    second.clock.advance(FRESHEN_EVERY_MS);
+    focus();
+    await second.clock.flush();
+    expect(shellCodes(second)).toContain("BIO 105");
+    expect(courseReads(second, LCC)).toBe(2);
+  });
+
+  it("returning to the window or opening a view of courses syncs at most once every two minutes", async () => {
+    let focus = () => {};
+    const first = await makeStoreRig();
+    await first.connectAll();
+    const second = await relaunch(first, { subscribeFocus: (onFocus) => (focus = onFocus) });
+    second.server.createShell(LCC, "BIO 105", "Biology");
+
+    second.clock.advance(FRESHEN_EVERY_MS - 1);
+    focus();
+    second.state().freshen();
+    await second.clock.flush();
+    expect(courseReads(second, LCC)).toBe(1);
+    expect(shellCodes(second)).not.toContain("BIO 105");
+
+    second.clock.advance(1);
+    second.state().freshen();
+    focus();
+    await second.clock.flush();
+    expect(courseReads(second, LCC)).toBe(2);
+    expect(shellCodes(second)).toContain("BIO 105");
+
+    focus();
+    await second.clock.flush();
+    expect(courseReads(second, LCC)).toBe(2);
   });
 });

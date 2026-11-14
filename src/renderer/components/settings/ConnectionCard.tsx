@@ -1,5 +1,5 @@
 import { VAULT_PLACE } from "~/renderer/desktop";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, LoaderCircle } from "lucide-react";
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
@@ -21,6 +21,7 @@ import {
   savedWords,
   scopeSummary,
   syncFailureWords,
+  syncProgressWords,
   syncWords,
   waitingCount,
   waitingWords,
@@ -53,6 +54,7 @@ export function ConnectionCard({ school }: { school: School }) {
     ),
   );
   const hasDrafts = useWorkspace((state) => hasChanges(state, school.id));
+  const progress = useWorkspace((state) => state.courseReads[school.id]);
   const now = useNow();
   const [entering, setEntering] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -144,7 +146,18 @@ export function ConnectionCard({ school }: { school: School }) {
             {record?.connectedAt ? savedWords(record.connectedAt) : "Saved"}
           </dd>
           <dt className="text-muted-foreground">Last sync</dt>
-          <dd>{syncWords(now, record?.lastSyncedAt ?? null)}</dd>
+          {status === "syncing" ? (
+            <dd
+              role="status"
+              data-testid="sync-progress"
+              className="flex items-center gap-1.5 text-muted-foreground"
+            >
+              <LoaderCircle className="size-3 flex-none animate-spin" />
+              {syncProgressWords(progress)}
+            </dd>
+          ) : (
+            <dd>{syncWords(now, record?.lastSyncedAt ?? null)}</dd>
+          )}
         </dl>
       )}
 

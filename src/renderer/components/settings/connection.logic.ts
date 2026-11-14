@@ -183,6 +183,16 @@ export const courseWords = (count: number): string =>
 export const readingWords = (count: number): string =>
   count === 1 ? "Reading your course" : `Reading your ${count} courses`;
 
+/** What a sync is on: the course list, each course's details, then the new shells to set up. */
+export const syncProgressWords = (
+  progress: { courses: readonly unknown[]; read: readonly unknown[] } | undefined,
+): string =>
+  !progress
+    ? "Listing your courses"
+    : progress.read.length < progress.courses.length
+      ? `Read ${progress.read.length} of ${progress.courses.length} courses`
+      : "Checking for new courses";
+
 export const STAGE_WORDS = {
   saving: `Saving to ${VAULT_PLACE}`,
   checking: "Checking your token",
