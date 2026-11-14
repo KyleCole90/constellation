@@ -11,10 +11,14 @@ import {
   type ReviewRow,
 } from "~/shared/domain/setup";
 import {
+  draftOf,
+  draftTerm,
   isoDate,
   planDays,
   planProblems,
+  termName,
   type DraftDate,
+  type DraftTerm,
   type PlanDraft,
   type TermDates,
   type TermPlan,
@@ -83,16 +87,18 @@ export const initialPlan = (
   source: SourceCourse | null,
 ): PlanDraft => {
   if (setup.draft) return setup.draft;
-  if (setup.plan) return setup.plan;
+  if (setup.plan) return draftOf(setup.plan);
   const hint = setup.source?.kind === "cartridge" ? setup.source.hint : null;
-  const oldTerm: TermDates<DraftDate> = source
+  const oldTerm: DraftTerm = source
     ? {
         name: source.termName,
         start: source.startAt ?? "",
         end: source.endAt ?? "",
         days: source.meetingDays,
       }
-    : (hint ?? { name: "", start: "", end: "", days: [] });
+    : hint
+      ? draftTerm(hint)
+      : { name: "", start: "", end: "", days: [] };
   return {
     oldTerm,
     newTerm: {
@@ -108,7 +114,7 @@ export const initialPlan = (
 /** Null when the old term matches what the package says of its own term, or it says nothing. Every shifted date leans on the old term. */
 export const packageTermWords = (
   source: CourseSetup["source"],
-  oldTerm: TermDates<DraftDate>,
+  oldTerm: DraftTerm,
 ): string | null => {
   const hint = source?.kind === "cartridge" ? source.hint : null;
   if (!hint) return null;
@@ -144,11 +150,15 @@ const filled = <T extends { start: DraftDate; end: DraftDate }>(
   const end = isoDate(held.end);
   return start && end ? { ...held, start, end } : null;
 };
+const filledTerm = (held: DraftTerm): TermDates | null => {
+  const term = filled(held);
+  return term && { ...term, name: termName(term.name) };
+};
 
 /** The plan, once every field is filled in and the dates make sense; otherwise what to fix. */
 export const checkPlan = (draft: PlanDraft): Result<TermPlan, readonly string[]> => {
-  const oldTerm = filled(draft.oldTerm);
-  const newTerm = filled(draft.newTerm);
+  const oldTerm = filledTerm(draft.oldTerm);
+  const newTerm = filledTerm(draft.newTerm);
   const breaks = draft.breaks.map((held) => (held.name.trim() ? filled(held) : null));
   const blanks = [
     ...(oldTerm ? [] : ["Fill in the old term's dates."]),

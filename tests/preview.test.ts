@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ChangeContent } from "~/shared/domain/change";
+import { newChangeRecord, type ChangeContent, type ChangeRecord } from "~/shared/domain/change";
+import type { ChangeId, IsoDate, LmsRef, SchoolId } from "~/shared/domain/ids";
 import { previewOf, type PreviewField } from "~/shared/domain/preview";
+import { termName, type TermName } from "~/shared/domain/term";
 
 import { AT, gradeContent, gradeRemote, held, newDraft, sending, step } from "./fixtures/changes";
 
@@ -210,5 +212,58 @@ describe("the send preview", () => {
     const comment = fieldOf(previewOf(revoked, "append"), "comment");
     expect(comment.status).toBe("landed");
     expect(comment.note).toBeNull();
+  });
+});
+
+describe("the course copy preview", () => {
+  const day = (text: string) => text as IsoDate;
+  const copyOf = (oldName: TermName | null): ChangeRecord =>
+    newChangeRecord({
+      id: "ch-copy" as ChangeId,
+      school: "lcc" as SchoolId,
+      course: "lcc:course:1" as LmsRef<"course">,
+      subject: "Copy into BIO",
+      content: {
+        kind: "course-copy",
+        target: "lcc:migrations:1" as LmsRef<"migrations">,
+        into: { code: "BIO", title: "Biology" },
+        source: { kind: "cartridge", name: "bio-export.imscc", kb: 12, hint: null },
+        plan: {
+          oldTerm: { name: oldName, start: day("2026-01-12"), end: day("2026-05-15"), days: [2] },
+          newTerm: {
+            name: termName("Spring 2027"),
+            start: day("2027-01-11"),
+            end: day("2027-05-14"),
+            days: [2],
+          },
+          breaks: [],
+        },
+        shift: {
+          oldStart: day("2026-01-12"),
+          oldEnd: day("2026-05-15"),
+          newStart: day("2027-01-11"),
+          newEnd: day("2027-05-14"),
+          substitutions: {},
+        },
+      },
+      basis: {
+        readAt: AT,
+        remote: { kind: "course-copy", targetVersion: "v", students: 0, items: 0, migrations: [] },
+      },
+      at: AT,
+      by: "you",
+    });
+  const wasOf = (record: ChangeRecord) => {
+    const body = previewOf(record, "append")[0]?.body;
+    return body?.kind === "copy" ? body.oldTerm : null;
+  };
+
+  it("an old term with no name, as an .imscc gives, reads as its dates alone", () => {
+    expect(wasOf(copyOf(null))).toBe("Jan 12, 2026 to May 15, 2026");
+  });
+  it("a named old term leads with its name", () => {
+    expect(wasOf(copyOf(termName("Spring 2026")))).toBe(
+      "Spring 2026, Jan 12, 2026 to May 15, 2026",
+    );
   });
 });

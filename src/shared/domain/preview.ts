@@ -108,7 +108,8 @@ const longTime = (at: IsoTime): string =>
   });
 const span = ({ start, end }: { start: IsoDate; end: IsoDate }): string =>
   start === end ? longDate(start) : `${longDate(start)} to ${longDate(end)}`;
-const termWords = (term: TermDates): string => `${term.name}, ${span(term)}`;
+const termWords = (term: TermDates): string =>
+  term.name === null ? span(term) : `${term.name}, ${span(term)}`;
 const breakWords = (held: TermBreak): string => `${held.name}, ${span(held)}`;
 
 const scored = (points: number | null): number => {

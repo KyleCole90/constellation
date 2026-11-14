@@ -7,9 +7,8 @@ import type { CourseSetup } from "~/shared/domain/setup";
 import {
   isoDate,
   shiftPreview,
-  type DraftDate,
+  type DraftTerm,
   type PlanDraft,
-  type TermDates,
   type TermPlan,
   type Weekday,
 } from "~/shared/domain/term";
@@ -76,8 +75,8 @@ function TermFields({
   onDay,
 }: {
   side: "old" | "new";
-  term: TermDates<DraftDate>;
-  onChange: (patch: Partial<TermDates<DraftDate>>) => void;
+  term: DraftTerm;
+  onChange: (patch: Partial<DraftTerm>) => void;
   onDay: (day: Weekday) => void;
 }) {
   return (
@@ -254,9 +253,9 @@ function DatesForm({
   const unchanged = confirmed && JSON.stringify(plan) === JSON.stringify(setup.plan);
   const occupied = occupiedWords(setup.shell);
   const packageTerm = packageTermWords(setup.source, plan.oldTerm);
-  const patchOld = (patch: Partial<TermDates<DraftDate>>) =>
+  const patchOld = (patch: Partial<DraftTerm>) =>
     setPlan((current) => ({ ...current, oldTerm: { ...current.oldTerm, ...patch } }));
-  const patchNew = (patch: Partial<TermDates<DraftDate>>) =>
+  const patchNew = (patch: Partial<DraftTerm>) =>
     setPlan((current) => ({ ...current, newTerm: { ...current.newTerm, ...patch } }));
   const review = async (confirming: TermPlan) => {
     setBusy(true);

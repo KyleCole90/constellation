@@ -149,7 +149,7 @@ const plainDate: ScanRule = (content, ctx) => {
               fix: null,
             }),
           ];
-        const why = `"${mention.text}" is a date from ${ctx.plan.oldTerm.name}.${movedFrom ? ` Moved out of ${movedFrom.name}.` : ""}`;
+        const why = `"${mention.text}" is a date from ${ctx.plan.oldTerm.name ?? "the old term"}.${movedFrom ? ` Moved out of ${movedFrom.name}.` : ""}`;
         return [
           about(item, {
             key,
@@ -199,7 +199,7 @@ const dateOutsideTerm: ScanRule = (content, { plan }) =>
         key: keyOf("date-outside-term", item.ref),
         type: "date-outside-term",
         quote: day,
-        why: `Due outside ${plan.newTerm.name}.`,
+        why: `Due outside ${plan.newTerm.name ?? "the new term"}.`,
         fix,
       }),
     ];
@@ -208,35 +208,37 @@ const dateOutsideTerm: ScanRule = (content, { plan }) =>
 const isWholeWords = (body: string, index: number, length: number): boolean =>
   !/\w/.test(body.charAt(index - 1)) && !/\w/.test(body.charAt(index + length));
 
-const oldTermName: ScanRule = (content, { plan: { oldTerm, newTerm } }) => {
-  if (oldTerm.name === newTerm.name) return [];
+const oldTermName: ScanRule = (content, { plan }) => {
+  const old = plan.oldTerm.name;
+  const next = plan.newTerm.name;
+  if (old === null || old === next) return [];
   const type = "old-term-name";
-  const why = `Still says ${oldTerm.name}.`;
-  const inNewName = newTerm.name.indexOf(oldTerm.name);
+  const why = `Still says ${old}.`;
+  const inNewName = next === null ? -1 : next.indexOf(old);
   const isNewName = (body: string, index: number): boolean =>
-    inNewName !== -1 && index >= inNewName && body.startsWith(newTerm.name, index - inNewName);
+    next !== null &&
+    inNewName !== -1 &&
+    index >= inNewName &&
+    body.startsWith(next, index - inNewName);
   return textItems(content).flatMap((item) => [
-    ...indexesOf(item.body, oldTerm.name)
-      .filter(
-        (index) =>
-          isWholeWords(item.body, index, oldTerm.name.length) && !isNewName(item.body, index),
-      )
+    ...indexesOf(item.body, old)
+      .filter((index) => isWholeWords(item.body, index, old.length) && !isNewName(item.body, index))
       .map((index) =>
         about(item, {
-          key: passageKey(type, item, index, oldTerm.name.length),
+          key: passageKey(type, item, index, old.length),
           type,
-          quote: oldTerm.name,
+          quote: old,
           why,
-          fix: textFix(item, index, oldTerm.name.length, newTerm.name),
+          fix: next === null ? null : textFix(item, index, old.length, next),
         }),
       ),
-    ...(item.title.includes(oldTerm.name)
+    ...(item.title.includes(old)
       ? [
           about(item, {
             key: keyOf(type, item.ref, "title", item.title),
             type,
             quote: item.title,
-            why: `The title still says ${oldTerm.name}.`,
+            why: `The title still says ${old}.`,
             fix: null,
           }),
         ]

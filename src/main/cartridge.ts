@@ -88,7 +88,7 @@ export const packageTerm = async (path: string): Promise<TermDates<DraftDate> | 
       if (day) due.push(day);
     }
     const term: TermDates<DraftDate> = {
-      name: "",
+      name: null,
       start: dayIn(xml, "start_at") ?? "",
       end: dayIn(xml, "conclude_at") ?? "",
       days: meetingDaysOf(due),

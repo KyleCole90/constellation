@@ -2,19 +2,20 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { newChangeRecord, type ChangeRecord, type RemoteState } from "~/shared/domain/change";
 import type { ChangeId, IsoDate, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
+import { termName } from "~/shared/domain/term";
 
 import { riskPrompt } from "./approve.logic";
 
 const AT = "2026-10-30T12:00:00.000Z" as IsoTime;
 const PLAN = {
   oldTerm: {
-    name: "Fall 2026",
+    name: termName("Fall 2026"),
     start: "2026-08-24" as IsoDate,
     end: "2026-12-11" as IsoDate,
     days: [2, 4] as const,
   },
   newTerm: {
-    name: "Spring 2027",
+    name: termName("Spring 2027"),
     start: "2027-01-19" as IsoDate,
     end: "2027-05-07" as IsoDate,
     days: [2, 4] as const,

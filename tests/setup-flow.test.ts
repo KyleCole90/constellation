@@ -6,7 +6,7 @@ import { riskOf, summarize, type ChangeRecord } from "~/shared/domain/change";
 import type { CopySource, CourseShell } from "~/shared/domain/content";
 import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
 import { reviewRows, stageOf, type CourseSetup, type SetupStage } from "~/shared/domain/setup";
-import type { TermDates, TermPlan } from "~/shared/domain/term";
+import { draftOf, type TermDates, type TermPlan } from "~/shared/domain/term";
 import {
   selectChangesShown,
   selectCourse,
@@ -361,8 +361,8 @@ describe("the whole setup", () => {
     const [source] = (await optionsOf(rig, LCC)).sources;
     if (!source) throw new Error("No source course.");
     const typed = planFor(termOf(source), shell);
-    rig.state().editDates(ref, typed);
-    expect(setupOf(rig, ref).draft).toEqual(typed);
+    rig.state().editDates(ref, draftOf(typed));
+    expect(setupOf(rig, ref).draft).toEqual(draftOf(typed));
     rig.state().chooseSource(ref, null);
     expect(setupOf(rig, ref).draft).toBeNull();
   });

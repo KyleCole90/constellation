@@ -13,6 +13,7 @@ import {
   shiftDate,
   shiftOptionsOf,
   shiftPreview,
+  termName,
   weekdayOf,
   type DateShiftOptions,
   type TermPlan,
@@ -22,8 +23,18 @@ import {
 const d = (text: string): IsoDate => text as IsoDate;
 const SPRING_BREAK = { name: "Spring break", start: d("2027-03-08"), end: d("2027-03-12") };
 const PLAN: TermPlan = {
-  oldTerm: { name: "Fall 2026", start: d("2026-08-24"), end: d("2026-12-11"), days: [2, 4] },
-  newTerm: { name: "Spring 2027", start: d("2027-01-19"), end: d("2027-05-07"), days: [1, 3] },
+  oldTerm: {
+    name: termName("Fall 2026"),
+    start: d("2026-08-24"),
+    end: d("2026-12-11"),
+    days: [2, 4],
+  },
+  newTerm: {
+    name: termName("Spring 2027"),
+    start: d("2027-01-19"),
+    end: d("2027-05-07"),
+    days: [1, 3],
+  },
   breaks: [SPRING_BREAK],
 };
 const OPTIONS = shiftOptionsOf(PLAN);

@@ -2,7 +2,7 @@ import type { ChangeRecord, CourseCopyContent, TextFixContent } from "~/shared/d
 import type { CourseContent, CourseShell, Migration, SourceCourse } from "~/shared/domain/content";
 import type { ChangeId, LmsRef, SchoolId } from "~/shared/domain/ids";
 import { scanCourse, type Finding, type FindingType } from "~/shared/domain/scan";
-import { shiftOptionsOf, type TermDates, type TermPlan } from "~/shared/domain/term";
+import { shiftOptionsOf, termName, type TermDates, type TermPlan } from "~/shared/domain/term";
 import {
   FALL_2026,
   SPRING_2027,
@@ -22,7 +22,7 @@ const CONTACT: Readonly<Record<string, string>> = {
 export const planFor = (oldTerm: TermDates, shell: CourseShell): TermPlan => ({
   oldTerm,
   newTerm: {
-    name: shell.termName,
+    name: termName(shell.termName),
     start: shell.startAt ?? SPRING_2027([]).start,
     end: shell.endAt ?? SPRING_2027([]).end,
     days: oldTerm.days,
@@ -31,7 +31,7 @@ export const planFor = (oldTerm: TermDates, shell: CourseShell): TermPlan => ({
 });
 /** The source's term as the Dates step holds it. Where the LMS hides its dates, the person types Fall 2026's. */
 export const termOf = (source: SourceCourse): TermDates => ({
-  name: source.termName,
+  name: termName(source.termName),
   start: source.startAt ?? FALL_2026([]).start,
   end: source.endAt ?? FALL_2026([]).end,
   days: source.meetingDays,
