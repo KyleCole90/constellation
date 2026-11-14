@@ -325,6 +325,14 @@ describe("a course's To grade in the Grading list (#48)", () => {
 });
 
 describe("nextLabel (#48)", () => {
+  it("names the work when the next row is the same student as the one just sent, so it can't read as pointing back (#81)", () => {
+    const composition = row("Stephanie Charles", { detail: "Composition" });
+    expect(nextLabel(composition, true, row("Stephanie Charles"))).toBe(
+      "Draft next: Stephanie's Composition",
+    );
+    expect(nextLabel(composition, true, row("Jean Tuttle"))).toBe("Draft next: Stephanie Charles");
+  });
+
   it("says a draft will start when Next would ask Claude for one", () => {
     expect(nextLabel(row("Jean Tuttle"), true)).toBe("Draft next: Jean Tuttle");
   });

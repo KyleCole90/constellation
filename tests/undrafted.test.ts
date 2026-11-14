@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { DRAFT_GRADE_REQUEST, type Agent } from "~/shared/agent/agent";
+import { DRAFT_GRADE_REQUEST, type Agent, type AgentInput } from "~/shared/agent/agent";
 import type { LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
 import {
   selectMessageSince,
@@ -13,21 +13,20 @@ import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 
 const QUEUE = "t-queue" as ThreadId;
 const LCC = "lcc" as SchoolId;
-const OFFER = "Draft a message asking Maya to resubmit the link";
+const SAID = "I didn't draft a grade because I can't see Maya's work.";
 
-/** Claude reads the work, can't see it, and drafts no grade, the way it answers a dead link. Asked after that, it drafts the message. */
-const cantSee = (): Agent & { calls: number } => {
-  const agent: Agent & { calls: number } = {
+/** Claude reads the work, can't see it, and drafts no grade, the way it answers a dead link. Asked for a message, it drafts one. It keeps what each call heard. */
+const cantSee = (): Agent & { calls: number; heard: AgentInput[] } => {
+  const agent: Agent & { calls: number; heard: AgentInput[] } = {
     calls: 0,
-    async *run({ request, scope }) {
+    heard: [],
+    async *run(input) {
+      const { request, scope } = input;
       agent.calls += 1;
+      agent.heard.push(input);
       const submission = scope.submissions[0];
       if (request === DRAFT_GRADE_REQUEST || !submission)
-        yield {
-          type: "say",
-          text: "I didn't draft a grade because I can't see Maya's work.",
-          replies: [OFFER],
-        };
+        yield { type: "say", text: SAID, replies: ["Show me the message to Maya"] };
       else {
         yield {
           type: "propose",
@@ -60,11 +59,19 @@ const declined = async () => {
 };
 const undrafted = (rig: StoreRig, ref: LmsRef<"submission">) =>
   selectUndrafted(rig.state(), selectSubmission(rig.state(), ref));
+const focused = (rig: StoreRig) => {
+  const focus = rig.state().threads[QUEUE]?.focus;
+  return selectThreadChanges(rig.state(), QUEUE).find((change) => change.id === focus);
+};
+const message = async (rig: StoreRig, ref: LmsRef<"submission">) => {
+  await rig.clock.run(rig.state().openMessage(QUEUE, ref));
+  return focused(rig);
+};
 
 describe("after Claude drafts no grade for a submission", () => {
-  it("keeps the next step Claude offered", async () => {
+  it("keeps what Claude said about it", async () => {
     const { rig, ref } = await declined();
-    expect(undrafted(rig, ref)?.offer).toBe(OFFER);
+    expect(undrafted(rig, ref)?.said).toBe(SAID);
   });
 
   it("drafting the unchanged submission again spends nothing", async () => {
@@ -84,27 +91,45 @@ describe("after Claude drafts no grade for a submission", () => {
     expect(agent.calls).toBe(2);
   });
 
-  it("taking Claude's offer shows the message it drafts, for the student on screen (#87)", async () => {
-    const { rig, ref } = await declined();
-    await rig.clock.run(rig.state().sendToAgent(QUEUE, OFFER));
-    const focus = rig.state().threads[QUEUE]?.focus;
-    const shown = selectThreadChanges(rig.state(), QUEUE).find((change) => change.id === focus);
-    expect(shown?.content).toMatchObject({ kind: "message", target: ref });
-    expect(rig.state().threads[QUEUE]?.messages.at(-1)).toMatchObject({ change: focus });
+  it("the resubmit message is drafted for this submission, from what Claude said about it alone (#87, #91)", async () => {
+    const { rig, ref, agent } = await declined();
+    expect((await message(rig, ref))?.content).toMatchObject({ kind: "message", target: ref });
+    expect(agent.heard.at(-1)?.thread.history).toEqual([{ role: "agent", text: SAID }]);
   });
 
   it("once the message is drafted, the submission leads to it instead of drafting another (#87)", async () => {
     const { rig, ref, agent } = await declined();
-    await rig.clock.run(rig.state().sendToAgent(QUEUE, OFFER));
-    const drafted = rig.state().threads[QUEUE]?.focus;
+    const drafted = (await message(rig, ref))?.id;
     rig.state().focusChange(QUEUE, null);
     const ask = () => selectMessageSince(rig.state(), selectSubmission(rig.state(), ref));
     expect(ask()?.id).toBe(drafted);
+    expect(await message(rig, ref)).toMatchObject({ id: drafted });
     expect(agent.calls).toBe(2);
     rig.state().dispatchUser(drafted!, {
       type: "discard",
       at: new Date(rig.clock.now()).toISOString() as never,
     });
     expect(ask()).toBeNull();
+  });
+
+  it("the same student's next unreadable submission gets its own decline and its own message, untouched by the first (#91)", async () => {
+    const { rig, ref, agent } = await declined();
+    await message(rig, ref);
+    const other = Object.values(rig.state().cache)
+      .flatMap((cache) => cache.submissions)
+      .find((s) => s.studentName === "Maya Ortiz" && s.ref !== ref && s.body.kind === "text");
+    if (!other) throw new Error("no second submission");
+    rig.state().focusChange(QUEUE, null);
+    rig.state().setThreadUi(QUEUE, { current: other.ref });
+    await rig.clock.run(rig.state().openSubmission(QUEUE, other.ref, { fill: "draft" }));
+    expect(agent.heard.at(-1)?.request).toBe(DRAFT_GRADE_REQUEST);
+    expect(agent.heard.at(-1)?.thread.history).toEqual([]);
+    expect(undrafted(rig, other.ref)?.said).toBe(SAID);
+    expect(selectMessageSince(rig.state(), selectSubmission(rig.state(), other.ref))).toBeNull();
+    const second = await message(rig, other.ref);
+    expect(second?.content).toMatchObject({ kind: "message", target: other.ref });
+    expect(selectMessageSince(rig.state(), selectSubmission(rig.state(), ref))?.id).not.toBe(
+      second?.id,
+    );
   });
 });

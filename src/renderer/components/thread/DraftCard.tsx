@@ -1140,7 +1140,13 @@ function Receipt({ view }: { view: ChangeView }) {
             className="ml-auto min-w-0"
             onClick={openNext}
           >
-            <span className="truncate">{nextLabel(next, drafts)}</span>
+            <span className="truncate">
+              {nextLabel(
+                next,
+                drafts,
+                rows.find((row) => row.key === view.record.content.target),
+              )}
+            </span>
             <Kbd variant="on-primary">⌘↵</Kbd>
           </Button>
         ) : view.record.content.kind === "announcement" ? (

@@ -673,8 +673,8 @@ type Fill = "draft" | "by-hand";
 interface AgentRun {
   change: ChangeId | null;
   held: ThreadMessage[] | null;
-  /** The replies Claude last offered, and whether the run broke or was turned away (offline, unreachable, refused), so a draft with no grade can tell Claude's answer from a failure. */
-  offers: readonly string[];
+  /** What Claude said, and whether the run broke or was turned away (offline, unreachable, refused), so a draft with no grade can tell Claude's answer from a failure. */
+  said: string[];
   failed: boolean;
   /** Work this run handed to other threads. The run isn't over until they are. */
   started: Promise<unknown>[];
@@ -682,7 +682,7 @@ interface AgentRun {
 const newRun = (change: ChangeId | null, held: ThreadMessage[] | null): AgentRun => ({
   change,
   held,
-  offers: [],
+  said: [],
   failed: false,
   started: [],
 });
@@ -1331,7 +1331,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             effect: async (effect) => {
               switch (effect.type) {
                 case "say":
-                  if (effect.replies) run.offers = effect.replies;
+                  run.said.push(effect.text);
                   return say(thread, run, {
                     type: "agent",
                     text: effect.text,
@@ -1430,7 +1430,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                           data: read.value.data,
                         },
                       ],
-                      read: `Saw only ${lms?.vendorLabel ?? "the LMS"}'s screenshot of the link's first screen, so a long doc may be cut off`,
+                      read: `Saw ${lms?.vendorLabel ?? "the LMS"}'s screenshot of the link's first screen`,
                     },
                   };
                 break;
@@ -1475,6 +1475,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           narrow: Narrow | null,
           run: AgentRun,
           target?: string,
+          given?: AgentInput["thread"]["history"],
         ) => {
           const current = get().threads[thread];
           if (!current || !get().aiOn()) return;
@@ -1491,13 +1492,15 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               );
             },
           };
-          const history = current.messages.flatMap((message): AgentInput["thread"]["history"] =>
-            message.type === "user"
-              ? [{ role: "user", text: message.text }]
-              : message.type === "agent"
-                ? [{ role: "agent", text: message.text }]
-                : [],
-          );
+          const history =
+            given ??
+            current.messages.flatMap((message): AgentInput["thread"]["history"] =>
+              message.type === "user"
+                ? [{ role: "user", text: message.text }]
+                : message.type === "agent"
+                  ? [{ role: "agent", text: message.text }]
+                  : [],
+            );
           set({ working: { ...get().working, [thread]: true } });
           try {
             // Filling in the rest of a hand grade reads the same files a fresh draft does.
@@ -1532,7 +1535,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   ...get().undrafted,
                   [submission.ref]: {
                     submittedAt: submission.submittedAt,
-                    offer: run.offers[0] ?? null,
+                    said: run.said.join(" "),
                   },
                 },
               });
@@ -1581,9 +1584,13 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           if (running) return running;
           if (get().aiOn() && fill === undefined) return null;
           if (!focus) background.add(slot);
+          // A draft of one item hears only what the app holds for that item. The thread's chat is about other students' work, and Claude took it as this one's.
+          const said = selectUndrafted(get(), narrow.submissions?.[0] ?? null)?.said;
+          const history: AgentInput["thread"]["history"] =
+            content.kind === "message" && said ? [{ role: "agent", text: said }] : [];
           const run = (
             get().aiOn() && fill === "draft"
-              ? runThreadAgent(thread, request, narrow, newRun(null, []), content.target)
+              ? runThreadAgent(thread, request, narrow, newRun(null, []), content.target, history)
               : openBlank(thread, blank, fill === "by-hand")
           )
             .then(() => existingChange(content, submittedAt)?.id ?? blankOn(content)?.id ?? null)
@@ -2346,25 +2353,28 @@ const declining = (text: string): Agent => ({
   },
 });
 
-/** Verify's stand-ins for Claude: unreachable, or answering a submission it can't see the way Claude does, with no grade and an offer to message the student. */
+/** Verify's stand-ins for Claude: unreachable, or answering a submission it can't see the way Claude does, with no grade. Like Claude, it takes earlier chat as about this submission. */
 type AgentStandIn = "down" | "cant-see" | null;
 let standIn: AgentStandIn = null;
 export const setAgentStandIn = (next: AgentStandIn): void => {
   standIn = next;
 };
-const RESUBMIT_OFFER = "Draft a message asking them to resubmit the link";
-const CANT_SEE: AgentEffect = {
-  type: "say",
-  text: "I didn't draft a grade because I can't see the work. The link opens an error page.",
-  replies: [RESUBMIT_OFFER],
-};
+const cantSee = ({ thread }: AgentInput): AgentEffect =>
+  thread.history.some((line) => line.role === "agent")
+    ? {
+        type: "say",
+        text: "I didn't draft a grade because I can't see the work. The message I drafted earlier asks them for a working link.",
+        replies: ["Show me the message to the student", "What's next to grade?"],
+      }
+    : {
+        type: "say",
+        text: "I didn't draft a grade because I can't see the work. The link opens an error page.",
+      };
 const standInFor = (agent: Agent): Agent => ({
   async *run(input, signal) {
     if (standIn === "down")
       yield { type: "decline", text: "Claude couldn't be reached, so nothing was drafted." };
-    else if (standIn === "cant-see" && input.request === DRAFT_GRADE_REQUEST) yield CANT_SEE;
-    else if (standIn === "cant-see" && input.request === RESUBMIT_OFFER)
-      yield* agent.run({ ...input, request: DRAFT_MESSAGE_REQUEST }, signal);
+    else if (standIn === "cant-see" && input.request === DRAFT_GRADE_REQUEST) yield cantSee(input);
     else yield* agent.run(input, signal);
   },
 });

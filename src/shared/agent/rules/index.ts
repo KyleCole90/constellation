@@ -32,7 +32,7 @@ import {
   type AgentInput,
 } from "../agent";
 import { blankMessage } from "~/shared/domain/blank";
-import { workName } from "~/shared/domain/workName";
+import { firstName, workName } from "~/shared/domain/workName";
 
 import {
   ANNOUNCEMENT_DRAFTS,
@@ -79,7 +79,6 @@ const RETARGET = /^(?:make|change)\s+(?:it|this)\s+(?:to\s+be\s+)?about\s+(.+)$/
 const WARM_CLOSING =
   "I can see the effort you put into this, and I'm glad to be reading your work.";
 
-const first = (name: string): string => name.split(" ")[0] ?? name;
 const last = (name: string): string => name.split(" ").at(-1) ?? name;
 
 const titleOf = (submission: Submission): string =>
@@ -171,7 +170,7 @@ async function* fillGrade({ scope }: AgentInput): AsyncGenerator<unknown, void> 
       : {}),
     ...(content.comment?.trim()
       ? {}
-      : { comment: draft.comment.replaceAll("{first}", first(submission.studentName)) }),
+      : { comment: draft.comment.replaceAll("{first}", firstName(submission.studentName)) }),
   };
   if (Object.keys(patch).length === 1) {
     yield { type: "say", text: "Everything is filled in already. Tell me what to change." };
@@ -220,7 +219,7 @@ async function* draftGrade(input: AgentInput): AsyncGenerator<unknown, void> {
       criterion: c.ref,
       points: draft.scores?.[c.name] ?? 0,
     })),
-    comment: draft.comment.replaceAll("{first}", first(student)),
+    comment: draft.comment.replaceAll("{first}", firstName(student)),
     attachment: draft.attach
       ? {
           name: `${assignment.shortTitle.replace(/\W+/g, "")}_feedback_${last(student)}.pdf`,
@@ -270,7 +269,7 @@ function* draftReply(conversation: Conversation | undefined): Generator<unknown,
   }
   const body =
     REPLY_DRAFTS[conversation.subject] ??
-    `Hi ${first(conversation.from)}, thanks for writing. I've read your message and I'll follow up shortly.`;
+    `Hi ${firstName(conversation.from)}, thanks for writing. I've read your message and I'll follow up shortly.`;
   yield { type: "work", line: `Read the conversation with ${conversation.from}` };
   yield {
     type: "work",
@@ -285,7 +284,7 @@ function* draftReply(conversation: Conversation | undefined): Generator<unknown,
   };
   yield {
     type: "say",
-    text: `Here's a reply to ${first(conversation.from)}. Edit anything, then review it to approve and send.`,
+    text: `Here's a reply to ${firstName(conversation.from)}. Edit anything, then review it to approve and send.`,
   };
 }
 
@@ -299,7 +298,7 @@ function* draftMessage({
     yield { type: "say", text: "I can't find that student in what this thread has open." };
     return;
   }
-  const name = first(submission.studentName);
+  const name = firstName(submission.studentName);
   yield { type: "work", line: `Checked what ${name} has turned in` };
   yield {
     type: "propose",

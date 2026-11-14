@@ -88,7 +88,7 @@ describe("drafting from a link (#71)", () => {
     expect(workLines(rig)).toContain("Read the whole Google Doc from the link");
   });
 
-  it("hands Claude the LMS's snapshot of a private doc, and says a long doc may be cut off", async () => {
+  it("hands Claude the LMS's snapshot of a private doc, and leaves a cut-off caveat to Claude, which sees whether there's a doc (#81)", async () => {
     const { agent, asked } = spy();
     const { rig, open } = await rigWith(agent);
     await open("Priya Raman");
@@ -96,9 +96,8 @@ describe("drafting from a link (#71)", () => {
     expect(input?.files?.map((file) => [file.name, file.mediaType])).toEqual([
       ["snapshot.png", "image/png"],
     ]);
-    expect(workLines(rig).join("\n")).toMatch(
-      /screenshot of the link's first screen, so a long doc may be cut off/,
-    );
+    expect(workLines(rig)).toContain("Saw Canvas's screenshot of the link's first screen");
+    expect(workLines(rig).join("\n")).not.toMatch(/cut off/);
   });
 
   it("drafts nothing from a private doc whose snapshot won't download, and says so", async () => {

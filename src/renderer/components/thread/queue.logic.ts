@@ -1,6 +1,7 @@
 import type { ChangeRecord, ChangeSummary } from "~/shared/domain/change";
 import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
 import { bySchoolName, undraftableReason, type Course, type School } from "~/shared/domain/lms";
+import { firstName } from "~/shared/domain/workName";
 import { formatDay } from "~/renderer/lib/utils";
 import {
   awaitsYou,
@@ -251,8 +252,9 @@ export const neighbor = (
 export const draftsNext = (next: WorkRow, aiDrafts: boolean): boolean =>
   aiDrafts && next.change === null && next.draftable;
 
-export const nextLabel = (next: WorkRow, aiDrafts: boolean): string =>
-  `${draftsNext(next, aiDrafts) ? "Draft next" : "Next"}: ${next.title}`;
+/** Names the work too when `next` is the same person as `done`, so it can't read as pointing back at what was just sent. */
+export const nextLabel = (next: WorkRow, aiDrafts: boolean, done?: WorkRow): string =>
+  `${draftsNext(next, aiDrafts) ? "Draft next" : "Next"}: ${done?.title === next.title ? `${firstName(next.title)}'s ${next.detail}` : next.title}`;
 
 /** The next row with work left after this one, wrapping, so Next never lands on something already sent. */
 export const nextOpen = (rows: readonly WorkRow[], key: string | null): WorkRow | null => {

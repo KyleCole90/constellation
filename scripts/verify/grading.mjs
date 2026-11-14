@@ -2257,7 +2257,7 @@ const submissionTypes = async (t) => {
   await t.shot("submission-url");
   await draftsLink(
     "Priya Raman",
-    /Saw only .*screenshot of the link's first screen, so a long doc may be cut off/,
+    /Saw .*screenshot of the link's first screen(?![^\n]*cut off)/,
     "submission-url-snapshot-draft",
   );
   await draftsLink(
@@ -2355,85 +2355,95 @@ const submissionTypes = async (t) => {
   await t.waitFor(`!document.querySelector(${JSON.stringify(CARD)})`, "Word draft: discarded");
 };
 
-/** Issue #81: once Claude says it can't see the work, the next step it offered leads, and the unchanged submission offers no paid redraft, reload included. */
+/** Issues #81 and #91: once Claude says it can't see the work, the app's own message for that submission leads, and the unchanged submission offers no paid redraft, reload included. The same student's next unreadable link gets its own decline and its own message. */
 const cantSee = async (t) => {
-  const OFFER = "Draft a message asking them to resubmit the link";
   const openRow = async (label) => {
     await t.goto("/threads/t-queue");
     await t.waitFor(`document.querySelector(${JSON.stringify(QUEUE)})`, `${label}: the list loads`);
     await expandQueue(t);
   };
+  const openOn = async (row, student, label) => {
+    await openRow(label);
+    await t.click(`[data-row="${row}"] button`);
+    await t.waitFor(
+      `document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(student)})`,
+      `${label}: opens on the student`,
+    );
+  };
   await openRow("can't see");
-  const row = await t.eval(
-    `[...document.querySelectorAll('${LIST} [data-row]')].find((row) => row.innerText.includes("Not started"))?.dataset.row`,
+  const [row, second] = await t.eval(
+    `[...document.querySelectorAll('${LIST} [data-row]')].filter((row) => row.innerText.includes("Not started")).slice(0, 2).map((row) => row.dataset.row)`,
   );
-  const student = await t.eval(
-    `document.querySelector('[data-row="${row}"] button span[title]').title`,
-  );
-  await t.eval(`window.__setAgentStandIn("cant-see")`);
-  await t.click(`[data-row="${row}"] button`);
-  await opensUndrafted(t, student, "can't see");
-  await draftWithClaude(t);
-  await t.waitFor(
-    `!document.querySelector('[data-testid="agent-working"]') && document.querySelector('${CHAT}')?.innerText.includes("I can't see the work")`,
-    "can't see: Claude answers with no grade",
-    15_000,
-  );
-  await t.eval(`window.__setAgentStandIn(null)`);
+  t.assert(row && second, "can't see: two submissions nobody has started");
+  const nameOf = (key) =>
+    t.eval(`document.querySelector('[data-row="${key}"] button span[title]').title`);
+  const student = await nameOf(row);
+  const secondStudent = await nameOf(second);
   const buttons = () =>
     t.eval(`[...document.querySelectorAll('${OPEN} button')].map((b) => b.innerText.trim())`);
-  const offered = async (label) => {
+  const declines = async (label) => {
+    await t.eval(`window.__setAgentStandIn("cant-see")`);
+    await draftWithClaude(t);
+    await t.waitFor(
+      `!document.querySelector('[data-testid="agent-working"]') && document.querySelector('${CHAT}')?.innerText.includes("I can't see the work")`,
+      `${label}: Claude answers with no grade`,
+      15_000,
+    );
+    await t.eval(`window.__setAgentStandIn(null)`);
+  };
+  const offered = async (label, name) => {
     const shown = await buttons();
+    const first = name.split(" ")[0];
     t.assert(
-      shown[0] === OFFER &&
+      shown[0] === `Draft a message asking ${first} to resubmit` &&
         !shown.includes("Draft with Claude") &&
         shown.includes("Grade it yourself"),
-      `${label}: the offer Claude made leads, then Grade it yourself, and Draft with Claude is gone (#81)`,
+      `${label}: a message asking ${first} to resubmit this assignment leads, then Grade it yourself, and Draft with Claude is gone (#81, #91)`,
       JSON.stringify(shown),
     );
   };
+  const MESSAGE = `${CARD} textarea`;
+  const messages = (target) =>
+    t.eval(
+      `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).filter((c) => c.content.kind === "message" && c.content.target === ${JSON.stringify(target)}).map((c) => c.state.tag)`,
+    );
+  const drafts = async (label) => {
+    const before = await t.eval(savedChanges);
+    await t.click(`${OPEN} [data-offer]`);
+    await t.waitFor(
+      `document.querySelector(${JSON.stringify(MESSAGE)})?.value.startsWith("Hi ")`,
+      `${label}: the offer drafts the message as a card on the student's thread (#87)`,
+      15_000,
+    );
+    await settled(t, `${label}: agent finished`);
+    t.assert(
+      (await t.has(`${CARD} [data-approve]`)) &&
+        !(await t.has(`${CARD} [data-typed-score]`)) &&
+        !(await t.has(OPEN)),
+      `${label}: the message waits for Approve, and the offer is gone, so a second press can't pay again (#87)`,
+      await t.text(CARD),
+    );
+    t.assert((await t.eval(savedChanges)) === before + 1, `${label}: one message is saved`);
+  };
+
+  await t.click(`[data-row="${row}"] button`);
+  await opensUndrafted(t, student, "can't see");
+  await declines("can't see");
   t.assert(!(await t.has(CARD)), "can't see: no grade was drafted");
-  await offered("can't see");
+  await offered("can't see", student);
   await t.shot("cant-see-offer");
   await t.reload();
-  await openRow("can't see, reloaded");
-  await t.click(`[data-row="${row}"] button`);
-  await t.waitFor(
-    `document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(student)})`,
-    "can't see, reloaded: opens on the student",
-  );
-  await offered("can't see, reloaded");
+  await openOn(row, student, "can't see, reloaded");
+  await offered("can't see, reloaded", student);
 
-  const MESSAGE = `${CARD} textarea`;
-  const before = await t.eval(savedChanges);
-  await t.eval(`window.__setAgentStandIn("cant-see")`);
-  await t.click(`${OPEN} [data-offer]`);
-  await t.waitFor(
-    `document.querySelector(${JSON.stringify(MESSAGE)})?.value.startsWith("Hi ")`,
-    "resubmit: the offer drafts the message as a card on the student's thread (#87)",
-    15_000,
-  );
-  await settled(t, "resubmit: agent finished");
-  await t.eval(`window.__setAgentStandIn(null)`);
-  t.assert(
-    (await t.has(`${CARD} [data-approve]`)) &&
-      !(await t.has(`${CARD} [data-typed-score]`)) &&
-      !(await t.has(OPEN)),
-    "resubmit: the message waits for Approve, and the offer is gone, so a second press can't pay again (#87)",
-    await t.text(CARD),
-  );
-  t.assert((await t.eval(savedChanges)) === before + 1, "resubmit: one message is saved");
+  await drafts("resubmit");
   await t.shot("cant-see-message");
 
-  await openRow("resubmit, back again");
-  await t.click(`[data-row="${row}"] button`);
-  await t.waitFor(
-    `document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(student)})`,
-    "resubmit, back again: opens on the student",
-  );
+  await openOn(row, student, "resubmit, back again");
   const back = await buttons();
   t.assert(
-    back[0] === `Review the message to ${student}` && !back.includes(OFFER),
+    back[0] === `Review the message to ${student}` &&
+      !back.some((b) => b.startsWith("Draft a message")),
     "resubmit, back again: the drafted message leads, free, and the offer doesn't come back (#87)",
     JSON.stringify(back),
   );
@@ -2457,10 +2467,17 @@ const cantSee = async (t) => {
     ),
     "resubmit: the student gets the message in the LMS",
   );
+  const onward = await t.eval(
+    `[...document.querySelectorAll('${CARD} button')].map((b) => b.innerText.split("\\n")[0]).find((label) => /^(Draft next|Next):/.test(label)) ?? ""`,
+  );
+  t.assert(
+    !onward.endsWith(`: ${student}`),
+    `resubmit: the way on never names only ${student}, so it can't read as pointing back at the message just sent (#81)`,
+    onward,
+  );
   await t.shot("cant-see-message-sent");
 
-  await openRow("resubmit, sent");
-  await t.click(`[data-row="${row}"] button`);
+  await openOn(row, student, "resubmit, sent");
   await t.waitFor(
     `document.querySelector('[data-testid="message-sent"]')?.innerText.includes(${JSON.stringify(student)})`,
     "resubmit, sent: the submission says the message went",
@@ -2472,9 +2489,40 @@ const cantSee = async (t) => {
   );
   const after = await buttons();
   t.assert(
-    !after.includes(OFFER) && !after.some((b) => b.startsWith("Review the message")),
+    !after.some((b) => b.startsWith("Draft a message") || b.startsWith("Review the message")),
     "resubmit, sent: nothing offers to draft or review the message again (#87)",
     JSON.stringify(after),
+  );
+
+  await openOn(second, secondStudent, "second link");
+  await opensUndrafted(t, secondStudent, "second link");
+  await declines("second link");
+  const chat = await t.text(CHAT);
+  t.assert(
+    !chat.includes("earlier"),
+    "second link: Claude's decline is about this submission alone, not the message sent about the first (#91)",
+    chat.slice(-400),
+  );
+  const secondShown = await buttons();
+  t.assert(
+    !secondShown.some((b) => b.startsWith("Show me")),
+    "second link: nothing offers a paid look at the message already sent (#91)",
+    JSON.stringify(secondShown),
+  );
+  await offered("second link", secondStudent);
+  await t.shot("cant-see-second-offer");
+  await drafts("second link");
+  t.assert(
+    JSON.stringify(await messages(second)) === JSON.stringify(["draft"]) &&
+      JSON.stringify(await messages(row)) === JSON.stringify(["sent"]),
+    "second link: its own message is drafted, and the first stays sent (#91)",
+    JSON.stringify({ second: await messages(second), first: await messages(row) }),
+  );
+  await t.shot("cant-see-second-message");
+  await openOn(row, student, "second link, first again");
+  await t.waitFor(
+    `document.querySelector('[data-testid="message-sent"]')`,
+    "second link: the first submission still says its message was sent, never a draft (#91)",
   );
 };
 
