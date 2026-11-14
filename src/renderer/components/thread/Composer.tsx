@@ -60,10 +60,11 @@ export function Composer({
 
   const correcting = !batching && setupStep === undefined && (focused?.summary.canEdit ?? false);
 
-  const submit = (value: string) => {
+  const submit = (value: string, typed = false) => {
     if (!value.trim() || held) return;
     setText("");
-    if (!hero) return void workspaceStore().getState().sendToAgent(thread.id, value.trim());
+    if (!hero)
+      return void workspaceStore().getState().sendToAgent(thread.id, value.trim(), { typed });
     const started = workspaceStore().getState().startChat(value.trim());
     if (!started) return;
     const open = () => navigate({ to: "/threads/$threadId", params: { threadId: started.thread } });
@@ -128,7 +129,7 @@ export function Composer({
             event.preventDefault();
             if (chord && correcting)
               workspaceStore().getState().setThreadUi(thread.id, { panel: "writeback" });
-            else submit(text);
+            else submit(text, true);
           }}
           className="block max-h-32 min-h-[22px] w-full resize-none bg-transparent text-chat outline-none [field-sizing:content] placeholder:text-muted-foreground"
         />
@@ -144,7 +145,7 @@ export function Composer({
             size="icon-round"
             aria-label="Send to agent"
             disabled={!text.trim() || held}
-            onClick={() => submit(text)}
+            onClick={() => submit(text, true)}
           >
             <ArrowUp />
           </Button>

@@ -229,7 +229,8 @@ interface WorkspaceActions extends SetupActions {
   threadForWork(course: Course, work: HandoffWork): ThreadId;
   /** Starts a North Star chat with this request. `done` settles when its run does. Null with AI off, so no empty chat exists. */
   startChat(text: string): { thread: ThreadId; done: Promise<void> } | null;
-  sendToAgent(thread: ThreadId, text: string): Promise<void>;
+  /** `typed` only for words the teacher wrote in the composer. Only such a run may set the thread's guidance. */
+  sendToAgent(thread: ThreadId, text: string, options?: { typed?: boolean }): Promise<void>;
   /** Drops the thread's standing guidance, so later drafts go back to Claude's own judgment. */
   clearGuidance(thread: ThreadId): void;
   /** Course threads and chats only (`canSettle`); others are ignored. A settled thread leaves its sidebar list until it is resumed or gets a new message. */
@@ -680,7 +681,7 @@ interface AgentRun {
   failed: boolean;
   /** Work this run handed to other threads. The run isn't over until they are. */
   started: Promise<unknown>[];
-  /** The teacher typed this run's request. Only such a run may set guidance, so a submission read by a Draft press can't plant one. */
+  /** The teacher wrote this run's request in the composer. Only such a run may set guidance, so neither a submission a draft reads nor Claude's own chip text can plant one. */
   typed: boolean;
 }
 const withoutReplies = (message: ThreadMessage): ThreadMessage => {
@@ -2052,7 +2053,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             return { thread, done: get().sendToAgent(thread, text) };
           },
 
-          sendToAgent: async (thread, text) => {
+          sendToAgent: async (thread, text, options) => {
             const current = get().threads[thread];
             if (!get().aiOn() || current?.kind === "north-star") return;
             const focus = current?.focus ?? null;
@@ -2085,7 +2086,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               thread,
               text,
               northStar ?? (scan && setupScope(scan)) ?? onScreen,
-              newRun(focus, null, true),
+              newRun(focus, null, options?.typed ?? false),
               onScreen ? target : undefined,
             );
           },

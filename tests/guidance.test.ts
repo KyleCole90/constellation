@@ -44,7 +44,9 @@ const rigged = async () => {
 describe("a preference the teacher states in a thread (#97)", () => {
   it("reaches every later draft there, without the thread's chat", async () => {
     const { rig, draft } = await rigged();
-    await rig.clock.run(rig.state().sendToAgent(QUEUE, "Be a bit stricter from now on"));
+    await rig.clock.run(
+      rig.state().sendToAgent(QUEUE, "Be a bit stricter from now on", { typed: true }),
+    );
     expect(rig.state().threads[QUEUE]?.guidance).toBe(STRICTER);
     const heard = await draft("Maya Ortiz");
     expect(heard?.request).toBe(DRAFT_GRADE_REQUEST);
@@ -53,7 +55,9 @@ describe("a preference the teacher states in a thread (#97)", () => {
 
   it("each draft says it followed the guidance", async () => {
     const { rig, draft } = await rigged();
-    await rig.clock.run(rig.state().sendToAgent(QUEUE, "Be a bit stricter from now on"));
+    await rig.clock.run(
+      rig.state().sendToAgent(QUEUE, "Be a bit stricter from now on", { typed: true }),
+    );
     await draft("Maya Ortiz");
     expect(rig.state().threads[QUEUE]?.messages).toContainEqual(
       expect.objectContaining({
@@ -67,14 +71,24 @@ describe("a preference the teacher states in a thread (#97)", () => {
     const { rig, draft } = await rigged();
     await draft("Maya Ortiz");
     expect(rig.state().threads[QUEUE]?.guidance).toBeUndefined();
-    await rig.clock.run(rig.state().sendToAgent(QUEUE, "Be a bit stricter from now on"));
+    await rig.clock.run(
+      rig.state().sendToAgent(QUEUE, "Be a bit stricter from now on", { typed: true }),
+    );
     await draft("Maya Ortiz");
     expect(rig.state().threads[QUEUE]?.guidance).toBe(STRICTER);
   });
 
+  it("a reply chip or the fill-in button can't set it, since the teacher didn't write those words", async () => {
+    const { rig } = await rigged();
+    await rig.clock.run(rig.state().sendToAgent(QUEUE, "Be a bit stricter from now on"));
+    expect(rig.state().threads[QUEUE]?.guidance).toBeUndefined();
+  });
+
   it("once cleared, later drafts hear none", async () => {
     const { rig, draft } = await rigged();
-    await rig.clock.run(rig.state().sendToAgent(QUEUE, "Be a bit stricter from now on"));
+    await rig.clock.run(
+      rig.state().sendToAgent(QUEUE, "Be a bit stricter from now on", { typed: true }),
+    );
     rig.state().clearGuidance(QUEUE);
     expect(rig.state().threads[QUEUE]?.guidance).toBeUndefined();
     expect((await draft("Maya Ortiz"))?.thread).toEqual({ history: [] });
