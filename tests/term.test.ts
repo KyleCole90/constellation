@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { DatedItem } from "~/shared/domain/content";
-import type { IsoDate, IsoTime, LmsRef } from "~/shared/domain/ids";
+import type { IsoDate } from "~/shared/domain/ids";
 import {
   findDateMentions,
   isoDate,
@@ -70,14 +69,9 @@ describe("the worked case", () => {
   });
 
   it("shiftPreview shows both what the LMS will do and where the break move puts it", () => {
-    const item: DatedItem = {
-      ref: "item:1" as LmsRef<"item">,
-      title: "Essay 2",
-      dueAt: "2026-10-13T23:59:00Z" as IsoTime,
-    };
-    expect(shiftPreview([item], PLAN)).toEqual([
+    expect(shiftPreview([{ title: "Essay 2", due: d("2026-10-13") }], PLAN)).toEqual([
       {
-        item,
+        title: "Essay 2",
         from: "2026-10-13",
         shifted: "2027-03-08",
         date: "2027-03-15",

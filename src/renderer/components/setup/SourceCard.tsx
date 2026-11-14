@@ -7,7 +7,7 @@ import { useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card, Note, Refusal } from "./parts";
-import { sourceChoices } from "./setup.logic";
+import { courseName, sourceChoices } from "./setup.logic";
 
 function CourseChoice({ source, onChoose }: { source: SourceCourse; onChoose: () => void }) {
   return (
@@ -19,7 +19,9 @@ function CourseChoice({ source, onChoose }: { source: SourceCourse; onChoose: ()
         onClick={onChoose}
         className="flex min-h-row-table w-full cursor-pointer items-center gap-2 rounded-control border border-border pr-row-end pl-row-x text-left outline-none hover:bg-accent focus-visible:border-ring"
       >
-        <span className="flex-none text-meta font-medium">{source.code}</span>
+        {source.code !== source.title && (
+          <span className="flex-none text-meta font-medium">{source.code}</span>
+        )}
         <span className="min-w-0 flex-1 truncate text-body">{source.title}</span>
         {source.template && <Badge tone="info">Template</Badge>}
         <span className="flex-none text-meta text-muted-foreground">{source.termName}</span>
@@ -108,7 +110,7 @@ export function SourceCard({ setup }: { setup: CourseSetup }) {
                   choose({
                     kind: "course",
                     ref: source.ref,
-                    label: `${source.code} ${source.title}`,
+                    label: courseName(source),
                     termName: source.termName,
                   })
                 }

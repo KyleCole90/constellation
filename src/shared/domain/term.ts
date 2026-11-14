@@ -1,4 +1,3 @@
-import type { DatedItem } from "./content";
 import { type Brand, type IsoDate, type IsoTime } from "./ids";
 
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
@@ -40,9 +39,11 @@ export interface PlanDraft {
   newTerm: DraftTerm;
   breaks: readonly TermBreak<DraftDate>[];
 }
-export const draftTerm = (term: TermDates<DraftDate>): DraftTerm => ({
-  ...term,
-  name: term.name ?? "",
+export const draftTerm = ({ name, start, end, days }: TermDates<DraftDate>): DraftTerm => ({
+  name: name ?? "",
+  start,
+  end,
+  days,
 });
 /** A confirmed plan back in the form, to edit again. */
 export const draftOf = (plan: TermPlan): PlanDraft => ({
@@ -55,8 +56,13 @@ export interface BreakMove {
   movedFrom: TermBreak | null;
   outsideTerm: boolean;
 }
+/** One item's due day, which is all a shift reads. */
+export interface DueDay {
+  title: string;
+  due: IsoDate;
+}
 export interface ShiftRow extends BreakMove {
-  item: DatedItem;
+  title: string;
   from: IsoDate;
   /** Before any break move: what the LMS itself will produce. */
   shifted: IsoDate;
@@ -73,6 +79,9 @@ const weekdayAt = (day: number): number => floorMod7(day + EPOCH_WEEKDAY);
 const roundHalfAway = (value: number): number => Math.sign(value) * Math.round(Math.abs(value));
 const byNumber = (a: number, b: number): number => a - b;
 
+/** The day that ends a span as long as `from` to `to`, starting at `start`. */
+export const sameSpanEnd = (start: IsoDate, from: IsoDate, to: IsoDate): IsoDate =>
+  dateAt(dayNumber(start) + dayNumber(to) - dayNumber(from));
 export const weekdayOf = (date: IsoDate): Weekday => weekdayAt(dayNumber(date)) as Weekday;
 /** The weekdays the old due dates fall on, which is where a class's work is usually due. The person confirms or changes them. */
 export const meetingDaysOf = (dates: readonly IsoDate[]): readonly Weekday[] =>
@@ -166,12 +175,11 @@ export const meetingDayInside = (date: IsoDate, plan: TermPlan): IsoDate | null 
     : firstMeeting(termEnd, termStart, -1, plan);
 };
 
-export const shiftPreview = (items: readonly DatedItem[], plan: TermPlan): readonly ShiftRow[] => {
+export const shiftPreview = (items: readonly DueDay[], plan: TermPlan): readonly ShiftRow[] => {
   const options = shiftOptionsOf(plan);
-  return items.map((item) => {
-    const from = dateOfTime(item.dueAt);
-    const shifted = shiftDate(from, options);
-    return { item, from, shifted, ...moveOutOfBreak(shifted, plan) };
+  return items.map(({ title, due }) => {
+    const shifted = shiftDate(due, options);
+    return { title, from: due, shifted, ...moveOutOfBreak(shifted, plan) };
   });
 };
 

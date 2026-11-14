@@ -9,8 +9,10 @@ import { draftOf, draftTerm, termName, type PlanDraft, type TermPlan } from "~/s
 
 import {
   batchOf,
+  courseName,
   dayMapWords,
   checkPlan,
+  guessedEnd,
   groupRows,
   initialPlan,
   occupiedWords,
@@ -150,7 +152,7 @@ describe("the plan a form opens with", () => {
 });
 
 describe("a package's own term", () => {
-  const hint = { ...term("2026-01-20", "2026-05-08"), name: termName("Spring 2026") };
+  const hint = { ...term("2026-01-20", "2026-05-08"), name: termName("Spring 2026"), dated: [] };
   const cartridge = { kind: "cartridge", name: "x.imscc", kb: 1, hint } as const;
   it("says nothing when the old term matches the package", () => {
     expect(packageTermWords(cartridge, draftTerm(hint))).toBeNull();
@@ -164,7 +166,7 @@ describe("a package's own term", () => {
   it("checks only what a package says, when its export leaves the end and days out", () => {
     const partial = {
       ...cartridge,
-      hint: { name: null, start: date("2026-01-20"), end: "", days: [] },
+      hint: { name: null, start: date("2026-01-20"), end: "", days: [], dated: [] },
     } as const;
     expect(packageTermWords(partial, term("2026-01-20", "2026-05-08"))).toBeNull();
     expect(packageTermWords(partial, term("2026-01-12", "2026-05-08"))).toBe(
@@ -211,7 +213,39 @@ describe("checking the Dates form", () => {
   });
 });
 
+describe("a package that leaves its end out", () => {
+  const hint = { name: null, start: date("2026-01-12"), end: "" as const, days: [2 as const] };
+  const spring = { start: date("2027-01-11"), end: date("2027-05-14") };
+  it("ends as long after its start as the new term runs, so each due date keeps its week", () => {
+    expect(guessedEnd({ ...hint, dated: [] }, spring)).toBe("2026-05-15");
+  });
+  it("never ends before its last due day", () => {
+    const late = [{ title: "Final", due: date("2026-06-02") }];
+    expect(guessedEnd({ ...hint, dated: late }, spring)).toBe("2026-06-02");
+  });
+  it("guesses nothing when the package states its end or the new term has no dates", () => {
+    expect(guessedEnd({ ...hint, end: date("2026-05-08"), dated: [] }, spring)).toBeNull();
+    expect(guessedEnd({ ...hint, dated: [] }, { start: "", end: "" })).toBeNull();
+    expect(guessedEnd(null, spring)).toBeNull();
+  });
+  it("fills the old term's end when Dates opens on such a package", () => {
+    const opened = initialPlan(
+      {
+        plan: null,
+        shell: { ...shell, startAt: spring.start, endAt: spring.end },
+        source: { kind: "cartridge", name: "x.imscc", kb: 1, hint: { ...hint, dated: [] } },
+      },
+      null,
+    );
+    expect(opened.oldTerm).toMatchObject({ name: "", start: "2026-01-12", end: "2026-05-15" });
+  });
+});
+
 describe("destination and source lists", () => {
+  it("says a course's code and title once when they match", () => {
+    expect(courseName({ code: "live-source", title: "live-source" })).toBe("live-source");
+    expect(courseName({ code: "BIO 101", title: "Biology" })).toBe("BIO 101 Biology");
+  });
   it("warns only for a course with students or items", () => {
     expect(occupiedWords({ code: "BIO", studentCount: 0, itemCount: 0 })).toBeNull();
     expect(occupiedWords({ code: "BIO", studentCount: 1, itemCount: 4 })).toContain(

@@ -36,6 +36,10 @@ export function Refusal({ text }: { text: string | null }) {
   ) : null;
 }
 
-export function Note({ children }: { children: ReactNode }) {
-  return <p className="text-meta text-muted-foreground">{children}</p>;
+export function Note({ children, testId }: { children: ReactNode; testId?: string }) {
+  return (
+    <p data-testid={testId} className="text-meta text-muted-foreground">
+      {children}
+    </p>
+  );
 }

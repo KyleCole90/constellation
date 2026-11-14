@@ -871,7 +871,17 @@ export class FakeCanvasServer implements FaultLab {
       .map(toMigration);
   };
   samplePackages = (): readonly SamplePackage[] =>
-    PACKAGES.map(({ name, kb, note, hint }) => ({ name, kb, note, hint }));
+    PACKAGES.map(({ name, kb, note, hint, body }) => ({
+      name,
+      kb,
+      note,
+      hint: hint && {
+        ...hint,
+        dated: (body?.items ?? []).flatMap(({ title, dueAt }) =>
+          dueAt === null ? [] : [{ title, due: dateOfTime(dueAt) }],
+        ),
+      },
+    }));
   assignments = (course: LmsRef<"course">): readonly Assignment[] =>
     structuredClone(this.#state.assignments.filter((a) => a.course === course));
   students = (course: LmsRef<"course">): readonly Student[] =>

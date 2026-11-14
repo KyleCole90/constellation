@@ -125,10 +125,12 @@ const pickSource = async (
     };
   }
   const sample = options.samples.find((entry) => entry.note.includes(pick.sample));
-  if (!sample?.hint) throw new Error(`No sample from ${pick.sample}.`);
+  const { name, start, end, days } = sample?.hint ?? {};
+  if (!sample?.hint || !start || !end || !days)
+    throw new Error(`No dated sample from ${pick.sample}.`);
   return {
     source: { kind: "cartridge", name: sample.name, kb: sample.kb, hint: sample.hint },
-    term: sample.hint,
+    term: { name: name ?? null, start, end, days },
   };
 };
 

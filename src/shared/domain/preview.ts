@@ -162,7 +162,12 @@ const copyBody = ({ source, plan, shift }: CourseCopyContent, remote: RemoteStat
       : null;
   return {
     kind: "copy",
-    source: source.kind === "course" ? `${source.label} (${source.termName})` : source.name,
+    source:
+      source.kind === "cartridge"
+        ? source.name
+        : source.termName
+          ? `${source.label} (${source.termName})`
+          : source.label,
     oldTerm: termWords(plan.oldTerm),
     newTerm: termWords(plan.newTerm),
     days,

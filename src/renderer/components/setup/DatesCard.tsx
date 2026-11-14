@@ -5,8 +5,10 @@ import { weekdayDate } from "~/shared/domain/preview";
 import type { SourceCourse } from "~/shared/domain/content";
 import type { CourseSetup } from "~/shared/domain/setup";
 import {
+  dateOfTime,
   isoDate,
   shiftPreview,
+  type DueDay,
   type DraftTerm,
   type PlanDraft,
   type TermPlan,
@@ -22,6 +24,7 @@ import {
   DAY_SHORT,
   dayMapWords,
   checkPlan,
+  guessedEnd,
   initialPlan,
   occupiedWords,
   packageTermWords,
@@ -174,8 +177,16 @@ function Breaks({
   );
 }
 
-function ShiftPreview({ source, plan }: { source: SourceCourse; plan: TermPlan }) {
-  if (source.dated.length === 0) return <Note>{source.code} has no due dates to move.</Note>;
+function ShiftPreview({
+  name,
+  dated,
+  plan,
+}: {
+  name: string;
+  dated: readonly DueDay[];
+  plan: TermPlan;
+}) {
+  if (dated.length === 0) return <Note>{name} has no due dates to move.</Note>;
   return (
     <table className="w-full text-left text-meta">
       <caption className="pt-1 pb-label-gap text-left section-title">
@@ -189,9 +200,10 @@ function ShiftPreview({ source, plan }: { source: SourceCourse; plan: TermPlan }
         </tr>
       </thead>
       <tbody>
-        {shiftPreview(source.dated, plan).map((row) => (
-          <tr key={row.item.ref} data-testid="shift-row" className="border-t border-border">
-            <td className="py-cell-y pr-cell-x">{row.item.title}</td>
+        {shiftPreview(dated, plan).map((row, index) => (
+          // oxlint-disable-next-line react/no-array-index-key -- two items can share a title and a day, and the rows never reorder
+          <tr key={index} data-testid="shift-row" className="border-t border-border">
+            <td className="py-cell-y pr-cell-x">{row.title}</td>
             <td className="py-cell-y pr-cell-x whitespace-nowrap text-muted-foreground">
               {weekdayDate(row.from)}
             </td>
@@ -217,6 +229,21 @@ function ShiftPreview({ source, plan }: { source: SourceCourse; plan: TermPlan }
 const sourceRefOf = (setup: CourseSetup) =>
   setup.source?.kind === "course" ? setup.source.ref : null;
 
+/** What the copy will shift, from the source course's read or the package's own. Null when a package's dates weren't read. */
+const datedOf = (
+  setup: CourseSetup,
+  source: SourceCourse | null,
+): { name: string; dated: readonly DueDay[] } | null => {
+  if (setup.source?.kind === "cartridge")
+    return setup.source.hint && { name: setup.source.name, dated: setup.source.hint.dated };
+  return (
+    source && {
+      name: source.code,
+      dated: source.dated.map(({ title, dueAt }) => ({ title, due: dateOfTime(dueAt) })),
+    }
+  );
+};
+
 /** Inside the copy card: where each due date lands under the dates the copy was drafted from, which is what the approval covers. */
 export function CopyDates({ setup }: { setup: CourseSetup }) {
   const source = useWorkspace(
@@ -224,10 +251,11 @@ export function CopyDates({ setup }: { setup: CourseSetup }) {
       state.setupOptions[setup.school]?.sources.find((entry) => entry.ref === sourceRefOf(setup)) ??
       null,
   );
-  if (!source || !setup.plan) return null;
+  const dates = datedOf(setup, source);
+  if (!dates || !setup.plan) return null;
   return (
     <section data-testid="copy-dates" className="border-b border-border px-card py-3">
-      <ShiftPreview source={source} plan={setup.plan} />
+      <ShiftPreview {...dates} plan={setup.plan} />
     </section>
   );
 }
@@ -253,6 +281,9 @@ function DatesForm({
   const unchanged = confirmed && JSON.stringify(plan) === JSON.stringify(setup.plan);
   const occupied = occupiedWords(setup.shell);
   const packageTerm = packageTermWords(setup.source, plan.oldTerm);
+  const hint = setup.source?.kind === "cartridge" ? setup.source.hint : null;
+  const guessed = guessedEnd(hint, plan.newTerm);
+  const dates = datedOf(setup, source);
   const patchOld = (patch: Partial<DraftTerm>) =>
     setPlan((current) => ({ ...current, oldTerm: { ...current.oldTerm, ...patch } }));
   const patchNew = (patch: Partial<DraftTerm>) =>
@@ -308,14 +339,17 @@ function DatesForm({
         {dayMapWords(plan.oldTerm.days, plan.newTerm.days)}
       </p>
       <Breaks plan={plan} onChange={(breaks) => setPlan((current) => ({ ...current, breaks }))} />
-      {setup.source?.kind === "cartridge" ? (
-        <Note>
-          Dates in a package are read during the import, so there is nothing to preview here. Only
-          the rule applies later.
+      {guessed !== null && plan.oldTerm.end === guessed && (
+        <Note testId="guessed-end">
+          The package doesn't say when the old term ended, so it's set to run as long as the new
+          term. Change it if the old term was longer or shorter.
         </Note>
-      ) : source && checked.ok && !unchanged ? (
+      )}
+      {setup.source?.kind === "cartridge" && !dates ? (
+        <Note>This package's due dates move by the same rule when it's imported.</Note>
+      ) : dates && checked.ok && !unchanged ? (
         // Unchanged since the review, the copy card below shows this same table.
-        <ShiftPreview source={source} plan={checked.value} />
+        <ShiftPreview {...dates} plan={checked.value} />
       ) : null}
       {packageTerm && (
         <p data-testid="package-term-warning" role="alert" className={WARNING_CLASS}>

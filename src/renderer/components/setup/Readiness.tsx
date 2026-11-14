@@ -70,6 +70,7 @@ export function Readiness({
   onOpenRow: (key: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
   const run = async (work: () => Promise<string | null>) => {
     setBusy(true);
@@ -77,12 +78,14 @@ export function Readiness({
     setBusy(false);
   };
   const store = () => workspaceStore().getState();
-  const check = () =>
-    run(() => store().runPublishCheck(course)).then(() => {
-      requestAnimationFrame(() =>
-        document.querySelector('[data-testid="readiness"]')?.scrollIntoView({ block: "center" }),
-      );
-    });
+  const check = async () => {
+    setChecking(true);
+    await run(() => store().runPublishCheck(course));
+    setChecking(false);
+    requestAnimationFrame(() =>
+      document.querySelector('[data-testid="readiness"]')?.scrollIntoView({ block: "center" }),
+    );
+  };
   const prepare = () =>
     run(async () => {
       const proposed = await store().proposePublish(course);
@@ -106,7 +109,7 @@ export function Readiness({
               disabled={busy}
               onClick={() => void check()}
             >
-              Run publish check
+              {checking ? "Checking the course" : "Run publish check"}
             </Button>
             {ready && setup.check && !publish && (
               <Button
@@ -122,7 +125,11 @@ export function Readiness({
           </>
         }
       >
-        {setup.check ? (
+        {checking && !setup.check ? (
+          <p data-testid="check-running" className="text-meta text-muted-foreground">
+            Reading the course again.
+          </p>
+        ) : setup.check ? (
           <Table rows={rows} onOpenRow={onOpenRow} />
         ) : (
           <p className="text-meta text-muted-foreground">

@@ -239,6 +239,7 @@ const PackageTermSchema: v.GenericSchema<PackageTerm> = v.object({
   start: DraftDateSchema,
   end: DraftDateSchema,
   days: v.array(WeekdaySchema),
+  dated: v.array(v.object({ title: text, due: IsoDateSchema })),
 });
 
 export const CourseShellSchema: v.GenericSchema<CourseShell> = v.object({
@@ -343,7 +344,7 @@ export const SamplePackageSchema: v.GenericSchema<SamplePackage> = v.object({
   name: text,
   kb: count,
   note: text,
-  hint: nullable(TermDatesSchema),
+  hint: nullable(PackageTermSchema),
 });
 
 // ---- Writes ----

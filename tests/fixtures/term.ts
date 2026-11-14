@@ -66,7 +66,7 @@ export const cartridgeContent = (
     kind: "course-copy",
     target: shell.copyTarget,
     into: { code: shell.code, title: shell.title },
-    source: { kind: "cartridge", name, kb, hint },
+    source: { kind: "cartridge", name, kb, hint: { ...hint, dated: [] } },
     plan,
     shift: shiftOptionsOf(plan),
   };

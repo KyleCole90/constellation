@@ -1156,9 +1156,19 @@ const cartridgeFromConnected = async (t) => {
     `document.querySelector(${JSON.stringify(id("dates-card"))})`,
     `${code}: a real .imscc through main's picker opens Dates`,
   );
+  const newStart = Date.parse(await value(t, "new-term-start"));
+  const newEnd = Date.parse(await value(t, "new-term-end"));
+  const sameLength = new Date(Date.parse("2026-01-20") + newEnd - newStart)
+    .toISOString()
+    .slice(0, 10);
   t.assert(
-    (await value(t, "old-term-start")) === "2026-01-20" && (await value(t, "old-term-end")) === "",
-    `${code}: the package's course settings fill the old term's start, and leave the missing end blank`,
+    (await value(t, "old-term-start")) === "2026-01-20" &&
+      (await value(t, "old-term-end")) === sameLength,
+    `${code}: the package's start fills the old term, and its missing end runs as long as the new term (${sameLength})`,
+  );
+  t.assert(
+    (await t.text(id("guessed-end"))).includes("doesn't say when the old term ended"),
+    `${code}: the form says where the old term's end came from`,
   );
   await shot(t, "dates-package-settings");
   await fillOldTerm(t, "Spring 2026", "2026-01-20", "2026-05-08");
@@ -1224,13 +1234,43 @@ const cartridgeFromConnected = async (t) => {
     `${code}: an old term that doesn't match the package is called out`,
   );
   await shot(t, "dates-package-term-mismatch");
-  await fillOldTerm(t, "Fall 2026", "2026-08-24", "2026-12-11");
+  // A Canvas export carries no term name, so the teacher leaves it blank.
+  await fillOldTerm(t, "", "2026-08-24", "2026-12-11");
   await pickDaysIfBlank(t, "old", [2, 4]);
   await pickDaysIfBlank(t, "new", [2, 4]);
+  await t.waitFor(
+    `document.querySelectorAll(${JSON.stringify(`${id("dates-card")} ${id("shift-row")}`)}).length > 0`,
+    `${code}: the package's due dates preview where they land, as a course source's do`,
+  );
+  await shot(t, "dates-package-preview");
   await t.click(id("review-copy"));
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(id("copy-card"))})`,
+    `${code}: the copy card opens`,
+    WAIT,
+  );
+  const was = await t.eval(
+    `[...document.querySelectorAll('${id("copy-card")} dt')].find((dt) => dt.innerText === "Was")?.nextElementSibling?.innerText ?? null`,
+  );
+  t.assert(
+    was === "Aug 24, 2026 to Dec 11, 2026",
+    `${code}: an old term with no name reads as its dates alone (got ${JSON.stringify(was)})`,
+  );
+  t.assert(
+    await t.has(`${id("copy-card")} ${id("shift-row")}`),
+    `${code}: the copy card shows where the package's due dates land`,
+  );
+  await shot(t, "copy-package-no-term-name");
   await approveCopy(t, code, 1);
   await t.click(id("copy-send"));
   await waitReview(t, code);
+  t.assert(
+    !(await t.eval(
+      `/Old term names|still says \\./.test(document.querySelector(${JSON.stringify(id("review-card"))})?.innerText ?? document.body.innerText)`,
+    )),
+    `${code}: with no old term name, the scan flags no item for one`,
+  );
+  await shot(t, "review-package-no-term-name");
   await clearManual(t, code);
   await fixRest(t, code);
   await publish(t, code);
