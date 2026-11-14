@@ -8,6 +8,7 @@ import {
   DRAFT_GRADE_REQUEST,
   DRAFT_MESSAGE_REQUEST,
   DRAFT_REPLY_REQUEST,
+  FILL_GRADE_REQUEST,
   describeViolation,
   runAgent,
   type Agent,
@@ -40,6 +41,7 @@ import {
   transition,
   type ActivityActor,
   type ChangeContent,
+  type ChangePatch,
   type ChangeRecord,
   type ConflictChoice,
   type FieldKey,
@@ -136,6 +138,16 @@ import type {
 
 export const WORKSPACE_STORAGE_KEY = "lms-app.v1";
 const STORE_VERSION = 3;
+
+const DROPPED_KEPT = 20;
+const TRY_AGAIN = "Try again";
+const STOPPED_PARTWAY = "Claude stopped before it finished.";
+/** What the teacher asked for that didn't happen. A dropped line, quote or finding isn't a failed ask, so it says nothing. */
+const FAILED_ASK: Readonly<Record<string, string>> = {
+  propose: "Claude's draft didn't come through, so nothing was drafted.",
+  edit: "Claude's change didn't come through, so the draft is as it was.",
+  handoff: "Claude couldn't start that work, so nothing was started.",
+};
 const UNREADABLE_BACKUP_KEY = `${WORKSPACE_STORAGE_KEY}.unreadable`;
 
 export type ConnectStage = "saving" | "checking" | "reading";
@@ -552,6 +564,12 @@ const nextWorkOf = (state: WorkspaceData, now: number): readonly NextWork[] =>
 
 type Narrow = Partial<Omit<AgentScope, "changes" | "focus">>;
 
+/** A setup thread is about the course being set up, so that course is in scope for Claude to point at. */
+const setupScope = (scan: NonNullable<AgentScope["scan"]>): Narrow => ({
+  scan,
+  courses: [scan.content.shell],
+});
+
 /** One item and what it belongs to, as a first draft of it sees them. A correction gets the same, not the whole course. */
 const targetScope = (state: WorkspaceData, ref: string): Narrow | null => {
   for (const cache of Object.values(state.cache)) {
@@ -614,6 +632,22 @@ const newRun = (change: ChangeId | null, held: ThreadMessage[] | null): AgentRun
   held,
   started: [],
 });
+
+/** "Fill the rest" promises the teacher's entries stay, so Claude's edit keeps only what is still blank. */
+const blanksOnly = (patch: ChangePatch, content: ChangeContent | undefined): ChangePatch | null => {
+  if (patch.kind !== "grade" || content?.kind !== "grade") return null;
+  const blank = new Set<string>(
+    (content.rubric ?? []).filter((s) => s.points === null).map((s) => s.criterion),
+  );
+  const rubricPoints = Object.entries(patch.rubricPoints ?? {}).filter(([c]) => blank.has(c));
+  const kept: ChangePatch = {
+    kind: "grade",
+    ...(rubricPoints.length > 0 ? { rubricPoints: Object.fromEntries(rubricPoints) } : {}),
+    ...(patch.points !== undefined && content.points === null ? { points: patch.points } : {}),
+    ...(patch.comment !== undefined && !content.comment?.trim() ? { comment: patch.comment } : {}),
+  };
+  return Object.keys(kept).length > 1 ? kept : null;
+};
 
 const sameWords = (a: ChangeContent, b: ChangeContent): boolean => {
   const trimmed = (_key: string, value: unknown) =>
@@ -858,7 +892,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               : deps.locks,
           inFlight,
           runAgent: (thread, request, scan) =>
-            runThreadAgent(thread, request, { scan }, newRun(null, null)),
+            runThreadAgent(thread, request, setupScope(scan), newRun(null, null)),
         });
 
         const syncSchool = (school: SchoolId): Promise<boolean> => {
@@ -1223,56 +1257,77 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           run.started.push(runHandoff({ thread: to, course: effect.course, work: effect.work }));
         };
 
-        const sinkFor = (thread: ThreadId, run: AgentRun): AgentSink => ({
-          effect: async (effect) => {
-            switch (effect.type) {
-              case "say":
-                return say(thread, run, {
-                  type: "agent",
-                  text: effect.text,
-                  at: nowIso(),
-                  ...(effect.lines ? { lines: effect.lines } : {}),
-                  ...(effect.replies ? { replies: effect.replies } : {}),
-                });
-              case "decline":
-                return say(thread, run, {
-                  type: "declined",
-                  text: effect.text,
-                  at: nowIso(),
-                  ...(effect.lines ? { lines: effect.lines } : {}),
-                });
-              case "work":
-                return say(thread, run, { type: "work", lines: [effect.line], at: nowIso() });
-              case "spend": {
-                const current = get().threads[thread];
-                if (!current) return;
-                const spent = current.spend ?? { tokens: 0, usd: 0 };
-                set({
-                  threads: {
-                    ...get().threads,
-                    [thread]: {
-                      ...current,
-                      spend: { tokens: spent.tokens + effect.tokens, usd: spent.usd + effect.usd },
+        const logDropped = (thread: ThreadId, text: string) => {
+          const current = get().threads[thread];
+          if (!current) return;
+          const dropped = [...(current.dropped ?? []), { text, at: nowIso() }].slice(-DROPPED_KEPT);
+          set({ threads: { ...get().threads, [thread]: { ...current, dropped } } });
+        };
+
+        const sinkFor = (thread: ThreadId, run: AgentRun, fill: boolean): AgentSink => {
+          let told = false;
+          return {
+            effect: async (effect) => {
+              switch (effect.type) {
+                case "say":
+                  return say(thread, run, {
+                    type: "agent",
+                    text: effect.text,
+                    at: nowIso(),
+                    ...(effect.lines ? { lines: effect.lines } : {}),
+                    ...(effect.replies ? { replies: effect.replies } : {}),
+                  });
+                case "decline":
+                  return say(thread, run, {
+                    type: "declined",
+                    text: effect.text,
+                    at: nowIso(),
+                    ...(effect.lines ? { lines: effect.lines } : {}),
+                  });
+                case "work":
+                  return say(thread, run, { type: "work", lines: [effect.line], at: nowIso() });
+                case "spend": {
+                  const current = get().threads[thread];
+                  if (!current) return;
+                  const spent = current.spend ?? { tokens: 0, usd: 0 };
+                  set({
+                    threads: {
+                      ...get().threads,
+                      [thread]: {
+                        ...current,
+                        spend: {
+                          tokens: spent.tokens + effect.tokens,
+                          usd: spent.usd + effect.usd,
+                        },
+                      },
                     },
-                  },
-                });
-                return;
+                  });
+                  return;
+                }
+                case "propose":
+                  return applyPropose(effect, thread, run);
+                case "edit": {
+                  if (!fill) return applyEdit(effect, thread);
+                  const patch = blanksOnly(effect.patch, get().changes[effect.change]?.content);
+                  return patch ? applyEdit({ ...effect, patch }, thread) : undefined;
+                }
+                case "annotate":
+                  return applyAnnotate(effect);
+                case "finding":
+                  return setup.applyFinding(thread, effect);
+                case "handoff":
+                  return applyHandoff(effect, thread, run);
               }
-              case "propose":
-                return applyPropose(effect, thread, run);
-              case "edit":
-                return applyEdit(effect, thread);
-              case "annotate":
-                return applyAnnotate(effect);
-              case "finding":
-                return setup.applyFinding(thread, effect);
-              case "handoff":
-                return applyHandoff(effect, thread, run);
-            }
-          },
-          refuse: (violation) =>
-            say(thread, run, { type: "refusal", text: describeViolation(violation), at: nowIso() }),
-        });
+            },
+            refuse: (violation, effect) => {
+              logDropped(thread, `${effect ?? "run"}: ${describeViolation(violation)}`);
+              const text = effect === null ? STOPPED_PARTWAY : FAILED_ASK[effect];
+              if (!text || told) return;
+              told = true;
+              say(thread, run, { type: "agent", text, at: nowIso(), replies: [TRY_AGAIN] });
+            },
+          };
+        };
 
         const runThreadAgent = async (
           thread: ThreadId,
@@ -1308,7 +1363,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             await runAgent(
               agent,
               { request, thread: { history }, scope },
-              sinkFor(thread, run),
+              sinkFor(thread, run, request === FILL_GRADE_REQUEST),
               new AbortController().signal,
             );
             await Promise.allSettled(run.started);
@@ -1795,7 +1850,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             await runThreadAgent(
               thread,
               text,
-              northStar ?? (scan && { scan }) ?? onScreen,
+              northStar ?? (scan && setupScope(scan)) ?? onScreen,
               newRun(focus, null),
               onScreen ? target : undefined,
             );

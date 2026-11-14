@@ -97,10 +97,10 @@ describe("the effect parser", () => {
     ).toEqual({ ok: false, error: { kind: "out-of-scope", target: "ch-other" } });
   });
 
-  it("a refusal explains itself without echoing a whole payload", () => {
-    const text = describeViolation({ kind: "unknown-effect", seen: "approve" });
-    expect(text).toContain("approve");
-    expect(text).toContain("Approve and Send buttons");
+  it("a refusal is described for diagnosis without echoing a whole payload", () => {
+    expect(describeViolation({ kind: "unknown-effect", seen: "approve" })).toBe(
+      'asked to "approve", which no tool allows',
+    );
   });
 
   it("an agent that throws reads as a refusal rather than a crash", async () => {
@@ -130,35 +130,131 @@ describe("the effect parser", () => {
 });
 
 describe("the agent, going through the store", () => {
-  it("an unknown effect from a test double appears in the thread as a refusal and changes nothing", async () => {
+  it("an unknown effect from a test double is logged, shows the teacher nothing, and changes nothing", async () => {
     const rig = await makeStoreRig({ agent: yields({ type: "approve", change: "anything" }) });
     await rig.connectAll();
     await rig.state().sendToAgent(QUEUE, "do it");
-    expect(lastMessage(rig)).toMatchObject({ type: "refusal" });
-    expect(lastMessage(rig)?.type === "refusal" && lastMessage(rig)).toMatchObject({
-      text: expect.stringContaining("approve"),
-    });
+    expect(lastMessage(rig)).toMatchObject({ type: "user", text: "do it" });
+    expect(rig.state().threads[QUEUE]?.dropped?.map((entry) => entry.text)).toEqual([
+      'approve: asked to "approve", which no tool allows',
+    ]);
     expect(Object.keys(rig.state().changes)).toEqual([]);
   });
 
-  it("a quote that is not in the submission is refused and leaves no rationale", async () => {
+  it("a quote that is not in the submission loses its highlight, and the reason stands", async () => {
     const { rig, id } = await opened();
-    const annotated = rig.state().changes[id]?.rationale.length;
+    const scope = rig.scopeFor(id);
+    const submission = scope.submissions[0];
+    const real = (submission?.body.kind === "text" ? submission.body.paragraphs[0] : "")?.slice(
+      0,
+      30,
+    );
     const liar = yields({
       type: "annotate",
       change: id,
       field: "x",
       why: "y",
-      quotes: [{ paragraph: 0, quote: "These words were never written." }],
+      quotes: [
+        { paragraph: 0, quote: "These words were never written." },
+        { paragraph: 0, quote: real },
+      ],
     });
-    const scope = rig.scopeFor(id);
     const { effects, refused } = await collect(liar, { request: "x", scope });
-    expect(effects).toEqual([]);
-    expect(refused[0]).toMatchObject({ kind: "quote-not-found" });
-    expect(rig.state().changes[id]?.rationale).toHaveLength(annotated ?? 0);
+    expect(effects).toEqual([
+      {
+        type: "annotate",
+        change: id,
+        field: "x",
+        why: "y",
+        quotes: [{ paragraph: 0, quote: real }],
+      },
+    ]);
+    expect(refused).toEqual([
+      { kind: "quote-not-found", quote: "These words were never written." },
+    ]);
   });
 
-  it("a quote from the wrong paragraph is refused", async () => {
+  it("a reason with no quote list still stands, without highlights", async () => {
+    const { rig, id } = await opened();
+    const scope = rig.scopeFor(id);
+    for (const quotes of [undefined, "the second paragraph", null]) {
+      const { effects, refused } = await collect(
+        yields({ type: "annotate", change: id, field: "overall", why: "Thin ending.", quotes }),
+        { request: "x", scope },
+      );
+      expect(effects).toEqual([
+        { type: "annotate", change: id, field: "overall", why: "Thin ending.", quotes: [] },
+      ]);
+      expect(refused).toEqual([{ kind: "malformed", detail: "annotate quotes" }]);
+    }
+  });
+
+  it("a correction's score and comment land, and its reason stands even with no usable quotes (walk 5, #65)", async () => {
+    const rules = createRuleAgent();
+    const correcting: Agent = {
+      async *run(input, signal) {
+        if (input.request === DRAFT_GRADE_REQUEST) return yield* rules.run(input, signal);
+        const change = input.scope.focus;
+        yield {
+          type: "edit",
+          change,
+          why: "Score to 17; the comment asks for a concrete example and a stronger ending",
+          patch: { kind: "grade", points: 17, comment: "Aaliyah, name the passage next time." },
+        };
+        yield {
+          type: "annotate",
+          change,
+          field: "overall",
+          why: "Three points off: the study point has no concrete example, and the ending is thin.",
+          quotes: '[{"paragraph":0,"quote":"built on one small study"}]',
+        };
+        yield { type: "say", text: "I changed the grade to 17 out of 20." };
+      },
+    };
+    const rig = await makeStoreRig({ agent: correcting });
+    await rig.connectAll();
+    const ref = rig.server.findSubmission("Aaliyah Brooks", "Reading Response 6");
+    if (!ref) throw new Error("no submission");
+    const id = await rig.state().openSubmission(QUEUE, ref, { fill: "draft" });
+    if (!id) throw new Error("Nothing was drafted.");
+    await rig.state().sendToAgent(QUEUE, "Make it 17. The ending feels thin.");
+    expect(contentOf(rig, id)).toMatchObject({
+      points: 17,
+      comment: "Aaliyah, name the passage next time.",
+    });
+    expect(rig.state().changes[id]?.rationale).toEqual([
+      {
+        field: "overall",
+        why: "Three points off: the study point has no concrete example, and the ending is thin.",
+        anchors: [],
+      },
+    ]);
+    const messages = rig.state().threads[QUEUE]?.messages ?? [];
+    expect(messages.filter((message) => message.type === "refusal")).toEqual([]);
+    expect(messages.at(-1)).toMatchObject({
+      type: "agent",
+      text: "I changed the grade to 17 out of 20.",
+    });
+    expect(rig.state().threads[QUEUE]?.dropped?.map((entry) => entry.text)).toEqual([
+      "annotate: unreadable annotate quotes",
+    ]);
+  });
+
+  it("a draft Claude asked for that fails says so in plain words, with a retry", async () => {
+    const rig = await makeStoreRig({
+      agent: yields({ type: "propose", school: "lcc", course: "lcc:course:0", subject: "x" }),
+    });
+    await rig.connectAll();
+    await rig.state().sendToAgent(QUEUE, "Draft an announcement");
+    expect(lastMessage(rig)).toMatchObject({
+      type: "agent",
+      text: "Claude's draft didn't come through, so nothing was drafted.",
+      replies: ["Try again"],
+    });
+    expect(JSON.stringify(rig.state().threads[QUEUE]?.messages)).not.toContain("outside");
+  });
+
+  it("a quote from the wrong paragraph is dropped", async () => {
     const { rig, id } = await opened();
     const scope = rig.scopeFor(id);
     const submission = scope.submissions[0];

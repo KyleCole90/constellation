@@ -13,6 +13,7 @@ import {
   type GradeContent,
   type RubricScore,
 } from "~/shared/domain/change";
+import { FILL_GRADE_REQUEST } from "~/shared/agent/agent";
 import type { ChangeId } from "~/shared/domain/ids";
 import { ratingLabel } from "~/shared/domain/preview";
 import { workLine } from "~/shared/domain/workName";
@@ -587,7 +588,7 @@ export function DiscardButton({ view, size }: { view: ChangeView; size: "sm" | "
       variant="ghost"
       size={size}
       title={afterDiscard(view)}
-      data-lands='[data-testid="queue-start"], [data-draft-reply]'
+      data-lands='[data-testid="grade-open"] button, [data-testid="queue-start"], [data-draft-reply]'
       onClick={() => discardChange(threadId, view.record.id)}
     >
       {view.summary.banner === "in-doubt" || view.summary.banner === "interrupted"
@@ -597,14 +598,29 @@ export function DiscardButton({ view, size }: { view: ChangeView; size: "sm" | "
   );
 }
 
-/** A grade form opened by hand and left untouched can still go back to Claude. It spends a model call only on click. */
-function DraftInsteadButton({ record }: { record: ChangeRecord }) {
+/**
+ * A grade form opened by hand can still go back to Claude, and it spends a model call only on click. Left untouched, Claude
+ * drafts it from scratch. Once the teacher has typed into it, Claude fills in only what is blank, and the button says so.
+ */
+function DraftInsteadButton({ view }: { view: ChangeView }) {
+  const { record, summary } = view;
   const { threadId } = useThreadActions();
   const ai = useAiOn();
   const untouched = useWorkspace((state) => state.blanks[record.id] !== undefined);
   const working = useWorkspace((state) => state.working[threadId] ?? false);
-  if (!ai || !untouched || record.content.kind !== "grade") return null;
+  const byHand =
+    summary.canEdit &&
+    summary.approvedAt === null &&
+    record.activity.every((entry) => entry.actor !== "agent");
+  if (!ai || !byHand || record.content.kind !== "grade") return null;
   const { target } = record.content;
+  const draft = () => {
+    if (working) return;
+    const state = workspaceStore().getState();
+    void (untouched
+      ? state.openSubmission(threadId, target, { fill: "draft" })
+      : state.sendToAgent(threadId, FILL_GRADE_REQUEST));
+  };
   return (
     <Button
       variant="ghost"
@@ -612,12 +628,9 @@ function DraftInsteadButton({ record }: { record: ChangeRecord }) {
       aria-disabled={working}
       data-draft-instead
       data-lands="[data-card-primary]"
-      onClick={() => {
-        if (!working)
-          void workspaceStore().getState().openSubmission(threadId, target, { fill: "draft" });
-      }}
+      onClick={draft}
     >
-      {working ? "Drafting" : "Draft with Claude"}
+      {working ? "Drafting" : untouched ? "Draft with Claude" : "Fill the rest with Claude"}
     </Button>
   );
 }
@@ -649,7 +662,7 @@ function CardActions({
       )}
       <span className="flex items-center gap-btn-gap">
         <DiscardButton view={view} size="sm" />
-        <DraftInsteadButton record={record} />
+        <DraftInsteadButton view={view} />
         {extra}
       </span>
       <span className="ml-auto flex items-center gap-btn-gap">

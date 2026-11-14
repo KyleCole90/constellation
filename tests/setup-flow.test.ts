@@ -665,6 +665,54 @@ describe("a fix", () => {
   });
 });
 
+describe("the scan's own summary (walk 5, #65)", () => {
+  it("survives a line that points at the course being set up and a finding whose quote isn't there", async () => {
+    // Claude's real answer to a cartridge scan, in a setup thread whose cache has no courses yet.
+    const agent: Agent = {
+      async *run(input) {
+        const shell = input.scope.scan?.content.shell;
+        const essay = input.scope.scan?.content.items.find((item) => item.type === "assignment");
+        if (!shell || !essay) return;
+        yield { type: "work", line: "Read the syllabus, Week 1 page, both essays and the modules" };
+        yield {
+          type: "finding",
+          findingType: "date-in-break",
+          item: essay.ref,
+          quote: "Essay 2 (the title, not the body)",
+          why: "Essay 2 is due during spring break.",
+          after: null,
+        };
+        yield {
+          type: "say",
+          text: "I found 10 problems in COMM 110 for Spring 2027.",
+          lines: [
+            {
+              source: { kind: "course", ref: shell.ref },
+              title: "COMM 110 Public Speaking, Spring 2027",
+              detail: "9 new findings, plus the unpublished Week 1 Overview",
+            },
+          ],
+          replies: ["What date should Essay 2 move to?"],
+        };
+      },
+    };
+    const rig = await connected({ agent });
+    const { course } = await toReview(rig, LCC, "COMM 110", { sample: "Lakeshore" });
+    const thread = setupOf(rig, course).thread;
+    const messages = rig.state().threads[thread]?.messages ?? [];
+    expect(messages.filter((message) => message.type === "refusal")).toEqual([]);
+    expect(messages.at(-1)).toMatchObject({
+      type: "agent",
+      text: "I found 10 problems in COMM 110 for Spring 2027.",
+      lines: [{ source: { kind: "course", ref: course } }],
+      replies: ["What date should Essay 2 move to?"],
+    });
+    expect(rig.state().threads[thread]?.dropped?.map((entry) => entry.text)).toEqual([
+      'finding: quote not in the text: "Essay 2 (the title, not the body)"',
+    ]);
+  });
+});
+
 describe("the publish check", () => {
   it("refuses while anything is open, and refuses a course that moved since the check", async () => {
     const rig = await connected();

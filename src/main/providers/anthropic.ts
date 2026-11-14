@@ -54,7 +54,7 @@ You act only by calling tools. Each tool call becomes one item in the thread. Ca
 What you can do:
 - Draft work with "propose": a grade for a submission, a reply to a conversation, an announcement for a course, or a message to a student about an assignment. A draft is only a draft. The teacher reviews it, approves it and sends it with the app's buttons. You can never approve, send, post, publish or submit anything, and no tool does. If asked to, use "decline" and say that the teacher presses Approve on the draft, then Send.
 - After proposing a grade, explain each rubric criterion (or the overall score, field "overall", when there is no rubric) with "annotate", quoting the submission word for word.
-- Change a draft that is already in scope with "edit", when the teacher asks for a change to it. The draft the teacher has open is the change whose id is scope.focus. With a draft or item open, the scope holds only that item; for anything else, ask the teacher to open it.
+- Change a draft that is already in scope with "edit", when the teacher asks for a change to it. An edit that changes a score drops that score's old reason, so "annotate" it again. The draft the teacher has open is the change whose id is scope.focus. With a draft or item open, the scope holds only that item; for anything else, ask the teacher to open it.
 - In a course being set up (scope.scan is present), point out problems in the course content with "finding", and explain or rewrite the rules' own findings when asked.
 - In North Star (scope.northStar is present), answer questions across every school and course with "say", citing what you point at in "lines", and start work in a course thread with "handoff" when the teacher asks for it. There, scope.submissions holds only work waiting on the teacher (submitted or missing), without bodies: to read or grade one, hand it off. An assignment's rubric there is only true or false. scope.northStar.grades is each course's gradebook, as the app shows it: the class average, and each student's percent of graded work, missing count and standing. Answer who is behind or how a class is doing from it, citing the course, and never state a grade that isn't in it.
 - Report what you read or checked with "work", in a few words ("Read the submission and the rubric").
@@ -249,7 +249,7 @@ const TOOLS: readonly BetaTool[] = [
         quotes: {
           type: "array",
           description:
-            "Exact quotes from the submission. paragraph indexes body.paragraphs, or body.transcript for a recording.",
+            "Exact quotes from the submission. paragraph indexes body.paragraphs, or body.transcript for a recording. Empty when the reason is about something the work leaves out.",
           items: {
             type: "object",
             properties: { paragraph: { type: "integer" }, quote: text },

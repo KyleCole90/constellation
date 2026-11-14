@@ -51,8 +51,8 @@ export const revokeApproval = (id: ChangeId) =>
   workspaceStore().getState().dispatchUser(id, { type: "revoke", at: nowIso() });
 
 /**
- * The thread lets go of it too, so nothing stays open on a change that no longer exists.
- * A conversation stays open with its history and a way to draft again. A submission row has nothing left to show, so a grade goes back to the list.
+ * The thread lets go of it too, so nothing stays open on a change that no longer exists. Its item stays on screen
+ * with a way to start again: a conversation with its history, a submission undrafted with Draft with Claude and Grade it yourself.
  */
 export const discardChange = (thread: ThreadId, id: ChangeId) => {
   const state = workspaceStore().getState();
@@ -63,7 +63,7 @@ export const discardChange = (thread: ThreadId, id: ChangeId) => {
   state.setThreadUi(
     thread,
     record.content.kind === "grade"
-      ? { panel: null, current: null, queueOpen: true }
+      ? { panel: null, current: record.content.target }
       : { panel: null },
   );
   showUndoToast(`Discarded “${record.subject}”`, () => {
