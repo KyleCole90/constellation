@@ -1,4 +1,9 @@
-import { SCAN_COURSE_REQUEST, type AgentEffect, type AgentScope } from "~/shared/agent/agent";
+import {
+  SCAN_COURSE_REQUEST,
+  scanScopeOf,
+  type AgentEffect,
+  type ScanScope,
+} from "~/shared/agent/agent";
 import {
   copySignature,
   errorWords,
@@ -62,7 +67,6 @@ const SCAN_AREAS = [
 ] as const;
 
 type CourseRef = LmsRef<"course">;
-type ScanScope = NonNullable<AgentScope["scan"]>;
 
 export interface SetupOptions {
   sources: readonly SourceCourse[];
@@ -438,11 +442,11 @@ export const createSetupActions = (host: SetupHost) => {
     const content = lastContent.get(course);
     const plan = scanned.value.plan;
     if (content && plan && scanned.value.scan)
-      await host.runAgent(before.thread, SCAN_COURSE_REQUEST, {
-        content,
-        findings: scanned.value.scan.findings,
-        plan,
-      });
+      await host.runAgent(
+        before.thread,
+        SCAN_COURSE_REQUEST,
+        scanScopeOf(content, scanned.value.scan.findings, plan),
+      );
   };
 
   const driveWatch = async (course: string) => {
@@ -916,12 +920,12 @@ export const createSetupActions = (host: SetupHost) => {
       const setup = Object.values(get().setups).find((entry) => entry.thread === thread);
       if (!setup?.scan || !setup.plan) return null;
       const known = lastContent.get(setup.course);
-      if (known) return { content: known, findings: setup.scan.findings, plan: setup.plan };
+      if (known) return scanScopeOf(known, setup.scan.findings, setup.plan);
       const term = termOf(setup.school);
       const read = term && (await laneRead(setup.school, () => term.courseContent(setup.course)));
       if (!read?.ok) return null;
       lastContent.set(setup.course, read.value);
-      return { content: read.value, findings: setup.scan.findings, plan: setup.plan };
+      return scanScopeOf(read.value, setup.scan.findings, setup.plan);
     },
   };
 };
