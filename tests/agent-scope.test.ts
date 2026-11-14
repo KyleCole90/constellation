@@ -5,6 +5,7 @@ import { createRuleAgent } from "~/shared/agent/rules";
 import type { ChangeId, ThreadId } from "~/shared/domain/ids";
 import { invoker, type Bridge } from "~/shared/ipc";
 import { createBridgeAgent } from "~/renderer/providers/agent";
+import { selectGradebook } from "~/renderer/stores/selectors";
 
 import { makeStoreRig } from "./fixtures/store-rig";
 
@@ -81,5 +82,31 @@ describe("what a turn sends Claude", () => {
     expect(waiting.length).toBeLessThan(allSubmissions(rig).length);
     expect(refs(chat.scope.submissions)).toEqual(refs(waiting));
     expect(chat.scope.submissions.filter((submission) => "body" in submission)).toEqual([]);
+  });
+
+  it("a North Star question about who is behind sends every course's gradebook totals, not its rubrics", async () => {
+    const { rig, sent } = await wire();
+    const started = rig.state().startChat("Who's falling behind?");
+    if (!started) throw new Error("No chat started.");
+    await rig.clock.run(started.done);
+
+    const [chat] = sent;
+    const grades = chat?.scope.northStar?.grades;
+    if (!chat || !grades) throw new Error("no grades sent");
+    expect(grades.map((course) => course.course)).toEqual(refs(chat.scope.courses));
+    for (const { course, students } of grades) {
+      const book = selectGradebook(rig.state(), course);
+      expect(students).toEqual(
+        book?.rows.map((row) =>
+          expect.objectContaining({
+            name: row.student.name,
+            percent: row.percent,
+            missing: row.missing,
+          }),
+        ),
+      );
+    }
+    expect(grades.flatMap((course) => course.students).some((s) => s.percent !== null)).toBe(true);
+    expect(chat.scope.assignments.filter((a) => Array.isArray(a.rubric))).toEqual([]);
   });
 });
