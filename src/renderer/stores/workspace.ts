@@ -125,6 +125,7 @@ import {
   selectCourse,
   selectDueExtras,
   selectThreadUi,
+  selectUndrafted,
   selectWhatsDue,
   selectWorkStages,
   selectCourseGrades,
@@ -487,6 +488,7 @@ const initialData = (backend: Backend, resetAt: number): WorkspaceData => ({
   newCourses: {},
   prefs: { sidebarOpen: true, collapsed: {}, expandedThreads: {}, threadUi: {} },
   handoffs: {},
+  undrafted: {},
   resetAt,
 });
 
@@ -671,12 +673,17 @@ type Fill = "draft" | "by-hand";
 interface AgentRun {
   change: ChangeId | null;
   held: ThreadMessage[] | null;
+  /** The replies Claude last offered, and whether the run broke or was turned away (offline, unreachable, refused), so a draft with no grade can tell Claude's answer from a failure. */
+  offers: readonly string[];
+  failed: boolean;
   /** Work this run handed to other threads. The run isn't over until they are. */
   started: Promise<unknown>[];
 }
 const newRun = (change: ChangeId | null, held: ThreadMessage[] | null): AgentRun => ({
   change,
   held,
+  offers: [],
+  failed: false,
   started: [],
 });
 
@@ -1323,6 +1330,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             effect: async (effect) => {
               switch (effect.type) {
                 case "say":
+                  if (effect.replies) run.offers = effect.replies;
                   return say(thread, run, {
                     type: "agent",
                     text: effect.text,
@@ -1331,6 +1339,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                     ...(effect.replies ? { replies: effect.replies } : {}),
                   });
                 case "decline":
+                  run.failed = true;
                   return say(thread, run, {
                     type: "declined",
                     text: effect.text,
@@ -1373,6 +1382,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               }
             },
             refuse: (violation, effect) => {
+              run.failed = true;
               logDropped(thread, `${effect ?? "run"}: ${describeViolation(violation)}`);
               const text = effect === null ? STOPPED_PARTWAY : FAILED_ASK[effect];
               if (!text || told) return;
@@ -1508,6 +1518,23 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               new AbortController().signal,
             );
             await Promise.allSettled(run.started);
+            const submission = narrow?.submissions?.[0];
+            if (
+              request === DRAFT_GRADE_REQUEST &&
+              files.ok &&
+              submission &&
+              run.change === null &&
+              !run.failed
+            )
+              set({
+                undrafted: {
+                  ...get().undrafted,
+                  [submission.ref]: {
+                    submittedAt: submission.submittedAt,
+                    offer: run.offers[0] ?? null,
+                  },
+                },
+              });
           } finally {
             fileHeld(thread, run, run.change);
             set({ working: { ...get().working, [thread]: false } });
@@ -1821,9 +1848,13 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   conversations: [],
                 },
                 blankGrade(submission, assignment),
-                options?.fill === "draft" && undraftableReason(submission.body) !== null
-                  ? { ...options, fill: "by-hand" }
-                  : (options ?? {}),
+                options?.fill !== "draft"
+                  ? (options ?? {})
+                  : undraftableReason(submission.body) !== null
+                    ? { ...options, fill: "by-hand" }
+                    : selectUndrafted(get(), submission)
+                      ? { focus: options.focus ?? true }
+                      : options,
               );
             }
             return null;
@@ -2210,6 +2241,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           newCourses,
           prefs,
           handoffs,
+          undrafted,
           resetAt,
         }) => ({
           schools,
@@ -2223,6 +2255,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           newCourses,
           prefs,
           handoffs,
+          undrafted,
           resetAt,
         }),
       },
@@ -2312,15 +2345,22 @@ const declining = (text: string): Agent => ({
   },
 });
 
-let agentDown = false;
-/** Verify's stand-in for Claude being unreachable: while down, the rules agent declines the way Claude's does. */
-export const setAgentDown = (down: boolean): void => {
-  agentDown = down;
+/** Verify's stand-ins for Claude: unreachable, or answering a submission it can't see the way Claude does, with no grade. */
+type AgentStandIn = "down" | "cant-see" | null;
+let standIn: AgentStandIn = null;
+export const setAgentStandIn = (next: AgentStandIn): void => {
+  standIn = next;
 };
-const downable = (agent: Agent): Agent => ({
+const CANT_SEE: AgentEffect = {
+  type: "say",
+  text: "I didn't draft a grade because I can't see the work. The link opens an error page.",
+  replies: ["Draft a message asking them to resubmit the link"],
+};
+const standInFor = (agent: Agent): Agent => ({
   async *run(input, signal) {
-    if (agentDown)
+    if (standIn === "down")
       yield { type: "decline", text: "Claude couldn't be reached, so nothing was drafted." };
+    else if (standIn === "cant-see" && input.request === DRAFT_GRADE_REQUEST) yield CANT_SEE;
     else yield* agent.run(input, signal);
   },
 });
@@ -2332,7 +2372,7 @@ const browserDeps = (): WorkspaceDeps => ({
   agent:
     desktopBridge?.agent === "claude"
       ? createBridgeAgent(desktopBridge)
-      : downable(createRuleAgent()),
+      : standInFor(createRuleAgent()),
   ...(desktopBridge ? { connectivity: { online: isOnline, subscribe: onConnectivity } } : {}),
   // Verify and the web demo run the fake LMS, which changes only when a test changes it, so no timer races their steps.
   ...(desktopBridge?.agent === "claude"
