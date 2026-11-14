@@ -208,6 +208,14 @@ describe("main's Anthropic agent", () => {
     );
   });
 
+  it("tells Claude findings list under the chat, so a scan summary never points above for them (#92)", async () => {
+    const api = transport(() => json(200, message([])));
+    await anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch })(INPUT);
+    expect(api.sent[0]?.body["system"]).toContain(
+      "the app lists them in a review list under the chat, so when your words point at them, say they are below",
+    );
+  });
+
   it("forwards only its own tools, and a tool's input can't rename the effect", async () => {
     const api = transport(() =>
       json(
