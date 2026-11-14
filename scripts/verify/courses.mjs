@@ -1570,6 +1570,31 @@ const gradebook = async (t) => {
     "the page itself never scrolls sideways",
   );
   await shot(t, "gradebook-sticky-scrolled");
+
+  // A long student name, like Canvas's "Pageview 2362 Verify Student", widens the Student column past its 188px floor.
+  await t.eval(
+    `document.head.append(Object.assign(document.createElement("style"), { id: "long-name", textContent: "[data-first-col] { min-width: 240px }" }))`,
+  );
+  await t.click("Overview", { within: TABS });
+  await t.waitFor(`!document.querySelector(${JSON.stringify(SCROLL)})`, "the gradebook closes");
+  await t.click("Gradebook", { within: TABS });
+  await t.waitFor(`document.querySelector("[data-column]")`, "the gradebook opens again");
+  const opening = `(() => { const s = document.querySelector(${JSON.stringify(SCROLL)}); return { left: s.scrollLeft, corner: document.querySelector("[data-corner]").getBoundingClientRect().right, column: document.querySelector("[data-column]").getBoundingClientRect().left }; })()`;
+  const painted = await t.eval(opening);
+  t.assert(
+    painted.left === 0 && painted.column >= painted.corner - 1,
+    "a wide Student column opens at the start, with the first header in full view",
+    JSON.stringify(painted),
+  );
+  await t.sleep(300);
+  const later = await t.eval(opening);
+  t.assert(
+    later.left === 0 && later.column >= later.corner - 1,
+    "and stays there once it settles",
+    JSON.stringify(later),
+  );
+  await shot(t, "gradebook-wide-names");
+  await t.eval(`document.getElementById("long-name").remove()`);
   await t.viewport(1440, 900);
 
   const luisCell = `[...document.querySelectorAll("tr[data-student]")].find((row) => row.innerText.includes("Luis Cardenas")).querySelector('[data-cell]:has([data-mark="resubmitted"])')`;

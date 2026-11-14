@@ -665,6 +665,85 @@ const hiddenTermDates = async (t) => {
     `${code}: typed dates are enough for the shift preview`,
   );
   await shot(t, "hidden-term-dates");
+
+  const changeToPackage = async () => {
+    await t.click("Change source", { within: id("dates-card") });
+    await t.waitFor(
+      `document.querySelector(${JSON.stringify(id("cartridge-pick"))})`,
+      `${code}: Change source goes back to Source`,
+    );
+    await pickPackage(t, "imscc/damaged-export.imscc");
+    await t.waitFor(
+      `document.querySelector(${JSON.stringify(id("dates-card"))})`,
+      `${code}: the package opens Dates`,
+    );
+  };
+  // A Default Term shell: no term dates, and the course's own dates not set yet (walk 5, #58).
+  await changeToPackage();
+  const opened = await t.eval(
+    `["old-term-start", "old-term-end", "new-term-start", "new-term-end"].map((name) => document.querySelector('[data-testid="' + name + '"]').value)`,
+  );
+  t.assert(
+    JSON.stringify(opened) === JSON.stringify(["2026-01-20", "", "", ""]) &&
+      !(await t.has(id("guessed-end"))),
+    `${code}: with no new dates, the package's missing end isn't guessed yet`,
+    JSON.stringify(opened),
+  );
+  await setField(t, id("new-term-start"), "2027-01-19");
+  await setField(t, id("new-term-end"), "2027-05-07");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(id("old-term-end"))}).value === "2026-05-08" && document.querySelector(${JSON.stringify(id("guessed-end"))})`,
+    `${code}: typing the new term's dates guesses the old end, and says so`,
+  );
+  await setField(t, id("new-term-end"), "2027-05-14");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(id("old-term-end"))}).value === "2026-05-15"`,
+    `${code}: the guess follows a new term end`,
+  );
+  await setField(t, id("old-term-end"), "2026-05-01");
+  await setField(t, id("new-term-end"), "2027-05-07");
+  await t.sleep(200);
+  t.assert(
+    (await value(t, "old-term-end")) === "2026-05-01" && !(await t.has(id("guessed-end"))),
+    `${code}: an old end the teacher typed stays when the new dates change`,
+  );
+
+  // The teacher sets the course's own dates in Canvas while the setup is open.
+  await changeToPackage();
+  const thread = await t.eval("location.pathname");
+  await t.eval("window.__faultLab.hideTermDates(false)");
+  await syncShells(t, "every((shell) => shell.startAt !== null)", "a sync reads the dates again");
+  const course = await t.eval(
+    `JSON.parse(localStorage.getItem("lms-app.v1")).state.newCourses.lcc.find((shell) => shell.code === ${JSON.stringify(code)})`,
+  );
+  const guess = new Date(
+    Date.parse("2026-01-20") + Date.parse(course.endAt) - Date.parse(course.startAt),
+  )
+    .toISOString()
+    .slice(0, 10);
+  await t.goto(thread);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(id("dates-card"))})`,
+    `${code}: Dates opens again`,
+  );
+  const filled = await t.eval(
+    `["new-term-start", "new-term-end", "old-term-end"].map((name) => document.querySelector('[data-testid="' + name + '"]').value)`,
+  );
+  t.assert(
+    JSON.stringify(filled) === JSON.stringify([course.startAt, course.endAt, guess]) &&
+      (await t.has(id("guessed-end"))),
+    `${code}: the course's own dates fill the new term, and the old end is guessed from them`,
+    JSON.stringify({ filled, course: [course.startAt, course.endAt], guess }),
+  );
+  await shot(t, "course-dates-fill-package");
+  await t.click("Change source", { within: id("dates-card") });
+  await t.click(id(`source-course-${code}`));
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(id("new-term-start"))})?.value === ${JSON.stringify(course.startAt)} && document.querySelector(${JSON.stringify(id("new-term-end"))}).value === ${JSON.stringify(course.endAt)}`,
+    `${code}: a course copy fills the new term from the course's own dates too`,
+  );
+  await shot(t, "course-dates-fill-copy");
+
   await t.click("What's due");
   await t.waitFor(`location.pathname === "/due"`, "What's due opens");
   await t.click("Cancel setup", { within: offer });
@@ -672,8 +751,6 @@ const hiddenTermDates = async (t) => {
     `document.querySelector(${JSON.stringify(offer)})?.innerText.includes("Set up this course")`,
     `${code}: Cancel setup offers the course again`,
   );
-  await t.eval("window.__faultLab.hideTermDates(false)");
-  await syncShells(t, "every((shell) => shell.startAt !== null)", "a sync reads the dates again");
 };
 
 const sidebarSetupCount = (t) =>

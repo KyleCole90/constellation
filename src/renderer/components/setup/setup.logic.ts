@@ -97,18 +97,13 @@ export const guessedEnd = (
   return last && last > end ? last : end;
 };
 
-/** What was last typed wins, then a plan already confirmed. Otherwise the source or its hint fills the old term, and the course fills the new one. */
-export const initialPlan = (
-  setup: Pick<CourseSetup, "plan" | "draft" | "shell" | "source">,
-  source: SourceCourse | null,
-): PlanDraft => {
+type PlanInputs = Pick<CourseSetup, "plan" | "draft" | "shell" | "source">;
+
+/** What was last typed wins, then a plan already confirmed. Otherwise the source or its hint fills the old term. Edits apply to this. */
+export const typedPlan = (setup: PlanInputs, source: SourceCourse | null): PlanDraft => {
   if (setup.draft) return setup.draft;
   if (setup.plan) return draftOf(setup.plan);
   const hint = setup.source?.kind === "cartridge" ? setup.source.hint : null;
-  const newDates: Pick<DraftTerm, "start" | "end"> = {
-    start: setup.shell.startAt ?? "",
-    end: setup.shell.endAt ?? "",
-  };
   const oldTerm: DraftTerm = source
     ? {
         name: source.termName,
@@ -117,13 +112,29 @@ export const initialPlan = (
         days: source.meetingDays,
       }
     : hint
-      ? { ...draftTerm(hint), end: guessedEnd(hint, newDates) ?? hint.end }
+      ? draftTerm(hint)
       : { name: "", start: "", end: "", days: [] };
   return {
     oldTerm,
-    newTerm: { name: setup.shell.termName, ...newDates, days: oldTerm.days },
+    newTerm: { name: setup.shell.termName, start: "", end: "", days: oldTerm.days },
     breaks: [],
   };
+};
+
+/**
+ * The plan the form shows: what was typed, with each blank date filled from what's known now. The course's own dates
+ * fill the new term, then a package's missing end is guessed from those, so both follow the course and the typing.
+ */
+export const formPlan = (setup: PlanInputs, source: SourceCourse | null): PlanDraft => {
+  const typed = typedPlan(setup, source);
+  const newTerm: DraftTerm = {
+    ...typed.newTerm,
+    start: typed.newTerm.start || (setup.shell.startAt ?? ""),
+    end: typed.newTerm.end || (setup.shell.endAt ?? ""),
+  };
+  const hint = setup.source?.kind === "cartridge" ? setup.source.hint : null;
+  const end = typed.oldTerm.end || (guessedEnd(hint, newTerm) ?? "");
+  return { ...typed, oldTerm: { ...typed.oldTerm, end }, newTerm };
 };
 
 /** Null when the old term matches what the package says of its own term, or it says nothing. Every shifted date leans on the old term. */
