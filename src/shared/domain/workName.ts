@@ -7,6 +7,8 @@ export type NamedWork =
   | { kind: "message"; student: string }
   | { kind: "announcement"; title: string; course: string };
 
+export const firstName = (name: string): string => name.split(" ")[0] ?? name;
+
 export const peopleWords = ([first, ...rest]: readonly string[]): string =>
   rest.length === 0
     ? (first ?? "")

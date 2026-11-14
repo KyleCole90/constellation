@@ -159,13 +159,13 @@ export interface PendingHandoff {
   work: HandoffWork;
 }
 
-/** Everything persisted under lms-app.v1. Parsed on load. */
-/** A draft that came back with no grade, for the submission as it was turned in then, and the next step Claude offered instead. */
+/** A draft that came back with no grade, for the submission as it was turned in then, and what Claude said about it, the only context a message about this submission gets. */
 export interface Undrafted {
   submittedAt: IsoTime | null;
-  offer: string | null;
+  said: string;
 }
 
+/** Everything persisted under lms-app.v1. Parsed on load. */
 export interface WorkspaceData {
   /** Empty until the person adds a school. Only `addSchool` grows it. */
   schools: readonly School[];

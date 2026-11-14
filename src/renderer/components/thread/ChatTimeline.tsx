@@ -12,6 +12,7 @@ import {
 
 import type { LmsRef, ThreadId } from "~/shared/domain/ids";
 import { undraftableReason, type Submission } from "~/shared/domain/lms";
+import { firstName } from "~/shared/domain/workName";
 import {
   selectAssignment,
   selectSubmission,
@@ -389,11 +390,16 @@ function OpenSubmission({
   const ask = useChange(useWorkspace((state) => selectMessageSince(state, submission)?.id ?? null));
   const askSent = ask?.summary.sentAt != null;
   const asking = ask !== null && !askSent;
-  const offer = ask ? null : (undrafted?.offer ?? null);
+  const askable = ai && undrafted !== null && ask === null;
   const open = (fill: "draft" | "by-hand") => {
     if (working) return;
     setAsked(fill === "draft");
     void workspaceStore().getState().openSubmission(thread, submission.ref, { fill });
+  };
+  const askToResubmit = () => {
+    if (working) return;
+    setAsked(true);
+    void workspaceStore().getState().openMessage(thread, submission.ref);
   };
   if (working && !drafting) return null;
   return (
@@ -425,7 +431,7 @@ function OpenSubmission({
           Your message to {submission.studentName} was sent.
         </p>
       )}
-      <div className="flex gap-btn-gap">
+      <div className="flex flex-wrap gap-btn-gap">
         {asking && (
           <Button
             variant="default"
@@ -435,13 +441,17 @@ function OpenSubmission({
             Review the message to {submission.studentName}
           </Button>
         )}
-        {ai && offer && (
+        {askable && (
           <Button
             variant="default"
+            aria-disabled={drafting}
             data-offer
-            onClick={() => void workspaceStore().getState().sendToAgent(thread, offer)}
+            data-lands="[data-card-primary]"
+            onClick={askToResubmit}
           >
-            {offer}
+            {drafting
+              ? "Drafting"
+              : `Draft a message asking ${firstName(submission.studentName)} to resubmit`}
           </Button>
         )}
         {ai && !undrafted && (
@@ -457,7 +467,7 @@ function OpenSubmission({
         )}
         {!drafting && (
           <Button
-            variant={asking || (ai && !blocked && (!undrafted || offer)) ? "outline" : "default"}
+            variant={asking || askable || (ai && !blocked && !undrafted) ? "outline" : "default"}
             data-lands="[data-typed-score], [data-card-primary]"
             onClick={() => open("by-hand")}
           >
