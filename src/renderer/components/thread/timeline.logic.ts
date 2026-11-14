@@ -43,6 +43,19 @@ export const liveReplies = (
 ): readonly string[] =>
   message.type === "agent" && message === messages.at(-1) ? (message.replies ?? []) : [];
 
+/** Claude's words about a change already sent, without the sentences telling the teacher to approve or send it, which no longer apply. */
+export const settledText = (text: string): string =>
+  text
+    .split("\n")
+    .map((line) =>
+      line
+        .split(/(?<=[.!?]["”’)]?)\s+/)
+        .filter((sentence) => !/\bapprove\b/i.test(sentence))
+        .join(" "),
+    )
+    .join("\n")
+    .trim();
+
 const LEADS_TO_A_CHANGE: ReadonlySet<ThreadMessage["type"]> = new Set([
   "user",
   "work",

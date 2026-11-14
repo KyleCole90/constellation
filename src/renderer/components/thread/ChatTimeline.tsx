@@ -29,7 +29,13 @@ import { Button } from "../ui/button";
 import { ChangeCard, ChangeRow } from "./DraftCard";
 import { useRefusedFile } from "./SubmittedFile";
 import { AnswerLines, HandedOffBanner, HandoffGroup, ReplyChips } from "./northStar";
-import { boldRuns, buildTimeline, liveReplies, visibleMessages } from "./timeline.logic";
+import {
+  boldRuns,
+  buildTimeline,
+  liveReplies,
+  settledText,
+  visibleMessages,
+} from "./timeline.logic";
 import { useChange } from "./useChange";
 import { focusIsFree } from "~/renderer/lib/lostFocus";
 
@@ -92,6 +98,7 @@ function Message({
   message: Exclude<ThreadMessage, { type: "work" | "handoff" }>;
   thread: Thread;
 }) {
+  const sent = (useChange(message.change ?? null)?.summary.sentAt ?? null) !== null;
   switch (message.type) {
     case "user":
       return (
@@ -101,9 +108,11 @@ function Message({
       );
     case "agent": {
       const replies = liveReplies(message, thread.messages);
+      const text = sent ? settledText(message.text) : message.text;
+      if (!text && !message.edited?.length && !message.lines?.length) return null;
       return (
         <div className="text-chat whitespace-pre-line">
-          <AgentText text={message.text} />
+          <AgentText text={text} />
           {message.edited && message.edited.length > 0 && (
             <ul data-edited className="mt-2 flex flex-wrap gap-2">
               {message.edited.map((edit) => (

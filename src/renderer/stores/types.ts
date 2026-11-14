@@ -103,6 +103,8 @@ export type Thread = ThreadSubject & {
   settledAt?: IsoTime;
   /** What Claude's runs in this thread used and cost, summed. Absent until a run reports one. */
   spend?: { tokens: number; usd: number };
+  /** The teacher's standing preference for drafts here, which Claude records and every run hears. The teacher can clear it. */
+  guidance?: string;
   /** For diagnosis, never shown: the last things the parser set aside from Claude's runs here, and why. */
   dropped?: readonly { text: string; at: IsoTime }[];
 };

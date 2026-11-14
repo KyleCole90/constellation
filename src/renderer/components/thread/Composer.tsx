@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
 import type { LmsRef } from "~/shared/domain/ids";
@@ -60,10 +60,11 @@ export function Composer({
 
   const correcting = !batching && setupStep === undefined && (focused?.summary.canEdit ?? false);
 
-  const submit = (value: string) => {
+  const submit = (value: string, typed = false) => {
     if (!value.trim() || held) return;
     setText("");
-    if (!hero) return void workspaceStore().getState().sendToAgent(thread.id, value.trim());
+    if (!hero)
+      return void workspaceStore().getState().sendToAgent(thread.id, value.trim(), { typed });
     const started = workspaceStore().getState().startChat(value.trim());
     if (!started) return;
     const open = () => navigate({ to: "/threads/$threadId", params: { threadId: started.thread } });
@@ -91,6 +92,26 @@ export function Composer({
           ))}
         </div>
       )}
+      {thread.guidance && (
+        <div
+          data-testid="thread-guidance"
+          className="mb-2 flex items-center gap-2 text-meta text-secondary-label"
+        >
+          <SlidersHorizontal className="size-3.5 flex-none text-muted-foreground" />
+          <span className="min-w-0 flex-1">
+            <span className="font-medium text-foreground">Every draft here: </span>
+            {thread.guidance}
+          </span>
+          <Button
+            variant="ghost-muted"
+            size="meta"
+            data-clear-guidance
+            onClick={() => workspaceStore().getState().clearGuidance(thread.id)}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
       <div className="composer-shell rounded-[20px] border border-input bg-card py-2 pr-2 pl-4 focus-within:border-ring/60">
         <textarea
           data-composer
@@ -108,7 +129,7 @@ export function Composer({
             event.preventDefault();
             if (chord && correcting)
               workspaceStore().getState().setThreadUi(thread.id, { panel: "writeback" });
-            else submit(text);
+            else submit(text, true);
           }}
           className="block max-h-32 min-h-[22px] w-full resize-none bg-transparent text-chat outline-none [field-sizing:content] placeholder:text-muted-foreground"
         />
@@ -124,7 +145,7 @@ export function Composer({
             size="icon-round"
             aria-label="Send to agent"
             disabled={!text.trim() || held}
-            onClick={() => submit(text)}
+            onClick={() => submit(text, true)}
           >
             <ArrowUp />
           </Button>

@@ -56,6 +56,8 @@ export type AgentEffect =
   /** The agent saying no. The thread renders it apart from ordinary replies. */
   | { type: "decline"; text: string; lines?: readonly AnswerLine[] }
   | { type: "work"; line: string }
+  /** The teacher's standing preference for every later draft in this thread, in full, replacing the last; null clears it. */
+  | { type: "guide"; text: string | null }
   /** What a model run cost, from the API's own count. The model can't write one: main adds it after the run. */
   | { type: "spend"; tokens: number; usd: number }
   | {
@@ -103,7 +105,8 @@ export type AgentEffect =
 /** Data only. No provider, store, vault, or token is reachable from here. `scope.changes` stays current during a run, so a propose is visible to the annotate that follows it. */
 export interface AgentInput {
   request: string;
-  thread: { history: readonly { role: "user" | "agent"; text: string }[] };
+  /** `guidance` is the thread's standing preference. A draft of one item hears it and none of the thread's chat. */
+  thread: { history: readonly { role: "user" | "agent"; text: string }[]; guidance?: string };
   scope: AgentScope;
   /** The files of the one submission being drafted, read from the LMS, in the order its body lists them. */
   files?: readonly SubmittedFile[];
@@ -643,6 +646,13 @@ export const parseAgentEffect = (
         raw["usd"] >= 0
         ? { ok: true, value: { type: "spend", tokens: raw["tokens"], usd: raw["usd"] } }
         : fail({ kind: "malformed", detail: "spend" });
+    // North Star drafts nothing itself, so a preference set there would reach no draft.
+    case "guide": {
+      if (scope.northStar) return fail({ kind: "out-of-scope", target: "guidance" });
+      const text = raw["text"] ?? null;
+      if (text !== null && !isText(text)) return fail({ kind: "malformed", detail: "guide text" });
+      return { ok: true, value: { type: "guide", text: text === null ? null : text.trim() } };
+    }
     case "propose": {
       const course = scope.courses.find(
         (c) => c.ref === raw["course"] && c.school === raw["school"],

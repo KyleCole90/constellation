@@ -78,6 +78,15 @@ describe("after Claude drafts no grade for a submission", () => {
     expect(undrafted(rig, ref)?.said).toBe(SAID);
   });
 
+  it("Claude's chips don't show, so the app's resubmit button is the one way on (#81)", async () => {
+    const { rig } = await declined();
+    const said = rig
+      .state()
+      .threads[QUEUE]?.messages.find((m) => m.type === "agent" && m.text === SAID);
+    expect(said).toBeDefined();
+    expect(said && "replies" in said).toBe(false);
+  });
+
   it("drafting the unchanged submission again spends nothing", async () => {
     const { rig, ref, agent } = await declined();
     expect(

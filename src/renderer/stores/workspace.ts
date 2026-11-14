@@ -229,7 +229,10 @@ interface WorkspaceActions extends SetupActions {
   threadForWork(course: Course, work: HandoffWork): ThreadId;
   /** Starts a North Star chat with this request. `done` settles when its run does. Null with AI off, so no empty chat exists. */
   startChat(text: string): { thread: ThreadId; done: Promise<void> } | null;
-  sendToAgent(thread: ThreadId, text: string): Promise<void>;
+  /** `typed` only for words the teacher wrote in the composer. Only such a run may set the thread's guidance. */
+  sendToAgent(thread: ThreadId, text: string, options?: { typed?: boolean }): Promise<void>;
+  /** Drops the thread's standing guidance, so later drafts go back to Claude's own judgment. */
+  clearGuidance(thread: ThreadId): void;
   /** Course threads and chats only (`canSettle`); others are ignored. A settled thread leaves its sidebar list until it is resumed or gets a new message. */
   settleThreads(ids: readonly ThreadId[]): void;
   resumeThreads(ids: readonly ThreadId[]): void;
@@ -678,10 +681,23 @@ interface AgentRun {
   failed: boolean;
   /** Work this run handed to other threads. The run isn't over until they are. */
   started: Promise<unknown>[];
+  /** The teacher wrote this run's request in the composer. Only such a run may set guidance, so neither a submission a draft reads nor Claude's own chip text can plant one. */
+  typed: boolean;
 }
-const newRun = (change: ChangeId | null, held: ThreadMessage[] | null): AgentRun => ({
+const withoutReplies = (message: ThreadMessage): ThreadMessage => {
+  if (message.type !== "agent") return message;
+  const { replies: _replies, ...rest } = message;
+  return rest;
+};
+
+const newRun = (
+  change: ChangeId | null,
+  held: ThreadMessage[] | null,
+  typed = false,
+): AgentRun => ({
   change,
   held,
+  typed,
   said: [],
   failed: false,
   started: [],
@@ -1325,6 +1341,18 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           set({ threads: { ...get().threads, [thread]: { ...current, dropped } } });
         };
 
+        const setGuidance = (thread: ThreadId, text: string | null) => {
+          const current = get().threads[thread];
+          if (!current) return;
+          const { guidance: _old, ...rest } = current;
+          set({
+            threads: {
+              ...get().threads,
+              [thread]: text === null ? rest : { ...rest, guidance: text },
+            },
+          });
+        };
+
         const sinkFor = (thread: ThreadId, run: AgentRun, fill: boolean): AgentSink => {
           let told = false;
           return {
@@ -1349,6 +1377,10 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   });
                 case "work":
                   return say(thread, run, { type: "work", lines: [effect.line], at: nowIso() });
+                case "guide":
+                  if (!run.typed)
+                    return logDropped(thread, "guide: only a typed request sets guidance");
+                  return setGuidance(thread, effect.text);
                 case "spend": {
                   const current = get().threads[thread];
                   if (!current) return;
@@ -1501,8 +1533,15 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   ? [{ role: "agent", text: message.text }]
                   : [],
             );
+          const { guidance } = current;
           set({ working: { ...get().working, [thread]: true } });
           try {
+            if (guidance)
+              say(thread, run, {
+                type: "work",
+                lines: [`Followed this thread's guidance: ${guidance}`],
+                at: nowIso(),
+              });
             // Filling in the rest of a hand grade reads the same files a fresh draft does.
             const files =
               request === DRAFT_GRADE_REQUEST || request === FILL_GRADE_REQUEST
@@ -1514,7 +1553,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               files.ok ? agent : declining(files.error),
               {
                 request,
-                thread: { history },
+                thread: { history, ...(guidance ? { guidance } : {}) },
                 scope,
                 ...(files.ok ? { files: files.value.files } : {}),
               },
@@ -1529,7 +1568,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               submission &&
               run.change === null &&
               !run.failed
-            )
+            ) {
+              // The app's own resubmit button is the next step, so Claude's chips would offer the same thing a second way.
+              run.held = run.held?.map(withoutReplies) ?? null;
               set({
                 undrafted: {
                   ...get().undrafted,
@@ -1539,6 +1580,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   },
                 },
               });
+            }
           } finally {
             fileHeld(thread, run, run.change);
             set({ working: { ...get().working, [thread]: false } });
@@ -2011,7 +2053,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             return { thread, done: get().sendToAgent(thread, text) };
           },
 
-          sendToAgent: async (thread, text) => {
+          sendToAgent: async (thread, text, options) => {
             const current = get().threads[thread];
             if (!get().aiOn() || current?.kind === "north-star") return;
             const focus = current?.focus ?? null;
@@ -2044,10 +2086,12 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               thread,
               text,
               northStar ?? (scan && setupScope(scan)) ?? onScreen,
-              newRun(focus, null),
+              newRun(focus, null, options?.typed ?? false),
               onScreen ? target : undefined,
             );
           },
+
+          clearGuidance: (thread) => setGuidance(thread, null),
 
           setConversationRead: (ref, read) => {
             const conversation = allCaches()
@@ -2369,6 +2413,7 @@ const cantSee = ({ thread }: AgentInput): AgentEffect =>
     : {
         type: "say",
         text: "I didn't draft a grade because I can't see the work. The link opens an error page.",
+        replies: ["Draft a message asking them for a working link"],
       };
 const standInFor = (agent: Agent): Agent => ({
   async *run(input, signal) {

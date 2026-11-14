@@ -4,7 +4,7 @@ import type { ChangeRecord, ChangeSummary } from "~/shared/domain/change";
 import type { ChangeId, IsoTime } from "~/shared/domain/ids";
 import type { ThreadMessage } from "~/renderer/stores/types";
 
-import { boldRuns, buildTimeline, visibleMessages, walkStep } from "./timeline.logic";
+import { boldRuns, buildTimeline, settledText, visibleMessages, walkStep } from "./timeline.logic";
 
 const at = (minute: number) => `2026-10-30T10:0${minute}:00.000Z` as IsoTime;
 const work = (minute: number, line: string): ThreadMessage => ({
@@ -191,6 +191,28 @@ describe("buildTimeline", () => {
         focusOn("c"),
       ).find((item) => item.type === "earlier"),
     ).toMatchObject({ label: "Earlier: 2 posts" });
+  });
+});
+
+describe("settledText", () => {
+  it("drops the sentence telling the teacher to approve what was already sent (#81)", () => {
+    expect(
+      settledText(
+        'I drafted a message asking Joey to fix the link. It asks him to set sharing to "Anyone with the link can view." You can review it, then press Approve and Send.',
+      ),
+    ).toBe(
+      'I drafted a message asking Joey to fix the link. It asks him to set sharing to "Anyone with the link can view."',
+    );
+  });
+
+  it("keeps paragraphs and words that only look alike", () => {
+    expect(
+      settledText("Scored 18 of 20.\nThe draft was approved earlier. Press Approve, then Send."),
+    ).toBe("Scored 18 of 20.\nThe draft was approved earlier.");
+  });
+
+  it("leaves nothing when the whole line was the instruction", () => {
+    expect(settledText("Press Approve, then Send.")).toBe("");
   });
 });
 
