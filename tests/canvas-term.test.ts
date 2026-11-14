@@ -121,6 +121,34 @@ describe("Canvas term setup reads", () => {
     });
   });
 
+  it("counts many new shells side by side, never with more than 8 requests out, so Canvas doesn't throttle the sync", async () => {
+    const http = new CanvasTermHttp();
+    const [shell] = http.courses.filter((row) => row.id === SHELL_ID);
+    if (!shell) throw new Error("the fixture has a shell");
+    for (let id = 1; id <= 20; id++)
+      http.courses.push({ ...shell, id: SHELL_ID + id, name: `Shell ${id}` });
+    let out = 0;
+    let most = 0;
+    const provider = createCanvasProvider({
+      school: SCHOOL,
+      lease: {
+        use: (work) => work({ kind: "bearer", token: new Secret(TERM_TOKEN) }),
+        replace: async () => {},
+      },
+      fetch: async (url, init) => {
+        most = Math.max(most, ++out);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        out--;
+        return http.fetch(url, init);
+      },
+      now: http.now,
+      packageFile: async () => null,
+    });
+    expect(await unwrap(setupOf(provider).newCourses())).toHaveLength(21);
+    expect(most).toBeGreaterThan(1);
+    expect(most).toBeLessThanOrEqual(8);
+  });
+
   it("offers the shell and its source with null dates when Canvas hides the term's dates from teachers", async () => {
     const http = new CanvasTermHttp();
     http.hideTermDates = true;

@@ -23,6 +23,9 @@ const start = async () => {
     }
   }
   void workspaceStore().getState().boot();
+  router.subscribe("onResolved", ({ toLocation }) => {
+    if (/^\/(due|courses)\b/.test(toLocation.pathname)) workspaceStore().getState().freshen();
+  });
   keepFocusOnThePage(document);
 
   ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

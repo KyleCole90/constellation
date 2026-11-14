@@ -11,6 +11,7 @@ import {
   savedWords,
   scopeSummary,
   syncFailureWords,
+  syncProgressWords,
   syncWords,
   waitingWords,
 } from "./connection.logic";
@@ -131,5 +132,15 @@ describe("words", () => {
     expect(syncFailureWords("rate_limited", 0, null)).toBe(
       "The school asked for fewer requests. Nothing has been read yet.",
     );
+  });
+});
+
+describe("syncProgressWords", () => {
+  it("says what a sync is on: the list, each course, then the new shells", () => {
+    expect(syncProgressWords(undefined)).toBe("Listing your courses");
+    expect(syncProgressWords({ courses: [1, 2, 3, 4, 5], read: [1, 2, 3] })).toBe(
+      "Read 3 of 5 courses",
+    );
+    expect(syncProgressWords({ courses: [1, 2], read: [1, 2] })).toBe("Checking for new courses");
   });
 });

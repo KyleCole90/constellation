@@ -192,6 +192,8 @@ interface WorkspaceActions extends SetupActions {
   turnOffAi(): Promise<void>;
   scopeWordsFor(school: SchoolId): readonly string[];
   syncSchool(school: SchoolId): Promise<boolean>;
+  /** Syncs every connected school unless a sync started in the last two minutes. Opening a view of courses calls it. */
+  freshen(): void;
   /**
    * Focuses the submission's live change. With none, it spends nothing: a Claude draft costs a model call, so only `fill: "draft"` starts one, and
    * `fill: "by-hand"` opens a blank form. With AI off, opening is the blank form. With `focus: false` it works in the background and leaves the thread where it is.
@@ -305,6 +307,8 @@ export interface WorkspaceDeps {
   locks?: Pick<LockManager, "request"> | null;
   /** Calls back when another tab wrote the workspace key. */
   subscribeStorage?(onChange: () => void): void;
+  /** Calls back when the teacher comes back to the window. */
+  subscribeFocus?(onFocus: () => void): void;
   /** The desktop app's network. Without one, as in the web demo, whose LMS is in the page, the app is always online. */
   connectivity?: { online(): boolean; subscribe(onChange: () => void): void };
   timer?: AutoSyncDeps["timer"];
@@ -933,6 +937,12 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           };
           const courses = await writeback.laneRead(school, () => lms.courses());
           if (!courses.ok) return fail(courses.error);
+          if (gone()) return false;
+          // A course added or removed in the LMS shows now. Its details fill in when the reads below finish.
+          const known = get().cache[school];
+          if (known)
+            set({ cache: { ...get().cache, [school]: { ...known, courses: courses.value } } });
+          const shells = setup.readNewCourses(school, gone);
           const progress = (read: readonly LmsRef<"course">[]) =>
             set({
               courseReads: { ...get().courseReads, [school]: { courses: courses.value, read } },
@@ -955,6 +965,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               ? writeback.laneRead(school, () => lms.conversations())
               : ({ ok: true, value: [] } as const),
           ]);
+          await shells;
           if (!conversations.ok) return fail(conversations.error);
           const readThrough = get().prefs.readThrough ?? {};
           const seen = conversations.value.map((c) =>
@@ -981,7 +992,6 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           if (gone()) return false;
           set({ cache: { ...get().cache, [school]: cache } });
           patchConnection(school, { lastSyncedAt: nowIso(), syncError: null });
-          await setup.readNewCourses(school, gone);
           return true;
         };
 
@@ -1688,6 +1698,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           },
 
           syncSchool,
+          freshen: () => void autoSync.freshen(),
 
           readFile: async (submission, file) =>
             (await provider(submission.school)?.file(submission.ref, file)) ?? {
@@ -2161,6 +2172,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
         .map((connection) => connection.school),
     sync: (school) => store.getState().syncSchool(school),
     online: () => store.getState().online,
+    now: () => deps.realNow(),
     ...(deps.timer ? { timer: deps.timer } : {}),
   });
 
@@ -2169,6 +2181,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
     store.setState({ online });
     if (online) void autoSync.now();
   });
+  deps.subscribeFocus?.(() => void autoSync.freshen());
 
   deps.subscribeStorage?.(() => {
     syncFromStorage();
@@ -2231,6 +2244,7 @@ const browserDeps = (): WorkspaceDeps => ({
   realNow: () => Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   random: () => Math.random(),
+  subscribeFocus: (onFocus) => window.addEventListener("focus", onFocus),
   subscribeStorage: (onChange) => {
     window.addEventListener("storage", (event) => {
       if (event.key === WORKSPACE_STORAGE_KEY || event.key === null) onChange();

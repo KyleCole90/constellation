@@ -1590,15 +1590,22 @@ const offered = (code) =>
   `(JSON.parse(localStorage.getItem("lms-app.v1")).state.newCourses.lcc ?? []).some((shell) => shell.code === ${JSON.stringify(code)})`;
 const sidebarOffers = (code) =>
   `[...document.querySelectorAll('[data-testid="setup-offer"][data-surface="sidebar"]')].some((el) => el.innerText.includes(${JSON.stringify(code)}))`;
+const syncSettled = (t) =>
+  t.waitFor(
+    `!document.querySelector('[data-testid="school-row"][data-connection="syncing"]')`,
+    "no sync is running",
+    WAIT,
+  );
 const unfoldSidebarOffers = (t) =>
   t.eval(
     `document.querySelectorAll('[data-testid="setup-offers-toggle"][aria-expanded="false"]').forEach((row) => row.click())`,
   );
 
-// Nothing here presses Sync now: the network coming back, and then a relaunch, each read what Canvas added meanwhile.
+// Nothing here presses Sync now: the network coming back, a relaunch, and coming back to the window each read what Canvas added meanwhile.
 const newCourseWithoutSync = async (t) => {
   await t.click("What's due");
   await t.waitFor(`location.pathname === "/due"`, "What's due opens");
+  await syncSettled(t);
   await t.eval(`window.__faultLab.createShell("lcc", "BIO 105", "Biology")`);
   t.assert(
     !(await t.eval(offered("BIO 105"))),
@@ -1636,6 +1643,24 @@ const newCourseWithoutSync = async (t) => {
   await unfoldSidebarOffers(t);
   await t.waitFor(sidebarOffers("CHEM 110"), "the sidebar offers CHEM 110 to set up", WAIT);
   await shot(t, "auto-sync-launch");
+
+  await syncSettled(t);
+  await t.eval(`window.__faultLab.createShell("lcc", "PHYS 120", "Physics")`);
+  t.assert(
+    !(await t.eval(offered("PHYS 120"))),
+    "a course Canvas adds while the teacher is in another window is not offered yet",
+  );
+  // The launch sync just ran, and focus syncs at most every two minutes, so the page's clock moves past that.
+  await t.eval(`{ const real = Date.now; Date.now = () => real() + 3 * 60_000; }`);
+  await t.eval(`window.dispatchEvent(new Event("focus"))`);
+  await t.waitFor(
+    offered("PHYS 120"),
+    "coming back to the window syncs, so the new course is offered without Sync now",
+    WAIT,
+  );
+  await unfoldSidebarOffers(t);
+  await t.waitFor(sidebarOffers("PHYS 120"), "the sidebar offers PHYS 120 to set up", WAIT);
+  await shot(t, "auto-sync-focus");
 };
 
 export const run = async (t) => {
