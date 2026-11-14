@@ -101,6 +101,10 @@ describe("meeting days", () => {
   it("says the days stay when nothing moved", () => {
     expect(dayMapWords([2, 4], [2, 4])).toBe("Meeting days stay the same.");
   });
+  it("says why the days matter while either side has none", () => {
+    expect(dayMapWords([], [])).toMatch(/^Each due date moves from an old meeting day/);
+    expect(dayMapWords([2], [])).toBe(dayMapWords([], []));
+  });
 });
 
 describe("the plan a form opens with", () => {
@@ -148,9 +152,19 @@ describe("a package's own term", () => {
   });
   it("names the package's term when the typed dates or days differ", () => {
     expect(packageTermWords(cartridge, term("2026-08-24", "2026-12-11"))).toBe(
-      "This package is from Spring 2026, Jan 20, 2026 to May 8, 2026, meeting Mo. The old term here doesn't match, so every shifted date would be off.",
+      "This package comes from Spring 2026, Jan 20, 2026 to May 8, 2026, meeting Mo. The old term here doesn't match, so every shifted date would be off.",
     );
     expect(packageTermWords(cartridge, { ...hint, days: [2] })).not.toBeNull();
+  });
+  it("checks only what a package says, when its export leaves the end and days out", () => {
+    const partial = {
+      ...cartridge,
+      hint: { name: "", start: date("2026-01-20"), end: "", days: [] },
+    } as const;
+    expect(packageTermWords(partial, term("2026-01-20", "2026-05-08"))).toBeNull();
+    expect(packageTermWords(partial, term("2026-01-12", "2026-05-08"))).toBe(
+      "This package comes from a term starting Jan 20, 2026. The old term here doesn't match, so every shifted date would be off.",
+    );
   });
   it("says nothing when the package's term isn't known", () => {
     expect(

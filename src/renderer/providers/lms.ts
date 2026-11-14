@@ -67,7 +67,8 @@ const createBridgeProvider = (
   };
 };
 
-const bridgeTermSetup = (bridge: Bridge, school: School): Omit<TermSetup, "pickPackage"> => {
+/** Main's native picker chooses a package for every school, the demo's too, so the desktop app has one import path. */
+const bridgeTermSetup = (bridge: Bridge, school: School): TermSetup => {
   const bySchool = { school };
   const byCourse = (course: LmsRef<"course">) => ({ school, course });
   return {
@@ -76,6 +77,15 @@ const bridgeTermSetup = (bridge: Bridge, school: School): Omit<TermSetup, "pickP
     courseContent: (course) => read(() => bridge.invoke("lms.courseContent", byCourse(course))),
     migrations: (course) => read(() => bridge.invoke("lms.migrations", byCourse(course))),
     samplePackages: () => read(() => bridge.invoke("lms.samplePackages", bySchool)),
+    // Not `read`: a picker main never answered isn't the school being offline, so it says so.
+    pickPackage: () =>
+      bridge.invoke("lms.pickPackage", bySchool).catch(
+        () =>
+          ({
+            ok: false,
+            error: { kind: "rejected", reason: "The file picker didn't open. Try again." },
+          }) as const,
+      ),
   };
 };
 
@@ -89,18 +99,7 @@ export const bridgeCanvas = (
   ...canvas,
   create: ({ school }) => ({
     ...createBridgeProvider(bridge, face, school, now),
-    termSetup: {
-      ...bridgeTermSetup(bridge, school),
-      // Not `read`: a picker main never answered isn't the school being offline, so it says so.
-      pickPackage: () =>
-        bridge.invoke("lms.pickPackage", { school }).catch(
-          () =>
-            ({
-              ok: false,
-              error: { kind: "rejected", reason: "The file picker didn't open. Try again." },
-            }) as const,
-        ),
-    },
+    termSetup: bridgeTermSetup(bridge, school),
   }),
 });
 

@@ -47,14 +47,12 @@ const setField = (t, selector, value) =>
     el.dispatchEvent(new Event("change", { bubbles: true }));
   })()`);
 
-const upload = async (t, file) => {
-  const { root } = await t.cdp("DOM.getDocument");
-  const { nodeId } = await t.cdp("DOM.querySelector", {
-    nodeId: root.nodeId,
-    selector: id("cartridge-input"),
-  });
-  await t.cdp("DOM.setFileInputFiles", { nodeId, files: [`${FIXTURES}${file}`] });
+/** The desktop app's own path: main's picker, answered through verify's stand-in for the native dialog. */
+const pickPackage = async (t, file) => {
+  await t.pickPackage(file && `${FIXTURES}${file}`);
+  await t.click(id("cartridge-pick"));
 };
+const value = (t, testId) => t.eval(`document.querySelector(${JSON.stringify(id(testId))}).value`);
 
 const setup = async (t) => {
   await t.viewport(1440, 900);
@@ -786,11 +784,8 @@ const previousCourseFlow = async (t) => {
   );
   await shot(t, "source");
 
-  await upload(t, "grades-export.csv");
-  await t.waitText(
-    "Canvas course exports are .imscc, not CSV.",
-    "a CSV is refused with the reason",
-  );
+  await pickPackage(t, "grades-export.csv");
+  await t.waitText("That file isn't a course export.", "a CSV is refused with the reason");
   t.assert(await t.has(id("source-card")), "a refused file stays on the source step");
   await shot(t, "source-csv-refused");
 
@@ -1146,16 +1141,36 @@ const cartridgeFromConnected = async (t) => {
   );
   await shot(t, "source-template-listed");
 
-  await upload(t, "imscc/damaged-export.imscc");
+  t.assert(
+    !(await t.has(id("cartridge-input"))),
+    `${code}: the desktop app picks a package with main's picker, not a file input`,
+  );
+  await pickPackage(t, null);
+  await t.sleep(300);
+  t.assert(
+    (await t.has(id("source-card"))) && !(await t.has(id("dates-card"))),
+    `${code}: cancelling the picker stays on Source`,
+  );
+  await pickPackage(t, "imscc/damaged-export.imscc");
   await t.waitFor(
     `document.querySelector(${JSON.stringify(id("dates-card"))})`,
-    `${code}: a real .imscc through the file input opens Dates`,
+    `${code}: a real .imscc through main's picker opens Dates`,
   );
+  t.assert(
+    (await value(t, "old-term-start")) === "2026-01-20" && (await value(t, "old-term-end")) === "",
+    `${code}: the package's course settings fill the old term's start, and leave the missing end blank`,
+  );
+  await shot(t, "dates-package-settings");
   await fillOldTerm(t, "Spring 2026", "2026-01-20", "2026-05-08");
   t.assert(
     !(await t.eval(enabled(id("review-copy")))),
-    `${code}: a package from the file input needs its meeting days first`,
+    `${code}: a package with no due dates needs its meeting days first`,
   );
+  t.assert(
+    (await t.text(id("day-map"))).includes("Each due date moves from an old meeting day"),
+    `${code}: the form says why it needs meeting days`,
+  );
+  await shot(t, "dates-days-why");
   await pickDaysIfBlank(t, "old", [1, 3]);
   await pickDaysIfBlank(t, "new", [1, 3]);
   await t.click(id("review-copy"));
@@ -1183,15 +1198,21 @@ const cartridgeFromConnected = async (t) => {
     `document.querySelector(${JSON.stringify(id("source-card"))})`,
     `${code}: Change source goes back to Source`,
   );
-  await upload(t, "imscc/comm110-lakeshore-fall2026-export.imscc");
+  await pickPackage(t, "imscc/comm110-lakeshore-fall2026-export.imscc");
   await t.waitFor(
     `document.querySelector(${JSON.stringify(id("dates-card"))})`,
     `${code}: the good package opens Dates`,
   );
   t.assert(
-    (await t.eval(`document.querySelector(${JSON.stringify(id("old-term-start"))}).value`)) ===
-      "2026-08-24",
-    `${code}: a known package through the file input fills its own old term`,
+    (await value(t, "old-term-start")) === "2026-08-24" &&
+      (await value(t, "old-term-end")) === "2026-12-11",
+    `${code}: a package through main's picker fills its own old term`,
+  );
+  t.assert(
+    (await t.eval(
+      `["old", "new"].every((side) => [0, 1, 2, 3, 4, 5, 6].map((day) => document.querySelector(\`[data-testid="day-\${side}-\${day}"]\`).getAttribute("aria-pressed") === "true").join() === [false, false, true, false, true, false, false].join())`,
+    )) === true,
+    `${code}: the package's due dates fill Tue/Thu on both terms, so the teacher only confirms`,
   );
   t.assert(
     !(await t.has(id("package-term-warning"))),

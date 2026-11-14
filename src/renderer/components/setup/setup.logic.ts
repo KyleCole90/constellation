@@ -68,7 +68,8 @@ export const toggleNewDay = (
 };
 
 export const dayMapWords = (oldDays: readonly Weekday[], newDays: readonly Weekday[]): string => {
-  if (oldDays.length === 0 || newDays.length === 0) return "";
+  if (oldDays.length === 0 || newDays.length === 0)
+    return "Each due date moves from an old meeting day to the matching new one, so pick the days the class meets.";
   const map = planDays(oldDays, newDays);
   const moved = sorted(oldDays).filter((day) => map[day] !== day);
   return moved.length === 0
@@ -104,23 +105,36 @@ export const initialPlan = (
   };
 };
 
-/** Null when the old term matches the package's own, or the package's term isn't known. Every shifted date leans on the old term. */
+/** Null when the old term matches what the package says of its own term, or it says nothing. Every shifted date leans on the old term. */
 export const packageTermWords = (
   source: CourseSetup["source"],
   oldTerm: TermDates<DraftDate>,
 ): string | null => {
   const hint = source?.kind === "cartridge" ? source.hint : null;
-  if (
-    !hint ||
-    (hint.start === oldTerm.start &&
-      hint.end === oldTerm.end &&
-      sorted(hint.days).join() === sorted(oldTerm.days).join())
-  )
-    return null;
+  if (!hint) return null;
   const days = sorted(hint.days)
     .map((day) => DAY_SHORT[day])
     .join("/");
-  return `This package is from ${hint.name}, ${longDate(hint.start)} to ${longDate(hint.end)}${days ? `, meeting ${days}` : ""}. The old term here doesn't match, so every shifted date would be off.`;
+  const differs =
+    (hint.start !== "" && hint.start !== oldTerm.start) ||
+    (hint.end !== "" && hint.end !== oldTerm.end) ||
+    (days !== "" &&
+      days !==
+        sorted(oldTerm.days)
+          .map((day) => DAY_SHORT[day])
+          .join("/"));
+  if (!differs) return null;
+  const span =
+    hint.start && hint.end
+      ? `${longDate(hint.start)} to ${longDate(hint.end)}`
+      : hint.start
+        ? `starting ${longDate(hint.start)}`
+        : hint.end
+          ? `ending ${longDate(hint.end)}`
+          : "";
+  const about = [span, days && `meeting ${days}`].filter(Boolean).join(", ");
+  const from = hint.name ? [hint.name, about].filter(Boolean).join(", ") : `a term ${about}`;
+  return `This package comes from ${from}. The old term here doesn't match, so every shifted date would be off.`;
 };
 
 const filled = <T extends { start: DraftDate; end: DraftDate }>(

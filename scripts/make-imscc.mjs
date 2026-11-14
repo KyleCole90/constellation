@@ -5,6 +5,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateRawSync } from "node:zlib";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "imscc");
 
@@ -23,25 +24,26 @@ const u16 = (n) => [n & 0xff, (n >>> 8) & 0xff];
 const u32 = (n) => [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff];
 const encoder = new TextEncoder();
 
-/** A stored (uncompressed) zip. Enough for an archive a person opens to look at, and small enough to read here. */
+/** A deflated zip, as Canvas writes its exports. Small enough to read here. */
 const zip = (entries) => {
   const local = [];
   const central = [];
   let offset = 0;
   for (const { name, text } of entries) {
     const nameBytes = encoder.encode(name);
-    const data = encoder.encode(text);
-    const crc = crc32(data);
+    const raw = encoder.encode(text);
+    const data = deflateRawSync(raw);
+    const crc = crc32(raw);
     const header = [
       ...u32(0x04034b50),
       ...u16(20),
       ...u16(0),
-      ...u16(0),
+      ...u16(8),
       ...u16(0),
       ...u16(0x21),
       ...u32(crc),
       ...u32(data.length),
-      ...u32(data.length),
+      ...u32(raw.length),
       ...u16(nameBytes.length),
       ...u16(0),
     ];
@@ -52,12 +54,12 @@ const zip = (entries) => {
         ...u16(20),
         ...u16(20),
         ...u16(0),
-        ...u16(0),
+        ...u16(8),
         ...u16(0),
         ...u16(0x21),
         ...u32(crc),
         ...u32(data.length),
-        ...u32(data.length),
+        ...u32(raw.length),
         ...u16(nameBytes.length),
         ...u16(0),
         ...u16(0),
@@ -109,6 +111,22 @@ const manifest = (title, resources) => `<?xml version="1.0" encoding="UTF-8"?>
 </manifest>
 `;
 
+/** Canvas's own course settings file. Its dates are in the course's time zone, with no offset. */
+const courseSettings = (title, { start, conclude }) => `<?xml version="1.0" encoding="UTF-8"?>
+<course identifier="settings" xmlns="http://canvas.instructure.com/xsd/cccv1p0">
+  <title>${title}</title>
+  <start_at>${start}T08:00:00</start_at>
+  ${conclude ? `<conclude_at>${conclude}T23:59:00</conclude_at>` : "<conclude_at/>"}
+</course>
+`;
+
+const assignmentSettings = (title, due) => `<?xml version="1.0" encoding="UTF-8"?>
+<assignment identifier="${title.replace(/\W+/g, "_")}" xmlns="http://canvas.instructure.com/xsd/cccv1p0">
+  <title>${title}</title>
+  <due_at>${due}T23:59:00</due_at>
+</assignment>
+`;
+
 const page = (title, body) =>
   `<html><head><title>${title}</title></head><body>${body}</body></html>`;
 
@@ -123,6 +141,11 @@ const PACKAGES = [
         "<p>Welcome to COMM 110, Fall 2026. Speeches are delivered in class on Tuesdays and Thursdays.</p>",
       ],
       ["course-policies", "Course Policies", "<p>Attendance is required on speech days.</p>"],
+    ],
+    settings: { start: "2026-08-24", conclude: "2026-12-11" },
+    assignments: [
+      ["Informative Speech", "2026-09-15"],
+      ["Persuasive Speech", "2026-10-22"],
     ],
   },
   {
@@ -145,6 +168,8 @@ const PACKAGES = [
     name: "damaged-export.imscc",
     title: "Damaged export",
     pages: [["syllabus", "Syllabus", "<p>This package is missing most of its files.</p>"]],
+    // A real export often leaves the end out, so the teacher types only that.
+    settings: { start: "2026-01-20", conclude: null },
     missing: true,
   },
 ];
@@ -169,6 +194,18 @@ for (const pkg of PACKAGES) {
     ...pkg.pages.map(([slug, title, body]) => ({
       name: `wiki_content/${slug}.html`,
       text: page(title, body),
+    })),
+    ...(pkg.settings
+      ? [
+          {
+            name: "course_settings/course_settings.xml",
+            text: courseSettings(pkg.title, pkg.settings),
+          },
+        ]
+      : []),
+    ...(pkg.assignments ?? []).map(([title, due], index) => ({
+      name: `assignment_${index + 1}/assignment_settings.xml`,
+      text: assignmentSettings(title, due),
     })),
   ];
   writeFileSync(join(OUT, pkg.name), zip(entries));

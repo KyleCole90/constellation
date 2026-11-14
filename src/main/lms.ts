@@ -28,6 +28,7 @@ import type {
   VaultKey,
 } from "../shared/providers/provider";
 
+import { packageTerm } from "./cartridge";
 import { jsonFile } from "./json-file";
 import { canvasSchoolAt, createCanvasProvider, type Fetch } from "./providers/canvas";
 
@@ -325,20 +326,19 @@ export const lmsHandlers = (options: {
     "lms.migrations": ({ school, course }) => term(school, (setup) => setup.migrations(course)),
     "lms.samplePackages": ({ school }) => term(school, (setup) => setup.samplePackages()),
     "lms.pickPackage": async ({ school }) => {
-      // A demo school's package is named by the page's file input, as the web demo does.
-      if (school.provider !== "canvas") return NO_TERM_SETUP;
-      // Throws unless main itself would mint this school from its host.
-      canvasProvider(school);
+      // Throws unless main itself would mint this school from its host. A demo school's import reads only the name.
+      if (school.provider === "canvas") canvasProvider(school);
       const path = await options.choosePackage();
       if (path === null) return { ok: true, value: null };
       const file = await packageAt(path);
       if (!file.ok) return file;
-      picked.set(`${school.id}\n${file.value.name}`, path);
+      if (school.provider === "canvas") picked.set(`${school.id}\n${file.value.name}`, path);
       return {
         ok: true,
         value: {
           name: file.value.name,
           kb: Math.ceil(file.value.size / 1024),
+          hint: await packageTerm(path),
         } satisfies PickedPackage,
       };
     },

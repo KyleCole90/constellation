@@ -30,7 +30,7 @@ import {
 } from "../../shared/domain/ids";
 import type { School } from "../../shared/domain/lms";
 import { applySplice, spliceState } from "../../shared/domain/splice";
-import { dateOfTime } from "../../shared/domain/term";
+import { dateOfTime, meetingDaysOf } from "../../shared/domain/term";
 import { classifyLink } from "../../shared/providers/canvas-links";
 import { refParts, refs } from "../../shared/providers/canvas-refs";
 import type { FieldOutcomes, Read, TermSetup } from "../../shared/providers/provider";
@@ -287,6 +287,17 @@ export const canvasTermSetup = (client: CanvasClient) => {
       if (row.workflow_state === "unpublished" && !row.template) continue;
       const dated = await list(`/courses/${row.id}/assignments`, DatedRow);
       if (!dated.ok) return dated;
+      const items = dated.value.flatMap((item) =>
+        item.due_at === null
+          ? []
+          : [
+              {
+                ref: refs.item(school.id, row.id, "assignment", item.id),
+                title: item.name,
+                dueAt: item.due_at,
+              },
+            ],
+      );
       out.push({
         ref: refs.course(school.id, row.id),
         code: row.course_code,
@@ -294,20 +305,10 @@ export const canvasTermSetup = (client: CanvasClient) => {
         termName: row.term?.name ?? "",
         startAt: start,
         endAt: end,
-        // Canvas keeps no meeting pattern, so the person names the days on the Dates step.
-        meetingDays: [],
+        // Canvas keeps no meeting pattern, so the old due dates stand in for one, read the way the date shift reads them.
+        meetingDays: meetingDaysOf(items.map((item) => dateOfTime(item.dueAt))),
         template: row.template,
-        dated: dated.value.flatMap((item) =>
-          item.due_at === null
-            ? []
-            : [
-                {
-                  ref: refs.item(school.id, row.id, "assignment", item.id),
-                  title: item.name,
-                  dueAt: item.due_at,
-                },
-              ],
-        ),
+        dated: items,
       });
     }
     return { ok: true, value: out.sort((a, b) => Number(b.template) - Number(a.template)) };

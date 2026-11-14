@@ -53,6 +53,9 @@ const roundHalfAway = (value: number): number => Math.sign(value) * Math.round(M
 const byNumber = (a: number, b: number): number => a - b;
 
 export const weekdayOf = (date: IsoDate): Weekday => weekdayAt(dayNumber(date)) as Weekday;
+/** The weekdays the old due dates fall on, which is where a class's work is usually due. The person confirms or changes them. */
+export const meetingDaysOf = (dates: readonly IsoDate[]): readonly Weekday[] =>
+  [...new Set(dates.map(weekdayOf))].sort(byNumber);
 export const dateOfTime = (at: IsoTime): IsoDate => at.slice(0, 10) as IsoDate;
 /** Keeps the time exactly as the LMS wrote it, so a moved due date changes only its day. */
 export const timeOnDate = (at: IsoTime, date: IsoDate): IsoTime =>
