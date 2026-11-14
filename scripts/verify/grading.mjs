@@ -1605,6 +1605,7 @@ const keyboardAndClear = async (t) => {
       `document.querySelector('[data-testid="sent-banner"]')`,
       `speech ${done}: chord sends`,
     );
+    if (done === 3) await lab(t, "holdReads(true)");
     if (done < 3) {
       await t.waitFor(
         `[...document.querySelectorAll('${CARD} button')].some((b) => /^(Draft next|Next):/.test(b.innerText))`,
@@ -1634,7 +1635,8 @@ const keyboardAndClear = async (t) => {
     "a clear queue's receipt offers the next course's work, not the one just sent, before the sync reads it back (#78)",
     await t.text(onward),
   );
-  await t.goto("/due");
+  // A page load starts a fresh fake LMS, which drops the hold, so What's due opens from the sidebar.
+  await t.click('[data-testid="sidebar"] a[href="/due"]');
   await t.waitFor(
     `document.querySelector('[data-testid="due-list"]')`,
     "What's due opens mid-sync",
@@ -1650,6 +1652,7 @@ const keyboardAndClear = async (t) => {
     `${summary} | LMS: ${inLms} to grade`,
   );
   await t.shot("due-while-syncing");
+  await lab(t, "holdReads(false)");
   await t.eval(`window.__faultLab.setNoise({ latencyMs: [120, 240] })`);
   await t.goto("/threads/t-c110-speech2");
   await t.waitFor(
