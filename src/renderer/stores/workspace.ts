@@ -782,8 +782,8 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
   const inFlight = new Map<string, Promise<unknown>>();
   let lastRaw: string | null = null;
   let writingChanges = false;
-  /** The slot each thread was last asked to open, so a slow draft doesn't pull focus from a later click. */
-  const wanted = new Map<ThreadId, string>();
+  /** What each thread was last asked to open, so a slow draft doesn't pull focus from a later click. */
+  const wanted = new Map<ThreadId, Pick<ChangeContent, "kind" | "target">>();
   /** Slots drafting in the background. One focuses only once someone asks for it by name. */
   const background = new Set<string>();
   let loadNotice: string | null = null;
@@ -1141,11 +1141,12 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           Object.values(get().blanks).find((blank) => sameSlot(blank.content, content));
 
         const focusIfWanted = (thread: ThreadId, id: ChangeId, content: ChangeContent) => {
-          const slot = slotOf(content);
           const current = get().threads[thread];
           const stillWanted = wanted.get(thread);
-          if (background.has(slot) && stillWanted !== slot) return;
-          if (current && (stillWanted === undefined || stillWanted === slot))
+          if (background.has(slotOf(content)) && !(stillWanted && sameSlot(stillWanted, content)))
+            return;
+          // A message Claude drafts for the student on screen shows too, though the row was opened for its grade.
+          if (current && (stillWanted === undefined || stillWanted.target === content.target))
             set({ threads: { ...get().threads, [thread]: { ...current, focus: id } } });
         };
 
@@ -1570,7 +1571,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
         ): Promise<ChangeId | null> => {
           const { content } = blank;
           const slot = slotOf(content);
-          if (focus) wanted.set(thread, slot);
+          if (focus) wanted.set(thread, content);
           const existing = existingChange(content, submittedAt);
           if (existing) {
             if (focus) get().focusChange(thread, existing.id);
@@ -1925,7 +1926,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
 
           focusChange: (thread, change) => {
             const record = change && (get().changes[change] ?? get().blanks[change]);
-            if (record) wanted.set(thread, slotOf(record.content));
+            if (record) wanted.set(thread, record.content);
             else wanted.delete(thread);
             const current = get().threads[thread];
             if (current)
@@ -2345,22 +2346,25 @@ const declining = (text: string): Agent => ({
   },
 });
 
-/** Verify's stand-ins for Claude: unreachable, or answering a submission it can't see the way Claude does, with no grade. */
+/** Verify's stand-ins for Claude: unreachable, or answering a submission it can't see the way Claude does, with no grade and an offer to message the student. */
 type AgentStandIn = "down" | "cant-see" | null;
 let standIn: AgentStandIn = null;
 export const setAgentStandIn = (next: AgentStandIn): void => {
   standIn = next;
 };
+const RESUBMIT_OFFER = "Draft a message asking them to resubmit the link";
 const CANT_SEE: AgentEffect = {
   type: "say",
   text: "I didn't draft a grade because I can't see the work. The link opens an error page.",
-  replies: ["Draft a message asking them to resubmit the link"],
+  replies: [RESUBMIT_OFFER],
 };
 const standInFor = (agent: Agent): Agent => ({
   async *run(input, signal) {
     if (standIn === "down")
       yield { type: "decline", text: "Claude couldn't be reached, so nothing was drafted." };
     else if (standIn === "cant-see" && input.request === DRAFT_GRADE_REQUEST) yield CANT_SEE;
+    else if (standIn === "cant-see" && input.request === RESUBMIT_OFFER)
+      yield* agent.run({ ...input, request: DRAFT_MESSAGE_REQUEST }, signal);
     else yield* agent.run(input, signal);
   },
 });

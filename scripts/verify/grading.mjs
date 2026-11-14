@@ -2403,6 +2403,79 @@ const cantSee = async (t) => {
     "can't see, reloaded: opens on the student",
   );
   await offered("can't see, reloaded");
+
+  const MESSAGE = `${CARD} textarea`;
+  const before = await t.eval(savedChanges);
+  await t.eval(`window.__setAgentStandIn("cant-see")`);
+  await t.click(`${OPEN} [data-offer]`);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(MESSAGE)})?.value.startsWith("Hi ")`,
+    "resubmit: the offer drafts the message as a card on the student's thread (#87)",
+    15_000,
+  );
+  await settled(t, "resubmit: agent finished");
+  await t.eval(`window.__setAgentStandIn(null)`);
+  t.assert(
+    (await t.has(`${CARD} [data-approve]`)) &&
+      !(await t.has(`${CARD} [data-typed-score]`)) &&
+      !(await t.has(OPEN)),
+    "resubmit: the message waits for Approve, and the offer is gone, so a second press can't pay again (#87)",
+    await t.text(CARD),
+  );
+  t.assert((await t.eval(savedChanges)) === before + 1, "resubmit: one message is saved");
+  await t.shot("cant-see-message");
+
+  await openRow("resubmit, back again");
+  await t.click(`[data-row="${row}"] button`);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(student)})`,
+    "resubmit, back again: opens on the student",
+  );
+  const back = await buttons();
+  t.assert(
+    back[0] === `Review the message to ${student}` && !back.includes(OFFER),
+    "resubmit, back again: the drafted message leads, free, and the offer doesn't come back (#87)",
+    JSON.stringify(back),
+  );
+  const gradeBefore = await t.text('[data-testid="current-grade"]');
+  await t.click(`${OPEN} [data-review-message]`);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(MESSAGE)})?.value.startsWith("Hi ")`,
+    "resubmit, back again: Review opens the message",
+  );
+  await approve(t, "resubmit");
+  await clickSend(t);
+  await t.waitFor(
+    `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).some((c) => c.content.kind === "message" && c.content.target === ${JSON.stringify(row)} && c.state.tag === "sent")`,
+    "resubmit: the message sends through the usual path",
+    10_000,
+  );
+  t.assert(
+    await lms(
+      t,
+      `lms.conversations.some((c) => c.from === ${JSON.stringify(student)} && c.messages.some((m) => m.mine))`,
+    ),
+    "resubmit: the student gets the message in the LMS",
+  );
+  await t.shot("cant-see-message-sent");
+
+  await openRow("resubmit, sent");
+  await t.click(`[data-row="${row}"] button`);
+  await t.waitFor(
+    `document.querySelector('[data-testid="message-sent"]')?.innerText.includes(${JSON.stringify(student)})`,
+    "resubmit, sent: the submission says the message went",
+  );
+  t.assert(
+    (await t.text('[data-testid="current-grade"]')) === gradeBefore,
+    "resubmit, sent: the message left the grade alone",
+    `${gradeBefore} -> ${await t.text('[data-testid="current-grade"]')}`,
+  );
+  const after = await buttons();
+  t.assert(
+    !after.includes(OFFER) && !after.some((b) => b.startsWith("Review the message")),
+    "resubmit, sent: nothing offers to draft or review the message again (#87)",
+    JSON.stringify(after),
+  );
 };
 
 export const run = async (t) => {

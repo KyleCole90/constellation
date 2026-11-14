@@ -872,6 +872,22 @@ export const selectUndrafted = (
   return undrafted && undrafted.submittedAt === submission?.submittedAt ? undrafted : null;
 };
 
+/** A message to the student about this submission, drafted or sent since they turned it in, so offering to draft one again would pay for a second. */
+export const selectMessageSince = (
+  state: WorkspaceData,
+  submission: Submission | null,
+): ChangeRecord | null =>
+  (submission &&
+    Object.values(state.changes).findLast(
+      (change) =>
+        change.content.kind === "message" &&
+        change.content.target === submission.ref &&
+        change.state.tag !== "discarded" &&
+        (submission.submittedAt === null ||
+          (change.activity[0]?.at ?? "") >= submission.submittedAt),
+    )) ??
+  null;
+
 export const selectSubmission = (
   state: WorkspaceData,
   ref: LmsRef<"submission"> | null,
