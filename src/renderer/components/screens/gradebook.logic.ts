@@ -85,3 +85,20 @@ export const filterRows = (
   filter === "all"
     ? rows
     : rows.filter((row) => row.cells.some((cell) => cellMarks(cell).includes(filter)));
+
+/** Under a filter, only the assignments that hold a matching mark, so the table answers "missing what". */
+export const filterColumns = (
+  rows: readonly GradebookRow[],
+  columns: readonly Assignment[],
+  assignments: readonly Assignment[],
+  filter: RowFilter,
+): readonly Assignment[] =>
+  filter === "all"
+    ? columns
+    : columns.filter((assignment) => {
+        const index = assignments.indexOf(assignment);
+        return rows.some((row) => {
+          const cell = row.cells[index];
+          return cell !== undefined && cellMarks(cell).includes(filter);
+        });
+      });

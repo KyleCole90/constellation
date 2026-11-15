@@ -864,6 +864,27 @@ function GradeCard({
   return (
     <>
       <CardHead view={view} />
+      {/* Before the scores, so Tab from the last score goes to the comment, not to Zero. */}
+      {missing && summary.canEdit && (
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setError(editChange(record.id, zeroPatch(content)))}
+          >
+            Zero
+          </Button>
+          {canExcuse && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setError(editChange(record.id, { kind: "grade", excused: true }))}
+            >
+              Excuse
+            </Button>
+          )}
+        </div>
+      )}
       <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
         {content.rubric ? (
           content.rubric.map((score) => (
@@ -885,26 +906,6 @@ function GradeCard({
           />
         )}
       </div>
-      {missing && summary.canEdit && (
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setError(editChange(record.id, zeroPatch(content)))}
-          >
-            Zero
-          </Button>
-          {canExcuse && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setError(editChange(record.id, { kind: "grade", excused: true }))}
-            >
-              Excuse
-            </Button>
-          )}
-        </div>
-      )}
       <div className="flex flex-col gap-1 pr-grade-total-end">
         {prior !== null && <TotalRow label="Previous grade">{prior}</TotalRow>}
         {!oneNumber && (
@@ -954,37 +955,6 @@ function GradeCard({
             )}
           </TotalRow>
         )}
-        {summary.canEdit && !content.excused && !oneNumber && (
-          <div className="flex flex-wrap justify-end gap-2">
-            {content.late && !overridden && (
-              <Button
-                variant="ghost-muted"
-                size="sm"
-                onClick={() =>
-                  setError(
-                    editChange(record.id, { kind: "grade", lateWaived: !content.late?.waived }),
-                  )
-                }
-              >
-                {content.late.waived ? "Apply late penalty" : "Waive late penalty"}
-              </Button>
-            )}
-            <Button
-              variant="ghost-muted"
-              size="sm"
-              onClick={() =>
-                setError(
-                  editChange(record.id, {
-                    kind: "grade",
-                    override: overridden ? null : (total ?? 0),
-                  }),
-                )
-              }
-            >
-              {overridden ? "Use the scores" : "Override total"}
-            </Button>
-          </div>
-        )}
       </div>
       <div className="flex flex-col gap-label-gap">
         <div className="flex items-baseline justify-between gap-2 text-meta text-muted-foreground">
@@ -1001,6 +971,38 @@ function GradeCard({
           onCommit={(text) => setError(editChange(record.id, { kind: "grade", comment: text }))}
         />
       </div>
+      {/* After the comment, so Tab from the last score lands in the comment rather than on an override. */}
+      {summary.canEdit && !content.excused && !oneNumber && (
+        <div className="flex flex-wrap justify-end gap-2">
+          {content.late && !overridden && (
+            <Button
+              variant="ghost-muted"
+              size="sm"
+              onClick={() =>
+                setError(
+                  editChange(record.id, { kind: "grade", lateWaived: !content.late?.waived }),
+                )
+              }
+            >
+              {content.late.waived ? "Apply late penalty" : "Waive late penalty"}
+            </Button>
+          )}
+          <Button
+            variant="ghost-muted"
+            size="sm"
+            onClick={() =>
+              setError(
+                editChange(record.id, {
+                  kind: "grade",
+                  override: overridden ? null : (total ?? 0),
+                }),
+              )
+            }
+          >
+            {overridden ? "Use the scores" : "Override total"}
+          </Button>
+        </div>
+      )}
       {content.attachment && (
         <div className="flex items-center gap-2 text-meta">
           <Paperclip className="size-3.5 flex-none text-muted-foreground" />

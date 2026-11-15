@@ -20,6 +20,7 @@ import { CoursePage } from "./CourseHeader";
 import {
   cellMarks,
   cellTarget,
+  filterColumns,
   filterRows,
   nextSort,
   orderColumns,
@@ -189,7 +190,11 @@ function StudentRow({
 }) {
   const ref = useRef<HTMLTableRowElement>(null);
   useEffect(() => {
-    if (highlighted) ref.current?.scrollIntoView({ block: "center" });
+    if (!highlighted) return;
+    // A student opened from the roster brings their first missing assignment into view, not only their row.
+    const missing = ref.current?.querySelector('[data-mark="missing"]');
+    if (missing) missing.scrollIntoView({ block: "center", inline: "center" });
+    else ref.current?.scrollIntoView({ block: "center" });
   }, [highlighted]);
   return (
     <tr
@@ -262,7 +267,10 @@ export function GradebookScreen({ courseId }: { courseId: LmsRef<"course"> }) {
     () => (book ? sortRows(filterRows(book.rows, filter), sort, book.assignments) : []),
     [book, sort, filter],
   );
-  const columns = useMemo(() => orderColumns(assignments, order), [assignments, order]);
+  const columns = useMemo(
+    () => filterColumns(rows, orderColumns(assignments, order), assignments, filter),
+    [rows, assignments, order, filter],
+  );
   const onSort = (by: RowSort["by"]) => setSort((prior) => nextSort(prior, by));
   const hasColumn = columns.some((assignment) => assignment.ref === hash);
   useEffect(() => {
@@ -312,6 +320,8 @@ export function GradebookScreen({ courseId }: { courseId: LmsRef<"course"> }) {
                 ))}
             </div>
             <div
+              // A new filter is a new table, so it starts scrolled to its first column rather than wherever the last one was.
+              key={filter}
               ref={markHiddenEdges}
               data-testid="gradebook-scroll"
               data-scroll-x
