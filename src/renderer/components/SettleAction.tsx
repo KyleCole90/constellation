@@ -6,7 +6,12 @@ import { useShallow } from "zustand/react/shallow";
 
 import type { ThreadId } from "~/shared/domain/ids";
 import { cn } from "~/renderer/lib/utils";
-import { canSettle, isSettled, selectThreadName } from "~/renderer/stores/selectors";
+import {
+  canSettle,
+  isSettled,
+  ofAddedSchools,
+  selectThreadName,
+} from "~/renderer/stores/selectors";
 import type { Thread } from "~/renderer/stores/types";
 import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
@@ -186,7 +191,9 @@ function SettledRow({ thread, active }: { thread: Thread; active: boolean }) {
 export function SettledArea({ activeThread }: { activeThread: ThreadId | null }) {
   const ai = useAiOn();
   const settled = useWorkspace(
-    useShallow((state) => settledNewestFirst(Object.values(state.threads), ai)),
+    useShallow((state) =>
+      settledNewestFirst(ofAddedSchools(Object.values(state.threads), state.schools), ai),
+    ),
   );
   const open = useSettleUi((state) => state.settledOpen);
   const setOpen = (settledOpen: boolean) => useSettleUi.setState({ settledOpen });

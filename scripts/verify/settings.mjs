@@ -1766,8 +1766,64 @@ const realSchoolSettings = async (t, shot) => {
   await shot("real-school-token-dialog");
   await t.key("Escape");
 
+  await t.eval(`(() => {
+    const stored = JSON.parse(${JSON.stringify(saved)});
+    stored.state.schools = [${JSON.stringify(REAL_SCHOOL)}];
+    stored.state.cache = {};
+    localStorage.setItem("lms-app.v1", JSON.stringify(stored));
+  })()`);
+  await t.reload();
+  await t.waitFor(
+    `document.querySelector('${CARD(REAL_SCHOOL.id)}')`,
+    "real school: Settings is back",
+  );
+  await t.key("Meta+k");
+  await t.waitFor(`document.querySelector('${DIALOG} input')`, "real school: the palette opens");
+  const listed = await t.text(DIALOG);
+  t.assert(
+    ["Reset demo data", "Grade Essay 2", "Reply to late-work emails", "Week 10"].every(
+      (demo) => !listed.includes(demo),
+    ),
+    "with only a real school, search lists no demo threads and no demo reset (#109)",
+    listed,
+  );
+  await shot("real-school-palette");
+  await t.type("Essay 2");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(DIALOG)})?.innerText.includes("Nothing matches that.")`,
+    "with only a real school, searching a demo thread's name finds nothing (#109)",
+  );
+  await t.key("Escape");
+
   await withSchools(t, saved, `(demo, real) => [real, ...demo]`);
+  await t.waitFor(
+    `document.querySelector('${CARD(REAL_SCHOOL.id)}')`,
+    "mixed schools: Settings is back",
+  );
+  await t.key("Meta+k");
+  await t.waitFor(`document.querySelector('${DIALOG} input')`, "mixed schools: the palette opens");
+  await t.type("Essay 2");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(DIALOG)})?.innerText.includes("Grade Essay 2")`,
+    "beside a demo school, search finds the demo's threads",
+  );
+  await t.key("Escape");
+  await t.key("Meta+k");
+  await t.waitFor(
+    `document.querySelector('${DIALOG} input')`,
+    "mixed schools: the palette opens again",
+  );
+  await t.type("Reset demo");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(DIALOG)})?.innerText.includes("Nothing matches that.")`,
+    "beside a real school, search offers no demo reset, which would forget the real school's token",
+  );
+  await t.key("Escape");
   await openSection(t, "Demo");
+  t.assert(
+    !(await bodyHas("Reset demo data")),
+    "beside a real school, the Demo section offers no reset",
+  );
   const target = await t.text('[aria-label="School to expire"]');
   t.assert(
     target !== REAL_SCHOOL.name,
