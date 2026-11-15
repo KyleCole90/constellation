@@ -172,3 +172,31 @@ describe("Draft with Claude on a hand form the teacher has typed into (#66)", ()
     expect(after.excused).toBe(false);
   });
 });
+
+describe("a typed turn on an open submission sees its work (#126)", () => {
+  it("a typed draft request on a PDF upload sends the PDF the Draft button sends, and drafts from it", async () => {
+    const inner = createRuleAgent();
+    const sent: { request: string; files: readonly string[] }[] = [];
+    const agent: Agent = {
+      run: (input, signal) => {
+        sent.push({ request: input.request, files: (input.files ?? []).map((f) => f.name) });
+        return inner.run(input, signal);
+      },
+    };
+    const rig = await makeStoreRig({ agent });
+    await rig.connectAll();
+    const ref = rig.server.findSubmission("Maya Ortiz", "Reading Response 5");
+    if (!ref) throw new Error("no submission");
+
+    rig.state().setThreadUi(QUEUE, { current: ref });
+    expect(await open(rig, ref)).toBeNull();
+    expect(sent).toEqual([]);
+    await rig.clock.run(rig.state().sendToAgent(QUEUE, "Now draft Maya's.", { typed: true }));
+
+    expect(sent).toEqual([{ request: "Now draft Maya's.", files: ["Reading Response 5.pdf"] }]);
+    const drafts = Object.values(rig.state().changes);
+    expect(drafts.map((change) => change.content)).toEqual([
+      expect.objectContaining({ kind: "grade", target: ref }),
+    ]);
+  });
+});

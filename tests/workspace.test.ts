@@ -512,6 +512,7 @@ describe("a second tab", () => {
 describe("one open change per target", () => {
   it("asking the agent for a second draft opens the first one", async () => {
     const rig = await connected();
+    rig.state().setThreadUi(QUEUE, { current: rig.server.findSubmission("Maya Ortiz", "Essay 2") });
     await rig.clock.run(rig.state().sendToAgent(QUEUE, DRAFT_GRADE_REQUEST));
     const [first, ...others] = Object.keys(rig.state().changes);
     expect(others).toEqual([]);

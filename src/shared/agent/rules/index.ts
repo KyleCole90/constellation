@@ -200,7 +200,16 @@ async function* draftGrade(input: AgentInput): AsyncGenerator<unknown, void> {
     yield { type: "say", text: "I can't find that submission in what this thread has open." };
     return;
   }
-  const empty = submission.body.kind === "none";
+  const { kind } = submission.body;
+  // Like Claude: an upload or link reaches it only as files, so without them there is nothing to grade.
+  if ((kind === "upload" || kind === "url") && !input.files?.length) {
+    yield {
+      type: "say",
+      text: "I didn't draft a grade. The work's contents didn't come through to me, so I have nothing to grade.",
+    };
+    return;
+  }
+  const empty = kind === "none";
   const draft = gradeDraftFor(submission, assignment);
   yield {
     type: "work",

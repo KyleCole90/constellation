@@ -2423,6 +2423,22 @@ const submissionTypes = async (t) => {
   await t.click("Discard", { within: '[data-testid="card-actions"]' });
   await t.waitFor(`!document.querySelector(${JSON.stringify(CARD)})`, "PDF draft: discarded");
 
+  await openCell("ENG 101", "Maya Ortiz", "Reading Response 5");
+  const typed = await ask(t, "Now draft Maya's.");
+  t.assert(
+    !typed.some((m) => /didn't come through/.test(m.text ?? "")),
+    "typed draft request: Claude is given the PDF, never told its contents didn't come through (#126)",
+    JSON.stringify(typed),
+  );
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})?.innerText.includes("Maya Ortiz, Reading Response 5")`,
+    "typed draft request: the PDF upload drafts, as from the button (#126)",
+    15_000,
+  );
+  await t.shot("typed-draft-pdf");
+  await t.click("Discard", { within: '[data-testid="card-actions"]' });
+  await t.waitFor(`!document.querySelector(${JSON.stringify(CARD)})`, "typed PDF draft: discarded");
+
   await openCell("ENG 101", "Tomasz Wilk", "Reading Response 5");
   await draftWithClaude(t);
   await t.waitFor(
