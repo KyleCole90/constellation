@@ -69,9 +69,12 @@ export default defineConfig({
   test: {
     environment: "node",
     // `npm run contract:live` reaches a real Canvas, so its tests run only through that script (docs/electron-spec.md, D25).
+    // `npm run bench:claude-code` spends real quota, so the benchmark runs only through that script (#85).
     include: process.env.CONTRACT_LIVE
       ? ["tests/**/*.live.ts"]
-      : ["tests/**/*.test.ts", "src/**/*.test.ts"],
+      : process.env.BENCH
+        ? ["bench/*.run.ts"]
+        : ["tests/**/*.test.ts", "src/**/*.test.ts"],
     allowOnly: !process.env.CI,
     // Flaky tests are fixed, not retried.
     retry: 0,
