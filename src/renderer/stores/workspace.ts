@@ -2565,6 +2565,10 @@ const bridgeFakeBackend =
     const backend = fakeBackend(fake.descriptor, fake.reset);
     return {
       ...backend,
+      // Verify's stand-in for a real account's first run, which seeds nothing.
+      ...(import.meta.env.DEV && sessionStorage.getItem("verify.demo") === "off"
+        ? { demo: null }
+        : {}),
       // Main refuses every Canvas read here, but verify still renders a saved real school's screens through it.
       descriptors: {
         ...backend.descriptors,

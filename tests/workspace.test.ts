@@ -11,6 +11,9 @@ import { SEED } from "~/shared/providers/fake-canvas/seed";
 import { Secret } from "~/shared/providers/provider";
 import { createMemoryVault } from "~/renderer/providers/vault";
 import {
+  GRADING_LIST_THREAD,
+  INBOX_THREAD,
+  NORTH_STAR_THREAD,
   selectCalendar,
   selectCourseOverview,
   selectGradebook,
@@ -335,11 +338,42 @@ describe("a real school", () => {
 describe("the teacher's desktop app, which has no demo", () => {
   const WALL = Date.UTC(2026, 10, 13, 20, 37);
 
-  it("starts with no seeded threads, no demo offer, and real time", async () => {
+  const builtIn = (rig: StoreRig) =>
+    [NORTH_STAR_THREAD, GRADING_LIST_THREAD, INBOX_THREAD].map(
+      (id) => rig.state().threads[id]?.kind,
+    );
+
+  it("starts with only the built-in threads, no demo offer, and real time", async () => {
     const rig = await makeStoreRig({ noDemo: true, clock: new VirtualClock(WALL) });
-    expect(rig.state().threads).toEqual({});
+    expect(Object.keys(rig.state().threads).sort()).toEqual(
+      [GRADING_LIST_THREAD, INBOX_THREAD, NORTH_STAR_THREAD].sort(),
+    );
+    expect(builtIn(rig)).toEqual(["north-star", "queue", "messages"]);
+    expect(Object.values(rig.state().threads).flatMap((thread) => thread.messages)).toEqual([]);
     expect(rig.state().demoHosts()).toEqual([]);
     expect(rig.state().now()).toBe(WALL);
+  });
+
+  it("gives a profile the broken build saved with no threads its built-in threads at boot", async () => {
+    const first = await makeStoreRig({ noDemo: true, realSchools: [LCC] });
+    first.state().setOnboarding("done");
+    const saved = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
+      state: Record<string, unknown>;
+    };
+    first.storage.setItem(
+      WORKSPACE_STORAGE_KEY,
+      JSON.stringify({ ...saved, state: { ...saved.state, threads: {} } }),
+    );
+    const second = await makeStoreRig({
+      storage: first.storage,
+      vault: first.vault,
+      clock: first.clock,
+      realSchools: [LCC],
+      noDemo: true,
+    });
+    expect(second.state().threads).toEqual({});
+    await second.state().boot();
+    expect(builtIn(second)).toEqual(["north-star", "queue", "messages"]);
   });
 
   it("answers the same empty demo offer each time, so a screen that selects it settles", async () => {
@@ -384,6 +418,7 @@ describe("the teacher's desktop app, which has no demo", () => {
     expect(await second.vault.has(LCC)).toBe(true);
     expect(second.state().changes[id]?.state.tag).toBe("draft");
     expect(seeded(second)).toEqual([]);
+    expect(builtIn(second)).toEqual(["north-star", "queue", "messages"]);
     expect(Object.values(second.state().threads).some((thread) => thread.messages.length > 0)).toBe(
       true,
     );
