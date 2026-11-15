@@ -1620,11 +1620,10 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                 lines: [`Followed this thread's guidance: ${guidance}`],
                 at: nowIso(),
               });
-            // Filling in the rest of a hand grade reads the same files a fresh draft does.
-            const files =
-              request === DRAFT_GRADE_REQUEST || request === FILL_GRADE_REQUEST
-                ? await draftFiles(narrow)
-                : NO_FILES;
+            // A turn about one submission sees its work, whether the button asked or the teacher typed (#126). Only a grade request stops on a file it can't read; any other turn goes on without it.
+            const grading = request === DRAFT_GRADE_REQUEST || request === FILL_GRADE_REQUEST;
+            const read = narrow?.submissions?.length === 1 ? await draftFiles(narrow) : NO_FILES;
+            const files = read.ok || grading ? read : NO_FILES;
             if (files.ok && files.value.read)
               say(thread, run, { type: "work", lines: [files.value.read], at: nowIso() });
             await runAgent(
