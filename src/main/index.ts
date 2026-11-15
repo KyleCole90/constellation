@@ -17,7 +17,7 @@ import electronUpdater from "electron-updater";
 
 import * as v from "valibot";
 
-import { FAKES_SWITCH, errorReport, handle } from "../shared/ipc";
+import { FAKES_SWITCH, errorReport, handle, type Handlers } from "../shared/ipc";
 
 import {
   APP_SCHEME,
@@ -30,6 +30,7 @@ import {
 } from "./security";
 import { createFileStorage, fakeServer, lmsHandlers } from "./lms";
 import { anthropicAgent } from "./providers/anthropic";
+import { claudeCodeAgent } from "./providers/claude-code";
 import { jsonFile } from "./json-file";
 import { createTelemetry } from "./telemetry";
 import { startUpdates } from "./updates";
@@ -54,6 +55,12 @@ const FAKE_ONLY = !app.isPackaged && process.env.CONSTELLATION_LMS === "fake";
  * place of the native dialog, which CDP can't reach. An empty or missing file is a cancel. A packaged app never reads it.
  */
 const PICKED_PACKAGE_FILE = app.isPackaged ? undefined : process.env.CONSTELLATION_PICKED_PACKAGE;
+/** Set by verify to a fake `claude`, so a run never reaches the teacher's own. A packaged app never reads it. */
+const CLAUDE_OVERRIDE = app.isPackaged ? undefined : process.env.CONSTELLATION_CLAUDE;
+const AI_OFF = {
+  ok: false,
+  reason: "AI drafts are off. Choose an AI source in Settings to turn them on.",
+} as const;
 /** Only the unpackaged app takes CDP. A packaged app quits before it opens a window (`npm run smoke:packaged`). */
 /**
  * Baked in by `CONSTELLATION_UPDATES=on npm run build`, which only the release workflow runs. Every other build bakes
@@ -128,6 +135,26 @@ const start = async () => {
     reportMain(reason);
   });
   const vault = createVault(join(userData, "vault.json"), safeStorage);
+  const keyAgent = anthropicAgent({
+    lease: vault.lease("ai-key"),
+    fetch: (url, init) => net.fetch(url, init),
+  });
+  const claudeCode = claudeCodeAgent(
+    CLAUDE_OVERRIDE ? { locate: async () => CLAUDE_OVERRIDE } : {},
+  );
+  app.on("will-quit", claudeCode.stop);
+  /** The teacher's choice, told by the renderer on load and on every change. Never a fallback from one to the other. */
+  let source: Parameters<Handlers["agent.source"]>[0]["source"] = "none";
+  const runAgent: Handlers["agent.run"] = async (input) => {
+    switch (source) {
+      case "none":
+        return AI_OFF;
+      case "key":
+        return keyAgent(input);
+      case "claude-code":
+        return claudeCode.run(input);
+    }
+  };
   /** The teacher's last click, Return or Space in the window, as the OS delivered it. Page script can't produce one. */
   let pressedAt = Number.NEGATIVE_INFINITY;
   const lms = lmsHandlers({
@@ -163,10 +190,11 @@ const start = async () => {
       "vault.standIn": ({ key }) => vault.standIn(key),
       "agent.run": FAKE_ONLY
         ? async () => ({ ok: false, reason: "This run drafts with the rules agent." })
-        : anthropicAgent({
-            lease: vault.lease("ai-key"),
-            fetch: (url, init) => net.fetch(url, init),
-          }),
+        : runAgent,
+      "agent.source": async (input) => {
+        source = input.source;
+      },
+      "claudeCode.status": () => claudeCode.status(),
       ...lms,
     },
   );

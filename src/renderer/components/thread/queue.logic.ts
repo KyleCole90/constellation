@@ -310,6 +310,24 @@ export const batchChanges = (
 ): readonly ChangeId[] =>
   rows.flatMap((row) => (selected.includes(row.key) && row.change ? [row.change.id] : []));
 
+/**
+ * Drafts each row in turn. A run at the teacher's Claude plan limit ends the batch: the drafts so far stay, the rest
+ * stay undrafted, and nothing asks again later.
+ */
+export const draftInTurn = async (
+  rows: readonly WorkRow[],
+  draft: (row: WorkRow) => Promise<unknown>,
+  limitHits: () => number,
+  onDrafted: (row: WorkRow) => void,
+): Promise<void> => {
+  const before = limitHits();
+  for (const row of rows) {
+    await draft(row);
+    onDrafted(row);
+    if (limitHits() !== before) return;
+  }
+};
+
 export const moveCursor = (cursor: number, delta: 1 | -1, length: number): number =>
   length === 0 ? -1 : Math.min(Math.max(cursor + delta, 0), length - 1);
 

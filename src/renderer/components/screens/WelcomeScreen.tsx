@@ -1,4 +1,4 @@
-import { REAL_AI, VAULT_PLACE } from "~/renderer/desktop";
+import { REAL_AI, VAULT_PLACE, desktopBridge } from "~/renderer/desktop";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { Check, Lock } from "lucide-react";
 import { useState } from "react";
@@ -12,6 +12,8 @@ import { useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 import { Brand, PRODUCT_NAME } from "../Brand";
 import { isMacDevice } from "../device";
 import { AiKeyForm } from "../settings/AiKeyForm";
+import type { ClaudeCodeReading } from "../settings/claude-code.logic";
+import { ClaudeCodeCheck, useClaudeCode } from "../settings/ClaudeCode";
 import { SetupPrivacy } from "../settings/Privacy";
 import {
   AddressField,
@@ -21,9 +23,10 @@ import {
   type InstitutionRow,
 } from "../settings/Institutions";
 import { Button } from "../ui/button";
+import { setupBlocker } from "./setup.logic";
 
 const NO_MODEL = REAL_AI
-  ? "With a key, drafts and chat come from Claude, billed to your Anthropic account."
+  ? "Drafts and chat come from Claude, billed to your Anthropic key or counted against your Claude subscription."
   : "No model is wired up in this build yet, so AI drafts come from built-in rules for now.";
 const PROMISE = "Nothing reaches your LMS until you approve it.";
 
@@ -40,6 +43,17 @@ const AI_OPTIONS: readonly AiOption[] = [
     title: "Claude, with your Anthropic API key",
     body: () => `The key stays in ${VAULT_PLACE} and is never shown again.`,
   },
+  // Only the desktop app can run the teacher's Claude Code. It shows even when Claude Code isn't found, so the teacher can install it.
+  ...(desktopBridge
+    ? [
+        {
+          source: "claude-code",
+          title: "Claude, with your Claude Code subscription",
+          body: () =>
+            "Your own Claude Code on this Mac runs each draft. Usage counts against your Claude plan.",
+        } satisfies AiOption,
+      ]
+    : []),
   // The desktop app drafts with Claude alone (D27), so it offers no on-device model.
   ...(REAL_AI
     ? []
@@ -63,6 +77,7 @@ const AI_OPTIONS: readonly AiOption[] = [
 
 const AI_WORDS: Readonly<Record<AiSource, string>> = {
   key: "Claude, with your key",
+  "claude-code": "Claude, with Claude Code",
   "on-device": "this Mac",
   none: "off",
 };
@@ -117,10 +132,12 @@ function AiChoices({
   choice,
   onChoose,
   disabled,
+  claudeCode,
 }: {
   choice: AiSource | null;
   onChoose: (source: AiSource) => void;
   disabled: boolean;
+  claudeCode: { reading: ClaudeCodeReading; check: () => void };
 }) {
   const keySaved = useWorkspace((state) => state.aiSource === "key");
   const mac = isMacDevice();
@@ -190,6 +207,11 @@ function AiChoices({
                     <AiKeyForm layout="inline" submitLabel="Save key" />
                   </div>
                 ))}
+              {option.source === "claude-code" && choice === "claude-code" && (
+                <div className="pl-7">
+                  <ClaudeCodeCheck reading={claudeCode.reading} onCheck={claudeCode.check} />
+                </div>
+              )}
             </div>
           );
         })}
@@ -245,20 +267,19 @@ export function SetupScreen() {
     const saved = workspaceStore().getState().aiSource;
     return saved === "none" ? null : saved;
   });
-  const blocker =
-    connected === 0
-      ? "Connect a school to finish."
-      : choice === null
-        ? "Choose an AI option to finish."
-        : choice === "key" && !keySaved
-          ? "Save your key to finish."
-          : reading
-            ? `Reading courses from ${reading}…`
-            : null;
+  const claudeCode = useClaudeCode(choice === "claude-code");
+  const blocker = setupBlocker({
+    connected,
+    choice,
+    keySaved,
+    claudeCode: claudeCode.reading,
+    reading,
+  });
 
   const finish = async () => {
     const store = workspaceStore().getState();
     if (choice === "on-device") await store.chooseOnDeviceModel();
+    if (choice === "claude-code") await store.chooseClaudeCode();
     if (choice === "none") await store.turnOffAi();
     store.setOnboarding("done");
     store.dismissNotice();
@@ -292,7 +313,12 @@ export function SetupScreen() {
             )}
           </section>
 
-          <AiChoices choice={choice} onChoose={setChoice} disabled={connected === 0} />
+          <AiChoices
+            choice={choice}
+            onChoose={setChoice}
+            disabled={connected === 0}
+            claudeCode={claudeCode}
+          />
 
           <SetupPrivacy title={<SectionTitle number={3}>Privacy</SectionTitle>} />
         </div>
@@ -316,7 +342,9 @@ export function SetupScreen() {
               ? "not chosen"
               : choice === "key" && !keySaved
                 ? "key needed"
-                : AI_WORDS[choice]}
+                : choice === "claude-code" && claudeCode.reading.kind !== "ready"
+                  ? "Claude Code not ready"
+                  : AI_WORDS[choice]}
           </span>
         </aside>
 

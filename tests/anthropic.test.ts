@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { MODEL, anthropicAgent, spendOf } from "~/main/providers/anthropic";
+import { MODEL } from "~/main/agent";
+import { anthropicAgent, spendOf } from "~/main/providers/anthropic";
 import type { Fetch } from "~/main/providers/canvas";
 import { DRAFT_GRADE_REQUEST } from "~/shared/agent/agent";
 import type { ChangeId, ThreadId } from "~/shared/domain/ids";
@@ -411,6 +412,8 @@ describe("an AI-drafted grade, end to end", () => {
         "vault.keys": async () => [],
         "vault.forget": async () => {},
         "vault.standIn": async () => null,
+        "agent.source": async () => {},
+        "claudeCode.status": async () => ({ installed: false, weekly: null }),
         "agent.run": anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch }),
         ...fakeLmsHandlers(),
       },

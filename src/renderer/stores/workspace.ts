@@ -78,7 +78,7 @@ import {
   type SubmissionBody,
 } from "~/shared/domain/lms";
 import type { SetupLive } from "~/shared/domain/setup";
-import type { Bridge } from "~/shared/ipc";
+import type { AgentSource, Bridge, ClaudeCodeStatus } from "~/shared/ipc";
 import { workName } from "~/shared/domain/workName";
 import { FakeCanvasServer, type StorageLike } from "~/shared/providers/fake-canvas/server";
 import type { FaultLab, NoiseConfig } from "~/shared/providers/fake-canvas/faults";
@@ -206,8 +206,12 @@ interface WorkspaceActions extends SetupActions {
   disconnect(school: SchoolId): Promise<void>;
   addAiKey(secret: Secret): Promise<void>;
   chooseOnDeviceModel(): Promise<void>;
+  /** The teacher's own Claude Code, which keeps no secret here, so any saved key is forgotten. */
+  chooseClaudeCode(): Promise<void>;
   /** Forgets any saved key. */
   turnOffAi(): Promise<void>;
+  /** What main reads of the teacher's Claude Code. Null when there is no main to ask, as in the web demo, or it didn't answer. */
+  claudeCodeStatus(): Promise<ClaudeCodeStatus | null>;
   scopeWordsFor(school: SchoolId): readonly string[];
   syncSchool(school: SchoolId): Promise<boolean>;
   /** Syncs every connected school unless a sync started in the last two minutes. Opening a view of courses calls it. */
@@ -298,6 +302,8 @@ export type WorkspaceState = WorkspaceData &
     setupLive: Readonly<Record<string, SetupLive>>;
     /** What a school offers to copy from. Not persisted. */
     setupOptions: Readonly<Record<SchoolId, SetupOptions>>;
+    /** Runs in each thread that came back at the teacher's Claude plan limit, so a batch can stop there. Not persisted. */
+    limitHits: Readonly<Record<ThreadId, number>>;
     /** Not persisted: it reports something that just happened, so a reload has nothing to say. */
     notice: string | null;
   };
@@ -337,6 +343,11 @@ export interface WorkspaceDeps {
   /** The desktop app's network. Without one, as in the web demo, whose LMS is in the page, the app is always online. */
   connectivity?: { online(): boolean; subscribe(onChange: () => void): void };
   timer?: AutoSyncDeps["timer"];
+  /** Main's half of the AI source: which source `agent.run` follows, and the teacher's Claude Code. The web demo has none. */
+  agentMain?: {
+    source(source: AgentSource): Promise<void>;
+    claudeCode(): Promise<ClaudeCodeStatus>;
+  };
 }
 
 export type WorkspaceStore = StoreApi<WorkspaceState> & { syncFromStorage(): void };
@@ -362,7 +373,19 @@ const migrateV2 = (state: Record<string, unknown>): Record<string, unknown> => {
   };
 };
 
-const AI_SOURCES: readonly unknown[] = ["none", "key", "on-device"] satisfies readonly AiSource[];
+const AI_SOURCES: readonly unknown[] = [
+  "none",
+  "key",
+  "on-device",
+  "claude-code",
+] satisfies readonly AiSource[];
+/** The web demo's on-device model never reaches main, so main runs nothing for it. */
+const AGENT_SOURCE: Readonly<Record<AiSource, AgentSource>> = {
+  none: "none",
+  key: "key",
+  "on-device": "none",
+  "claude-code": "claude-code",
+};
 const STEPS: readonly unknown[] = ["welcome", "setup", "done"] satisfies readonly OnboardingStep[];
 // Records, so the compiler fails here when a variant is added and a save holding it still loads.
 const CHANGE_KINDS: Readonly<Record<ChangeContent["kind"], true>> = {
@@ -911,6 +934,10 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
     removeItem: (name) => deps.storage.removeItem(name),
   };
 
+  // Main starts with no source and never falls back, so it hears the teacher's choice on load and on every change.
+  const tellMain = (source: AiSource) =>
+    deps.agentMain?.source(AGENT_SOURCE[source]).catch(() => {}) ?? Promise.resolve();
+
   // Set just below, once the store exists. Actions only run after that.
   let writeback: Writeback;
   let autoSync: ReturnType<typeof createAutoSync>;
@@ -1353,11 +1380,15 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             case "replies": {
               const unread = awaitingReply(course);
               const opened: (ChangeId | null)[] = [];
-              // One at a time, because a thread draws one working state and one focus.
-              for (const conversation of unread)
+              const hits = () => get().limitHits[thread] ?? 0;
+              const before = hits();
+              // One at a time, because a thread draws one working state and one focus. The plan limit ends the batch.
+              for (const conversation of unread) {
                 opened.push(
                   await state.openConversation(thread, conversation.ref, { fill: "draft" }),
                 );
+                if (hits() !== before) break;
+              }
               state.setThreadUi(thread, { queueOpen: true, current: unread[0]?.ref ?? null });
               state.focusChange(thread, opened[0] ?? null);
               return;
@@ -1499,6 +1530,12 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                     at: nowIso(),
                     ...(effect.lines ? { lines: effect.lines } : {}),
                   });
+                case "limited": {
+                  run.failed = true;
+                  const { limitHits } = get();
+                  set({ limitHits: { ...limitHits, [thread]: (limitHits[thread] ?? 0) + 1 } });
+                  return say(thread, run, { type: "declined", text: effect.text, at: nowIso() });
+                }
                 case "work":
                   return say(thread, run, { type: "work", lines: [effect.line], at: nowIso() });
                 case "guide":
@@ -1876,6 +1913,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           online: deps.connectivity?.online() ?? true,
           setupLive: {},
           setupOptions: {},
+          limitHits: {},
           notice: null,
           ...setup.actions,
 
@@ -1924,6 +1962,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             }
             if (get().aiSource === "key" && !(await deps.vault.has("ai-key")))
               set({ aiSource: "none" });
+            await tellMain(get().aiSource);
             await writeback.recover();
             for (const pending of Object.values(get().handoffs)) void runHandoff(pending);
             void autoSync.now();
@@ -1984,9 +2023,23 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             dropBlanks();
           },
 
+          chooseClaudeCode: async () => {
+            await deps.vault.forget("ai-key");
+            set({ aiSource: "claude-code" });
+            dropBlanks();
+          },
+
           turnOffAi: async () => {
             await deps.vault.forget("ai-key");
             set({ aiSource: "none" });
+          },
+
+          claudeCodeStatus: async () => {
+            try {
+              return (await deps.agentMain?.claudeCode()) ?? null;
+            } catch {
+              return null;
+            }
           },
 
           scopeWordsFor: (school) => {
@@ -2497,6 +2550,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
     if (online) void autoSync.now();
   });
   deps.subscribeFocus?.(() => void autoSync.freshen());
+  store.subscribe((state, prior) => {
+    if (state.aiSource !== prior.aiSource) void tellMain(state.aiSource);
+  });
 
   deps.subscribeStorage?.(() => {
     syncFromStorage();
@@ -2557,6 +2613,11 @@ const standInFor = (agent: Agent): Agent => ({
   },
 });
 
+const agentMainOf = (bridge: Bridge): NonNullable<WorkspaceDeps["agentMain"]> => ({
+  source: (source) => bridge.invoke("agent.source", { source }),
+  claudeCode: () => bridge.invoke("claudeCode.status", undefined),
+});
+
 const browserDeps = (): WorkspaceDeps => ({
   storage: localStorage,
   vault: createAppVault(),
@@ -2567,7 +2628,12 @@ const browserDeps = (): WorkspaceDeps => ({
       : bridgeCanvasBackend(desktopBridge),
   agent:
     REAL_AI && desktopBridge ? createBridgeAgent(desktopBridge) : standInFor(createRuleAgent()),
-  ...(desktopBridge ? { connectivity: { online: isOnline, subscribe: onConnectivity } } : {}),
+  ...(desktopBridge
+    ? {
+        connectivity: { online: isOnline, subscribe: onConnectivity },
+        agentMain: agentMainOf(desktopBridge),
+      }
+    : {}),
   // Verify and the web demo run the fake LMS, which changes only when a test changes it, so no timer races their steps.
   ...(REAL_AI
     ? {

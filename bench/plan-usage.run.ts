@@ -19,7 +19,7 @@ const localDate = () => new Date().toLocaleDateString("sv-SE");
 
 it("measures plan usage per graded submission for each AI source", async () => {
   if (process.env["CI"]) throw new Error("The benchmark never runs in CI: it spends real quota.");
-  const { ready, unavailable } = sortSources(SOURCES, process.env);
+  const { ready, unavailable } = await sortSources(SOURCES, process.env);
   if (ready.length === 0) throw new Error(refusal(unavailable));
   for (const { id, missing } of unavailable)
     console.log(`${id}: unavailable, missing ${missing.join("; ")}`);

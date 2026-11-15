@@ -55,6 +55,8 @@ const desktop = () => {
       "vault.keys": async () => [],
       "vault.forget": async () => {},
       "vault.standIn": async () => null,
+      "agent.source": async () => {},
+      "claudeCode.status": async () => ({ installed: false, weekly: null }),
       "agent.run": async () => ({ ok: false, reason: "no agent in this rig" }),
       ...fakeLmsHandlers(),
     },

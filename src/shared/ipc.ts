@@ -91,8 +91,35 @@ const AgentRunOutput = v.variant("ok", [
       usd: v.pipe(v.number(), v.minValue(0)),
     }),
   }),
-  v.strictObject({ ok: v.literal(false), reason: v.string() }),
+  /** `limited`: the teacher's Claude plan limit is reached, so a batch stops here instead of asking again. */
+  v.strictObject({
+    ok: v.literal(false),
+    reason: v.string(),
+    limited: v.optional(v.literal(true)),
+  }),
 ]);
+
+/** Where drafts come from, as main runs them. The web demo's on-device model never reaches main. */
+const AgentSourceSchema = v.picklist(["none", "key", "claude-code"]);
+export type AgentSource = v.InferOutput<typeof AgentSourceSchema>;
+
+/** The latest weekly-limit reading from a Claude Code run, kept in main's memory. */
+const WeeklyUsage = v.strictObject({
+  usedPercent: v.pipe(v.number(), v.minValue(0)),
+  resetsAt: v.pipe(v.string(), v.isoTimestamp()),
+});
+/** What `claude --version` and `claude auth status` said, and nothing else: no email, organization or token. */
+const ClaudeCodeStatus = v.variant("installed", [
+  v.strictObject({ installed: v.literal(false), weekly: v.nullable(WeeklyUsage) }),
+  v.strictObject({
+    installed: v.literal(true),
+    version: v.string(),
+    tooOld: v.boolean(),
+    signedIn: v.boolean(),
+    weekly: v.nullable(WeeklyUsage),
+  }),
+]);
+export type ClaudeCodeStatus = v.InferOutput<typeof ClaudeCodeStatus>;
 
 interface Channel {
   readonly input: v.GenericSchema;
@@ -120,8 +147,11 @@ const ipc = {
    */
   "vault.standIn": { input: ByKey, output: v.nullable(v.string()) },
   /** The school at an address: one of the fake's, or real Canvas at that host. Null when main knows none there. */
-  /** Claude in main, with the key from main's vault (docs/electron-spec.md, AI). */
+  /** Claude in main, from the source the teacher chose: the key in main's vault, or their Claude Code (docs/electron-spec.md, AI). */
   "agent.run": { input: AgentRunInput, output: AgentRunOutput },
+  /** The teacher's choice of source, which `agent.run` follows. Main never falls back from one to the other. */
+  "agent.source": { input: v.strictObject({ source: AgentSourceSchema }), output: v.void() },
+  "claudeCode.status": { input: v.void(), output: ClaudeCodeStatus },
   "lms.schoolAt": { input: v.strictObject({ host: v.string() }), output: v.nullable(SchoolSchema) },
   // A school's LmsProvider, run in main with the token from main's vault (docs/electron-spec.md, step 10).
   "lms.verify": { input: BySchool, output: readOf(AccountInfoSchema) },

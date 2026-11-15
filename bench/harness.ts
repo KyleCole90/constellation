@@ -123,6 +123,7 @@ export const benchmark = async (
     model: source.model,
     claudeCodeVersion: opened.claudeCodeVersion,
     overheadLimitMs: source.overheadLimitMs,
+    minValidPercent: source.minValidPercent,
     weekly: { before, after: await opened.weeklyUsed() },
     drafts,
   };

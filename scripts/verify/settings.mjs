@@ -827,6 +827,12 @@ const onboarding = async (t, shot) => {
     )),
     "a connected school opens the AI choice",
   );
+  t.assert(
+    await t.eval(
+      `["key", "claude-code"].every((value) => document.querySelector(\`input[name="ai-source"][value="\${value}"]\`)?.checked === false)`,
+    ),
+    "the API key and Claude Code are both offered, and neither is preselected",
+  );
   await shot("connected-row");
   await assertNoLeak(t, "after connecting Lakeshore");
 
@@ -986,6 +992,63 @@ const onboarding = async (t, shot) => {
   );
   await shot("ai-on-device");
   await undoMac();
+
+  const claudeCode = '[data-ai-source="claude-code"]';
+  const claudeCodeReads = (reading, tag) =>
+    t.waitFor(
+      `document.querySelector('${claudeCode} [data-testid="claude-code-status"]')?.dataset.reading === "${reading}"`,
+      tag,
+    );
+  t.assert(
+    (await t.text(claudeCode)).includes("Claude, with your Claude Code subscription"),
+    "the Claude Code option is listed",
+    await t.text(claudeCode),
+  );
+  await t.signInClaude(false);
+  await t.click('input[name="ai-source"][value="claude-code"]');
+  await claudeCodeReads(
+    "signed-out",
+    "picking Claude Code checks it at once, and it reads signed out",
+  );
+  t.assert(
+    (await t.text(claudeCode)).includes("Open Terminal, run claude and sign in"),
+    "signed out, the option says how to sign in",
+    await t.text(claudeCode),
+  );
+  t.assert(
+    (await finishReason(t)).includes("Set up Claude Code"),
+    "signed out, Finish waits for Claude Code",
+    await finishReason(t),
+  );
+  t.assert(
+    await t.eval(
+      `[...document.querySelectorAll("main button")].find((b) => b.innerText === "Finish setup").disabled`,
+    ),
+    "signed out, Finish setup is disabled",
+  );
+  await shot("ai-claude-code-signed-out");
+  await t.signInClaude(true);
+  await t.click("Check again", { within: claudeCode });
+  await claudeCodeReads("ready", "Check again after signing in reads Ready");
+  t.assert(
+    (await t.text(claudeCode)).includes("Ready. Claude Code 2.1.323 is signed in."),
+    "Ready names the version",
+    await t.text(claudeCode),
+  );
+  t.assert(
+    !(await t.eval(
+      `[...document.querySelectorAll("main button")].find((b) => b.innerText === "Finish setup").disabled`,
+    )),
+    "Ready unblocks Finish setup",
+  );
+  t.assert(
+    (await t.text('[data-testid="constellation-summary"]')).includes(
+      "AI: Claude, with Claude Code",
+    ),
+    "the summary names Claude Code",
+    await t.text('[data-testid="constellation-summary"]'),
+  );
+  await shot("ai-claude-code-ready");
 
   await t.click('input[name="ai-source"][value="key"]');
   await t.waitFor(
@@ -1360,6 +1423,50 @@ const ai = async (t, shot) => {
   );
   await says("Anthropic key", "the key is the source again");
   await assertNoLeak(t, "after the AI key changes");
+
+  await t.signInClaude(false);
+  await t.click("Use Claude Code", { within: row });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(DIALOG)})?.innerText.includes("This forgets the key")`,
+    "Use Claude Code from a key says first that the key is forgotten",
+  );
+  await says("Anthropic key", "the key stays until the switch is confirmed");
+  await t.click("Forget key and use Claude Code", { within: DIALOG });
+  await says("through your Claude Code subscription", "confirming switches drafts to Claude Code");
+  const status = '[data-testid="ai-claude-code-row"] [data-testid="claude-code-status"]';
+  await t.waitFor(
+    `document.querySelector('${status}')?.dataset.reading === "signed-out"`,
+    "Settings checks Claude Code when it opens, and it reads signed out",
+  );
+  t.assert(!(await t.has('[data-testid="ai-spend-row"]')), "Claude Code has no spend-limit row");
+  t.assert(
+    !vaultKeys(await t.vaultFile())
+      .split(",")
+      .includes("ai-key"),
+    "switching to Claude Code forgot the key",
+    vaultKeys(await t.vaultFile()),
+  );
+  await shot("settings-ai-claude-code-signed-out");
+  await t.signInClaude(true);
+  await t.click("Check again", { within: '[data-testid="ai-claude-code-row"]' });
+  await t.waitFor(
+    `document.querySelector('${status}')?.dataset.reading === "ready"`,
+    "Check again in Settings reads Ready",
+  );
+  t.assert(
+    (await t.text('[data-testid="ai-claude-code-row"]')).includes("2.1.323"),
+    "Settings names Claude Code's version",
+  );
+  await shot("settings-ai-claude-code-ready");
+  await t.click("Use a key", { within: row });
+  await enter(t, DIALOG_FIELD, SECRETS.aiAgain);
+  await t.key("Enter");
+  await t.waitFor(
+    `!document.querySelector(${JSON.stringify(DIALOG)})`,
+    "the AI dialog closes after adding a key over Claude Code",
+  );
+  await says("Anthropic key", "Claude Code can switch back to a key");
+  await assertNoLeak(t, "after switching between the key and Claude Code");
 };
 
 const pick = async (t, trigger, option) => {

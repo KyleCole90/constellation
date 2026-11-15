@@ -1,4 +1,4 @@
-import { REAL_AI, SPEND_LIMITS_URL, VAULT_PLACE } from "~/renderer/desktop";
+import { REAL_AI, SPEND_LIMITS_URL, VAULT_PLACE, desktopBridge } from "~/renderer/desktop";
 import { ArrowUpRight } from "lucide-react";
 import { useState } from "react";
 
@@ -10,6 +10,8 @@ import { Badge, type BadgeTone } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Dialog, DialogDescription, DialogPopup, DialogTitle } from "../ui/dialog";
 import { AiKeyForm } from "./AiKeyForm";
+import { weeklyWords } from "./claude-code.logic";
+import { ClaudeCodeCheck, useClaudeCode } from "./ClaudeCode";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SettingsCard, SettingsRow, SettingsSection } from "./layout";
 
@@ -19,6 +21,11 @@ const SOURCE_VIEW: Readonly<Record<AiSource, { label: string; badge: BadgeTone; 
       label: "Anthropic key",
       badge: "success",
       words: `A key is saved in ${VAULT_PLACE}. It is never shown again.`,
+    },
+    "claude-code": {
+      label: "Claude Code",
+      badge: "success",
+      words: "Drafts and chat come from Claude through your Claude Code subscription.",
     },
     "on-device": {
       label: "On-device model",
@@ -33,6 +40,25 @@ const SOURCE_VIEW: Readonly<Record<AiSource, { label: string; badge: BadgeTone; 
   };
 
 const CHATS_KEPT = "Your chats are kept and come back when AI is on.";
+const TURN_ON = desktopBridge
+  ? REAL_AI
+    ? "Add a key or use Claude Code"
+    : "Add a key, use Claude Code, or use the on-device model"
+  : "Add a key or use the on-device model";
+
+function ClaudeCodeRow() {
+  const { reading, weekly, check } = useClaudeCode(true);
+  const limit = weeklyWords(weekly);
+  return (
+    <SettingsRow
+      data-testid="ai-claude-code-row"
+      title="Claude Code"
+      description={limit && <span data-testid="ai-weekly-limit">{limit}</span>}
+    >
+      <ClaudeCodeCheck reading={reading} onCheck={check} />
+    </SettingsRow>
+  );
+}
 
 export function AiSection() {
   const source = useWorkspace((state) => state.aiSource);
@@ -42,6 +68,7 @@ export function AiSection() {
   );
   const [entering, setEntering] = useState(false);
   const [turnOff, setTurnOff] = useState({ open: false, key: false });
+  const [keyToClaudeCode, setKeyToClaudeCode] = useState(false);
   const mac = isMacDevice();
   const view = SOURCE_VIEW[source];
   const store = () => workspaceStore().getState();
@@ -50,10 +77,12 @@ export function AiSection() {
       title="AI"
       description={
         ai
-          ? REAL_AI
-            ? "AI is on. Drafts and chat come from Claude, billed to your Anthropic key. Each thread shows what it has cost."
-            : "AI is on. Drafts come from built-in rules for now, because no model is wired up in this prototype."
-          : `AI is off, so you fill in grades and replies by hand. ${REAL_AI ? "Add a key" : "Add a key or use the on-device model"} to turn on AI drafts and chat.${hasChats ? ` ${CHATS_KEPT}` : ""}`
+          ? !REAL_AI
+            ? "AI is on. Drafts come from built-in rules for now, because no model is wired up in this prototype."
+            : source === "claude-code"
+              ? "AI is on. Drafts and chat come from Claude through your Claude Code subscription, and count against your plan's limits."
+              : "AI is on. Drafts and chat come from Claude, billed to your Anthropic key. Each thread shows what it has cost."
+          : `AI is off, so you fill in grades and replies by hand. ${TURN_ON} to turn on AI drafts and chat.${hasChats ? ` ${CHATS_KEPT}` : ""}`
       }
     >
       <SettingsCard data-testid="ai-card">
@@ -74,6 +103,16 @@ export function AiSection() {
               >
                 {source === "key" ? "Replace key" : "Use a key"}
               </Button>
+              {desktopBridge && source !== "claude-code" && (
+                <Button
+                  variant={source === "none" ? "default" : "outline"}
+                  onClick={() =>
+                    source === "key" ? setKeyToClaudeCode(true) : void store().chooseClaudeCode()
+                  }
+                >
+                  Use Claude Code
+                </Button>
+              )}
               {!REAL_AI && source !== "on-device" && (
                 <Button
                   disabled={!mac}
@@ -94,7 +133,8 @@ export function AiSection() {
             </>
           }
         />
-        {REAL_AI && (
+        {source === "claude-code" && <ClaudeCodeRow />}
+        {REAL_AI && source !== "claude-code" && (
           <SettingsRow
             data-testid="ai-spend-row"
             title="Spend limit"
@@ -129,6 +169,19 @@ export function AiSection() {
           drafts turn off, and you fill in grades and replies by hand.
         </p>
         <p>Drafts already written stay. {CHATS_KEPT}</p>
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={keyToClaudeCode}
+        onOpenChange={setKeyToClaudeCode}
+        title="Use Claude Code instead of your key?"
+        confirmLabel="Forget key and use Claude Code"
+        onConfirm={() => store().chooseClaudeCode()}
+      >
+        <p>
+          This forgets the key in {VAULT_PLACE}. Drafts and chat then come from Claude through your
+          Claude Code subscription.
+        </p>
+        <p>Drafts already written stay.</p>
       </ConfirmDialog>
       <Dialog open={entering} onOpenChange={setEntering}>
         <DialogPopup>

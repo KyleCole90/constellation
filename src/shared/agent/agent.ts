@@ -55,6 +55,8 @@ export type AgentEffect =
   | { type: "say"; text: string; lines?: readonly AnswerLine[]; replies?: readonly string[] }
   /** The agent saying no. The thread renders it apart from ordinary replies. */
   | { type: "decline"; text: string; lines?: readonly AnswerLine[] }
+  /** A decline because the teacher's Claude plan limit is reached, so a batch stops instead of asking again. Main sets it, never the model. */
+  | { type: "limited"; text: string }
   | { type: "work"; line: string }
   /** The teacher's standing preference for every later draft in this thread, in full, replacing the last; null clears it. */
   | { type: "guide"; text: string | null }
@@ -660,6 +662,11 @@ export const parseAgentEffect = (
       return parseSay(raw, scope, drop);
     case "decline":
       return parseDecline(raw, scope, drop);
+    // Only the bridge agent yields this, from main's own flag, as with "spend" below.
+    case "limited":
+      return isText(raw["text"])
+        ? { ok: true, value: { type: "limited", text: raw["text"] } }
+        : fail({ kind: "malformed", detail: "limited text" });
     case "work":
       return isText(raw["line"])
         ? { ok: true, value: { type: "work", line: raw["line"] } }

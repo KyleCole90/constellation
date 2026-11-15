@@ -113,8 +113,8 @@ export function SetupPrivacy({ title }: { title: ReactNode }) {
         {!desktopBridge
           ? "This web demo sends nothing anywhere."
           : sends
-            ? "There is no Constellation server. Only your school, Anthropic with your key, and scrubbed crash reports hear from this Mac."
-            : "There is no Constellation server. Only your school, and Anthropic if you add a key, hear from this Mac."}
+            ? "There is no Constellation server. Only your school, Anthropic (with your key or through your Claude Code), and scrubbed crash reports hear from this Mac. Constellation never asks for, sees or stores your Claude login."
+            : "There is no Constellation server. Only your school, and Anthropic if you add a key or use Claude Code, hear from this Mac. Constellation never asks for, sees or stores your Claude login."}
       </p>
       <CrashReportsToggle />
       <details className="rounded-xl border border-border bg-card px-card py-3">

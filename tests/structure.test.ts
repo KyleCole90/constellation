@@ -165,6 +165,39 @@ const fakeFile = (path: string, text: string): SourceFile => {
   };
 };
 
+/** Only main starts a process, so only main can run Claude Code. */
+const spawners = (sources: readonly SourceFile[]): readonly string[] =>
+  sources
+    .filter(
+      (file) =>
+        !startsWith(file, "main") &&
+        file.imports.some((entry) => /^npm:(node:)?child_process$/.test(entry.spec)),
+    )
+    .map((file) => file.path);
+
+describe("who may start a process", () => {
+  it("nothing outside src/main imports child_process", () => {
+    expect(spawners(SOURCES)).toEqual([]);
+  });
+
+  it("src/main does, so this check is looking at the right module", () => {
+    expect(
+      SOURCES.filter((file) =>
+        file.imports.some((entry) => entry.spec === "npm:node:child_process"),
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("the check catches the preload or the renderer importing it, with or without node:", () => {
+    expect(
+      spawners([
+        fakeFile("preload/evil.ts", 'import { spawn } from "node:child_process";'),
+        fakeFile("renderer/evil.ts", 'import * as cp from "child_process";'),
+      ]),
+    ).toEqual(["preload/evil.ts", "renderer/evil.ts"]);
+  });
+});
+
 describe("who may read a secret", () => {
   it("nothing but the vault, the provider layers and the store's validity check calls revealSecret", () => {
     const allowed = (path: string) =>

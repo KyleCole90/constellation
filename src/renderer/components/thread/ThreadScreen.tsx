@@ -41,6 +41,7 @@ import {
   type WorkRow,
   type WorkView,
 } from "./queue.logic";
+import { spendWords } from "./spend.logic";
 import { ThreadPanel } from "./ThreadPanel";
 import { useChange } from "./useChange";
 import { useThreadWork } from "./useThreadWork";
@@ -130,21 +131,20 @@ export function PanelToggle({
   );
 }
 
-const tokenWords = (tokens: number): string =>
-  tokens < 1000 ? `${tokens} tokens` : `${(tokens / 1000).toFixed(1)}k tokens`;
-const dollars = (usd: number): string => (usd < 0.01 ? "under $0.01" : `$${usd.toFixed(2)}`);
-
 /** What Claude's runs in this thread used and cost (docs/electron-spec.md, AI). Absent until one reports. */
 function ThreadSpend({ thread }: { thread: Thread }) {
   if (!thread.spend) return null;
-  const { tokens, usd } = thread.spend;
   return (
     <span
       data-testid="thread-spend"
-      title="Claude's usage in this thread, billed to your Anthropic key"
+      title={
+        thread.spend.usd > 0
+          ? "Claude's usage in this thread, billed to your Anthropic key"
+          : "Claude's usage in this thread"
+      }
       className="whitespace-nowrap text-meta text-muted-foreground"
     >
-      {tokenWords(tokens)} · {dollars(usd)}
+      {spendWords(thread.spend)}
     </span>
   );
 }

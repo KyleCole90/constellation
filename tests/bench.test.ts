@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vite-plus/test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { describe, expect, it, onTestFinished } from "vite-plus/test";
 
 import {
   WEIGHTS,
@@ -38,6 +43,7 @@ const run = (drafts: readonly Draft[], extra: Partial<Run> = {}): Run => ({
   model: OPUS,
   claudeCodeVersion: null,
   overheadLimitMs: null,
+  minValidPercent: 100,
   weekly: { before: null, after: null },
   drafts,
   ...extra,
@@ -123,19 +129,25 @@ describe("the guards", () => {
     ).toEqual({ applies: false, p50Ms: 200 });
   });
 
-  it("passes first-try validity only when every draft was valid", () => {
+  it("passes first-try validity only at or above the source's floor", () => {
     const good = draft("text", { input: 1, output: 1 });
     const bad = { ...good, valid: false, problems: ["no grade proposed"] };
     expect(results(run([good, good]), META).guards.firstTryValid).toEqual({
       valid: 2,
       of: 2,
+      minPercent: 100,
       pass: true,
     });
-    expect(results(run([good, bad]), META).guards.firstTryValid).toEqual({
+    expect(results(run([good, bad]), META).guards.firstTryValid).toMatchObject({
       valid: 1,
-      of: 2,
       pass: false,
     });
+    const tenth = [...Array<Draft>(9).fill(good), bad];
+    expect(results(run(tenth, { minValidPercent: 90 }), META).guards.firstTryValid.pass).toBe(true);
+    expect(
+      results(run([...tenth.slice(1), bad], { minValidPercent: 90 }), META).guards.firstTryValid
+        .pass,
+    ).toBe(false);
   });
 });
 
@@ -210,28 +222,105 @@ describe("the results file", () => {
   });
 });
 
+const NO_CLAUDE = { CONSTELLATION_CLAUDE: "/nowhere/claude" };
+const CLAUDE_MISSING = "a signed-in, current Claude Code, for the claude-code source";
+
+/** The fake `claude` from the Claude Code tests, signed in, drafting one say from a 2,000-token request. */
+const fakeClaude = () => {
+  const dir = mkdtempSync(join(tmpdir(), "bench-claude-"));
+  const scenario = join(dir, "scenario.json");
+  writeFileSync(
+    scenario,
+    JSON.stringify({
+      record: join(dir, "runs.jsonl"),
+      lines: [
+        {
+          type: "system",
+          subtype: "init",
+          tools: ["StructuredOutput"],
+          mcp_servers: [],
+          slash_commands: [],
+          claude_code_version: "2.1.325",
+        },
+        {
+          type: "rate_limit_event",
+          rate_limit_info: {
+            status: "allowed",
+            unifiedWindows: { seven_day: { utilization: 0.16, resetsAt: 1_795_000_000 } },
+          },
+        },
+        {
+          type: "result",
+          is_error: false,
+          duration_api_ms: 3000,
+          modelUsage: {
+            [OPUS]: {
+              inputTokens: 1000,
+              outputTokens: 500,
+              cacheReadInputTokens: 400,
+              cacheCreationInputTokens: 100,
+            },
+          },
+          structured_output: { effects: [{ type: "say", text: "Hello." }] },
+        },
+      ],
+    }),
+  );
+  const env = {
+    CONSTELLATION_CLAUDE: fileURLToPath(new URL("./fixtures/fake-claude.mjs", import.meta.url)),
+    FAKE_CLAUDE: scenario,
+    PATH: process.env["PATH"],
+  };
+  onTestFinished(() => rmSync(dir, { recursive: true, force: true }));
+  return env;
+};
+
 describe("credentials", () => {
-  it("runs the API-key source with ANTHROPIC_API_KEY and reports Claude Code as unavailable until #82", () => {
-    const { ready, unavailable } = sortSources(SOURCES, { ANTHROPIC_API_KEY: "sk-ant-x" });
+  it("runs the API-key source with ANTHROPIC_API_KEY and reports Claude Code unavailable without a signed-in claude", async () => {
+    const { ready, unavailable } = await sortSources(SOURCES, {
+      ANTHROPIC_API_KEY: "sk-ant-x",
+      ...NO_CLAUDE,
+    });
     expect(ready.map((source) => source.id)).toEqual(["api-key"]);
-    expect(unavailable).toEqual([
-      {
-        id: "claude-code",
-        missing: ["a signed-in Claude Code, for the claude-code source, which #82 adds"],
-      },
-    ]);
+    expect(unavailable).toEqual([{ id: "claude-code", missing: [CLAUDE_MISSING] }]);
   });
 
-  it("refuses to start with no credentials, naming each one missing", () => {
-    const { ready, unavailable } = sortSources(SOURCES, { ANTHROPIC_API_KEY: "" });
+  it("refuses to start with no credentials, naming each one missing", async () => {
+    const { ready, unavailable } = await sortSources(SOURCES, {
+      ANTHROPIC_API_KEY: "",
+      ...NO_CLAUDE,
+    });
     expect(ready).toEqual([]);
     expect(refusal(unavailable)).toBe(
       [
         "No AI source has the credentials it needs, so the benchmark didn't start. Missing:",
         "- ANTHROPIC_API_KEY, for the api-key source",
-        "- a signed-in Claude Code, for the claude-code source, which #82 adds",
+        `- ${CLAUDE_MISSING}`,
       ].join("\n"),
     );
+  });
+
+  it("runs Claude Code with a signed-in claude, metering each run's requests, version and weekly use", async () => {
+    const env = fakeClaude();
+    const { ready } = await sortSources(SOURCES, env);
+    const source = ready.find(({ id }) => id === "claude-code");
+    expect(source).toBeDefined();
+    const requests: unknown[] = [];
+    const opened = await source?.open(env, {
+      request: (calls, modelMs) => requests.push({ calls, modelMs }),
+    });
+    expect(opened?.claudeCodeVersion).toBe("2.1.325");
+    expect(await opened?.weeklyUsed()).toBeNull();
+    await opened?.run({ request: "Hi.", history: [], scope: {}, files: [] });
+    expect(requests).toEqual([
+      {
+        calls: [
+          { model: OPUS, usage: { input: 1000, cacheWrite: 100, cacheRead: 400, output: 500 } },
+        ],
+        modelMs: 3000,
+      },
+    ]);
+    expect(await opened?.weeklyUsed()).toBe(16);
   });
 });
 
