@@ -22,9 +22,9 @@ const openTarget = async (
   row: WorkRow,
   { focus = true, draft = false } = {},
 ): Promise<unknown> => {
-  if (row.kind === "submission")
-    return store().openSubmission(thread, row.key, draft ? { focus, fill: "draft" } : { focus });
-  return isAnswered(row.key) ? null : store().openConversation(thread, row.key, { focus });
+  const options = draft ? { focus, fill: "draft" as const } : { focus };
+  if (row.kind === "submission") return store().openSubmission(thread, row.key, options);
+  return isAnswered(row.key) ? null : store().openConversation(thread, row.key, options);
 };
 
 const isTyping = (target: EventTarget | null): boolean =>

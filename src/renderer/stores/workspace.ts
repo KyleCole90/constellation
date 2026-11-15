@@ -220,6 +220,7 @@ interface WorkspaceActions extends SetupActions {
   ): Promise<ChangeId | null>;
   /** A file the submission lists, read from its school's LMS. The token never leaves main. */
   readFile(submission: Submission, file: string): Read<FileContent>;
+  /** Like `openSubmission`: opening spends nothing, so with AI on only `fill: "draft"` asks Claude for a reply. */
   openConversation(
     thread: ThreadId,
     conversation: LmsRef<"conversation">,
@@ -1308,13 +1309,17 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               const opened: (ChangeId | null)[] = [];
               // One at a time, because a thread draws one working state and one focus.
               for (const conversation of unread)
-                opened.push(await state.openConversation(thread, conversation.ref));
+                opened.push(
+                  await state.openConversation(thread, conversation.ref, { fill: "draft" }),
+                );
               state.setThreadUi(thread, { queueOpen: true, current: unread[0]?.ref ?? null });
               state.focusChange(thread, opened[0] ?? null);
               return;
             }
             case "reply": {
-              const opened = await state.openConversation(thread, work.conversation);
+              const opened = await state.openConversation(thread, work.conversation, {
+                fill: "draft",
+              });
               state.setThreadUi(thread, { queueOpen: true, current: work.conversation });
               state.focusChange(thread, opened);
               return;
@@ -1996,7 +2001,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   assignments: [],
                 },
                 blankReply(conversation),
-                { fill: "draft", ...options },
+                options ?? {},
               );
             }
             return null;

@@ -35,7 +35,7 @@ function History({ conversation }: { conversation: Conversation }) {
   );
 }
 
-/** The conversation, and a way to draft when nothing is open on it, such as after a Discard. */
+/** The conversation, and a way to reply when nothing is open on it: just opened with AI on, or after a Discard. Opening never drafts, since a draft costs a model call. */
 export function ConversationLead({
   thread,
   conversation,
@@ -46,20 +46,31 @@ export function ConversationLead({
   const working = useWorkspace((state) => state.working[thread.id] ?? false);
   const ai = useAiOn();
   const last = conversation.messages.at(-1);
+  const open = (fill: "draft" | "by-hand") =>
+    void workspaceStore().getState().openConversation(thread.id, conversation.ref, { fill });
   return (
     <>
       <History conversation={conversation} />
       {thread.focus === null && !working && last && !last.mine && (
-        <div>
+        <div className="flex flex-wrap gap-btn-gap">
           <Button
             variant="default"
             data-draft-reply
-            onClick={() =>
-              void workspaceStore().getState().openConversation(thread.id, conversation.ref)
-            }
+            data-lands="[data-card-primary]"
+            onClick={() => open("draft")}
           >
             {ai ? "Draft a reply" : "Write a reply"}
           </Button>
+          {ai && (
+            <Button
+              variant="outline"
+              data-write-reply
+              data-lands="[data-change] textarea, [data-card-primary]"
+              onClick={() => open("by-hand")}
+            >
+              Write it yourself
+            </Button>
+          )}
         </div>
       )}
     </>
