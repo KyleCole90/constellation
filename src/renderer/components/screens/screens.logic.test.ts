@@ -600,6 +600,7 @@ const cell = (over: Partial<GradebookCell>): GradebookCell => ({
   proposed: null,
   change: null,
   sent: false,
+  asked: null,
   ...over,
 });
 
@@ -616,6 +617,25 @@ describe("gradebook cells", () => {
     ).toEqual(["resubmitted"]);
     expect(cellMarks(cell({ submission: submission({ lateDays: 2 }) }))).toEqual(["late"]);
     expect(cellMarks(cell({}))).toEqual([]);
+  });
+
+  it("work the student was asked to resubmit says so, not ungraded or resubmitted (#106)", () => {
+    const asked = "2026-11-14T15:00:00.000Z" as IsoTime;
+    expect(
+      cellMarks(cell({ grade: null, asked, submission: submission({ workflow: "submitted" }) })),
+    ).toEqual(["asked"]);
+    expect(
+      cellMarks(cell({ grade: 70, asked, submission: submission({ workflow: "submitted" }) })),
+    ).toEqual(["asked"]);
+    expect(
+      cellMarks(
+        cell({
+          grade: null,
+          asked,
+          submission: submission({ workflow: "submitted", lateDays: 3 }),
+        }),
+      ),
+    ).toEqual(["asked", "late"]);
   });
 
   it("an ungraded cell with a pending grade shows only the pending grade", () => {

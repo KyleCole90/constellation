@@ -4,6 +4,7 @@ import { DRAFT_GRADE_REQUEST, type Agent, type AgentInput } from "~/shared/agent
 import type { LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
 import {
   selectCourseWaiting,
+  selectGradebook,
   selectMessageSince,
   selectQueueRows,
   selectSubmission,
@@ -161,6 +162,14 @@ describe("once the message asking for a resubmit is sent (#98)", () => {
   };
   const rowOf = (rig: StoreRig, ref: LmsRef<"submission">) =>
     selectQueueRows(rig.state()).find((row) => row.submission.ref === ref);
+  /** The submission's Gradebook cell, which must say what the grading list says. */
+  const cellOf = (rig: StoreRig, ref: LmsRef<"submission">) => {
+    const course = rowOf(rig, ref)?.course.ref;
+    if (!course) throw new Error("no row");
+    return selectGradebook(rig.state(), course)
+      ?.rows.flatMap((row) => row.cells)
+      .find((cell) => cell.submission?.ref === ref);
+  };
   /** The grading list, the course's sidebar count and What's due, which must agree. */
   const toGrade = (rig: StoreRig, ref: LmsRef<"submission">) => {
     const course = rowOf(rig, ref)?.course.ref;
@@ -181,6 +190,7 @@ describe("once the message asking for a resubmit is sent (#98)", () => {
     await send(rig, ref);
     expect(rowOf(rig, ref)).toMatchObject({ open: false, change: null });
     expect(rowOf(rig, ref)?.asked).not.toBeNull();
+    expect(cellOf(rig, ref)?.asked).toBe(rowOf(rig, ref)?.asked);
     expect(toGrade(rig, ref)).toEqual([list - 1, course - 1, due - 1]);
   });
 
@@ -209,6 +219,7 @@ describe("once the message asking for a resubmit is sent (#98)", () => {
     await freshCopy(rig);
     expect(rowOf(rig, ref)).toMatchObject({ open: false, change: null });
     expect(rowOf(rig, ref)?.asked?.slice(0, 16)).toBe(asked?.slice(0, 16));
+    expect(cellOf(rig, ref)?.asked).toBe(rowOf(rig, ref)?.asked);
     expect(toGrade(rig, ref)).toEqual(counts);
   });
 
@@ -228,6 +239,7 @@ describe("once the message asking for a resubmit is sent (#98)", () => {
     rig.server.studentResubmits(ref);
     await freshCopy(rig);
     expect(rowOf(rig, ref)).toMatchObject({ open: true, asked: null });
+    expect(cellOf(rig, ref)?.asked).toBeNull();
     expect(toGrade(rig, ref)).toEqual(before);
   });
 });
