@@ -194,6 +194,8 @@ export const bridgeFakeLms = (
     failNextMigration: (stage, message) => command({ do: "failNextMigration", stage, message }),
     enrollStudents: (course, count) => command({ do: "enrollStudents", course, count }),
     clearDueDates: (course) => command({ do: "clearDueDates", course }),
+    addAssignments: (course, titles) =>
+      command({ do: "addAssignments", course, titles: [...titles] }),
     hideTermDates: (hidden) => command({ do: "hideTermDates", hidden }),
     createShell: (school, code, title) => command({ do: "createShell", school, code, title }),
     demoScript: () => snapshot.demoScript,
