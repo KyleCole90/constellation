@@ -2555,7 +2555,15 @@ const bridgeFakeBackend =
   (now: () => number): Backend => {
     const fake = bridgeFakeLms(bridge, FAKE_CANVAS, FAKE_CANVAS_FACE, now);
     lab = fake.lab;
-    return fakeBackend(fake.descriptor, fake.reset);
+    const backend = fakeBackend(fake.descriptor, fake.reset);
+    return {
+      ...backend,
+      // Main refuses every Canvas read here, but verify still renders a saved real school's screens through it.
+      descriptors: {
+        ...backend.descriptors,
+        canvas: bridgeCanvas(bridge, CANVAS, CANVAS_FACE, now),
+      },
+    };
   };
 
 /** The teacher's desktop app: real Canvas through main, with no demo. */
