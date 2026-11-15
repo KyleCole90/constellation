@@ -101,6 +101,9 @@ const { ELECTRON_RUN_AS_NODE: _, ...APP_ENV } = {
 };
 /** What main's .imscc picker answers in this launch, in place of the native dialog. */
 const pickedPackageFile = (profile) => join(profile, "picked-package.txt");
+/** Whether verify's fake `claude` reads as signed in, in this launch. It starts signed out. */
+const fakeClaudeFile = (profile) => join(profile, "fake-claude.txt");
+const FAKE_CLAUDE = join(ROOT, "scripts/verify/fake-claude.mjs");
 const launch = (port, profile, origin) =>
   WEB
     ? spawn(
@@ -131,6 +134,8 @@ const launch = (port, profile, origin) =>
             ...APP_ENV,
             CONSTELLATION_VERIFY_ORIGIN: origin,
             CONSTELLATION_PICKED_PACKAGE: pickedPackageFile(profile),
+            CONSTELLATION_CLAUDE: FAKE_CLAUDE,
+            CONSTELLATION_FAKE_CLAUDE_STATE: fakeClaudeFile(profile),
           },
         },
       );
@@ -396,6 +401,9 @@ const main = async () => {
       shots: SHOTS,
       /** Makes main's "Choose a .imscc file" pick `path` next, or cancel with null. */
       pickPackage: (path) => writeFile(pickedPackageFile(profile), path ?? ""),
+      /** Signs verify's fake `claude` in or out, as the teacher would in Terminal. */
+      signInClaude: (signedIn) =>
+        writeFile(fakeClaudeFile(profile), signedIn ? "signed-in" : "signed-out"),
       sleep,
       consoleEntries,
       cdp: send,
