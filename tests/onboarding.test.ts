@@ -7,6 +7,7 @@ import {
   type SchoolId,
   type ThreadId,
 } from "~/shared/domain/ids";
+import type { LmsError } from "~/shared/domain/change";
 import { Secret } from "~/shared/providers/provider";
 import { createMemoryVault } from "~/renderer/providers/vault";
 import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
@@ -154,6 +155,34 @@ describe("addSchool", () => {
     });
     await expectNoTrace(rig, LCC);
   });
+
+  it.each([
+    [{ kind: "not_found" }, "Couldn't find a school at lakeshore.instructure.com.", false],
+    [
+      { kind: "rejected", reason: "Canvas sent a page this app can't read." },
+      "Couldn't find a school at lakeshore.instructure.com.",
+      false,
+    ],
+    [
+      { kind: "unavailable", status: null },
+      "Nothing answered at lakeshore.instructure.com. Check the address",
+      false,
+    ],
+    [{ kind: "unavailable", status: 503 }, "Canvas is down for maintenance right now.", false],
+    [{ kind: "forbidden", missingScope: null }, "That token was refused.", true],
+  ] satisfies [LmsError, string, boolean][])(
+    "a check that meets %o points at the right thing and leaves nothing behind (#115)",
+    async (error, words, wrongSecret) => {
+      const rig = await makeStoreRig({ verify: async () => ({ ok: false, error }) });
+      const result = await add(rig, LCC_HOST);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.error.message).toContain(words);
+      expect(result.error.wrongSecret).toBe(wrongSecret);
+      expect(result.error.message.endsWith("Your token is still filled in.")).toBe(!wrongSecret);
+      await expectNoTrace(rig, LCC);
+    },
+  );
 
   it("adding an address twice reconnects the one school", async () => {
     const rig = await makeStoreRig();
