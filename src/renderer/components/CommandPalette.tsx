@@ -106,6 +106,12 @@ export function CommandPalette({
         return void workspaceStore().getState().syncSchool(target.school);
       case "assignment":
         return links.assignment(target.assignment);
+      case "gradebook-column":
+        return void navigate({
+          to: "/courses/$courseId/gradebook",
+          params: { courseId: target.assignment.course },
+          hash: target.assignment.ref,
+        });
       case "student": {
         const { submission } = target;
         if (!submission)

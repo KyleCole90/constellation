@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 
 import { OVERALL_RATIONALE, type ChangeRecord } from "~/shared/domain/change";
 import type { LmsRef } from "~/shared/domain/ids";
-import { excerptNote, type Conversation, type Submission } from "~/shared/domain/lms";
+import { excerptNote, resubmitted, type Conversation, type Submission } from "~/shared/domain/lms";
 import { cn, formatDayTime } from "~/renderer/lib/utils";
 import {
   selectAssignment,
@@ -234,7 +234,7 @@ function SubmissionDoc({
           )}
         </span>
       </div>
-      {submission.attempt > 1 && submission.grade !== null && (
+      {resubmitted(submission) && (
         <div
           data-testid="prior-attempt"
           className="mt-3 rounded-lg border border-border px-3 py-2 text-body"

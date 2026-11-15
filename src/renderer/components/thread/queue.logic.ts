@@ -1,6 +1,12 @@
 import type { ChangeRecord, ChangeSummary } from "~/shared/domain/change";
 import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
-import { bySchoolName, undraftableReason, type Course, type School } from "~/shared/domain/lms";
+import {
+  bySchoolName,
+  resubmitted,
+  undraftableReason,
+  type Course,
+  type School,
+} from "~/shared/domain/lms";
 import { firstName } from "~/shared/domain/workName";
 import { formatDay } from "~/renderer/lib/utils";
 import {
@@ -47,7 +53,7 @@ export const fromQueueRows = (rows: readonly QueueRow[]): readonly WorkRow[] =>
     course: row.course,
     dueAt: row.assignment.dueAt,
     lateDays: row.submission.lateDays,
-    resubmitted: row.submission.attempt > 1,
+    resubmitted: resubmitted(row.submission),
     change: row.change,
     summary: row.summary,
     open: row.open,
