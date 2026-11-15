@@ -11,7 +11,7 @@ import {
   type RemoteState,
   type SetContent,
 } from "~/shared/domain/change";
-import type { LmsRef } from "~/shared/domain/ids";
+import type { IsoTime, LmsRef } from "~/shared/domain/ids";
 import { mintSendPermit } from "~/shared/domain/permit";
 import { copyMigration } from "~/shared/domain/setup";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
@@ -24,6 +24,7 @@ import { DEFAULT_RETRY_POLICY, createWriteback } from "~/renderer/writeback/writ
 import { bridgedLms } from "./fixtures/bridge";
 import {
   CanvasTermHttp,
+  QUIZ_MS,
   STORAGE_ORIGIN,
   SHELL_ID,
   SOURCE_ID,
@@ -307,6 +308,148 @@ describe("Canvas term setup writes", () => {
     await clock.run(writeback.send([draft.id]));
     expect(ledger.get(draft.id)?.state.tag).toBe("sent");
     expect(http.jobs).toHaveLength(1);
+  });
+});
+
+describe("what a Canvas copy brings, as the setup review reads it (#132, #136)", () => {
+  /** The shell with ENG-101's copy sent, at the moment Canvas reports the migration completed. */
+  const copied = async (http = new CanvasTermHttp()) => {
+    const provider = canvasOver(http);
+    const { shell, source } = await shellAndSource(provider);
+    const content = copyContent(shell, source);
+    const permit = mintSendPermit(sending(approved(newDraft("ch-copy", content, copyRemote))), [
+      "copy",
+    ]);
+    if (!permit) throw new Error("no permit");
+    expect((await provider.apply(permit)).copy?.status).toBe("landed");
+    http.advance(5_000);
+    await unwrap(setupOf(provider).migrations(shell.ref));
+    return { http, provider, shell };
+  };
+  const itemsOf = async (provider: LmsProvider) =>
+    (await unwrap(setupOf(provider).courseContent(SHELL))).items;
+  const fileNamed = async (provider: LmsProvider, title: string) => {
+    const found = (await itemsOf(provider)).find(
+      (item) => item.type === "file" && item.title === title,
+    );
+    if (!found) throw new Error(`no file ${title}`);
+    return found;
+  };
+  const publishOf = async (provider: LmsProvider, title: string) => {
+    const content: SetContent = {
+      kind: "item-set",
+      target: (await fileNamed(provider, title)).ref,
+      where: title,
+      intent: { set: "item-published" },
+    };
+    return { content, remote: await unwrap(provider.observe(content)) };
+  };
+
+  it("stays running while New Quizzes brings the quizzes in, so the scan never reads one mid-copy", async () => {
+    const { http, provider, shell } = await copied();
+    const quiz = async () =>
+      (await itemsOf(provider)).find((item) => item.title === "Week 1 quiz")?.published;
+    expect(await quiz()).toBe(false);
+    expect(await unwrap(setupOf(provider).migrations(shell.ref))).toMatchObject([
+      { state: "running", message: "Canvas is still copying the quizzes." },
+    ]);
+
+    http.advance(QUIZ_MS);
+    expect(await quiz()).toBe(true);
+    expect((await unwrap(setupOf(provider).migrations(shell.ref))).map((job) => job.state)).toEqual(
+      ["completed"],
+    );
+  });
+
+  it("reads done once a quiz has been arriving five minutes, so a stuck quiz never holds the scan back", async () => {
+    const http = new CanvasTermHttp();
+    http.quizMs = 60 * 60_000;
+    const { provider, shell } = await copied(http);
+    http.advance(5 * 60_000);
+    expect((await unwrap(setupOf(provider).migrations(shell.ref))).map((job) => job.state)).toEqual(
+      ["completed"],
+    );
+    const quiz = (await itemsOf(provider)).find((item) => item.title === "Week 1 quiz");
+    expect(quiz?.published).toBe(false);
+  });
+
+  it("lands a due date Canvas stores a second early, as it does a midnight one", async () => {
+    const { provider } = await copied();
+    const essay = (await itemsOf(provider)).find((item) => item.title === "Essay 1");
+    if (!essay) throw new Error("no essay");
+    const content: SetContent = {
+      kind: "item-set",
+      target: essay.ref,
+      where: "Essay 1",
+      intent: { set: "due-at", at: "2027-02-04T00:00:00.000Z" as IsoTime },
+    };
+    const remote = await unwrap(provider.observe(content));
+    const permit = mintSendPermit(sending(approved(newDraft("ch-due", content, remote))), [
+      "value",
+    ]);
+    if (!permit) throw new Error("no permit");
+    expect((await provider.apply(permit)).value?.status).toBe("landed");
+  });
+
+  it("flags only a locked file: one students open from a link, or in the hidden Uploaded Media folder, is published", async () => {
+    const { provider } = await copied();
+    const files = (await itemsOf(provider)).filter((item) => item.type === "file");
+    expect(Object.fromEntries(files.map((file) => [file.title, file.published]))).toEqual({
+      "clef.jpg": true,
+      "violin.jpg": true,
+      "answers.pdf": false,
+    });
+  });
+
+  it("publishes a locked file with locked=false alone, and lands once Canvas reads it published", async () => {
+    const { http, provider } = await copied();
+    const { content, remote } = await publishOf(provider, "answers.pdf");
+    expect(remote).toMatchObject({ value: "unpublished" });
+    const permit = mintSendPermit(sending(approved(newDraft("ch-pub", content, remote))), [
+      "value",
+    ]);
+    if (!permit) throw new Error("no permit");
+    expect((await provider.apply(permit)).value?.status).toBe("landed");
+    const id = content.target.split(":").at(-1);
+    expect(http.requests).toContain(`PUT /files/${id}`);
+    expect((await fileNamed(provider, "answers.pdf")).published).toBe(true);
+    expect((await fileNamed(provider, "violin.jpg")).published).toBe(true);
+  });
+
+  it("never reports landed for a setting Canvas answers 200 and doesn't apply: the send rests failed, not sent", async () => {
+    const { http, provider } = await copied();
+    const { content, remote } = await publishOf(provider, "answers.pdf");
+    http.inertFileWrites = true;
+    const clock = new VirtualClock();
+    const ledger = new DurableLedger();
+    const draft = { ...newDraft("ch-inert", content, remote), school: SCHOOL.id };
+    ledger.add(draft);
+    const committed = ledger.commit(draft.id, {
+      type: "approve",
+      witness: clickWitness(draft),
+      at: draft.basis.readAt,
+    });
+    if (!committed.ok) throw new Error(committed.error);
+    const writeback = createWriteback({
+      ledger,
+      providerFor: () => provider,
+      markExpired: () => undefined,
+      now: clock.now,
+      sleep: clock.sleep,
+      random: () => 0.5,
+      policy: DEFAULT_RETRY_POLICY,
+      locks: null,
+    });
+    await clock.run(writeback.send([draft.id]));
+    const record = ledger.get(draft.id);
+    expect(record?.state).toMatchObject({
+      tag: "held",
+      cause: {
+        tag: "rejected",
+        reason: expect.stringContaining("Canvas answered, but didn't change answers.pdf"),
+      },
+    });
+    expect(record?.landed).toEqual([]);
   });
 });
 

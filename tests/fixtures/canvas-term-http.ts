@@ -19,6 +19,10 @@ export const SHELL_ID = 3301;
 /** Another course on this host, which the old course's pages still link to. */
 const ELSEWHERE_ID = 1901;
 const JOB_MS = 4000;
+/** How long New Quizzes takes to copy a quiz after the migration completes, about what a real school took. */
+export const QUIZ_MS = 10_000;
+/** Canvas hides its Uploaded Media folder, where media embedded in content is kept. */
+const HIDDEN_FOLDERS = new Set<FileRow["folder"]>(["Uploaded Media"]);
 
 interface Page {
   page_id: number;
@@ -35,6 +39,19 @@ interface Assignment {
   due_at: string | null;
   published: boolean;
   created_at: string;
+  /** A New Quiz. Its copy lands after the migration reports done, as New Quizzes copies it on its own. */
+  quiz?: boolean;
+  /** When a copied quiz lands. Until then Canvas reads it `duplicating`, unpublished. */
+  arrivesMs?: number;
+}
+interface FileRow {
+  id: number;
+  display_name: string;
+  locked: boolean;
+  /** The file's own setting. Canvas also reads a file `hidden` when its folder is hidden. */
+  hidden: boolean;
+  folder: "course files" | "Uploaded Media";
+  created_at: string;
 }
 interface Topic {
   id: number;
@@ -47,6 +64,7 @@ interface CourseBody {
   pages: Page[];
   assignments: Assignment[];
   topics: Topic[];
+  files: FileRow[];
 }
 interface CourseRow {
   id: number;
@@ -117,7 +135,7 @@ const course = (
   ...extra,
 });
 
-const EMPTY = (): CourseBody => ({ pages: [], assignments: [], topics: [] });
+const EMPTY = (): CourseBody => ({ pages: [], assignments: [], topics: [], files: [] });
 const sourceBody = (): CourseBody => ({
   pages: [
     {
@@ -146,7 +164,23 @@ const sourceBody = (): CourseBody => ({
       published: true,
       created_at: "2026-08-01T12:00:00Z",
     },
+    {
+      id: 602,
+      name: "Week 1 quiz",
+      description: "",
+      due_at: null,
+      published: true,
+      created_at: "2026-08-01T12:00:00Z",
+      quiz: true,
+    },
   ],
+  files: (
+    [
+      { id: 801, display_name: "clef.jpg", locked: false, hidden: false, folder: "Uploaded Media" },
+      { id: 802, display_name: "violin.jpg", locked: false, hidden: true, folder: "course files" },
+      { id: 803, display_name: "answers.pdf", locked: true, hidden: false, folder: "course files" },
+    ] satisfies Omit<FileRow, "created_at">[]
+  ).map((file) => ({ ...file, created_at: "2026-08-01T12:00:00Z" })),
   topics: [
     {
       id: 701,
@@ -206,6 +240,10 @@ export class CanvasTermHttp {
   confirmPath = (fileId: number) => `/api/v1/files/${fileId}/create_success`;
   /** Set to report every term's dates, and the courses' own, as null: a school whose terms have no teacher dates. */
   hideTermDates = false;
+  /** How long New Quizzes takes to bring a copied quiz in. Set it past any wait to make one stuck. */
+  quizMs = QUIZ_MS;
+  /** Set to answer a file write 200 and change nothing, as Canvas does with a setting it doesn't apply. */
+  inertFileWrites = false;
   readonly issues = [
     {
       id: 1,
@@ -228,6 +266,20 @@ export class CanvasTermHttp {
   }
   writeCount = (): number => this.requests.filter((line) => !line.startsWith("GET ")).length;
 
+  #assignmentJson({ quiz: _quiz, arrivesMs, ...assignment }: Assignment) {
+    const arriving = arrivesMs !== undefined && this.#now < arrivesMs;
+    return {
+      ...assignment,
+      published: assignment.published && !arriving,
+      workflow_state: arriving ? "duplicating" : assignment.published ? "published" : "unpublished",
+    };
+  }
+  #fileJson({ folder, ...file }: FileRow) {
+    return { ...file, hidden: file.hidden || HIDDEN_FOLDERS.has(folder) };
+  }
+  #fileAt(id: number): FileRow | undefined {
+    return this.courses.flatMap((row) => row.body.files).find((file) => file.id === id);
+  }
   #course(id: number): CourseRow | undefined {
     return this.courses.find((row) => row.id === id);
   }
@@ -282,7 +334,11 @@ export class CanvasTermHttp {
             ? null
             : `${shiftDate(assignment.due_at.slice(0, 10) as IsoDate, job.shift)}${assignment.due_at.slice(10)}`,
         created_at: created,
+        ...(assignment.quiz ? { arrivesMs: job.startedMs + JOB_MS + this.quizMs } : {}),
       })),
+    );
+    into.body.files.push(
+      ...from.body.files.map((file) => ({ ...file, id: ++this.#seq, created_at: created })),
     );
     into.body.topics.push(
       ...from.body.topics.map((topic) => ({
@@ -486,11 +542,18 @@ export class CanvasTermHttp {
       const found = body.pages.find((entry) => entry.page_id === Number(page[1]));
       return found ? json(found) : missing();
     }
-    if (rest === "/assignments") return json(body.assignments);
+    if (rest === "/assignments")
+      return json(body.assignments.map((entry) => this.#assignmentJson(entry)));
     const assignment = /^\/assignments\/(\d+)$/.exec(rest);
     if (assignment) {
       const found = body.assignments.find((entry) => entry.id === Number(assignment[1]));
-      return found ? json(found) : missing();
+      return found ? json(this.#assignmentJson(found)) : missing();
+    }
+    if (rest === "/files") return json(body.files.map((entry) => this.#fileJson(entry)));
+    const courseFile = /^\/files\/(\d+)$/.exec(rest);
+    if (courseFile) {
+      const found = body.files.find((entry) => entry.id === Number(courseFile[1]));
+      return found ? json(this.#fileJson(found)) : missing();
     }
     if (rest === "/discussion_topics") return json(body.topics);
     const topic = /^\/discussion_topics\/(\d+)$/.exec(rest);
@@ -498,7 +561,7 @@ export class CanvasTermHttp {
       const found = body.topics.find((entry) => entry.id === Number(topic[1]));
       return found ? json(found) : missing();
     }
-    if (rest === "/files" || rest === "/modules" || rest === "/external_tools") return json([]);
+    if (rest === "/modules" || rest === "/external_tools") return json([]);
     if (rest === "/content_migrations")
       // Newest first, as Canvas lists them.
       return json(
@@ -545,6 +608,16 @@ export class CanvasTermHttp {
   }
 
   #write(method: string, path: string, form: URLSearchParams): Response {
+    const fileId = /^\/files\/(\d+)$/.exec(path)?.[1];
+    if (fileId !== undefined) {
+      const file = this.#fileAt(Number(fileId));
+      if (method !== "PUT" || !file) return missing();
+      if (!this.inertFileWrites) {
+        if (form.has("locked")) file.locked = form.get("locked") === "true";
+        if (form.has("hidden")) file.hidden = form.get("hidden") === "true";
+      }
+      return json(this.#fileJson(file));
+    }
     const match = /^\/courses\/(\d+)(\/.*)?$/.exec(path);
     const row = match ? this.#course(Number(match[1])) : undefined;
     if (!match || !row) return missing();
@@ -588,6 +661,18 @@ export class CanvasTermHttp {
       found.body = form.get("wiki_page[body]") ?? found.body;
       if (form.get("wiki_page[published]") === "true") found.published = true;
       return json(found);
+    }
+    const assignment = /^\/assignments\/(\d+)$/.exec(rest);
+    const due =
+      assignment && row.body.assignments.find((entry) => entry.id === Number(assignment[1]));
+    if (method === "PUT" && due) {
+      const at = form.get("assignment[due_at]");
+      // Canvas's "fancy midnight": a due time of exactly 00:00 is stored as 23:59:59 the night before.
+      if (at !== null)
+        due.due_at = at.includes("T00:00:00")
+          ? new Date(Date.parse(at) - 1000).toISOString().replace(".000", "")
+          : at;
+      return json(this.#assignmentJson(due));
     }
     const topic = /^\/discussion_topics\/(\d+)$/.exec(rest);
     if (method === "DELETE" && topic) {

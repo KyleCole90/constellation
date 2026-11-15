@@ -868,6 +868,33 @@ const dismissAndUndo = async (t) => {
   await t.viewport(1440, 900);
 };
 
+/** Claude's summary links each drafted fix. One opens that fix's row in this setup thread, never another thread (#136). */
+const fixLinkStaysInSetup = async (t, code) => {
+  const links = `[...document.querySelectorAll('[data-testid="chat"] [data-testid="sources"] [data-source="change"]')]`;
+  await t.waitFor(`${links}.length > 0`, `${code}: Claude's summary links the drafted fixes`, WAIT);
+  const thread = await t.eval("location.pathname");
+  const title = await t.eval(`${links}.at(-1).querySelector("span").innerText.trim()`);
+  await t.eval(`${links}.at(-1).click()`);
+  const expanded = `document.querySelector('${id("finding-row")}:has(button[aria-expanded="true"])')`;
+  await t.waitFor(
+    `${expanded}?.innerText.includes(${JSON.stringify(title)})`,
+    `${code}: the "${title}" link opens that fix's row`,
+  );
+  t.assert(
+    (await t.eval("location.pathname")) === thread,
+    `${code}: the fix link stays in the setup thread`,
+    await t.eval("location.pathname"),
+  );
+  t.assert(
+    !/announcement/i.test(await t.eval(`document.querySelector("header").innerText`)),
+    `${code}: the fix link doesn't open an announcement thread`,
+    await t.eval(`document.querySelector("header").innerText`),
+  );
+  await shot(t, "fix-link-opens-row");
+  await t.click(`${id("finding-row")} button[aria-expanded="true"]`);
+  await t.waitFor(`!${expanded}`, `${code}: the fix's row closes again`);
+};
+
 const previousCourseFlow = async (t) => {
   const code = "ENG 101";
   t.assert((await t.eval(`location.pathname`)) !== "", "the app is running");
@@ -1113,6 +1140,7 @@ const previousCourseFlow = async (t) => {
       await t.has(id(`finding-group-${type}`)),
       `${code}: the review lists ${type} findings`,
     );
+  await fixLinkStaysInSetup(t, code);
 
   const afterCopy = await writesTo(t);
   t.assert(
