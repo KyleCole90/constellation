@@ -37,7 +37,7 @@ export const workLine = (content: ChangeContent, course: string): string | null 
     case "message":
       return `Message in ${course}`;
     case "announcement":
-      return content.title.trim() ? `Announcement to ${course}` : null;
+      return `Announcement to ${course}`;
     case "course-copy":
     case "item-set":
     case "text-fix":

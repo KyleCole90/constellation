@@ -81,7 +81,7 @@ describe("the line under a draft's name", () => {
     expect(workLine({ kind: "grade" } as ChangeContent, "HUM 150")).toBeNull();
   });
 
-  it("drops out when an untitled announcement's heading already says it", () => {
-    expect(workLine(announcement("  "), "HUM 150")).toBeNull();
+  it("stays while an announcement is untitled, so a title typed into the heading moves nothing below it", () => {
+    expect(workLine(announcement("  "), "HUM 150")).toBe("Announcement to HUM 150");
   });
 });

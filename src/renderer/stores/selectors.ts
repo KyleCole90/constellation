@@ -1102,6 +1102,29 @@ export const selectSchoolGap = (state: WorkspaceData): SchoolGap | null => {
     : null;
 };
 
+/**
+ * Courses the LMS leaves out of `courses()` because they're unpublished, but that are the teacher's from the moment a
+ * setup's copy is sent: no students and a term still ahead, yet they have content and take announcements. A shell
+ * the LMS stops offering (deleted, or started without being published) drops out.
+ */
+export const selectSetUpCourses = (state: WorkspaceData, school: SchoolId): readonly Course[] =>
+  (state.newCourses[school] ?? []).flatMap((shell): Course[] => {
+    const copy = state.setups[shell.ref]?.copy;
+    return copy && state.changes[copy]?.state.tag === "sent"
+      ? [
+          {
+            ref: shell.ref,
+            school: shell.school,
+            code: shell.code,
+            title: shell.title,
+            section: shell.section,
+            modality: shell.modality,
+            studentCount: shell.studentCount,
+          },
+        ]
+      : [];
+  });
+
 export interface SetupOffer {
   shell: CourseShell;
   school: School;
@@ -1120,18 +1143,21 @@ export const selectSetupOffers = memoByState(
     state.schools.flatMap((school) =>
       state.connections[school.id]?.status === "disconnected"
         ? []
-        : (state.newCourses[school.id] ?? []).map((shell) => {
-            const setup = state.setups[shell.ref];
-            return {
-              shell,
-              school,
-              thread: setup?.thread ?? null,
-              cancellable: setup ? canCancelSetup(setup, state.changes) : false,
-              words: setup
-                ? stageWords(stageOf(setup, state.changes, state.setupLive?.[shell.ref]))
-                : offerWords(shell),
-            };
-          }),
+        : (state.newCourses[school.id] ?? [])
+            // Once synced it is a course, listed with the others, and its setup thread sits under it.
+            .filter((shell) => !state.cache[school.id]?.courses.some((c) => c.ref === shell.ref))
+            .map((shell) => {
+              const setup = state.setups[shell.ref];
+              return {
+                shell,
+                school,
+                thread: setup?.thread ?? null,
+                cancellable: setup ? canCancelSetup(setup, state.changes) : false,
+                words: setup
+                  ? stageWords(stageOf(setup, state.changes, state.setupLive?.[shell.ref]))
+                  : offerWords(shell),
+              };
+            }),
     ),
 );
 

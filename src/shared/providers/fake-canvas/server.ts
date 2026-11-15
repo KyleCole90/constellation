@@ -770,6 +770,14 @@ export class FakeCanvasServer implements FaultLab {
     return this.#state.term.shells.find((shell) => shell.canvasId === courseId);
   }
 
+  /** As Canvas, an unpublished new-term course takes announcements too, ahead of its students. */
+  #announceable(ref: LmsRef<"course">): { school: SchoolId; code: string } | undefined {
+    return (
+      this.#state.courses.find((c) => c.ref === ref) ??
+      this.#state.term.shells.find((shell) => refs.course(shell.school, shell.canvasId) === ref)
+    );
+  }
+
   /** Any course a person can save as a template: a new-term course, or one already taught. */
   #courseRow(courseId: number): ShellRow | SourceRow | undefined {
     return (
@@ -1110,7 +1118,7 @@ export class FakeCanvasServer implements FaultLab {
         return student ? { school: student.school, target: `Message to ${student.name}` } : null;
       }
       case "announcement": {
-        const course = this.#state.courses.find((c) => c.ref === content.target);
+        const course = this.#announceable(content.target);
         return course ? { school: course.school, target: `Announcement in ${course.code}` } : null;
       }
       case "course-copy": {
@@ -1201,12 +1209,12 @@ export class FakeCanvasServer implements FaultLab {
         return;
       }
       case "announcement": {
-        const course = this.#state.courses.find((c) => c.ref === content.target);
+        const course = this.#announceable(content.target);
         if (!course) return;
         this.#state.announcements.push({
           ref: refs.announcement(course.school, id),
           school: course.school,
-          course: course.ref,
+          course: content.target,
           title: content.title,
           body: content.body,
           postedAt: at,

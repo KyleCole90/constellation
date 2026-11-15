@@ -436,40 +436,41 @@ function TitleInPlace({
   readOnly,
   record,
   onCommit,
-  onEmptied,
 }: {
   title: string;
   readOnly: boolean;
   record: ChangeRecord;
   onCommit: (text: string) => void;
-  onEmptied: () => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const cancelled = useRef(false);
   const byKey = useRef(false);
   const editControl = useRef<HTMLButtonElement>(null);
+  const field = useRef<HTMLInputElement>(null);
   const flash = useAgentFlash(title, record);
+  // Untitled, the heading is the Title field itself, so a commit swaps one line for one line and nothing below moves.
+  const untitled = !readOnly && !title.trim();
   useEffect(() => {
     if (draft !== null || !byKey.current) return;
     byKey.current = false;
-    editControl.current?.focus();
-  }, [draft]);
+    (untitled ? field : editControl).current?.focus();
+  }, [draft, untitled]);
   const settle = () => {
-    if (draft !== null && !cancelled.current && draft !== title) {
-      onCommit(draft);
-      if (byKey.current && !draft.trim()) onEmptied();
-    }
+    if (draft !== null && !cancelled.current && draft !== title) onCommit(draft);
     cancelled.current = false;
     setDraft(null);
   };
   useCommitOnLeave(settle);
-  if (draft !== null) {
+  if (draft !== null || untitled) {
+    const text = draft ?? title;
     return (
       <input
+        ref={field}
         aria-label="Title"
-        autoFocus
-        value={draft}
-        onFocus={(event) => event.currentTarget.setSelectionRange(draft.length, draft.length)}
+        placeholder="Add a title"
+        autoFocus={draft !== null}
+        value={text}
+        onFocus={(event) => event.currentTarget.setSelectionRange(text.length, text.length)}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={settle}
         onKeyDown={(event) => {
@@ -479,7 +480,7 @@ function TitleInPlace({
           byKey.current = true;
           event.currentTarget.blur();
         }}
-        className="-mx-1 block h-5 w-full rounded border border-input bg-background px-1 text-title outline-none focus:border-ring/60"
+        className="-mx-1 block h-5 w-full rounded border border-input bg-background px-1 text-title outline-none placeholder:text-muted-foreground focus:border-ring/60"
       />
     );
   }
@@ -1038,7 +1039,6 @@ function TextCard({
   const { record, summary } = view;
   const { content } = record;
   const [error, setError] = useState<string | null>(null);
-  const [focusTitle, setFocusTitle] = useState(false);
   const quoted = useWorkspace((state) =>
     quote && content.kind === "reply"
       ? (selectConversation(state, content.target)?.messages.at(-1) ?? null)
@@ -1049,19 +1049,19 @@ function TextCard({
   const label = TEXT_LABEL[content.kind];
   const commitTitle = (title: string) =>
     setError(editChange(record.id, { kind: "announcement", title }));
-  const titled = content.kind === "announcement" && content.title.trim() !== "";
+  const titleInHead =
+    content.kind === "announcement" && (summary.canEdit || content.title.trim() !== "");
   return (
     <>
       <CardHead
         view={view}
         name={
-          titled ? (
+          titleInHead ? (
             <TitleInPlace
               title={content.title}
               readOnly={!summary.canEdit}
               record={record}
               onCommit={commitTitle}
-              onEmptied={() => setFocusTitle(true)}
             />
           ) : undefined
         }
@@ -1072,20 +1072,6 @@ function TextCard({
           <br />
           {quoted.text}
         </blockquote>
-      )}
-      {content.kind === "announcement" && !titled && (
-        <div className="flex flex-col gap-1">
-          <span className="text-title text-foreground">Title</span>
-          <EditableText
-            label="Title"
-            multiline={false}
-            value={content.title}
-            readOnly={!summary.canEdit}
-            autoFocus={focusTitle}
-            record={record}
-            onCommit={commitTitle}
-          />
-        </div>
       )}
       {content.kind === "message" && (
         <div className="text-meta text-muted-foreground">Subject: {content.subject}</div>
