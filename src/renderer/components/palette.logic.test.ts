@@ -39,7 +39,7 @@ const connection = (id: string, status: ConnectionRecord["status"]): ConnectionR
   lastSyncedAt: null,
   syncError: null,
 });
-const noSchools = { schools: [], connections: {} };
+const demoSchool = { schools: [schoolNamed("lcc", "Lansing CC")], connections: {} };
 const thread: Thread & { toApprove: boolean } = {
   id: "t1" as ThreadId,
   school,
@@ -57,7 +57,7 @@ const submission = {
   workflow: "submitted",
 } as Submission;
 const entries = buildEntries({
-  ...noSchools,
+  ...demoSchool,
   threads: [thread],
   courses: [course],
   shells: [],
@@ -77,7 +77,7 @@ describe("filterEntries", () => {
     };
     const [hit, ...others] = filterEntries(
       buildEntries({
-        ...noSchools,
+        ...demoSchool,
         threads: [chat],
         courses: [course],
         shells: [],
@@ -117,7 +117,7 @@ describe("filterEntries", () => {
 
   it("the thread behind the inbox never shows up as a thread", () => {
     const withInbox = buildEntries({
-      ...noSchools,
+      ...demoSchool,
       threads: [{ ...thread, id: INBOX_THREAD, title: "Messages" }],
       courses: [],
       shells: [],
@@ -153,7 +153,7 @@ describe("filterEntries", () => {
         stateTarget: "s" as LmsRef<"course-state">,
       } satisfies CourseShell;
       const withShell = buildEntries({
-        ...noSchools,
+        ...demoSchool,
         threads: [],
         courses: [],
         shells: [shell],
@@ -173,7 +173,7 @@ describe("filterEntries", () => {
 
   it("caps each group, so a common word cannot bury the others", () => {
     const many = buildEntries({
-      ...noSchools,
+      ...demoSchool,
       threads: Array.from({ length: 20 }, (_, i) => ({ ...thread, id: `t${i}` as ThreadId })),
       courses: [course],
       shells: [],
@@ -222,7 +222,7 @@ describe("filterEntries", () => {
 
   it("a thread awaiting approval says so, and approve finds it", () => {
     const awaiting = buildEntries({
-      ...noSchools,
+      ...demoSchool,
       threads: [thread, { ...thread, id: "t2" as ThreadId, title: "Reminder", toApprove: true }],
       courses: [course],
       shells: [],
@@ -241,7 +241,7 @@ describe("filterEntries", () => {
 
   it("a whole word or word start outranks a match mid-word, within and across groups", () => {
     const ranked = buildEntries({
-      ...noSchools,
+      ...demoSchool,
       threads: [{ ...thread, title: "Notes on Ortizville" }],
       courses: [course],
       shells: [],
@@ -256,5 +256,46 @@ describe("filterEntries", () => {
       "Bo Shortiz",
       "Notes on Ortizville",
     ]);
+  });
+});
+
+describe("buildEntries for a real school", () => {
+  const real: School = { ...schoolNamed("uni", "State University"), provider: "canvas" };
+  const own = { ...thread, id: "t-own" as ThreadId, school: real.id, title: "Grade Lab 3" };
+  const chat = {
+    ...thread,
+    id: "t-chat" as ThreadId,
+    school: null,
+    course: null,
+    kind: "north-star-chat" as const,
+    title: "What's due this week?",
+  };
+  const shown = (schools: readonly School[]) =>
+    filterEntries(
+      buildEntries({
+        schools,
+        connections: {},
+        threads: [thread, own, chat],
+        courses: [],
+        shells: [],
+        students: [],
+        submissions: [],
+      }),
+      "",
+    ).map((entry) => entry.title);
+
+  it("lists only its own threads and offers no demo reset", () => {
+    expect(shown([real])).toEqual(expect.arrayContaining(["Grade Lab 3", "What's due this week?"]));
+    expect(shown([real])).not.toContain("Essay 2");
+    expect(shown([real])).not.toContain("Reset demo data");
+  });
+
+  it("beside a demo school, lists the demo's threads but still offers no reset, which would wipe the real token", () => {
+    expect(shown([real, schoolNamed("lcc", "Lansing CC")])).toContain("Essay 2");
+    expect(shown([real, schoolNamed("lcc", "Lansing CC")])).not.toContain("Reset demo data");
+  });
+
+  it("with only demo schools, offers the demo reset", () => {
+    expect(shown([schoolNamed("lcc", "Lansing CC")])).toContain("Reset demo data");
   });
 });
