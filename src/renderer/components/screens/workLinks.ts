@@ -26,6 +26,18 @@ const gradingThread = (assignment: Assignment): ThreadId | null => {
   return course && state.threadForWork(course, { kind: "grading", assignment: assignment.ref });
 };
 
+/** Setup's own changes (the copy, its fixes, publish and template) live in the course's setup thread. */
+const setupThread = (course: LmsRef<"course">): ThreadId | null => {
+  const state = store();
+  return (
+    state.setups[course]?.thread ??
+    Object.values(state.threads).find(
+      (thread) => thread.kind === "setup" && thread.course === course,
+    )?.id ??
+    null
+  );
+};
+
 /** Selecting a conversation reads it, and shows it from the bottom rather than where another one was left. */
 export const markInboxOpened = (conversation: LmsRef<"conversation">) => {
   store().setThreadUi(INBOX_THREAD, { current: conversation, panel: null, scrollTop: null });
@@ -147,29 +159,42 @@ export const useWorkLinks = () => {
       },
       change: (change: ChangeRecord, course: Course) => {
         const state = store();
-        if (change.content.kind === "reply") {
-          openInInbox(change.content.target);
-          void navigate({ to: "/inbox", search: { conversation: change.content.target } });
-          return;
-        }
         const { content } = change;
-        const assignment = selectAssignment(
-          state,
-          content.kind === "grade" || content.kind === "message"
-            ? (selectSubmission(state, content.target)?.assignment ?? null)
-            : null,
-        );
-        const thread = assignment
-          ? gradingThread(assignment)
-          : state.threadForWork(course, { kind: "announcement" });
-        if (!thread) return;
-        state.setThreadUi(thread, {
-          current: change.content.target,
-          queueOpen: false,
-          panel: null,
-        });
-        state.focusChange(thread, change.id);
-        toThread(thread);
+        switch (content.kind) {
+          case "reply":
+            openInInbox(content.target);
+            void navigate({ to: "/inbox", search: { conversation: content.target } });
+            return;
+          case "course-copy":
+          case "text-fix":
+          case "item-set": {
+            const thread = setupThread(course.ref);
+            if (!thread) return;
+            state.focusChange(thread, change.id);
+            toThread(thread);
+            return;
+          }
+          case "grade":
+          case "message":
+          case "announcement": {
+            const assignment =
+              content.kind === "announcement"
+                ? null
+                : selectAssignment(
+                    state,
+                    selectSubmission(state, content.target)?.assignment ?? null,
+                  );
+            const thread =
+              content.kind === "announcement"
+                ? state.threadForWork(course, { kind: "announcement" })
+                : assignment && gradingThread(assignment);
+            if (!thread) return;
+            state.setThreadUi(thread, { current: content.target, queueOpen: false, panel: null });
+            state.focusChange(thread, change.id);
+            toThread(thread);
+            return;
+          }
+        }
       },
       announcement: (course: Course) => {
         const state = store();
