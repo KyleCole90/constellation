@@ -29,6 +29,8 @@ export interface BenchSource {
   model: string;
   /** The startup-overhead guard's p50 limit, or null where it doesn't apply. */
   overheadLimitMs: number | null;
+  /** The first-try-validity guard's floor, as a percent of drafts. */
+  minValidPercent: number;
   /** What this source still needs before it can run, in words for the maintainer. Empty when it can run. */
   missing(env: Env): Promise<readonly string[]>;
   open(env: Env, meter: Meter): Promise<OpenSource>;
@@ -73,6 +75,7 @@ const apiKey: BenchSource = {
   id: "api-key",
   model: MODEL,
   overheadLimitMs: null,
+  minValidPercent: 100,
   missing: async (env) =>
     env["ANTHROPIC_API_KEY"] ? [] : ["ANTHROPIC_API_KEY, for the api-key source"],
   open: async (env, meter) => ({
@@ -115,6 +118,8 @@ const claudeCode: BenchSource = {
   id: "claude-code",
   model: MODEL,
   overheadLimitMs: 300,
+  // Kyle's call on 2026-11-15 (#82): 90% first-try valid is enough for Claude Code.
+  minValidPercent: 90,
   missing: async (env) => {
     const status = await claudeCodeFor(env).status();
     return status.installed && status.signedIn && !status.tooOld

@@ -53,6 +53,8 @@ export interface Run {
   claudeCodeVersion: string | null;
   /** The startup-overhead guard's p50 limit, or null where it doesn't apply (the API source). */
   overheadLimitMs: number | null;
+  /** The first-try-validity guard's floor, as a percent of drafts. */
+  minValidPercent: number;
   /** The source's weekly-limit utilization in percent, read before and after the class. Null for a source without one. */
   weekly: { before: number | null; after: number | null };
   drafts: readonly Draft[];
@@ -136,7 +138,12 @@ export const results = (run: Run, meta: Meta) => {
               pass: overheadP50 <= run.overheadLimitMs,
             },
       otherModelTokens: { tokens: otherTokens, pass: otherTokens === 0 },
-      firstTryValid: { valid, of: drafts.length, pass: valid === drafts.length },
+      firstTryValid: {
+        valid,
+        of: drafts.length,
+        minPercent: run.minValidPercent,
+        pass: valid * 100 >= run.minValidPercent * drafts.length,
+      },
     },
     translation: {
       weeklyLimitPercentPerClass: before === null || after === null ? null : after - before,

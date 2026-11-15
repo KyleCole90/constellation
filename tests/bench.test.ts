@@ -43,6 +43,7 @@ const run = (drafts: readonly Draft[], extra: Partial<Run> = {}): Run => ({
   model: OPUS,
   claudeCodeVersion: null,
   overheadLimitMs: null,
+  minValidPercent: 100,
   weekly: { before: null, after: null },
   drafts,
   ...extra,
@@ -128,19 +129,25 @@ describe("the guards", () => {
     ).toEqual({ applies: false, p50Ms: 200 });
   });
 
-  it("passes first-try validity only when every draft was valid", () => {
+  it("passes first-try validity only at or above the source's floor", () => {
     const good = draft("text", { input: 1, output: 1 });
     const bad = { ...good, valid: false, problems: ["no grade proposed"] };
     expect(results(run([good, good]), META).guards.firstTryValid).toEqual({
       valid: 2,
       of: 2,
+      minPercent: 100,
       pass: true,
     });
-    expect(results(run([good, bad]), META).guards.firstTryValid).toEqual({
+    expect(results(run([good, bad]), META).guards.firstTryValid).toMatchObject({
       valid: 1,
-      of: 2,
       pass: false,
     });
+    const tenth = [...Array<Draft>(9).fill(good), bad];
+    expect(results(run(tenth, { minValidPercent: 90 }), META).guards.firstTryValid.pass).toBe(true);
+    expect(
+      results(run([...tenth.slice(1), bad], { minValidPercent: 90 }), META).guards.firstTryValid
+        .pass,
+    ).toBe(false);
   });
 });
 
