@@ -229,17 +229,38 @@ describe("settledText", () => {
       ),
     ).toBe("I drafted a message asking Natalie for a working link.");
   });
+
+  it("drops a line about reviewing before sending (#81, walk 12)", () => {
+    expect(settledText("I drafted a message to Shelly. You can review it before sending.")).toBe(
+      "I drafted a message to Shelly.",
+    );
+  });
 });
 
 describe("liveReplies", () => {
-  it("leaves out a chip that repeats an action the app shows as a button (#81, walk 11)", () => {
-    const message: ThreadMessage = {
-      type: "agent",
-      text: "Recorded: be a bit stricter.",
-      at: at(1),
-      replies: ["Clear the stricter setting", "Approve and send it", "Why that score?"],
-    };
-    expect(liveReplies(message, [message])).toEqual(["Why that score?"]);
+  const offering = (replies: readonly string[]): ThreadMessage => ({
+    type: "agent",
+    text: "I drafted 15 out of 20 for Shelly.",
+    at: at(1),
+    replies,
+  });
+
+  it("offers the latest chat message's chips", () => {
+    const message = offering(["What's next to grade?"]);
+    expect(liveReplies(message, [message])).toEqual(["What's next to grade?"]);
+  });
+
+  it("offers no chip on a message about a draft, sent or not, since the card and the app's own chips act on it (#81, walk 12)", () => {
+    const grade = filed(
+      offering(["Make it 16 to match the current grade", "What would earn full marks?"]),
+      "c1",
+    );
+    const message = filed(
+      offering(["Make the message shorter", "Add a deadline for resubmitting"]),
+      "c2",
+    );
+    expect(liveReplies(grade, [grade])).toEqual([]);
+    expect(liveReplies(message, [message])).toEqual([]);
   });
 });
 
