@@ -1747,6 +1747,27 @@ describe("what a Next up row promises", () => {
   });
 });
 
+describe("a grading thread's opening counts the roster", () => {
+  it("leaves out a concluded student and the Test Student, as the list does (#151)", async () => {
+    const rig = await connected();
+    const thread = rig.state().threads["t-e101-essay2" as ThreadId];
+    const assignment = thread?.assignment;
+    if (!assignment) throw new Error("No assignment.");
+    const open = selectQueueRows(rig.state(), assignment).filter((row) => row.open).length;
+    const roster = Object.values(rig.state().cache)
+      .flatMap((cache) => cache.students)
+      .filter((student) => student.course === thread.course).length;
+    const text = thread.messages
+      .map((message) =>
+        message.type === "work" ? message.lines.join(" ") : "text" in message ? message.text : "",
+      )
+      .join(" ");
+    expect(text).toContain(`Read ${roster} submission records`);
+    expect(text).toContain(`**${open}** still need a grade`);
+    expect(text).not.toMatch(/Marcus Bell|Test Student/);
+  });
+});
+
 describe("who hasn't turned work in", () => {
   const submissionsOf = (rig: StoreRig) =>
     Object.values(rig.state().cache).flatMap((cache) => cache.submissions);

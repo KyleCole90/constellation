@@ -2017,7 +2017,7 @@ const overview = async (t) => {
   const course = await lms(t, `lms.courses.find((c) => c.code === "ENG 101").ref`);
   const toGrade = await lms(
     t,
-    `lms.submissions.filter((s) => s.course === ${JSON.stringify(course)} && s.workflow === "submitted").length`,
+    `lms.submissions.filter((s) => s.course === ${JSON.stringify(course)} && s.workflow === "submitted" && lms.students.some((st) => st.ref === s.student && st.course === s.course)).length`,
   );
   t.assert(
     (await t.text('[data-stat="to-grade"]')).includes(String(toGrade)),
@@ -2149,7 +2149,7 @@ const undatedWork = async (t) => {
   );
   const waiting = await lms(
     t,
-    `lms.assignments.filter((a) => a.course === ${JSON.stringify(course)}).map((a) => { const inbox = lms.submissions.filter((s) => s.assignment === a.ref && s.workflow === "submitted"); return { title: a.title, toGrade: inbox.length, first: inbox.map((s) => s.submittedAt).sort()[0] }; }).filter((a) => a.toGrade > 0).sort((a, b) => a.first.localeCompare(b.first)).map((a) => a.title + "|" + a.toGrade)`,
+    `lms.assignments.filter((a) => a.course === ${JSON.stringify(course)}).map((a) => { const inbox = lms.submissions.filter((s) => s.assignment === a.ref && s.workflow === "submitted" && lms.students.some((st) => st.ref === s.student && st.course === s.course)); return { title: a.title, toGrade: inbox.length, first: inbox.map((s) => s.submittedAt).sort()[0] }; }).filter((a) => a.toGrade > 0).sort((a, b) => a.first.localeCompare(b.first)).map((a) => a.title + "|" + a.toGrade)`,
   );
   const listed = await t.eval(
     `[...document.querySelectorAll('[data-section="needs-you"] [data-row] button')].map((button) => [button.children[1]?.textContent, button.children[2]?.textContent.match(/^([0-9]+) to grade$/)?.[1]]).filter(([, toGrade]) => toGrade).map(([title, toGrade]) => title + "|" + toGrade)`,

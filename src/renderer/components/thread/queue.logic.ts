@@ -219,13 +219,15 @@ export const liveFilter = (rows: readonly WorkRow[], filter: QueueFilter): Queue
     ? filter
     : "all";
 
-/** Grades and requests to resubmit both take work off the list, but a teacher reads "sent" as grades, so a grading list counts each by name. */
+/** Grades and requests to resubmit both take work off the list, but a teacher reads "sent" as grades, so a grading list counts each by name. Missing work is missing, never to grade (#151). */
 export const queueProgress = (
   rows: readonly WorkRow[],
   currentKey: string | null = null,
 ): { label: string; place: string | null; done: string; fraction: number } => {
   const done = rows.filter((row) => !row.open).length;
   const asked = rows.filter((row) => !row.open && row.asked !== null).length;
+  const missing = rows.filter((row) => row.open && row.missing).length;
+  const toGrade = rows.length - done - missing;
   const index = rows.findIndex((row) => row.key === currentKey);
   const grading = rows.some((row) => row.kind === "submission");
   return {
@@ -233,7 +235,8 @@ export const queueProgress = (
       ? [
           `${done - asked} graded`,
           asked > 0 && `${asked} asked to resubmit`,
-          `${rows.length - done} to grade`,
+          missing > 0 && `${missing} missing`,
+          (toGrade > 0 || missing === 0) && `${toGrade} to grade`,
         ]
           .filter(Boolean)
           .join(" · ")

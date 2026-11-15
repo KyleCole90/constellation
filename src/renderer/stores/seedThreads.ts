@@ -54,9 +54,11 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
     for (const thread of course.threads) {
       const updatedAt = at(ageMinutes(thread.time));
       const assignmentIndex = course.assignments.findIndex((a) => a.id === thread.assignmentId);
-      const assignment = course.assignments[assignmentIndex];
+      const found = course.assignments[assignmentIndex];
       let messages: readonly ThreadMessage[] = [];
-      if (thread.kind === "grading" && assignment) {
+      if (thread.kind === "grading" && found) {
+        // Off-roster students' statuses trail the roster's, and no count holds them (#151).
+        const assignment = { ...found, statuses: found.statuses.slice(0, course.students.length) };
         const size = assignment.statuses.length;
         const notes = [
           countOf(assignment, "L") && `${countOf(assignment, "L")} late`,
@@ -110,7 +112,7 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
       }
       const subjectOf = (): ThreadSubject => {
         if (thread.kind !== "grading") return { kind: thread.kind, school, course: courseRef };
-        if (!assignment)
+        if (!found)
           throw new Error(`Seed thread ${thread.id} grades an assignment its course doesn't have.`);
         return {
           kind: "grading",
@@ -119,7 +121,7 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
           assignment: refs.assignment(
             school,
             course.canvasId,
-            assignmentCanvasId(assignment, courseIndex, assignmentIndex),
+            assignmentCanvasId(found, courseIndex, assignmentIndex),
           ),
         };
       };

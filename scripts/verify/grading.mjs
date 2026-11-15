@@ -298,6 +298,12 @@ const pinnedQueue = async (t) => {
     "with nothing open the list offers Start grading",
   );
   await t.click("All", { within: QUEUE });
+  const roster = await t.text(QUEUE);
+  t.assert(
+    roster.includes("0 graded · 32 to grade") && !/Marcus Bell|Test Student/.test(roster),
+    "the grading list counts only the roster: no concluded student, no Test Student (#151)",
+    roster,
+  );
 
   await openStudent(t, "Maya Ortiz", "Essay 2");
   t.assert(
@@ -1678,7 +1684,7 @@ const keyboardAndClear = async (t) => {
   );
   const summary = await t.text('[data-testid="due-summary"]');
   const inLms = await t.eval(
-    `(async () => JSON.parse(await window.__faultLab.stored()).submissions.filter((s) => s.workflow === "submitted").length)()`,
+    `(async () => { const lms = JSON.parse(await window.__faultLab.stored()); return lms.submissions.filter((s) => s.workflow === "submitted" && lms.students.some((st) => st.ref === s.student && st.course === s.course)).length; })()`,
   );
   t.assert(
     (await t.has('[data-connection="syncing"]')) &&
