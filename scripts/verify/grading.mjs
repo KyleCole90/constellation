@@ -2112,6 +2112,44 @@ const discard = async (t) => {
   await t.shot("discard-done");
 };
 
+/** A teacher types into Claude's comment and clicks Approve: one click commits the edit and approves it (#116). */
+const editThenApprove = async (t) => {
+  const { width, height } = t.size;
+  await t.goto("/threads/t-queue");
+  await expandQueue(t);
+  await t.click("Arjun Venkataraghavan-Subramaniam Krishnamurthy", { within: LIST });
+  await draftWithClaude(t);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(CARD)})`,
+    "edit then approve: a draft opens",
+    15_000,
+  );
+  await settled(t, "edit then approve: agent finished");
+  // The walker's window, where a longer status label rewrapped this name onto one more line.
+  await t.viewport(1280, 788);
+  await t.click(`${CARD} [data-edit-field]`);
+  await t.eval(`document.activeElement.setSelectionRange(1e6, 1e6)`);
+  await t.type(" Nice work.");
+  await t.click(`${CARD} [data-approve]`);
+  await t.waitFor(
+    `document.querySelector('${CARD} [data-undo-approval]')`,
+    "edit then approve: the first click on Approve approves the edited draft (#116)",
+  );
+  t.assert(
+    (await t.eval(`document.querySelector('${CARD} [data-edit-field]')?.value ?? ""`)).endsWith(
+      " Nice work.",
+    ),
+    "edit then approve: the approved draft keeps the edit",
+  );
+  await t.shot("edit-then-approve");
+  await t.click("Discard", { within: '[data-testid="card-actions"]' });
+  await t.waitFor(
+    `!document.querySelector(${JSON.stringify(CARD)})`,
+    "edit then approve: Discard puts the student back undrafted for the steps after",
+  );
+  await t.viewport(width, height);
+};
+
 const replyCard = (t) =>
   t.waitFor(`document.querySelector(${JSON.stringify(CARD)})`, "a reply draft opens", 15_000);
 
@@ -2716,6 +2754,7 @@ export const run = async (t) => {
   await replies(t);
   await keyboardAndClear(t);
   await discard(t);
+  await editThenApprove(t);
   await replyDiscard(t);
   await handFormBackToClaude(t);
   await handFormTypedBackToClaude(t);
