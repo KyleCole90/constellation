@@ -734,15 +734,10 @@ const sameWords = (a: ChangeContent, b: ChangeContent): boolean => {
  * An alpha install of the desktop app could add demo schools, and seeded its threads. The app has no demo now, so boot
  * drops them and every seeded message, and the vault check after it forgets the demo schools' tokens.
  */
+type DemoParts = "schools" | "connections" | "cache" | "newCourses" | "changes" | "threads";
 const withoutDemo = (
-  data: Pick<
-    WorkspaceData,
-    "schools" | "connections" | "cache" | "newCourses" | "changes" | "threads"
-  >,
-): Pick<
-  WorkspaceData,
-  "schools" | "connections" | "cache" | "newCourses" | "changes" | "threads"
-> => {
+  data: Pick<WorkspaceData, DemoParts | "onboarding">,
+): Pick<WorkspaceData, DemoParts | "onboarding"> => {
   const demo: ReadonlySet<string> = new Set(
     data.schools.filter(isDemoSchool).map((school) => school.id),
   );
@@ -753,8 +748,11 @@ const withoutDemo = (
     Object.fromEntries(
       Object.entries(record).filter(([key, value]) => !demo.has(school(key, value))),
     );
+  const schools = data.schools.filter((school) => !demo.has(school.id));
   return {
-    schools: data.schools.filter((school) => !demo.has(school.id)),
+    schools,
+    // A workspace of only demo schools starts over at Welcome, rather than finished with no school.
+    onboarding: demo.size > 0 && schools.length === 0 ? "welcome" : data.onboarding,
     connections: kept(data.connections, (key) => key),
     cache: kept(data.cache, (key) => key),
     newCourses: kept(data.newCourses, (key) => key),

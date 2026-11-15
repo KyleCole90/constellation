@@ -385,6 +385,23 @@ describe("the teacher's desktop app, which has no demo", () => {
   });
 });
 
+describe("an earlier desktop install of only demo schools", () => {
+  it("starts over at Welcome with no school", async () => {
+    const first = await connected();
+    first.state().setOnboarding("done");
+    const second = await makeStoreRig({
+      storage: first.storage,
+      vault: first.vault,
+      clock: first.clock,
+      noDemo: true,
+    });
+    await second.state().boot();
+    expect(second.state().schools).toEqual([]);
+    expect(second.state().onboarding).toBe("welcome");
+    expect(await second.vault.keys()).toEqual([]);
+  });
+});
+
 describe("a second tab", () => {
   const twoTabs = async () => {
     let notify = () => undefined as void;
