@@ -230,9 +230,12 @@ const hasOpenChange = (scope: AgentScope, target: string): boolean =>
       change.state.tag !== "discarded",
   );
 
-const toGrade = (scope: AgentScope, assignment: Assignment): number =>
-  scope.submissions.filter((s) => s.assignment === assignment.ref && s.workflow === "submitted")
-    .length;
+/** The work the app counts as to grade, so every count here matches the badge. Asked-back work waits on the student. */
+const waitingToGrade = ({ scope, northStar }: Pick<Ask, "scope" | "northStar">) =>
+  scope.submissions.filter((s) => northStar.grading.toGrade.includes(s.ref));
+
+const toGrade = (ask: Ask, assignment: Assignment): number =>
+  waitingToGrade(ask).filter((s) => s.assignment === assignment.ref).length;
 
 const lastAgentText = (ask: Ask): string | undefined =>
   ask.history.findLast((message) => message.role === "agent")?.text;
@@ -425,7 +428,7 @@ function* startGrading(ask: Ask): Generator<AgentEffect, void> {
   const hits = titledAssignments(ask);
   if (hits.length === 0) {
     const busiest = [...scope.assignments]
-      .sort((a, b) => toGrade(scope, b) - toGrade(scope, a))
+      .sort((a, b) => toGrade(ask, b) - toGrade(ask, a))
       .map((a) => `Start grading ${a.shortTitle}`);
     yield question(WHICH_ASSIGNMENT, [...new Set(busiest)].slice(0, BUSIEST_SHOWN));
     return;
@@ -435,7 +438,7 @@ function* startGrading(ask: Ask): Generator<AgentEffect, void> {
     const course = scope.courses.find((c) => c.ref === assignment.course);
     if (!course) continue;
     handed.push(course);
-    const open = toGrade(scope, assignment);
+    const open = toGrade(ask, assignment);
     yield handoff(
       course,
       { kind: "grading", assignment: assignment.ref },
@@ -529,13 +532,10 @@ function* whatsDue({ scope, northStar }: Ask): Generator<AgentEffect, void> {
   ]);
 }
 
-function* gradingSummary({ scope }: Ask): Generator<AgentEffect, void> {
-  const counts = scope.courses
-    .map((course) => ({
-      course,
-      open: scope.submissions.filter((s) => s.course === course.ref && s.workflow === "submitted")
-        .length,
-    }))
+function* gradingSummary(ask: Ask): Generator<AgentEffect, void> {
+  const waiting = waitingToGrade(ask);
+  const counts = ask.scope.courses
+    .map((course) => ({ course, open: waiting.filter((s) => s.course === course.ref).length }))
     .filter((entry) => entry.open > 0);
   const total = counts.reduce((sum, entry) => sum + entry.open, 0);
   if (total === 0) {
@@ -658,7 +658,7 @@ const searchable = ({ scope, northStar }: Ask, facets: readonly string[]): reado
     .filter((first, index, all) => all.findIndex((s) => s.student === first.student) === index)
     .map(({ student, studentName, course }): Found => {
       const waiting = scope.submissions.find(
-        (s) => s.student === student && s.workflow === "submitted",
+        (s) => s.student === student && northStar.grading.toGrade.includes(s.ref),
       );
       const code = codeOf(scope, course);
       return {

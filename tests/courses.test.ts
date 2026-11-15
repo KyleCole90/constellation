@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { filterInbox } from "~/renderer/components/screens/inbox.logic";
+import { planWork } from "~/renderer/components/screens/due.logic";
+import { filterInbox, statusCount } from "~/renderer/components/screens/inbox.logic";
 import { fromInboxRows } from "~/renderer/components/thread/queue.logic";
 import type { ChangeId, LmsRef, ThreadId } from "~/shared/domain/ids";
 import { LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
-import { INBOX_THREAD, selectInboxRows, selectQueueRows } from "~/renderer/stores/selectors";
+import {
+  INBOX_THREAD,
+  selectDueExtras,
+  selectInboxRows,
+  selectQueueRows,
+  selectWhatsDue,
+  selectWorkStages,
+} from "~/renderer/stores/selectors";
 
 import { clickWitness } from "./fixtures/changes";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
@@ -133,6 +141,32 @@ describe("reading a conversation locally", () => {
     rig.state().setConversationRead(conversation.ref, false);
     await rig.clock.run(rig.state().syncSchool(conversation.school));
     expect(inboxRow(rig, "Wren Calloway").conversation.unread).toBe(true);
+  });
+});
+
+describe("What's due and Messages count the same replies (#110)", () => {
+  const counts = (rig: StoreRig) => {
+    const plan = planWork({
+      groups: selectWhatsDue(rig.state(), rig.clock.now()),
+      extras: selectDueExtras(rig.state()),
+      stages: selectWorkStages(rig.state()),
+      expired: [],
+      now: rig.clock.now(),
+    });
+    return {
+      due: plan.totals.needsReply,
+      messages: statusCount(selectInboxRows(rig.state()), "needs-reply"),
+      steps: plan.steps.some((step) => step.title.includes("Wren Calloway")),
+    };
+  };
+
+  it("a message read but not answered still needs a reply on both screens", async () => {
+    const rig = await connected();
+    const before = counts(rig);
+    expect(before.due).toBe(before.messages);
+    rig.state().setConversationRead(inboxRow(rig, "Wren Calloway").conversation.ref, true);
+    expect(counts(rig)).toEqual(before);
+    expect(counts(rig).steps).toBe(true);
   });
 });
 

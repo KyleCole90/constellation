@@ -130,6 +130,7 @@ import {
   selectWhatsDue,
   selectWorkStages,
   selectCourseGrades,
+  selectGradingRefs,
 } from "./selectors";
 import { createSetupActions, type SetupActions, type SetupOptions } from "./setup";
 import type {
@@ -2085,6 +2086,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                       now: nowIso(),
                       next: nextWorkOf(get(), get().now()),
                       grades: courses.map((course) => selectCourseGrades(get(), course.ref)),
+                      grading: selectGradingRefs(get()),
                     },
                   }
                 : null;

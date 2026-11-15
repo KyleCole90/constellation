@@ -116,6 +116,7 @@ const scopeOf = (rig: StoreRig, over: Partial<AgentScope> = {}): AgentScope => (
     now: "2026-10-30T15:42:00.000Z" as IsoTime,
     next: [],
     grades: [],
+    grading: { toGrade: [], asked: [] },
   },
   ...over,
 });

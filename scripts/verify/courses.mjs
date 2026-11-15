@@ -99,6 +99,29 @@ const unreadInSidebar = async (t) => {
   return Number(text.match(/(\d+) unread/)?.[1] ?? 0);
 };
 
+/** What's due's summary counts the replies Messages' Needs reply chip counts, read or not (#110). Leaves What's due open. */
+export const repliesAgree = async (t, label) => {
+  const status = '[data-testid="inbox-list"] [aria-label="Filter by status"]';
+  await t.click("Messages", { within: SIDEBAR });
+  await t.waitFor(`document.querySelector(${JSON.stringify(status)})`, `${label}: Messages opens`);
+  const chip = await t.eval(
+    `[...document.querySelectorAll(${JSON.stringify(`${status} button`)})].map((b) => b.innerText.replace(/\\s+/g, " ").trim()).find((text) => text.startsWith("Needs reply"))`,
+  );
+  const needsReply = Number(chip?.split(" ").at(-1));
+  await t.click("What's due", { within: SIDEBAR });
+  await t.waitFor(
+    `document.querySelector('[data-testid="due-summary"]')`,
+    `${label}: What's due opens`,
+  );
+  const summary = (await t.text('[data-testid="due-summary"]')).trim();
+  t.assert(
+    summary.includes(`, ${needsReply} message${needsReply === 1 ? "" : "s"} needing a reply,`),
+    `${label}: What's due counts the ${needsReply} Messages says need a reply`,
+    JSON.stringify({ chip, summary }),
+  );
+  return { needsReply, summary };
+};
+
 const goCourse = async (t, code) => {
   await t.click(code, { within: SIDEBAR });
   await t.waitFor(
@@ -256,17 +279,13 @@ const whatsDue = async (t) => {
     `document.querySelector('[data-testid="due-summary"]')`,
     "What's due opens from the sidebar",
   );
-  const summary = await t.text('[data-testid="due-summary"]');
+  const { summary } = await repliesAgree(t, "What's due");
   t.assert(
-    /^\d+ submissions? to grade, \d+ unread messages?, \d+ unsent announcements?\.$/.test(
-      summary.trim(),
+    /^\d+ submissions? to grade, \d+ messages? needing a reply, \d+ unsent announcements?\.$/.test(
+      summary,
     ),
     "the summary is one line",
     summary,
-  );
-  t.assert(
-    new RegExp(`${await unreadInSidebar(t)} unread`).test(summary),
-    "the summary and the sidebar agree on unread",
   );
   const groups = await t.eval(
     `[...document.querySelectorAll('[data-due-group] h2')].map((h) => h.innerText)`,

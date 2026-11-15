@@ -1,4 +1,5 @@
 import type { Agent, AgentScope } from "~/shared/agent/agent";
+import type { Submission } from "~/shared/domain/lms";
 import { OFFLINE_REASON, isOnline } from "~/renderer/desktop";
 import type { Bridge } from "~/shared/ipc";
 
@@ -24,19 +25,43 @@ const withChange = (raw: unknown, scope: AgentScope): unknown => {
 
 /**
  * North Star's scope holds every record of the term, which the parser and the rules agent's search still use. Claude
- * reads only the work that waits on the teacher, without bodies, and whether each assignment has a rubric, not its
- * criteria; reading or grading one is a handoff to a course thread. Grades come as the gradebook's totals instead.
+ * reads only the work still open, without bodies, each marked with what it waits on, and each course's to-grade count
+ * as the badge shows it, so its headline can't count asked-back work. It sees whether each assignment has a rubric,
+ * not its criteria; reading or grading one is a handoff to a course thread. Grades come as the gradebook's totals.
  */
-const forClaude = (scope: AgentScope): unknown =>
-  scope.northStar
-    ? {
-        ...scope,
-        submissions: scope.submissions
-          .filter((s) => s.workflow === "submitted" || s.workflow === "missing")
-          .map(({ body: _body, ...rest }) => rest),
-        assignments: scope.assignments.map((a) => ({ ...a, rubric: a.rubric !== null })),
-      }
-    : scope;
+const forClaude = (scope: AgentScope): unknown => {
+  if (!scope.northStar) return scope;
+  const toGrade = new Set<string>(scope.northStar.grading.toGrade);
+  const asked = new Set<string>(scope.northStar.grading.asked);
+  const waitingOn = (s: Pick<Submission, "ref" | "workflow">) =>
+    toGrade.has(s.ref)
+      ? "to grade"
+      : asked.has(s.ref)
+        ? "asked to resubmit"
+        : s.workflow === "missing"
+          ? "missing"
+          : null;
+  const submissions = scope.submissions.flatMap(({ body: _body, ...rest }) => {
+    const waiting = waitingOn(rest);
+    return waiting ? [{ ...rest, waiting }] : [];
+  });
+  return {
+    ...scope,
+    submissions,
+    assignments: scope.assignments.map((a) => ({ ...a, rubric: a.rubric !== null })),
+    northStar: {
+      ...scope.northStar,
+      grading: scope.courses.map((course) => {
+        const mine = submissions.filter((s) => s.course === course.ref);
+        return {
+          course: course.ref,
+          toGrade: mine.filter((s) => s.waiting === "to grade").length,
+          askedToResubmit: mine.filter((s) => s.waiting === "asked to resubmit").length,
+        };
+      }),
+    },
+  };
+};
 
 /**
  * The desktop app's agent: Claude, run in main over `agent.run` with the key from main's vault. Everything it yields

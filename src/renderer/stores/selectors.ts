@@ -264,12 +264,19 @@ const GROUPS: readonly { key: DueGroup["key"]; label: string; holds: (days: numb
     { key: "later", label: "Later", holds: (days) => days > WEEK_AHEAD },
   ];
 
-const dueItems = (
-  state: WorkspaceData,
-  today: number,
-): { dated: readonly DatedItem[]; undated: readonly DueItem[] } => {
-  const dated: DatedItem[] = [];
-  const undated: { item: DueItem; firstIn: string }[] = [];
+interface AssignmentWork {
+  assignment: Assignment;
+  course: Course;
+  school: School;
+  submissions: readonly Submission[];
+  turnedIn: readonly Submission[];
+  /** Turned in with no grade sent: to grade, or, once `asked` is set, waiting on the student to resubmit. */
+  ungraded: readonly { s: Submission; asked: IsoTime | null }[];
+}
+
+/** Every to-grade count, on any screen or in North Star's scope, reads its work from here. */
+const assignmentWork = memoByState((state: WorkspaceData): readonly AssignmentWork[] => {
+  const work: AssignmentWork[] = [];
   const byTarget = changesByTarget(state);
   const messages = messagesOf(state);
   for (const cache of caches(state)) {
@@ -288,24 +295,50 @@ const dueItems = (
           ? []
           : [{ s, asked: askedAt(s, change, messages, cache, assignment) }];
       });
-      const waiting = ungraded.filter((entry) => entry.asked === null).map((entry) => entry.s);
-      const counts = {
-        assignment,
-        course,
-        school,
-        toGrade: waiting.length,
-        late: waiting.filter((s) => s.lateDays > 0).length,
-        submitted: turnedIn.length,
-        graded: turnedIn.length - ungraded.length,
-        missing: submissions.filter((s) => s.workflow === "missing").length,
-        total: submissions.length,
-      };
-      if (assignment.dueAt) {
-        dated.push({ ...counts, days: Math.round((startOfDay(dueMs(assignment)) - today) / DAY) });
-      } else {
-        const firstIn = waiting.flatMap((s) => s.submittedAt ?? []).sort()[0] ?? "";
-        undated.push({ item: { ...counts, days: null }, firstIn });
-      }
+      work.push({ assignment, course, school, submissions, turnedIn, ungraded });
+    }
+  }
+  return work;
+});
+
+/** The submissions the To grade tile, What's due and the badge count, and the ones asked back, which wait on the student. */
+export const selectGradingRefs = memoByState(
+  (
+    state: WorkspaceData,
+  ): { toGrade: readonly LmsRef<"submission">[]; asked: readonly LmsRef<"submission">[] } => {
+    const ungraded = assignmentWork(state).flatMap((work) => work.ungraded);
+    return {
+      toGrade: ungraded.filter((entry) => entry.asked === null).map((entry) => entry.s.ref),
+      asked: ungraded.filter((entry) => entry.asked !== null).map((entry) => entry.s.ref),
+    };
+  },
+);
+
+const dueItems = (
+  state: WorkspaceData,
+  today: number,
+): { dated: readonly DatedItem[]; undated: readonly DueItem[] } => {
+  const dated: DatedItem[] = [];
+  const undated: { item: DueItem; firstIn: string }[] = [];
+  for (const work of assignmentWork(state)) {
+    const { assignment, course, school, submissions, turnedIn, ungraded } = work;
+    const waiting = ungraded.filter((entry) => entry.asked === null).map((entry) => entry.s);
+    const counts = {
+      assignment,
+      course,
+      school,
+      toGrade: waiting.length,
+      late: waiting.filter((s) => s.lateDays > 0).length,
+      submitted: turnedIn.length,
+      graded: turnedIn.length - ungraded.length,
+      missing: submissions.filter((s) => s.workflow === "missing").length,
+      total: submissions.length,
+    };
+    if (assignment.dueAt) {
+      dated.push({ ...counts, days: Math.round((startOfDay(dueMs(assignment)) - today) / DAY) });
+    } else {
+      const firstIn = waiting.flatMap((s) => s.submittedAt ?? []).sort()[0] ?? "";
+      undated.push({ item: { ...counts, days: null }, firstIn });
     }
   }
   dated.sort((a, b) => dueMs(a.assignment) - dueMs(b.assignment));
@@ -652,6 +685,10 @@ const changesOfThread = (state: WorkspaceData, thread: Thread): readonly ChangeR
 export const awaitsYou = (row: Pick<InboxRow, "summary" | "last">): boolean =>
   row.summary?.sentAt == null && row.last?.mine !== true;
 
+/** The student wrote last and no reply is under way. Messages' Needs reply and What's due count this, read or not. */
+export const needsReply = (row: Pick<InboxRow, "summary" | "last">): boolean =>
+  row.last?.mine === false && (row.summary === null || row.summary.sentAt !== null);
+
 export const selectThreadName = memoByState((state: WorkspaceData, id: ThreadId): string => {
   const thread = state.threads[id];
   if (!thread) return "";
@@ -790,7 +827,8 @@ export interface DueExtras {
     status: ThreadStatus;
     drafted: boolean;
   }[];
-  unread: readonly InboxRow[];
+  /** The student wrote last and no reply has gone out, including one drafted and waiting on you. */
+  replies: readonly InboxRow[];
 }
 
 export const selectDueExtras = memoByState((state: WorkspaceData): DueExtras => {
@@ -812,7 +850,10 @@ export const selectDueExtras = memoByState((state: WorkspaceData): DueExtras => 
         ]
       : [];
   });
-  return { drafts, unread: selectInboxRows(state).filter((row) => row.conversation.unread) };
+  return {
+    drafts,
+    replies: selectInboxRows(state).filter((row) => row.last !== null && awaitsYou(row)),
+  };
 });
 
 export type WorkStage = "stuck" | "review";

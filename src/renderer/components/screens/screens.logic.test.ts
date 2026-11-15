@@ -55,7 +55,7 @@ const groups: readonly DueGroup[] = [
 ];
 const extras = {
   drafts: [{ school: lcc }, { school: rsu }],
-  unread: [{ school: lcc }, { school: lcc }, { school: rsu }],
+  replies: [{ school: lcc }, { school: lcc }, { school: rsu }],
 } as unknown as DueExtras;
 
 describe("the work plan", () => {
@@ -86,7 +86,7 @@ describe("the work plan", () => {
       drafted,
       status: { label: drafted ? "In progress" : "Not started", tone },
     }) as unknown as DueExtras["drafts"][number];
-  const unread = (course: string, from: string, status?: string) =>
+  const reply = (course: string, from: string, status?: string) =>
     ({
       school: rsu,
       course: { ref: course, code: course.toUpperCase() },
@@ -96,7 +96,7 @@ describe("the work plan", () => {
         subject: `Question from ${from}`,
         unread: true,
       },
-      last: { at: new Date(NOW - 86_400_000).toISOString() },
+      last: { at: new Date(NOW - 86_400_000).toISOString(), mine: false },
       summary: status
         ? { label: status, tone: status === "Needs approval" ? "approval" : "ready" }
         : null,
@@ -109,7 +109,7 @@ describe("the work plan", () => {
   ) =>
     planWork({
       groups: [{ key: "past", label: "Past due", items }],
-      extras: { drafts: [], unread: [], ...over },
+      extras: { drafts: [], replies: [], ...over },
       stages: new Map(
         [...stages].map(([ref, staged]) => [
           ref,
@@ -147,7 +147,7 @@ describe("the work plan", () => {
   it("keeps a course's grading ahead of its announcement and its replies", () => {
     const steps = plan(
       [assignment("hot", "Analysis", -4, 4), assignment("hot", "Response", 0, 0)],
-      { drafts: [draft("hot")], unread: [unread("hot", "Ezra"), unread("hot", "Amara")] },
+      { drafts: [draft("hot")], replies: [reply("hot", "Ezra"), reply("hot", "Amara")] },
     ).steps;
     expect(steps.map((step) => step.verb)).toEqual(["Grade", "Post", "Reply to"]);
     expect(steps[2]?.title).toBe("Ezra, Amara");
@@ -175,7 +175,7 @@ describe("the work plan", () => {
   it("splits a course's replies by what each one needs, so no step overstates the others", () => {
     const mixed = plan(
       [],
-      { unread: [unread("hot", "Amara"), unread("hot", "Ezra", "Needs approval")] },
+      { replies: [reply("hot", "Amara"), reply("hot", "Ezra", "Needs approval")] },
       new Map([["hot:Ezra", "review" as const]]),
     );
     expect(mixed.steps.map(stepInstruction)).toEqual([
@@ -191,7 +191,7 @@ describe("the work plan", () => {
     const steps = plan(
       [],
       {
-        unread: [unread("hot", "Ezra", "Needs approval"), unread("hot", "Amara", "Ready to send")],
+        replies: [reply("hot", "Ezra", "Needs approval"), reply("hot", "Amara", "Ready to send")],
       },
       new Map([
         ["hot:Ezra", "review" as const],
@@ -205,7 +205,7 @@ describe("the work plan", () => {
     const steps = (stage?: "review" | "stuck") =>
       plan(
         [],
-        { unread: [unread("hot", "Ezra"), unread("hot", "Amara")] },
+        { replies: [reply("hot", "Ezra"), reply("hot", "Amara")] },
         new Map(
           stage
             ? [
@@ -235,16 +235,13 @@ describe("the work plan", () => {
     ]);
     const tones = (over: Partial<DueExtras>, stages: ReadonlyMap<string, "review"> = new Map()) =>
       plan([], over, stages).steps.map((step) => step.detailTone);
-    expect(tones({ unread: [unread("hot", "Ezra", "Needs approval")] }, reviewing)).toEqual([
+    expect(tones({ replies: [reply("hot", "Ezra", "Needs approval")] }, reviewing)).toEqual([
       "approval",
     ]);
     expect(
       tones(
         {
-          unread: [
-            unread("hot", "Ezra", "Needs approval"),
-            unread("hot", "Amara", "Ready to send"),
-          ],
+          replies: [reply("hot", "Ezra", "Needs approval"), reply("hot", "Amara", "Ready to send")],
         },
         reviewing,
       ),
@@ -280,7 +277,7 @@ describe("the work plan", () => {
     const instructions = (stages: ReadonlyMap<string, "stuck" | "review">, tone?: string) =>
       plan(
         [assignment("hot", "Analysis", -4, 4), assignment("hot", "Response", 0, 0)],
-        { drafts: [draft("hot", tone)], unread: [unread("hot", "Ezra")] },
+        { drafts: [draft("hot", tone)], replies: [reply("hot", "Ezra")] },
         stages,
       ).steps.map(stepInstruction);
     expect(instructions(new Map())).toEqual([
@@ -319,7 +316,7 @@ describe("the work plan", () => {
   it("gives work in a course with no deadline left a reason of its own", () => {
     const steps = plan([assignment("done", "Final", -3, 2)], {
       drafts: [draft("done")],
-      unread: [unread("done", "Ezra")],
+      replies: [reply("done", "Ezra")],
     }).steps;
     expect(steps.map((step) => step.why)).toEqual([
       "3 days past due.",
@@ -417,7 +414,7 @@ describe("the work plan", () => {
       const sittings = sittingsOf(
         plan([...cold(), ...hot()], {
           drafts: [draft("hot")],
-          unread: [unread("hot", "Ezra"), unread("cold", "Amara")],
+          replies: [reply("hot", "Ezra"), reply("cold", "Amara")],
         }),
       );
       expect(sittings.map(sittingName)).toEqual(["HOT", "COLD"]);
@@ -438,7 +435,7 @@ describe("the work plan", () => {
       const [sitting] = sittingsOf(
         plan(hot(), {
           drafts: [draft("hot")],
-          unread: [unread("hot", "Ezra"), unread("hot", "Amara")],
+          replies: [reply("hot", "Ezra"), reply("hot", "Amara")],
         }),
       );
       expect(sittingLoad(sitting!)).toBe("6 to grade, 1 to post, 2 replies");
@@ -500,20 +497,20 @@ describe("the work plan", () => {
 
 describe("what's due", () => {
   it("the summary sentence names each total", () => {
-    expect(dueSummary({ toGrade: 7, unread: 3, drafts: 2 })).toBe(
-      "7 submissions to grade, 3 unread messages, 2 unsent announcements.",
+    expect(dueSummary({ toGrade: 7, needsReply: 3, drafts: 2 })).toBe(
+      "7 submissions to grade, 3 messages needing a reply, 2 unsent announcements.",
     );
   });
 
   it("the summary is singular for one of each", () => {
-    expect(dueSummary({ toGrade: 1, unread: 1, drafts: 1 })).toBe(
-      "1 submission to grade, 1 unread message, 1 unsent announcement.",
+    expect(dueSummary({ toGrade: 1, needsReply: 1, drafts: 1 })).toBe(
+      "1 submission to grade, 1 message needing a reply, 1 unsent announcement.",
     );
   });
 
   it("a school filter drops empty groups and narrows the extras", () => {
     expect(filterDue(groups, "lcc" as SchoolId).map((group) => group.key)).toEqual(["past"]);
-    expect(filterExtras(extras, "lcc" as SchoolId).unread).toHaveLength(2);
+    expect(filterExtras(extras, "lcc" as SchoolId).replies).toHaveLength(2);
     expect(filterDue(groups, "all")).toHaveLength(2);
   });
 
