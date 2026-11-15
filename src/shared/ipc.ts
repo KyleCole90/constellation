@@ -101,6 +101,7 @@ const AgentRunOutput = v.variant("ok", [
 
 /** Where drafts come from, as main runs them. The web demo's on-device model never reaches main. */
 const AgentSourceSchema = v.picklist(["none", "key", "claude-code"]);
+export type AgentSource = v.InferOutput<typeof AgentSourceSchema>;
 
 /** The latest weekly-limit reading from a Claude Code run, kept in main's memory. */
 const WeeklyUsage = v.strictObject({
@@ -118,6 +119,7 @@ const ClaudeCodeStatus = v.variant("installed", [
     weekly: v.nullable(WeeklyUsage),
   }),
 ]);
+export type ClaudeCodeStatus = v.InferOutput<typeof ClaudeCodeStatus>;
 
 interface Channel {
   readonly input: v.GenericSchema;

@@ -13,6 +13,7 @@ import { createMemoryVault } from "~/renderer/providers/vault";
 import {
   createWorkspaceStore,
   fakeCanvasBackend,
+  type WorkspaceDeps,
   type WorkspaceStore,
 } from "~/renderer/stores/workspace";
 
@@ -43,6 +44,7 @@ export interface StoreRigOptions {
   /** Runs as the teacher's desktop app, whose backend has no demo. */
   noDemo?: boolean;
   timer?: (run: () => void, ms: number) => () => void;
+  agentMain?: WorkspaceDeps["agentMain"];
 }
 
 export const makeStoreRig = async (options: StoreRigOptions = {}) => {
@@ -98,6 +100,7 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
     ...(options.subscribeFocus ? { subscribeFocus: options.subscribeFocus } : {}),
     ...(options.connectivity ? { connectivity: options.connectivity } : {}),
     ...(options.timer ? { timer: options.timer } : {}),
+    ...(options.agentMain ? { agentMain: options.agentMain } : {}),
   });
 
   const state = () => store.getState();

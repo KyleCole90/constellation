@@ -116,7 +116,7 @@ export const createBridgeAgent = (bridge: Bridge, online = isOnline): Agent => (
       return;
     }
     if (!answer.ok) {
-      yield { type: "decline", text: answer.reason };
+      yield { type: answer.limited ? "limited" : "decline", text: answer.reason };
       return;
     }
     for (const effect of answer.effects) yield withChange(effect, scope);

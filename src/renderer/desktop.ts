@@ -20,6 +20,9 @@ export const REAL_AI = desktopBridge !== undefined && !desktopBridge.fakes;
 /** Anthropic's console page where the teacher caps what their key spends. The app has no cap of its own. */
 export const SPEND_LIMITS_URL = "https://platform.claude.com/settings/limits";
 
+/** Anthropic's page for installing Claude Code, which the teacher does themselves. */
+export const CLAUDE_CODE_SETUP_URL = "https://code.claude.com/docs/en/setup";
+
 /** Where saved tokens and keys live, as the UI names it. */
 export const VAULT_PLACE = desktopBridge ? "your Mac's Keychain" : "this browser's vault";
 

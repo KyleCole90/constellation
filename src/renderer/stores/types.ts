@@ -111,8 +111,8 @@ export type Thread = ThreadSubject & {
 
 export type OnboardingStep = "welcome" | "setup" | "done";
 
-/** Where AI drafts come from. A key lives in the vault, and the on-device model needs a Mac. */
-export type AiSource = "none" | "key" | "on-device";
+/** Where AI drafts come from. A key lives in the vault, the on-device model needs a Mac, and Claude Code is the teacher's own install. */
+export type AiSource = "none" | "key" | "on-device" | "claude-code";
 
 export type QueueFilter =
   | "all"

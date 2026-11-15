@@ -7,7 +7,15 @@ import { useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
 import { isMod } from "../AppShell";
 import type { RationaleLink, ThreadActions } from "./context";
-import { batchChanges, draftsNext, moveCursor, nextOpen, runOf, type WorkRow } from "./queue.logic";
+import {
+  batchChanges,
+  draftInTurn,
+  draftsNext,
+  moveCursor,
+  nextOpen,
+  runOf,
+  type WorkRow,
+} from "./queue.logic";
 import { walkStep } from "./timeline.logic";
 import { useChange } from "./useChange";
 
@@ -133,10 +141,13 @@ export const useThreadWork = (
   const draftRows = useCallback(
     async (targets: readonly WorkRow[]) => {
       setDrafting(new Set(targets.map((row) => row.key)));
-      for (const row of targets) {
-        await openTarget(id, row, { focus: false, draft: true });
-        setDrafting((left) => new Set([...left].filter((key) => key !== row.key)));
-      }
+      await draftInTurn(
+        targets,
+        (row) => openTarget(id, row, { focus: false, draft: true }),
+        () => store().limitHits[id] ?? 0,
+        (row) => setDrafting((left) => new Set([...left].filter((key) => key !== row.key))),
+      );
+      setDrafting(new Set());
     },
     [id],
   );
