@@ -1,0 +1,751 @@
+{
+  "benchmark": "plan usage per graded submission (#85)",
+  "date": "2026-11-15",
+  "commit": "ba91be5",
+  "source": "claude-code",
+  "claudeCodeVersion": "2.1.325",
+  "model": "claude-opus-5-5",
+  "weights": {
+    "input": 1,
+    "cacheWrite": 1.25,
+    "cacheRead": 0.1,
+    "output": 5
+  },
+  "fixtures": 30,
+  "headline": {
+    "weightedOpusTokensPerSubmission": 12741.2
+  },
+  "raw": {
+    "pinnedModel": {
+      "input": 60,
+      "cacheWrite": 109753,
+      "cacheRead": 176297,
+      "output": 45471
+    },
+    "otherModels": {
+      "input": 0,
+      "cacheWrite": 0,
+      "cacheRead": 0,
+      "output": 0
+    }
+  },
+  "guards": {
+    "startupOverhead": {
+      "applies": true,
+      "p50Ms": 194.4,
+      "limitMs": 300,
+      "pass": true
+    },
+    "otherModelTokens": {
+      "tokens": 0,
+      "pass": true
+    },
+    "firstTryValid": {
+      "valid": 27,
+      "of": 30,
+      "pass": false
+    }
+  },
+  "translation": {
+    "weeklyLimitPercentPerClass": null
+  },
+  "time": {
+    "draftWallMs": {
+      "p50": 16222.7,
+      "p90": 17738.5
+    },
+    "classWallMs": 470638.7,
+    "modelMs": {
+      "p50": 16029,
+      "p90": 17431
+    },
+    "overheadMs": {
+      "p50": 194.4,
+      "p90": 341
+    }
+  },
+  "byKind": {
+    "text": {
+      "drafts": 10,
+      "weightedPerSubmission": 10507.3,
+      "raw": {
+        "input": 20,
+        "cacheWrite": 14724,
+        "cacheRead": 60677,
+        "output": 16116
+      }
+    },
+    "pdf": {
+      "drafts": 8,
+      "weightedPerSubmission": 18229.5,
+      "raw": {
+        "input": 16,
+        "cacheWrite": 62476,
+        "cacheRead": 46248,
+        "output": 12620
+      }
+    },
+    "image": {
+      "drafts": 6,
+      "weightedPerSubmission": 11273.4,
+      "raw": {
+        "input": 12,
+        "cacheWrite": 18332,
+        "cacheRead": 34686,
+        "output": 8249
+      }
+    },
+    "link-screenshot": {
+      "drafts": 3,
+      "weightedPerSubmission": 11242.2,
+      "raw": {
+        "input": 6,
+        "cacheWrite": 7773,
+        "cacheRead": 17343,
+        "output": 4454
+      }
+    },
+    "document": {
+      "drafts": 3,
+      "weightedPerSubmission": 9986.8,
+      "raw": {
+        "input": 6,
+        "cacheWrite": 6448,
+        "cacheRead": 17343,
+        "output": 4032
+      }
+    }
+  },
+  "drafts": [
+    {
+      "fixture": "maya-argument",
+      "kind": "text",
+      "weighted": 9199.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 341,
+        "cacheRead": 7366,
+        "output": 1607
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 16591.5,
+      "modelMs": 16402,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "dylan-argument",
+      "kind": "text",
+      "weighted": 8895.8,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 342,
+        "cacheRead": 7063,
+        "output": 1552
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 14306.8,
+      "modelMs": 14113,
+      "valid": false,
+      "problems": ["edit: aimed outside the thread at __none__"]
+    },
+    {
+      "fixture": "priya-argument",
+      "kind": "text",
+      "weighted": 11803.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 1643,
+        "cacheRead": 5781,
+        "output": 1834
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 17592.8,
+      "modelMs": 17402,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "jonah-poetry",
+      "kind": "text",
+      "weighted": 10863.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 1915,
+        "cacheRead": 5781,
+        "output": 1578
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 14731.7,
+      "modelMs": 14547,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "lucia-poetry",
+      "kind": "text",
+      "weighted": 10177.6,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 1634,
+        "cacheRead": 5781,
+        "output": 1511
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 14653.4,
+      "modelMs": 14463,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "theo-dbq",
+      "kind": "text",
+      "weighted": 10735.1,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 1924,
+        "cacheRead": 5781,
+        "output": 1550
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 16695.5,
+      "modelMs": 16503,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "amara-dbq",
+      "kind": "text",
+      "weighted": 11427.6,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 1674,
+        "cacheRead": 5781,
+        "output": 1751
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 17003.3,
+      "modelMs": 16811,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "noor-dbq",
+      "kind": "text",
+      "weighted": 10753.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 1683,
+        "cacheRead": 5781,
+        "output": 1614
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 16103.4,
+      "modelMs": 15909,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "caleb-lab",
+      "kind": "text",
+      "weighted": 12005.1,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 1908,
+        "cacheRead": 5781,
+        "output": 1808
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 16397.7,
+      "modelMs": 16205,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "ingrid-response",
+      "kind": "text",
+      "weighted": 9210.1,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 1660,
+        "cacheRead": 5781,
+        "output": 1311
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 14049.6,
+      "modelMs": 13853,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "wen-lab",
+      "kind": "pdf",
+      "weighted": 19666.4,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 7697,
+        "cacheRead": 5781,
+        "output": 1893
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 19545.2,
+      "modelMs": 19185,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "sofia-lab",
+      "kind": "pdf",
+      "weighted": 14928.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 4751,
+        "cacheRead": 5781,
+        "output": 1682
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 17394.6,
+      "modelMs": 16942,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "ethan-argument",
+      "kind": "pdf",
+      "weighted": 22378.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 11095,
+        "cacheRead": 5781,
+        "output": 1586
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 17938,
+      "modelMs": 17597,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "hannah-argument",
+      "kind": "pdf",
+      "weighted": 21017.6,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 9426,
+        "cacheRead": 5781,
+        "output": 1731
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 17738.5,
+      "modelMs": 17431,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "marcus-dbq",
+      "kind": "pdf",
+      "weighted": 21926.4,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 9469,
+        "cacheRead": 5781,
+        "output": 1902
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 19934.1,
+      "modelMs": 19552,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "zara-poetry",
+      "kind": "pdf",
+      "weighted": 15028.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 5479,
+        "cacheRead": 5781,
+        "output": 1520
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 16638.6,
+      "modelMs": 16438,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "owen-dbq",
+      "kind": "pdf",
+      "weighted": 17908.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 6987,
+        "cacheRead": 5781,
+        "output": 1719
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 17469.6,
+      "modelMs": 17271,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "leah-poetry",
+      "kind": "pdf",
+      "weighted": 12980.1,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 7572,
+        "cacheRead": 5781,
+        "output": 587
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 7746.9,
+      "modelMs": 7553,
+      "valid": false,
+      "problems": ["edit: aimed outside the thread at "]
+    },
+    {
+      "fixture": "ravi-poster",
+      "kind": "image",
+      "weighted": 11258.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 3215,
+        "cacheRead": 5781,
+        "output": 1332
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 12955.5,
+      "modelMs": 12754,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "isabel-poster",
+      "kind": "image",
+      "weighted": 12985.1,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 3088,
+        "cacheRead": 5781,
+        "output": 1709
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 16921.5,
+      "modelMs": 16725,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "felix-poster",
+      "kind": "image",
+      "weighted": 12255.1,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 3080,
+        "cacheRead": 5781,
+        "output": 1565
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 15731.3,
+      "modelMs": 15491,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "kai-lab",
+      "kind": "image",
+      "weighted": 9208.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 3355,
+        "cacheRead": 5781,
+        "output": 887
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 9327.9,
+      "modelMs": 9112,
+      "valid": false,
+      "problems": ["edit: aimed outside the thread at "]
+    },
+    {
+      "fixture": "lena-portrait",
+      "kind": "image",
+      "weighted": 10932.6,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 2754,
+        "cacheRead": 5781,
+        "output": 1382
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 15830.4,
+      "modelMs": 15586,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "diego-portrait",
+      "kind": "image",
+      "weighted": 11000.1,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 2840,
+        "cacheRead": 5781,
+        "output": 1374
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 14759.4,
+      "modelMs": 14562,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "nadia-response",
+      "kind": "link-screenshot",
+      "weighted": 11483.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 2587,
+        "cacheRead": 5781,
+        "output": 1534
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 16755.9,
+      "modelMs": 16562,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "carlos-exhibit",
+      "kind": "link-screenshot",
+      "weighted": 10646.4,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 2589,
+        "cacheRead": 5781,
+        "output": 1366
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 14145.9,
+      "modelMs": 13952,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "tessa-notebook",
+      "kind": "link-screenshot",
+      "weighted": 11596.4,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 2597,
+        "cacheRead": 5781,
+        "output": 1554
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 16222.7,
+      "modelMs": 16029,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "mira-portrait",
+      "kind": "document",
+      "weighted": 8927.6,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 2186,
+        "cacheRead": 5781,
+        "output": 1123
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 12817.8,
+      "modelMs": 12627,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "jamal-response",
+      "kind": "document",
+      "weighted": 9823.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 2007,
+        "cacheRead": 5781,
+        "output": 1347
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 15976.5,
+      "modelMs": 15786,
+      "valid": true,
+      "problems": []
+    },
+    {
+      "fixture": "elena-dbq",
+      "kind": "document",
+      "weighted": 11208.9,
+      "raw": {
+        "input": 2,
+        "cacheWrite": 2255,
+        "cacheRead": 5781,
+        "output": 1562
+      },
+      "otherModels": {
+        "input": 0,
+        "cacheWrite": 0,
+        "cacheRead": 0,
+        "output": 0
+      },
+      "wallMs": 16662.7,
+      "modelMs": 16454,
+      "valid": true,
+      "problems": []
+    }
+  ]
+}
