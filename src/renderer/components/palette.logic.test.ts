@@ -137,7 +137,7 @@ describe("filterEntries", () => {
     ]);
   });
 
-  it("a student with work to grade carries it and says to grade, and one without opens the course", () => {
+  it("a student with work to grade opens their grading row, and one without opens their gradebook row (#125, #141)", () => {
     const of = (name: string) => entries.find((entry) => entry.title === name);
     expect(of("Maya Ortiz")).toMatchObject({
       hint: "ENG 101, to grade",
@@ -145,7 +145,7 @@ describe("filterEntries", () => {
     });
     expect(of("Luis Cardenas")).toMatchObject({
       hint: "ENG 101",
-      target: { kind: "student", submission: null },
+      target: { kind: "gradebook-row", student: { name: "Luis Cardenas" } },
     });
   });
 

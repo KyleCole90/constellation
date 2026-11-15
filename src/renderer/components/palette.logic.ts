@@ -19,7 +19,9 @@ type PaletteTarget =
   | { kind: "assignment"; assignment: Assignment }
   /** An assignment with nothing to grade opens on its scores, not an empty grading list (#135). */
   | { kind: "gradebook-column"; assignment: Assignment }
-  | { kind: "student"; student: Student; submission: Submission | null }
+  | { kind: "student"; student: Student; submission: Submission }
+  /** A student with nothing to grade opens on their scores, the way the roster does (#141). */
+  | { kind: "gradebook-row"; student: Student }
   | { kind: "screen"; to: "/due" | "/inbox" | "/calendar" | "/settings" }
   | { kind: "reset-demo" }
   | { kind: "sync"; school: SchoolId };
@@ -191,7 +193,9 @@ export const buildEntries = (input: {
         hint: submission ? `${codeOf(student.course)}, to grade` : codeOf(student.course),
         waiting: submission !== null,
         school: student.school,
-        target: { kind: "student", student, submission },
+        target: submission
+          ? { kind: "student", student, submission }
+          : { kind: "gradebook-row", student },
       };
     }),
   ];
