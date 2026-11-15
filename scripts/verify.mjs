@@ -318,20 +318,30 @@ const main = async () => {
           const r = rects.length > 1 ? rects[0] : el.getBoundingClientRect();
           return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
         };
+        const describe = (target) => {
+          const landed = target.closest("button, a, [role=button], [role=tab], summary, label, input, select, textarea") ?? target;
+          const id = landed.getAttribute("data-testid");
+          const words = (landed.innerText ?? "").replace(/\\s+/g, " ").trim().split(" ").slice(0, 6).join(" ");
+          return "<" + landed.localName + ">" + (id ? " [data-testid=" + id + "]" : words ? ' "' + words + '"' : "");
+        };
+        const moved = (aim) => {
+          const now = aim.el.isConnected && centre(aim.el);
+          return now && Math.round(now.x - aim.x) + "," + Math.round(now.y - aim.y) + " px";
+        };
         // pointerdown, not mousedown: a control that cancels pointerdown (the row Settle sweep) suppresses mousedown.
         window.__pressWatch ??= (addEventListener("pointerdown", (event) => {
           const aim = window.__aim;
           window.__aim = null;
+          window.__pressed = aim;
           if (!aim) return;
-          const landed = event.target.closest("button, a, [role=button], [role=tab], summary, label, input, select, textarea") ?? event.target;
-          const id = landed.getAttribute("data-testid");
-          const words = (landed.innerText ?? "").replace(/\\s+/g, " ").trim().split(" ").slice(0, 6).join(" ");
-          const now = aim.el.isConnected && centre(aim.el);
-          window.__press = {
-            hit: covers(event.target, aim.el),
-            landed: "<" + landed.localName + ">" + (id ? " [data-testid=" + id + "]" : words ? ' "' + words + '"' : ""),
-            moved: now && Math.round(now.x - aim.x) + "," + Math.round(now.y - aim.y) + " px",
-          };
+          window.__press = { hit: covers(event.target, aim.el), landed: describe(event.target), moved: moved(aim) };
+        }, true), true);
+        // A press that blurs a field can reflow the page before the release, and a release off the target fires no click on it.
+        window.__releaseWatch ??= (addEventListener("pointerup", (event) => {
+          const aim = window.__pressed;
+          window.__pressed = null;
+          if (!aim || !window.__press?.hit || !aim.el.isConnected || aim.el.contains(event.target)) return;
+          window.__press.release = { landed: describe(event.target), moved: moved(aim) };
         }, true), true);
         const reachable = () => {
           const { x, y } = centre(el);
@@ -444,6 +454,10 @@ const main = async () => {
         if (press && !press.hit)
           throw new Error(
             `click aimed at ${JSON.stringify(query)} landed on ${press.landed}; ${press.moved ? `the target moved ${press.moved}` : "the target is gone"}`,
+          );
+        if (press?.release)
+          throw new Error(
+            `click aimed at ${JSON.stringify(query)} was pressed on it but released on ${press.release.landed}; the target moved ${press.release.moved} under the pointer`,
           );
       },
       // Every press and release goes out at once, so nothing the app waits out can pass between the clicks. Returns what each click landed on and its gap from the first.

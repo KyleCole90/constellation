@@ -3,7 +3,12 @@ import type { ChangeId, SchoolId } from "~/shared/domain/ids";
 import { QUIET_NOISE, type NoiseConfig } from "~/shared/providers/fake-canvas/faults";
 import { FAKE_SCHOOLS } from "~/shared/providers/fake-canvas/provider";
 import type { FakeCanvasServer } from "~/shared/providers/fake-canvas/server";
-import { Secret, type Capabilities, type Vault } from "~/shared/providers/provider";
+import {
+  Secret,
+  type Capabilities,
+  type LmsProvider,
+  type Vault,
+} from "~/shared/providers/provider";
 import { createMemoryVault } from "~/renderer/providers/vault";
 import {
   createWorkspaceStore,
@@ -21,6 +26,8 @@ export interface StoreRigOptions {
   agent?: Agent;
   noKey?: boolean;
   capabilities?: Partial<Capabilities>;
+  /** What the LMS answers when a token is checked, in place of the fake's own account read. */
+  verify?: LmsProvider["verify"];
   demoScript?: boolean;
   noise?: NoiseConfig;
   /** Share these to act as a second tab, or as a reload of the first. */
@@ -59,11 +66,15 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
       const descriptor = backend.descriptors["fake-canvas"];
       if (!descriptor) return backend;
       const narrowed = { ...descriptor };
-      if (options.capabilities) {
-        const capabilities = options.capabilities;
+      const { capabilities, verify } = options;
+      if (capabilities || verify) {
         narrowed.create = (context) => {
           const provider = descriptor.create(context);
-          return { ...provider, capabilities: { ...provider.capabilities, ...capabilities } };
+          return {
+            ...provider,
+            capabilities: { ...provider.capabilities, ...capabilities },
+            ...(verify ? { verify } : {}),
+          };
         };
       }
       const real = options.realSchools ?? [];

@@ -1362,7 +1362,8 @@ const announcements = async (t) => {
   await t.waitFor(`!document.querySelector(${JSON.stringify(PANEL)})`, "Escape closes the preview");
   await t.click('[aria-label="Title"]');
   await t.type(original);
-  await t.click(BODY);
+  // A click on the body here lands on the action bar: the committed title folds the Title field away mid-click (#118).
+  await t.key("Tab");
   await t.waitFor(
     `document.querySelector(${JSON.stringify(HEADING)})?.innerText === ${JSON.stringify(original)} && !document.querySelector('[aria-label="Title"]')`,
     "a new title goes back to being the heading",
