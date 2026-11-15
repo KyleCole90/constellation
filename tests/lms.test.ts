@@ -5,10 +5,12 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createFileStorage } from "~/main/lms";
+import type { Fetch } from "~/main/providers/canvas";
 import type { LmsRef } from "~/shared/domain/ids";
 import { invoker } from "~/shared/ipc";
+import { FAKE_SCHOOLS } from "~/shared/providers/fake-canvas/provider";
 
-import { bridgedLms } from "./fixtures/bridge";
+import { bridgedLms, fakeLmsHandlers } from "./fixtures/bridge";
 import { LCC } from "./fixtures/rig";
 
 const dirs: string[] = [];
@@ -160,14 +162,6 @@ describe("the lms channels", () => {
     expect(await lms.lab.findSubmission("Maya Ortiz", "Essay 2")).toBe(ref);
   });
 
-  it("a packaged app refuses verify's reads", async () => {
-    const lms = bridgedLms({ packaged: true });
-    await lms.connect(LCC);
-    expect(await lms.server.stored()).toContain('"version":1');
-    await expect(lms.lab.stored()).rejects.toThrow();
-    await expect(lms.lab.findSubmission("Maya Ortiz", "Essay 2")).rejects.toThrow();
-  });
-
   it("main's fake keeps the app's demo clock", async () => {
     const lms = bridgedLms();
     await lms.connect(LCC);
@@ -179,5 +173,49 @@ describe("the lms channels", () => {
     };
     const at = stored.submissions.find((entry) => entry.ref === submission)?.comments.at(-1)?.at;
     expect(Math.abs(Date.parse(at ?? "") - lms.clock.now())).toBeLessThan(1000);
+  });
+});
+
+describe("the teacher's app, on real Canvas", () => {
+  const requests: string[] = [];
+  const fetch: Fetch = async (url) => {
+    requests.push(String(url));
+    throw new TypeError("fetch failed");
+  };
+  const lms = () => fakeLmsHandlers({ fetch });
+  const demo = FAKE_SCHOOLS[0];
+  if (!demo) throw new Error("no demo school");
+
+  it("finds no demo school, even at a demo school's address", async () => {
+    const school = await lms()["lms.schoolAt"]({ host: demo.host });
+    expect(school?.provider).not.toBe("fake-canvas");
+  });
+
+  it("refuses a demo school on every channel, without reaching the network", async () => {
+    const channels = lms();
+    await expect(async () => channels["lms.verify"]({ school: demo })).rejects.toThrow(
+      "no demo schools",
+    );
+    await expect(async () => channels["lms.courses"]({ school: demo })).rejects.toThrow(
+      "no demo schools",
+    );
+    await expect(async () => channels["lms.conversations"]({ school: demo })).rejects.toThrow(
+      "no demo schools",
+    );
+    expect(requests).toEqual([]);
+  });
+
+  it("has no failure lab and answers none of verify's reads", async () => {
+    const channels = lms();
+    await expect(async () => channels["lms.lab"]({ do: "reset" })).rejects.toThrow(
+      "no demo schools",
+    );
+    await expect(async () => channels["lms.labNext"]({ after: null })).rejects.toThrow(
+      "no demo schools",
+    );
+    await expect(async () => channels["lms.stored"]()).rejects.toThrow("no demo schools");
+    await expect(async () =>
+      channels["lms.findSubmission"]({ student: "Maya Ortiz", assignment: "Essay 2" }),
+    ).rejects.toThrow("no demo schools");
   });
 });

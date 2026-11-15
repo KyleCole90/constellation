@@ -119,13 +119,15 @@ const NO_TERM_SETUP = {
  * crosses to the renderer. The fake LMS runs here, the way a real one will (docs/electron-spec.md, step 10).
  */
 export const lmsHandlers = (options: {
-  makeServer(now: () => number): FakeCanvasServer;
+  /**
+   * The one LMS world main runs. Verify runs the fake's demo schools, so nothing reaches a real host; the teacher's app
+   * runs real Canvas, with no demo school, fault lab or verify read.
+   */
+  lms:
+    | { kind: "fake"; makeServer(now: () => number): FakeCanvasServer }
+    | { kind: "canvas"; fetch: Fetch };
   realNow(): number;
   leaseFor(key: VaultKey): CredentialLease;
-  /** A packaged app refuses the channels only verify reads. */
-  packaged: boolean;
-  /** Real Canvas's network. Null leaves only the fake's schools, as verify runs the app, so nothing reaches a real host. */
-  fetch: Fetch | null;
   /**
    * When the teacher last clicked in the window or pressed Return or Space there, in `realNow` time, as the OS
    * delivered it. Page script can't produce that input, so the renderer can't fake a press.
@@ -144,16 +146,22 @@ export const lmsHandlers = (options: {
     for (const wake of waiting) wake();
     waiting.clear();
   };
-  const start = () => {
-    const server = options.makeServer(now);
+  const start = (makeServer: (now: () => number) => FakeCanvasServer) => {
+    const server = makeServer(now);
     server.subscribe(moved);
     return {
+      makeServer,
       server,
       descriptor: createFakeCanvasDescriptor(server, now),
       providers: new Map<SchoolId, LmsProvider>(),
     };
   };
-  let fake = start();
+  const world = options.lms;
+  let live = world.kind === "fake" ? start(world.makeServer) : null;
+  const theFake = () => {
+    if (!live) throw new Error("This app has no demo schools.");
+    return live;
+  };
 
   /**
    * The packages the teacher chose in main's picker, by school and file name, for as long as main runs. The renderer
@@ -170,14 +178,14 @@ export const lmsHandlers = (options: {
   /** The renderer is untrusted, so a Canvas school counts only as main itself would mint it from its host. */
   const canvasProvider = (school: School): LmsProvider => {
     const minted = canvasSchoolAt(school.host);
-    if (!options.fetch || minted?.id !== school.id)
+    if (world.kind !== "canvas" || minted?.id !== school.id)
       throw new Error("That isn't a Canvas school this app connects to.");
     const existing = canvas.get(minted.id);
     if (existing) return existing;
     const created = createCanvasProvider({
       school: minted,
       lease: options.leaseFor(minted.id),
-      fetch: options.fetch,
+      fetch: world.fetch,
       now,
       packageFile: (name) => packageFile(minted.id, name),
     });
@@ -194,6 +202,7 @@ export const lmsHandlers = (options: {
   };
   /** Main's own record of a demo school, so a renderer can't point the fake at a real school's token. */
   const fakeProvider = (asked: School): LmsProvider => {
+    const fake = theFake();
     const school = FAKE_SCHOOLS.find((entry) => entry.id === asked.id && entry.host === asked.host);
     if (!school) throw new Error("That isn't one of the demo schools.");
     const existing = fake.providers.get(school.id);
@@ -283,12 +292,8 @@ export const lmsHandlers = (options: {
     const setup = provider(school).termSetup;
     return setup ? read(setup) : NO_TERM_SETUP;
   };
-  const unpackaged = <T>(answer: () => T) => {
-    if (options.packaged) throw new Error("A packaged app doesn't answer verify's reads.");
-    return answer();
-  };
-
   const run = (command: LabCommand): void => {
+    const fake = theFake();
     switch (command.do) {
       case "setNoise":
         return fake.server.setNoise(command.patch);
@@ -327,7 +332,7 @@ export const lmsHandlers = (options: {
       case "reset":
         return fake.server.reset();
       case "reload":
-        fake = start();
+        live = start(fake.makeServer);
         return moved();
       case "clock":
         offset = command.offsetMs;
@@ -337,8 +342,9 @@ export const lmsHandlers = (options: {
 
   return {
     "lms.schoolAt": async ({ host }) =>
-      FAKE_SCHOOLS.find((school) => school.host === host) ??
-      (options.fetch ? canvasSchoolAt(host) : null),
+      world.kind === "canvas"
+        ? canvasSchoolAt(host)
+        : (FAKE_SCHOOLS.find((school) => school.host === host) ?? null),
     "lms.verify": ({ school }) => provider(school).verify(),
     "lms.courses": ({ school }) => provider(school).courses(),
     "lms.assignments": ({ school, course }) => provider(school).assignments(course),
@@ -383,6 +389,7 @@ export const lmsHandlers = (options: {
     },
     "lms.lab": async (command) => run(command),
     "lms.labNext": async ({ after }) => {
+      theFake();
       // Bounded, so a waiter left by a closed or reloaded window doesn't sit forever; the renderer simply asks again.
       if (after === version)
         await new Promise<void>((wake) => {
@@ -392,10 +399,10 @@ export const lmsHandlers = (options: {
             wake();
           }, LAB_WAIT_MS);
         });
-      return { version, lab: labSnapshot(fake.server) };
+      return { version, lab: labSnapshot(theFake().server) };
     },
-    "lms.stored": () => unpackaged(() => fake.server.stored()),
+    "lms.stored": () => theFake().server.stored(),
     "lms.findSubmission": async ({ student, assignment }) =>
-      unpackaged(() => fake.server.findSubmission(student, assignment)),
+      theFake().server.findSubmission(student, assignment),
   };
 };

@@ -131,11 +131,11 @@ const start = async () => {
   /** The teacher's last click, Return or Space in the window, as the OS delivered it. Page script can't produce one. */
   let pressedAt = Number.NEGATIVE_INFINITY;
   const lms = lmsHandlers({
-    makeServer: fakeServer(createFileStorage(join(userData, "lms.json"))),
+    lms: FAKE_ONLY
+      ? { kind: "fake", makeServer: fakeServer(createFileStorage(join(userData, "lms.json"))) }
+      : { kind: "canvas", fetch: (url, init) => net.fetch(url, init) },
     realNow: () => Date.now(),
     leaseFor: (key) => vault.lease(key),
-    packaged: app.isPackaged,
-    fetch: FAKE_ONLY ? null : (url, init) => net.fetch(url, init),
     pressedAt: () => pressedAt,
     // Main reads the file itself, so the renderer never names a path.
     choosePackage: async () => {
