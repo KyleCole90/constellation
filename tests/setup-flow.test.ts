@@ -1084,6 +1084,42 @@ describe("a course just set up, unpublished with no students yet (#140)", () => 
     expect(selectSetupOffers(rig.state()).some((offer) => offer.shell.ref === course)).toBe(false);
   });
 
+  it("lists a post in Posted as soon as Canvas confirms it, while the rest of the school syncs (#146)", async () => {
+    const rig = await connected();
+    const { course, copy } = await toDraftCopy(rig, LCC, "ENG 101", {
+      course: "ENG 101",
+      term: "Fall 2026",
+    });
+    approve(rig, copy);
+    await send(rig, [copy]);
+    await stageIs(rig, course, "review");
+    const id = await rig.clock.run(
+      rig.state().openAnnouncement(setupOf(rig, course).thread, course),
+    );
+    if (!id) throw new Error("Nothing opened.");
+    const edited = rig.state().dispatchUser(id, {
+      type: "edit",
+      by: "you",
+      patch: { kind: "announcement", title: "Welcome", body: "See you in January." },
+      at: nowIso(rig),
+    });
+    if (!edited.ok) throw new Error(edited.error);
+    approve(rig, id);
+
+    const whileSyncing: string[][] = [];
+    const unsubscribe = rig.store.subscribe((state) => {
+      if (state.changes[id]?.state.tag === "sent" && state.syncing[LCC])
+        whileSyncing.push(selectCourseAnnouncements(state, course).posted.map((a) => a.title));
+    });
+    await send(rig, [id]);
+    unsubscribe();
+    expect(whileSyncing.length).toBeGreaterThan(0);
+    expect(whileSyncing.every((titles) => titles.includes("Welcome"))).toBe(true);
+    expect(selectCourseAnnouncements(rig.state(), course).posted.map((a) => a.title)).toEqual([
+      "Welcome",
+    ]);
+  });
+
   it("is still only an offer while its copy is unsent", async () => {
     const rig = await connected();
     const { course } = await toDraftCopy(rig, LCC, "ENG 101", {

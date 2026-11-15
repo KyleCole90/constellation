@@ -1537,6 +1537,7 @@ const announcements = async (t) => {
     `document.body.innerText.includes("Undo approval")`,
     "approved after the title edit",
   );
+  await t.eval(`window.__faultLab.setNoise({ latencyMs: [1500, 1500] })`);
   await t.click("Send to", { within: PANEL });
   await t.waitFor(
     `document.querySelector('[data-testid="sent-banner"]')`,
@@ -1547,6 +1548,21 @@ const announcements = async (t) => {
   await t.waitFor(
     `document.querySelectorAll('[data-posted]').length === ${postedBefore + 1}`,
     "it appears in the posted list",
+  );
+  t.assert(
+    (await t.text('[data-testid="sync-line"]')).includes("Syncing"),
+    "while the rest of the course still syncs (#146)",
+  );
+  await shot(t, "announcements-posted-while-syncing");
+  await t.eval(`window.__faultLab.setNoise(${QUIET})`);
+  await t.waitFor(
+    `document.querySelector('[data-testid="sync-line"]').innerText.includes("Sync now")`,
+    "the sync finishes",
+    20_000,
+  );
+  t.assert(
+    (await count(t, "[data-posted]")) === postedBefore + 1,
+    "and the sync agrees, with no second copy",
   );
   t.assert(
     (await t.text("[data-posted]")).includes("(edited)"),
