@@ -256,7 +256,7 @@ describe("once the message asking for a resubmit is sent (#98)", () => {
 
     const sent: unknown[] = [];
     const bridge: Bridge = {
-      agent: "claude",
+      fakes: false,
       invoke: invoker(async (_channel, raw) => {
         sent.push(raw);
         return { ok: true, effects: [], spend: { tokens: 0, usd: 0 } };

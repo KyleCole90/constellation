@@ -1,5 +1,5 @@
 // Boots the packaged app and checks what only a packaged build can show: its fuses, that its window runs the
-// app from app://, and that it lets no debugger in. Takes the .app path, or finds this Mac's `electron-builder --dir`
+// app from app://, that it seeds no demo, and that it lets no debugger in. Takes the .app path, or finds this Mac's `electron-builder --dir`
 // output. A packaged app takes no CDP, so the window check reads the renderer's store from a scratch user-data
 // folder. Starts its own app processes, and stops only those.
 import { spawn } from "node:child_process";
@@ -71,15 +71,22 @@ const launch = async (args) => {
   return { userData, exited, running: () => running, stop };
 };
 
-const storeWritten = async (userData) => {
+const storeLog = async (userData) => {
   const folder = join(userData, "Local Storage/leveldb");
   const files = await readdir(folder).catch(() => []);
-  for (const file of files.filter((name) => name.endsWith(".log"))) {
-    const bytes = await readFile(join(folder, file)).catch(() => Buffer.alloc(0));
-    if (bytes.includes(STORE_KEY)) return true;
-  }
-  return false;
+  const logs = files.filter((name) => name.endsWith(".log"));
+  return Buffer.concat(
+    await Promise.all(
+      logs.map((file) => readFile(join(folder, file)).catch(() => Buffer.alloc(0))),
+    ),
+  );
 };
+
+const storeWritten = async (userData) => (await storeLog(userData)).includes(STORE_KEY);
+
+/** Chromium keeps a localStorage value as Latin-1 or as UTF-16LE, so a JSON fragment is looked for in both. */
+const inStore = (bytes, text) =>
+  bytes.includes(Buffer.from(text, "latin1")) || bytes.includes(Buffer.from(text, "utf16le"));
 
 const checkFuses = async () => {
   const wire = await getCurrentFuseWire(BINARY);
@@ -105,6 +112,11 @@ const checkWindowAndInspect = async () => {
     }
     if (await answers(port)) throw new Error(`--inspect opened port ${port}`);
     console.log("ok window: the renderer ran from app://constellation and wrote its store");
+    const log = await storeLog(app.userData);
+    if (!inStore(log, '"threads":')) throw new Error("the saved store has no threads to check");
+    if (inStore(log, '"seeded":true'))
+      throw new Error("the packaged app saved a seeded demo thread");
+    console.log("ok no demo: the packaged app's first store holds no seeded demo thread");
     console.log(`ok --inspect=${port}: ignored, nothing listens`);
   } finally {
     await app.stop();

@@ -15,7 +15,7 @@ export const reportError = (error: unknown) => {
 };
 
 /** Drafts and chat come from Claude in main. Otherwise, in the web demo and in verify, from the rules agent. */
-export const REAL_AI = desktopBridge?.agent === "claude";
+export const REAL_AI = desktopBridge !== undefined && !desktopBridge.fakes;
 
 /** Anthropic's console page where the teacher caps what their key spends. The app has no cap of its own. */
 export const SPEND_LIMITS_URL = "https://platform.claude.com/settings/limits";

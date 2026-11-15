@@ -32,12 +32,12 @@ describe("window options", () => {
   });
 
   it("pass the preload the arguments main gives it", () => {
-    expect(windowOptions("/preload.cjs", ["--constellation-agent=rules"]).webPreferences).toEqual({
+    expect(windowOptions("/preload.cjs", ["--constellation-fakes"]).webPreferences).toEqual({
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
       preload: "/preload.cjs",
-      additionalArguments: ["--constellation-agent=rules"],
+      additionalArguments: ["--constellation-fakes"],
     });
   });
 });

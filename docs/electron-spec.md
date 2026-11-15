@@ -72,7 +72,7 @@ export const ipc = {
 
 - Main registers handlers through `handle(ipc, handlers)`. The type of `handlers` is a mapped type over the map's keys, so a missing or misspelled handler fails to compile.
 - Main parses every input before its handler runs. The preload parses every output before the renderer sees it. A payload that fails to parse is rejected and reported as an error. It is never coerced.
-- The preload exposes one object, `window.constellation`, with `invoke(channel, input)` and `agent`: `"claude"`, or `"rules"` when main runs verify's fake schools. The renderer never sees `ipcRenderer`.
+- The preload exposes one object, `window.constellation`, with `invoke(channel, input)` and `fakes`: `true` only when main runs verify's fake schools and rules agent. The renderer never sees `ipcRenderer`.
 - Only `agent.run` outputs `unknown`, on purpose: its effects. Each raw effect goes to `parseAgentEffect` in the renderer, the same parser the rules agent goes through today: one parser, one path (D26).
 - `SendPermit` is checked again in main: `apply` refuses anything that isn't a genuine permit. The renderer is untrusted, so main checks the permit's fingerprint against the approved content it was minted from. (The exact check is designed in the writeback PR.)
 - The renderer's provider and agent become thin clients over this bridge, with the same `LmsProvider` and `Agent` interfaces, so screens and tests don't change.

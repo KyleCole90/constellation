@@ -1,6 +1,6 @@
 import type { faultLab } from "~/renderer/stores/workspace";
 
-export type Noise = ReturnType<ReturnType<typeof faultLab>["noise"]>;
+export type Noise = ReturnType<NonNullable<ReturnType<typeof faultLab>>["noise"]>;
 
 export interface NoiseDial {
   key: "rate429" | "rate5xx" | "rateLost" | "fastest" | "slowest";

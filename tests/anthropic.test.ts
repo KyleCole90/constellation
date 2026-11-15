@@ -408,7 +408,7 @@ describe("an AI-drafted grade, end to end", () => {
       },
     );
     const bridge: Bridge = {
-      agent: "claude",
+      fakes: false,
       invoke: invoker(async (channel, input) => {
         const listener = listeners.get(channel);
         if (!listener) throw new Error(`no listener for ${channel}`);
@@ -456,7 +456,7 @@ describe("offline", () => {
   it("declines at once with the reason, and asks main nothing", async () => {
     const asked: string[] = [];
     const bridge: Bridge = {
-      agent: "claude",
+      fakes: false,
       invoke: invoker(async (channel) => {
         asked.push(channel);
         throw new Error("unreachable");

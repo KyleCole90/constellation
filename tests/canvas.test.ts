@@ -658,42 +658,25 @@ describe("main's lms channels and real Canvas", () => {
   });
 });
 
-describe("the fake's failure lab and real Canvas", () => {
-  it("never reaches a Canvas school: every lab command aimed at one leaves its reads untouched", async () => {
+describe("real Canvas and the fake's failure lab", () => {
+  it("has no lab, so no lab command reaches a Canvas school's reads", async () => {
     const vault = createMemoryVault();
     await vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TOKEN) });
     const network = recorded({ ...SELF, [COURSES]: ok("courses-page-2.json") });
     const lms = fakeLmsHandlers({ vault, fetch: network.fetch });
     const commands: LabCommand[] = [
       { do: "expireToken", school: SCHOOL.id },
-      {
-        do: "changeGradeOutOfBand",
-        submission: `${HOST}:submission:2201:5301:6401` as LmsRef<"submission">,
-        newGrade: 1,
-        by: "lab",
-      },
-      {
-        do: "studentResubmits",
-        submission: `${HOST}:submission:2201:5301:6401` as LmsRef<"submission">,
-      },
-      { do: "enrollStudents", course: COURSE, count: 3 },
-      { do: "clearDueDates", course: COURSE },
       { do: "throttleNext", retryAfterMs: 60_000, on: "any" },
       { do: "failNextWrite", field: "grade", error: { kind: "auth_expired" } },
-      { do: "loseNextResponse", applied: true },
       { do: "holdReads", held: true },
       { do: "setNoise", patch: { rate429: 1, rate5xx: 1 } },
-      { do: "reset" },
       { do: "reload" },
     ];
-    for (const command of commands) await lms["lms.lab"](command);
+    for (const command of commands)
+      await expect(lms["lms.lab"](command)).rejects.toThrow("no demo schools");
     expect(await lms["lms.verify"]({ school: SCHOOL })).toMatchObject({ ok: true });
     const courses = await lms["lms.courses"]({ school: SCHOOL });
     expect(courses.ok && courses.value.map((course) => course.code)).toEqual(["ENG-210-02"]);
-    expect(network.requests.map(({ url }) => new URL(url).pathname)).toEqual([
-      "/api/v1/users/self",
-      "/api/v1/courses",
-    ]);
   });
 });
 
@@ -702,6 +685,15 @@ describe("a school the renderer relabels", () => {
     const vault = createMemoryVault();
     await vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TOKEN) });
     const lms = fakeLmsHandlers({ vault, fetch: recorded({}).fetch });
+    await expect(async () =>
+      lms["lms.verify"]({ school: { ...SCHOOL, provider: "fake-canvas" } }),
+    ).rejects.toThrow("no demo schools");
+  });
+
+  it("can't point verify's fake at a Canvas school's token", async () => {
+    const vault = createMemoryVault();
+    await vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TOKEN) });
+    const lms = fakeLmsHandlers({ vault });
     await expect(async () =>
       lms["lms.verify"]({ school: { ...SCHOOL, provider: "fake-canvas" } }),
     ).rejects.toThrow("isn't one of the demo schools");

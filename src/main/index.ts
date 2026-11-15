@@ -17,7 +17,7 @@ import electronUpdater from "electron-updater";
 
 import * as v from "valibot";
 
-import { RULES_AGENT_SWITCH, errorReport, handle } from "../shared/ipc";
+import { FAKES_SWITCH, errorReport, handle } from "../shared/ipc";
 
 import {
   APP_SCHEME,
@@ -131,11 +131,11 @@ const start = async () => {
   /** The teacher's last click, Return or Space in the window, as the OS delivered it. Page script can't produce one. */
   let pressedAt = Number.NEGATIVE_INFINITY;
   const lms = lmsHandlers({
-    makeServer: fakeServer(createFileStorage(join(userData, "lms.json"))),
+    lms: FAKE_ONLY
+      ? { kind: "fake", makeServer: fakeServer(createFileStorage(join(userData, "lms.json"))) }
+      : { kind: "canvas", fetch: (url, init) => net.fetch(url, init) },
     realNow: () => Date.now(),
     leaseFor: (key) => vault.lease(key),
-    packaged: app.isPackaged,
-    fetch: FAKE_ONLY ? null : (url, init) => net.fetch(url, init),
     pressedAt: () => pressedAt,
     // Main reads the file itself, so the renderer never names a path.
     choosePackage: async () => {
@@ -171,7 +171,7 @@ const start = async () => {
     },
   );
   const window = new BrowserWindow({
-    ...windowOptions(PRELOAD, FAKE_ONLY ? [RULES_AGENT_SWITCH] : []),
+    ...windowOptions(PRELOAD, FAKE_ONLY ? [FAKES_SWITCH] : []),
     show: !HIDDEN,
   });
   lockNavigation(window.webContents, (url) => void shell.openExternal(url));
