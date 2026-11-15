@@ -683,9 +683,9 @@ const scopeOf = (state: WorkspaceData, thread: Thread): Omit<AgentScope, "change
     submissions: inCourse(caches.flatMap((cache) => cache.submissions)),
     assignments: inCourse(caches.flatMap((cache) => cache.assignments)),
     conversations: inCourse(caches.flatMap((cache) => cache.conversations)),
-    courses: caches
-      .flatMap((cache) => cache.courses)
-      .filter((course) => !thread.course || course.ref === thread.course),
+    courses: thread.course
+      ? [selectCourse(state, thread.course) ?? []].flat()
+      : caches.flatMap((cache) => cache.courses),
   };
 };
 
@@ -2032,19 +2032,16 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           },
 
           openAnnouncement: async (thread, ref, topic) => {
-            for (const cache of allCaches()) {
-              const course = cache.courses.find((c) => c.ref === ref);
-              if (course)
-                return openTarget(
-                  thread,
-                  null,
-                  topic === undefined ? DRAFT_ANNOUNCEMENT_REQUEST : draftAnnouncementAbout(topic),
-                  { courses: [course], submissions: [], assignments: [], conversations: [] },
-                  blankAnnouncement(course),
-                  { fill: "draft" },
-                );
-            }
-            return null;
+            const course = selectCourse(get(), ref);
+            if (!course) return null;
+            return openTarget(
+              thread,
+              null,
+              topic === undefined ? DRAFT_ANNOUNCEMENT_REQUEST : draftAnnouncementAbout(topic),
+              { courses: [course], submissions: [], assignments: [], conversations: [] },
+              blankAnnouncement(course),
+              { fill: "draft" },
+            );
           },
 
           focusChange: (thread, change) => {

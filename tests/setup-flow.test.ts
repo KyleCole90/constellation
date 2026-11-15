@@ -1124,3 +1124,40 @@ describe("cancelling a setup", () => {
     expect(rig.state().setups[course]).toBeDefined();
   });
 });
+
+describe("a course set up but not yet published (#134)", () => {
+  const announcementsOf = (rig: StoreRig, course: Course) =>
+    Object.values(rig.state().changes).filter(
+      (change) => change.content.kind === "announcement" && change.content.target === course,
+    );
+
+  it("drafts its welcome announcement from New announcement and from a typed request", async () => {
+    const rig = await connected();
+    const { course } = await toReview(rig, LCC, "ENG 101", {
+      course: "ENG 101",
+      term: "Fall 2026",
+    });
+    expect(rig.state().cache[LCC]?.courses.some((entry) => entry.ref === course)).toBe(false);
+    const shell = selectCourse(rig.state(), course);
+    if (!shell) throw new Error("The shell isn't a course on screen.");
+    const thread = rig.state().threadForWork(shell, { kind: "announcement" });
+
+    const opened = await rig.clock.run(rig.state().openAnnouncement(thread, course));
+    expect(opened).not.toBeNull();
+    expect(announcementsOf(rig, course)).toHaveLength(1);
+
+    const other = await toReview(rig, RSU, "ENG 210", { course: "ENG 210", term: "Fall 2026" });
+    const otherShell = selectCourse(rig.state(), other.course);
+    if (!otherShell) throw new Error("The shell isn't a course on screen.");
+    const typedIn = rig.state().threadForWork(otherShell, { kind: "announcement" });
+    await rig.clock.run(
+      rig
+        .state()
+        .sendToAgent(typedIn, "Draft an announcement for this course about office hours.", {
+          typed: true,
+        }),
+    );
+    expect(announcementsOf(rig, other.course)).toHaveLength(1);
+    expect(rig.state().threads[typedIn]?.dropped ?? []).toEqual([]);
+  });
+});
