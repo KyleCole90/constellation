@@ -64,9 +64,16 @@ export function ApproveButton({
       setPrompt(riskPrompt(guarded));
       return;
     }
+    // Focus moves here on release, not press, so a field's commit on blur can't reflow the card under the pointer (#116).
+    // That commit is the person's own text on screen, so it is approved, unless something else moved a draft since this render.
+    const before = workspaceStore().getState().changes;
+    const unmoved = targets.every((record) => before[record.id] === record);
+    event.currentTarget.focus();
+    const after = workspaceStore().getState().changes;
+    const shown = unmoved ? targets.map((record) => after[record.id] ?? record) : targets;
     mint(
       event,
-      targets.map((record) => ({ changeId: record.id, fingerprint: fingerprintOf(record) })),
+      shown.map((record) => ({ changeId: record.id, fingerprint: fingerprintOf(record) })),
     );
   };
 
@@ -100,6 +107,7 @@ export function ApproveButton({
         data-lands='[data-send], [data-undo-approval], [data-testid="thread-panel"]'
         data-testid={testId}
         disabled={targets.length === 0}
+        onMouseDown={(event) => event.preventDefault()}
         onClick={approve}
       >
         <span className="tabular-nums">{label}</span>
