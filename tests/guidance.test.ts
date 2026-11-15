@@ -114,6 +114,7 @@ describe("a preference the teacher states in a thread (#97)", () => {
       now: "2026-01-01T00:00:00Z" as never,
       next: [],
       grades: [],
+      grading: { toGrade: [], asked: [] },
     };
     expect(parseAgentEffect({ type: "guide", text: STRICTER }, { ...scope, northStar }).ok).toBe(
       false,

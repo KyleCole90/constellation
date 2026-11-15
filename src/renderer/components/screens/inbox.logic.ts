@@ -1,7 +1,7 @@
 import type { LmsRef, SchoolId } from "~/shared/domain/ids";
 import type { School } from "~/shared/domain/lms";
 import type { Capabilities } from "~/shared/providers/provider";
-import type { InboxRow } from "~/renderer/stores/selectors";
+import { needsReply, type InboxRow } from "~/renderer/stores/selectors";
 
 import type { SchoolFilter } from "./due.logic";
 
@@ -19,7 +19,7 @@ const holds = (row: InboxRow, status: InboxStatus): boolean => {
     case "all":
       return true;
     case "needs-reply":
-      return row.last?.mine === false && (row.summary === null || row.summary.sentAt !== null);
+      return needsReply(row);
     case "waiting":
       return row.summary?.canApprove === true;
   }

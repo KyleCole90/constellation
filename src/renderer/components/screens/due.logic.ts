@@ -5,6 +5,7 @@ import type { Course, School } from "~/shared/domain/lms";
 import { peopleWords, workName } from "~/shared/domain/workName";
 import {
   hasWorkToGrade,
+  needsReply,
   NOT_STARTED,
   type DueExtras,
   type DueGroup,
@@ -32,7 +33,7 @@ export const filterDue = (groups: readonly DueGroup[], filter: SchoolFilter): re
 
 export const filterExtras = (extras: DueExtras, filter: SchoolFilter): DueExtras => ({
   drafts: extras.drafts.filter((draft) => inSchool(filter, draft.school.id)),
-  unread: extras.unread.filter((row) => inSchool(filter, row.school.id)),
+  replies: extras.replies.filter((row) => inSchool(filter, row.school.id)),
 });
 
 export const nothingDueWords = (filter: SchoolFilter, someDisconnected: boolean): string => {
@@ -102,7 +103,7 @@ export interface WorkPlan {
   open: readonly DatedItem[];
   /** The open deadlines this week with nothing to grade yet. Later ones, such as next term's, wait for their week. */
   notYet: readonly DatedItem[];
-  totals: { toGrade: number; unread: number; drafts: number };
+  totals: { toGrade: number; needsReply: number; drafts: number };
 }
 
 export interface PlanInput {
@@ -113,8 +114,8 @@ export interface PlanInput {
   now: number;
 }
 
-export const dueSummary = ({ toGrade, unread, drafts }: WorkPlan["totals"]): string =>
-  `${counted(toGrade, "submission")} to grade, ${counted(unread, "unread message")}, ${counted(drafts, "unsent announcement")}.`;
+export const dueSummary = ({ toGrade, needsReply, drafts }: WorkPlan["totals"]): string =>
+  `${counted(toGrade, "submission")} to grade, ${counted(needsReply, "message")} needing a reply, ${counted(drafts, "unsent announcement")}.`;
 
 const WEEKDAY = new Intl.DateTimeFormat("en-US", { weekday: "long" });
 const DAY = 86_400_000;
@@ -251,7 +252,7 @@ export const planWork = ({ groups, extras, stages, expired, now }: PlanInput): W
     string,
     { course: string; stage: WorkStage | null; rows: [InboxRow, ...InboxRow[]] }
   >();
-  for (const row of extras.unread) {
+  for (const row of extras.replies) {
     const stage = stages.get(row.conversation.ref)?.stage ?? null;
     const key = `${row.course.ref}:${stage ?? "open"}`;
     const group = repliesByStage.get(key);
@@ -299,7 +300,7 @@ export const planWork = ({ groups, extras, stages, expired, now }: PlanInput): W
     notYet: open.filter((item) => !hasWorkToGrade(item) && item.days <= WEEK_AHEAD),
     totals: {
       toGrade: items.reduce((sum, item) => sum + item.toGrade, 0),
-      unread: extras.unread.length,
+      needsReply: extras.replies.filter(needsReply).length,
       drafts: extras.drafts.length,
     },
   };

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { DRAFT_GRADE_REQUEST, type Agent, type AgentInput } from "~/shared/agent/agent";
 import type { LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
+import { invoker, type Bridge } from "~/shared/ipc";
+import { createBridgeAgent } from "~/renderer/providers/agent";
 import {
   selectCourseWaiting,
   selectGradebook,
@@ -241,5 +243,48 @@ describe("once the message asking for a resubmit is sent (#98)", () => {
     expect(rowOf(rig, ref)).toMatchObject({ open: true, asked: null });
     expect(cellOf(rig, ref)?.asked).toBeNull();
     expect(toGrade(rig, ref)).toEqual(before);
+  });
+
+  it("North Star sends Claude the app's to-grade count, with the asked work apart (#110)", async () => {
+    const { rig, ref, agent } = await declined();
+    await send(rig, ref);
+    const started = rig.state().startChat("What's waiting for me to grade?");
+    if (!started) throw new Error("No chat started.");
+    await rig.clock.run(started.done);
+    const heard = agent.heard.at(-1);
+    if (!heard?.scope.northStar) throw new Error("no North Star turn");
+
+    const sent: unknown[] = [];
+    const bridge: Bridge = {
+      agent: "claude",
+      invoke: invoker(async (_channel, raw) => {
+        sent.push(raw);
+        return { ok: true, effects: [], spend: { tokens: 0, usd: 0 } };
+      }),
+    };
+    for await (const _ of createBridgeAgent(bridge, () => true).run(
+      heard,
+      new AbortController().signal,
+    ));
+    const claude = sent[0] as {
+      scope: {
+        submissions: { ref: string; waiting: string }[];
+        northStar: {
+          grading: {
+            course: string;
+            toGrade: number;
+            askedToResubmit: number;
+          }[];
+        };
+      };
+    };
+    const course = rowOf(rig, ref)?.course.ref;
+    const [list] = toGrade(rig, ref);
+    expect(claude.scope.northStar.grading.find((c) => c.course === course)).toEqual({
+      course,
+      toGrade: list,
+      askedToResubmit: 1,
+    });
+    expect(claude.scope.submissions.find((s) => s.ref === ref)?.waiting).toBe("asked to resubmit");
   });
 });

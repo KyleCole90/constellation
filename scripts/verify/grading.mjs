@@ -1,4 +1,5 @@
 import { addAiKey } from "./ai-key.mjs";
+import { repliesAgree } from "./courses.mjs";
 import { expandCourse } from "./sidebar.mjs";
 import { onboard } from "./onboard.mjs";
 
@@ -2174,6 +2175,23 @@ const replyDiscard = async (t) => {
   await replyCard(t);
   await settled(t, "reply discard: drafted again from the button");
   await t.shot("reply-drafted-from-button");
+  await t.click("Discard", { within: '[data-testid="card-actions"]' });
+  await t.waitFor(
+    `!document.querySelector(${JSON.stringify(CARD)})`,
+    "the last reply is discarded",
+  );
+  const student = await t.eval(
+    `(async () => JSON.parse(await window.__faultLab.stored()).conversations.find((c) => c.ref === ${JSON.stringify(row)}).from)()`,
+  );
+  await repliesAgree(t, "a discarded reply");
+  t.assert(
+    await t.eval(
+      `document.querySelector('[data-testid="due-list"]').textContent.includes(${JSON.stringify(student)})`,
+    ),
+    "What's due still lists the student whose reply was discarded (#110)",
+    student,
+  );
+  await t.shot("reply-discarded-whats-due");
 };
 
 const submissionTypes = async (t) => {

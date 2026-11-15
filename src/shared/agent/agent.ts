@@ -147,6 +147,11 @@ export interface AgentScope {
     now: IsoTime;
     next: readonly NextWork[];
     grades: readonly CourseGrades[];
+    /** The submissions the app counts as to grade, and the ones asked back to resubmit, which wait on the student. */
+    grading: {
+      toGrade: readonly LmsRef<"submission">[];
+      asked: readonly LmsRef<"submission">[];
+    };
   };
 }
 
