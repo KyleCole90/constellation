@@ -237,6 +237,14 @@ describe("main's Anthropic agent", () => {
     );
   });
 
+  it("tells Claude it can point to the app's Zero and Excuse on missing work, never Canvas (#152)", async () => {
+    const api = transport(() => json(200, message([])));
+    await anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch })(INPUT);
+    expect(api.sent[0]?.body["system"]).toContain(
+      "never say the app can't do it or send the teacher to Canvas for it",
+    );
+  });
+
   it("forwards only its own tools, and a tool's input can't rename the effect", async () => {
     const api = transport(() =>
       json(

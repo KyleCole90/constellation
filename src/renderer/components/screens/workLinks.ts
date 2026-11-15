@@ -65,6 +65,35 @@ export const useWorkLinks = () => {
   return useMemo(() => {
     const toThread = (id: ThreadId) =>
       void navigate({ to: "/threads/$threadId", params: { threadId: id } });
+    const openSubmission = (submission: LmsRef<"submission">) => {
+      const state = store();
+      const found = selectSubmission(state, submission);
+      const assignment =
+        found?.workflow === "missing" ? selectAssignment(state, found.assignment) : null;
+      if (assignment) {
+        // Missing work is a row only in its own assignment's grading list.
+        const thread = gradingThread(assignment);
+        if (!thread) return;
+        const row = selectQueueRows(state, assignment.ref, true).find(
+          (candidate) => candidate.submission.ref === submission,
+        );
+        state.setThreadUi(thread, {
+          current: submission,
+          queueOpen: true,
+          queueFilter: "all",
+          panel: null,
+        });
+        state.focusChange(thread, row?.change?.id ?? null);
+        toThread(thread);
+        return;
+      }
+      const queue = Object.values(state.threads).find((thread) => thread.kind === "queue");
+      if (!queue) return;
+      state.setThreadUi(queue.id, { current: submission, queueOpen: false, panel: "source" });
+      state.focusChange(queue.id, null);
+      void state.openSubmission(queue.id, submission);
+      toThread(queue.id);
+    };
     return {
       assignment: (assignment: Assignment) => {
         const thread = gradingThread(assignment);
@@ -108,35 +137,7 @@ export const useWorkLinks = () => {
         if (row.last?.mine !== true) void state.openConversation(thread, row.conversation.ref);
         toThread(thread);
       },
-      submission: (submission: LmsRef<"submission">) => {
-        const state = store();
-        const found = selectSubmission(state, submission);
-        const assignment =
-          found?.workflow === "missing" ? selectAssignment(state, found.assignment) : null;
-        if (assignment) {
-          // Missing work is a row only in its own assignment's grading list.
-          const thread = gradingThread(assignment);
-          if (!thread) return;
-          const row = selectQueueRows(state, assignment.ref, true).find(
-            (candidate) => candidate.submission.ref === submission,
-          );
-          state.setThreadUi(thread, {
-            current: submission,
-            queueOpen: true,
-            queueFilter: "all",
-            panel: null,
-          });
-          state.focusChange(thread, row?.change?.id ?? null);
-          toThread(thread);
-          return;
-        }
-        const queue = Object.values(state.threads).find((thread) => thread.kind === "queue");
-        if (!queue) return;
-        state.setThreadUi(queue.id, { current: submission, queueOpen: false, panel: "source" });
-        state.focusChange(queue.id, null);
-        void state.openSubmission(queue.id, submission);
-        toThread(queue.id);
-      },
+      submission: openSubmission,
       inbox: (conversation: LmsRef<"conversation">) => {
         openInInbox(conversation);
         void navigate({ to: "/inbox", search: { conversation } });
@@ -146,6 +147,8 @@ export const useWorkLinks = () => {
         const submission = cell.submission;
         const target = cellTarget(cell);
         if (!submission || target === "none") return;
+        // Missing work opens where Claude's card opens it, the grading list with Zero and Excuse.
+        if (target === "missing") return openSubmission(submission.ref);
         const thread = gradingThread(assignment);
         if (!thread) return;
         state.setThreadUi(thread, {

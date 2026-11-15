@@ -1894,6 +1894,54 @@ const gradebook = async (t) => {
   );
   await shot(t, "gradebook-drafted");
   await gradedWithoutThread(t);
+  await missingCellExcused(t);
+};
+
+/** A missing cell opens the form Claude's card opens, where Excuse reaches the preview and Discard sends nothing (#152). */
+const missingCellExcused = async (t) => {
+  await goTab(t, "ENG 101", "Gradebook");
+  const ref = await t.eval(
+    `document.querySelector('[data-cell][data-target="missing"]:has([data-mark="missing"])')?.dataset.cell`,
+  );
+  t.assert(Boolean(ref), "a missing cell is a button (#152)");
+  const name = await lms(
+    t,
+    `lms.submissions.find((s) => s.ref === ${JSON.stringify(ref)}).studentName`,
+  );
+  const holds = (selector) =>
+    `document.querySelector(${JSON.stringify(selector)})?.innerText.includes(${JSON.stringify(name)})`;
+  await t.click(`[data-cell="${ref}"]`);
+  await t.waitFor(
+    `${holds(QUEUE_STRIP)} && (${holds(CARD)} || ${holds(OPEN)})`,
+    "clicking a missing cell opens that student in the assignment's grading list (#152)",
+  );
+  if (await t.has(OPEN)) await t.click("Grade it yourself", { within: OPEN });
+  await t.waitFor(
+    `${holds(CARD)} && [...document.querySelectorAll(${JSON.stringify(`${CARD} button`)})].some((b) => b.innerText === "Excuse")`,
+    "the missing student's form offers Zero and Excuse (#152)",
+  );
+  await shot(t, "gradebook-missing-form");
+  await t.click("Excuse", { within: CARD });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(`${CARD} [data-testid="draft-grade"]`)})?.innerText.includes("Excused")`,
+    "Excuse makes the grade read Excused",
+  );
+  await t.click("Preview", { within: ACTIONS });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(PANEL)})?.innerText.includes("Excused. It won't count toward the student's grade.")`,
+    "the preview says the missing work will be excused (#152)",
+  );
+  await shot(t, "gradebook-missing-excused-preview");
+  await t.click("Discard", { within: PANEL });
+  await t.waitFor(
+    `!document.querySelector(${JSON.stringify(PANEL)})`,
+    "Discard closes the preview",
+  );
+  t.assert(
+    (await lms(t, `lms.submissions.find((s) => s.ref === ${JSON.stringify(ref)}).workflow`)) ===
+      "missing",
+    "the discarded excuse never reached the LMS",
+  );
 };
 
 /** A graded cell with no change opens on that student, with the grade and comment the LMS holds and the same two choices (#39). */

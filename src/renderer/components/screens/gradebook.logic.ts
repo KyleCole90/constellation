@@ -21,13 +21,13 @@ export const pendingWords = (cell: GradebookCell): string | null => {
   return cell.proposed === null ? state : `${cell.proposed} ${state}`;
 };
 
-/** What clicking a cell does: open work to grade, read the record of a send, read the submission, or nothing at all. */
-export type CellTarget = "work" | "record" | "view" | "none";
+/** What clicking a cell does: open work to grade, open missing work to zero or excuse, read the record of a send, read the submission, or nothing at all. */
+export type CellTarget = "work" | "missing" | "record" | "view" | "none";
 
 export const cellTarget = (cell: GradebookCell): CellTarget => {
   const submission = cell.submission;
-  if (!submission || submission.workflow === "missing" || submission.workflow === "unsubmitted")
-    return "none";
+  if (!submission || submission.workflow === "unsubmitted") return "none";
+  if (submission.workflow === "missing") return "missing";
   if (cell.pending || submission.workflow === "submitted") return "work";
   return cell.sent ? "record" : "view";
 };
