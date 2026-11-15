@@ -747,7 +747,7 @@ const COMMENT_MIN_LINES = 3;
 const CARD_MARGIN_PX = 20;
 const REASONS_ASIDE = "data-reasons-aside";
 
-// The focused card's height in the chat with its comment cut to the fewest lines it shows, so an open queue can give up rows until the comment is in view (#207).
+// The focused card's height in the chat with its comment cut to the fewest lines it shows, so an open queue can give up rows until the comment is in view.
 export const cardFloor = (chat: HTMLElement): number => {
   const card = chat.querySelector<HTMLElement>("article[data-focused]");
   const field = card?.querySelector<HTMLElement>("[data-edit-field]");

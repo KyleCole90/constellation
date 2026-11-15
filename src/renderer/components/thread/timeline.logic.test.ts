@@ -222,7 +222,7 @@ describe("settledText", () => {
     expect(settledText("Press Approve, then Send.")).toBe("");
   });
 
-  it("drops every step before sending, not only approving (#81, walk 11)", () => {
+  it("drops every step before sending, not only approving (#81)", () => {
     expect(
       settledText(
         "I drafted a message asking Natalie for a working link. You can review it and edit it before you send it.",
@@ -230,7 +230,7 @@ describe("settledText", () => {
     ).toBe("I drafted a message asking Natalie for a working link.");
   });
 
-  it("drops a line about reviewing before sending (#81, walk 12)", () => {
+  it("drops a line about reviewing before sending (#81)", () => {
     expect(settledText("I drafted a message to Shelly. You can review it before sending.")).toBe(
       "I drafted a message to Shelly.",
     );
@@ -250,7 +250,7 @@ describe("liveReplies", () => {
     expect(liveReplies(message, [message])).toEqual(["What's next to grade?"]);
   });
 
-  it("offers no chip on a message about a draft, sent or not, since the card and the app's own chips act on it (#81, walk 12)", () => {
+  it("offers no chip on a message about a draft, sent or not, since the card and the app's own chips act on it (#81)", () => {
     const grade = filed(
       offering(["Make it 16 to match the current grade", "What would earn full marks?"]),
       "c1",

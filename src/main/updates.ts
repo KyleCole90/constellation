@@ -12,7 +12,7 @@ interface Updater {
  * they ask it to, so an update never interrupts a send.
  */
 export const startUpdates = (updater: Updater, ready: (version: string) => Promise<boolean>) => {
-  // Offline, or no release yet: the next launch checks again. Error tracking (step 9) will report these.
+  // Offline, or no release yet: the next launch checks again.
   updater.on("error", () => {});
   updater.on("update-downloaded", ({ version }) => {
     ready(version).then(

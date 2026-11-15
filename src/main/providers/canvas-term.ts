@@ -212,7 +212,7 @@ const BARE_URL = /https?:\/\/[^\s"'<>]*[^\s"'<>.,;:!?)]/g;
 const REFUSED_FILE_TEXT = "This app doesn't edit files in Canvas.";
 
 /**
- * Term setup on a school's real Canvas (docs/electron-spec.md, step 13): the reads a new term needs, and the writes a
+ * Term setup on a school's real Canvas: the reads a new term needs, and the writes a
  * copy, a fix, a publish and a template send, each one request. Long jobs aren't waited on here: `migrations` reads
  * each job's progress once, and the setup screen asks again.
  */

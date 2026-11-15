@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # Electron is pinned exactly and updates in its own PR, so a new major is never buried in a group (docs/electron-spec.md, D32).
+  # Electron is pinned exactly and updates in its own PR, so a new major is never buried in a group.
   - package-ecosystem: npm
     directory: /
     schedule:

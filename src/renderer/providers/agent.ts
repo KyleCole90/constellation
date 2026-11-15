@@ -91,7 +91,7 @@ const forClaude = (scope: AgentScope): unknown => {
 
 /**
  * The desktop app's agent: Claude, run in main over `agent.run` with the key from main's vault. Everything it yields
- * still goes through `parseAgentEffect`, like the rules agent's output (docs/electron-spec.md, D26).
+ * still goes through `parseAgentEffect`, like the rules agent's output.
  */
 export const createBridgeAgent = (bridge: Bridge, online = isOnline): Agent => ({
   async *run({ request, thread, scope, files = [] }) {

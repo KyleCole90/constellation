@@ -156,7 +156,7 @@ function ConflictBanner({ view }: { view: ChangeView }) {
   );
 }
 
-/** Retry and Resume both send, so offline they are disabled up front, like Send (D28). */
+/** Retry and Resume both send, so offline they are disabled up front, like Send. */
 function SendAgain({
   id,
   primary = false,

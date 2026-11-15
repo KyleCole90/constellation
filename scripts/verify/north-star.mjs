@@ -702,7 +702,7 @@ const nextUp = async (t) => {
       JSON.stringify(seen),
     );
   }
-  // The open list shows whole rows, up to its share of the screen, and gives up rows on a short screen so the card's grade and comment stay in view (#159, #207).
+  // The open list shows whole rows, up to its share of the screen, and gives up rows on a short screen so the card's grade and comment stay in view (#159).
   await t.eval(
     `window.__layoutErrors = []; window.addEventListener("error", (event) => window.__layoutErrors.push(event.message))`,
   );

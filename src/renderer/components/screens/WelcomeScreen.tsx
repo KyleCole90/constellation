@@ -54,7 +54,7 @@ const AI_OPTIONS: readonly AiOption[] = [
         } satisfies AiOption,
       ]
     : []),
-  // The desktop app drafts with Claude alone (D27), so it offers no on-device model.
+  // The desktop app drafts with Claude alone, so it offers no on-device model.
   ...(REAL_AI
     ? []
     : [

@@ -49,7 +49,7 @@ const sent = (
   messages: [{ id: "1", mine: true, author: "Teacher", text, at: at as IsoTime }],
 });
 
-/** The messages walk 11 found in the sandbox's sent folder, as their subjects and openings read. */
+/** The messages found in the sandbox's sent folder, as their subjects and openings read. */
 const SENT = [
   sent(
     JOEY,

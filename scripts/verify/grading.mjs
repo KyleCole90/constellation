@@ -2656,7 +2656,7 @@ const cantSee = async (t) => {
     t.assert((await t.eval(savedChanges)) === before + 1, `${label}: one message is saved`);
     t.assert(
       !(await t.has(`${CHAT} [data-testid="replies"]`)),
-      `${label}: none of Claude's chips sit beside the app's own "Make it shorter" under the draft (#81, walk 12)`,
+      `${label}: none of Claude's chips sit beside the app's own "Make it shorter" under the draft (#81)`,
       await t.text(CHAT),
     );
   };
@@ -2718,7 +2718,7 @@ const cantSee = async (t) => {
   );
   t.assert(
     !(await t.has(`${CHAT} [data-testid="replies"]`)),
-    "resubmit: under the Sent card, no chip of Claude's offers to change what already went (#81, walk 12)",
+    "resubmit: under the Sent card, no chip of Claude's offers to change what already went (#81)",
     await t.text(CHAT),
   );
   await t.shot("cant-see-message-sent");

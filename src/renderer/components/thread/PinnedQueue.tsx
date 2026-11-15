@@ -212,7 +212,7 @@ export function SelectionBar({
           Draft {toDraft.length}
         </Button>
       )}
-      {/* A batch opened now would leave out the rows still drafting, and Approve would skip them unseen (#249). */}
+      {/* A batch opened now would leave out the rows still drafting, and Approve would skip them unseen. */}
       {toReview.length > 0 && waiting.length === 0 && !batching && (
         <Button
           variant="default"
@@ -264,7 +264,7 @@ const useRowsOutOfView = (
   return { above, below };
 };
 
-// The open list takes up to this share of the thread, cut at a row's edge so no row shows in half. On a short screen it gives up rows, down to one, so the focused card and its comment stay in view (#207).
+// The open list takes up to this share of the thread, cut at a row's edge so no row shows in half. On a short screen it gives up rows, down to one, so the focused card and its comment stay in view.
 const LIST_SHARE = 0.46;
 
 const useWholeRows = (

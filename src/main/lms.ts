@@ -34,7 +34,7 @@ import { jsonFile } from "./json-file";
 import { canvasSchoolAt, createCanvasProvider, type Fetch } from "./providers/canvas";
 
 /**
- * A `StorageLike` in one JSON file under `userData` (docs/electron-spec.md, D8). Main is its only writer, so it reads
+ * A `StorageLike` in one JSON file under `userData`. Main is its only writer, so it reads
  * the file once and answers from memory after that.
  */
 export const createFileStorage = (file: string): StorageLike => {
@@ -116,7 +116,7 @@ const NO_TERM_SETUP = {
 
 /**
  * Main's half of every `lms.*` channel: one provider per school, holding a lease on main's vault, so a token never
- * crosses to the renderer. The fake LMS runs here, the way a real one will (docs/electron-spec.md, step 10).
+ * crosses to the renderer. The fake LMS runs here, the way a real one will.
  */
 export const lmsHandlers = (options: {
   /**

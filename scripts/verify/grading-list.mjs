@@ -367,7 +367,7 @@ const missingWork = async (t) => {
 const queueTitles = `[...document.querySelectorAll(${JSON.stringify(`${QUEUE} [data-row]`)})].map((row) => row.querySelector("button span[title]").innerText)`;
 const fionaRow = `[...document.querySelectorAll(${JSON.stringify(`${QUEUE} [data-row]`)})].find((row) => row.querySelector("button span[title]")?.innerText === "Fiona Kerr")`;
 
-/** Her zero posting turns her Missing into graded in the LMS, but she keeps her place, so Next stays off on the last row (#204). */
+/** Her zero posting turns her Missing into graded in the LMS, but she keeps her place, so Next stays off on the last row. */
 const keepsPlaceAfterSend = async (t, order) => {
   if (!(await t.has(LIST))) await t.click("Expand queue");
   await t.waitFor(

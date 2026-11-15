@@ -72,7 +72,7 @@ const useCrashReports = (): Status | null => {
 };
 
 /**
- * The opt-out, on by default (D24). A copy of the app that can't send reports (no build key, or turned off in its
+ * The opt-out, on by default. A copy of the app that can't send reports (no build key, or turned off in its
  * environment) says so instead of offering a choice that does nothing. Hidden in the web demo, which has nothing to turn off.
  */
 function CrashReportsToggle() {
@@ -103,7 +103,7 @@ function CrashReportsToggle() {
   );
 }
 
-/** The setup page's privacy step: the opt-out, then the whole notice behind a disclosure (D24, D36). */
+/** The setup page's privacy step: the opt-out, then the whole notice behind a disclosure. */
 export function SetupPrivacy({ title }: { title: ReactNode }) {
   const sends = useCrashReports()?.available === true;
   return (

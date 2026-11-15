@@ -20,7 +20,10 @@ const WAIT_MS = 30_000;
 /** The key the workspace store writes, under the app's own origin, in Chromium's localStorage log. */
 const STORE_KEY = "_app://constellation\u0000\u0001lms-app.v1";
 
-/** docs/electron-spec.md, "Security baseline", plus cookie encryption and no file:// privileges. */
+/**
+ * The fuses a packaged build keeps: no RunAsNode, NODE_OPTIONS or --inspect, asar-only with integrity checks, cookie
+ * encryption, and no file:// privileges.
+ */
 const FUSES = {
   RunAsNode: false,
   EnableNodeOptionsEnvironmentVariable: false,
@@ -96,7 +99,7 @@ const checkFuses = async () => {
   const wrong = Object.entries(FUSES).filter(
     ([name, on]) => wire[FuseV1Options[name]] !== (on ? FuseState.ENABLE : FuseState.DISABLE),
   );
-  if (wrong.length) throw new Error(`fuses not as the spec sets them: ${wrong.map(([n]) => n)}`);
+  if (wrong.length) throw new Error(`fuses differ from FUSES: ${wrong.map(([n]) => n)}`);
   console.log(`ok fuses: ${Object.entries(FUSES).map(([n, on]) => `${n}=${on}`)}`);
 };
 

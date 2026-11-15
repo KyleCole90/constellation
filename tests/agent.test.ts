@@ -189,7 +189,7 @@ describe("the agent, going through the store", () => {
     }
   });
 
-  it("a correction's score and comment land, and its reason stands even with no usable quotes (walk 5, #65)", async () => {
+  it("a correction's score and comment land, and its reason stands even with no usable quotes (#65)", async () => {
     const rules = createRuleAgent();
     const correcting: Agent = {
       async *run(input, signal) {

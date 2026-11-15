@@ -131,7 +131,7 @@ export function PanelToggle({
   );
 }
 
-/** What Claude's runs in this thread used and cost (docs/electron-spec.md, AI). Absent until one reports. */
+/** What Claude's runs in this thread used and cost. Absent until one reports. */
 function ThreadSpend({ thread }: { thread: Thread }) {
   if (!thread.spend) return null;
   return (

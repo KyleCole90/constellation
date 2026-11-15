@@ -29,7 +29,7 @@ import {
 } from "./providers/schemas";
 
 /**
- * A renderer error as it crosses to main: its type and its stack, never its message (docs/electron-spec.md, D23).
+ * A renderer error as it crosses to main: its type and its stack, never its message.
  * Strict, so a payload carrying anything more is rejected rather than trimmed.
  */
 /** A report keeps at most this many frames, and its stack at most this many characters. */
@@ -126,7 +126,7 @@ interface Channel {
   readonly output: v.GenericSchema;
 }
 
-/** Every channel between the renderer and main, declared once (docs/electron-spec.md, D16). */
+/** Every channel between the renderer and main, declared once. */
 const ipc = {
   "error.report": { input: RendererError, output: v.void() },
   /** Whether crash reports are on (the teacher's choice), and whether this build and launch can send any. */
@@ -147,13 +147,13 @@ const ipc = {
    */
   "vault.standIn": { input: ByKey, output: v.nullable(v.string()) },
   /** The school at an address: one of the fake's, or real Canvas at that host. Null when main knows none there. */
-  /** Claude in main, from the source the teacher chose: the key in main's vault, or their Claude Code (docs/electron-spec.md, AI). */
+  /** Claude in main, from the source the teacher chose: the key in main's vault, or their Claude Code. */
   "agent.run": { input: AgentRunInput, output: AgentRunOutput },
   /** The teacher's choice of source, which `agent.run` follows. Main never falls back from one to the other. */
   "agent.source": { input: v.strictObject({ source: AgentSourceSchema }), output: v.void() },
   "claudeCode.status": { input: v.void(), output: ClaudeCodeStatus },
   "lms.schoolAt": { input: v.strictObject({ host: v.string() }), output: v.nullable(SchoolSchema) },
-  // A school's LmsProvider, run in main with the token from main's vault (docs/electron-spec.md, step 10).
+  // A school's LmsProvider, run in main with the token from main's vault.
   "lms.verify": { input: BySchool, output: readOf(AccountInfoSchema) },
   "lms.courses": { input: BySchool, output: readOf(listOf(CourseSchema)) },
   "lms.assignments": { input: ByCourse, output: readOf(listOf(AssignmentSchema)) },
