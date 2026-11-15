@@ -1,4 +1,4 @@
-import type { Agent, AgentScope } from "~/shared/agent/agent";
+import type { Agent, AgentScope, Standing } from "~/shared/agent/agent";
 import { repliedAt } from "~/shared/domain/change";
 import { awaitsReply, type Submission } from "~/shared/domain/lms";
 import { OFFLINE_REASON, isOnline } from "~/renderer/desktop";
@@ -30,6 +30,8 @@ const withChange = (raw: unknown, scope: AgentScope): unknown => {
  * as the badge shows it, so its headline can't count asked-back work. It sees whether each assignment has a rubric,
  * not its criteria; reading or grading one is a handoff to a course thread. Grades come as the gradebook's totals.
  * Each conversation says whether it awaits a reply as What's due counts it, in place of whether it was read (#127).
+ * Every count Claude might say comes counted, each assignment's missing work and each course's students by standing,
+ * because Claude counting a list said "11 students" and then named 13 (#151).
  */
 const forClaude = (scope: AgentScope): unknown => {
   if (!scope.northStar) return scope;
@@ -54,9 +56,27 @@ const forClaude = (scope: AgentScope): unknown => {
       ...rest,
       awaitingReply: awaitsReply(rest.messages.at(-1), repliedAt(scope.changes, rest.ref)),
     })),
-    assignments: scope.assignments.map((a) => ({ ...a, rubric: a.rubric !== null })),
+    assignments: scope.assignments.map((a) => ({
+      ...a,
+      rubric: a.rubric !== null,
+      missing: submissions.filter((s) => s.assignment === a.ref && s.waiting === "missing").length,
+    })),
     northStar: {
       ...scope.northStar,
+      grades: scope.northStar.grades.map((course) => {
+        const standing = (of: Standing) => course.students.filter((s) => s.standing === of).length;
+        return {
+          ...course,
+          counts: {
+            students: course.students.length,
+            withMissingWork: course.students.filter((s) => s.missing > 0).length,
+            atRisk: standing("At risk"),
+            watch: standing("Watch"),
+            onTrack: standing("On track"),
+            noGrades: standing("No grades yet"),
+          },
+        };
+      }),
       grading: scope.courses.map((course) => {
         const mine = submissions.filter((s) => s.course === course.ref);
         return {

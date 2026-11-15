@@ -1684,7 +1684,7 @@ const keyboardAndClear = async (t) => {
   );
   const summary = await t.text('[data-testid="due-summary"]');
   const inLms = await t.eval(
-    `(async () => JSON.parse(await window.__faultLab.stored()).submissions.filter((s) => s.workflow === "submitted").length)()`,
+    `(async () => { const lms = JSON.parse(await window.__faultLab.stored()); return lms.submissions.filter((s) => s.workflow === "submitted" && lms.students.some((st) => st.ref === s.student && st.course === s.course)).length; })()`,
   );
   t.assert(
     (await t.has('[data-connection="syncing"]')) &&

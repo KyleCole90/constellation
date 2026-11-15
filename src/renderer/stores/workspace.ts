@@ -1145,7 +1145,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             if (!announcements.ok) return fail(announcements.error);
             cache.assignments.push(...assignments.value);
             cache.students.push(...students.value);
-            cache.submissions.push(...submissions.value);
+            // Canvas returns concluded students' and the Test Student's work too. Every count reads the roster's (#151).
+            const roster = new Set(students.value.map((student) => student.ref));
+            cache.submissions.push(...submissions.value.filter((s) => roster.has(s.student)));
             cache.announcements.push(...announcements.value);
           }
           if (gone()) return false;
@@ -1628,6 +1630,12 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           const current = get().threads[thread];
           if (!current || !get().aiOn()) return;
           const data = scopeOf(get(), current);
+          // An item's turn also sees what already went to its student, or Claude offers to write it again (#153).
+          const studentOf = (ref: string) =>
+            allCaches()
+              .flatMap((cache) => cache.submissions)
+              .find((s) => s.ref === ref)?.student;
+          const messaged = target === undefined ? undefined : studentOf(target);
           const scope: AgentScope = {
             focus: current.focus,
             ...data,
@@ -1636,7 +1644,11 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               return Object.values(get().changes).filter(
                 (change) =>
                   (!current.course || change.course === current.course) &&
-                  (target === undefined || change.content.target === target),
+                  (target === undefined ||
+                    change.content.target === target ||
+                    (change.content.kind === "message" &&
+                      messaged !== undefined &&
+                      studentOf(change.content.target) === messaged)),
               );
             },
           };
