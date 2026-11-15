@@ -506,6 +506,9 @@ const initialData = (backend: Backend, resetAt: number): WorkspaceData => ({
   resetAt,
 });
 
+/** One array, because screens select `demoHosts()` and a fresh one each call would re-render them forever. */
+const NO_HOSTS: readonly SchoolHost[] = [];
+
 const notAvailable: SecretRefusal = { message: "That school isn't available.", wrongSecret: false };
 
 /** Only a refused token is the token's fault. Anything else leaves it filled in, since Canvas shows a token only once. */
@@ -2300,7 +2303,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           },
           newSchoolEnrollment: () =>
             backend.descriptors[backend.newSchoolProvider]?.enrollment ?? null,
-          demoHosts: () => backend.demo?.hosts ?? [],
+          demoHosts: () => backend.demo?.hosts ?? NO_HOSTS,
 
           laneStatus: (school) => writeback.laneStatus(school),
           setOnboarding: (step) => set({ onboarding: step }),

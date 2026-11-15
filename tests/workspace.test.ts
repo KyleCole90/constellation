@@ -342,6 +342,11 @@ describe("the teacher's desktop app, which has no demo", () => {
     expect(rig.state().now()).toBe(WALL);
   });
 
+  it("answers the same empty demo offer each time, so a screen that selects it settles", async () => {
+    const rig = await makeStoreRig({ noDemo: true });
+    expect(rig.state().demoHosts()).toBe(rig.state().demoHosts());
+  });
+
   it("leaves a real school, its token and the AI key alone when asked to reset demo data", async () => {
     const rig = await makeStoreRig({ noDemo: true, realSchools: [LCC] });
     await rig.connect(LCC);
