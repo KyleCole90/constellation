@@ -2589,6 +2589,26 @@ const cantSee = async (t) => {
     JSON.stringify(freshShown),
   );
   await t.shot("cant-see-fresh-copy-open");
+
+  const [code] = fresh.match(/\b[A-Z]+ \d+\b/) ?? [];
+  t.assert(code, "fresh copy: the row names its course", fresh);
+  await t.click(code, { within: '[data-testid="sidebar"]' });
+  await t.click("Gradebook", { within: '[data-testid="course-tabs"]' });
+  const cell = `[data-cell="${row}"]`;
+  await t.waitFor(`document.querySelector('${cell}')`, "fresh copy, Gradebook: the cell shows");
+  const cellText = await t.text(cell);
+  t.assert(
+    (await t.has(`${cell} [data-mark="asked"]`)) &&
+      !(await t.has(`${cell} [data-mark="ungraded"]`)) &&
+      cellText.includes("Asked to resubmit"),
+    "fresh copy, Gradebook: the cell says the student was asked to resubmit, not Ungraded, as the grading list does (#106)",
+    cellText,
+  );
+  t.assert(
+    (await t.text('[data-testid="gradebook-legend"]')).includes("Asked to resubmit"),
+    "fresh copy, Gradebook: the legend says what the asked mark means (#106)",
+  );
+  await t.shot("cant-see-fresh-copy-gradebook");
 };
 
 /** A preference typed in chat is the thread's guidance: it shows above the composer, survives a reload, reaches the next Draft press, and clears (#97). */
