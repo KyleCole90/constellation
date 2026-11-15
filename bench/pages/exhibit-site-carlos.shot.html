@@ -1,0 +1,235 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Riverbend Mill</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Helvetica Neue", Arial, sans-serif;
+        color: #222;
+        min-height: 2600px;
+        background: #faf7f2;
+      }
+      .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 18px 60px;
+        background: #fff;
+        border-bottom: 1px solid #e4dccf;
+      }
+      .logo {
+        font:
+          bold 24px Georgia,
+          serif;
+        color: #7a3b1d;
+      }
+      .logo small {
+        display: block;
+        font: 11px Arial;
+        letter-spacing: 3px;
+        color: #aa8f78;
+        text-transform: uppercase;
+      }
+      nav a {
+        margin-left: 30px;
+        font-size: 15px;
+        color: #444;
+        text-decoration: none;
+      }
+      nav a.on {
+        border-bottom: 2px solid #7a3b1d;
+        padding-bottom: 4px;
+      }
+      .hero {
+        height: 430px;
+        background: linear-gradient(120deg, #6b2f17, #b56a3a 55%, #d9a05b);
+        color: #fff;
+        padding: 90px 60px;
+        position: relative;
+        overflow: hidden;
+      }
+      .hero h1 {
+        margin: 0;
+        font:
+          bold 62px/1.05 Georgia,
+          serif;
+        max-width: 760px;
+      }
+      .hero p {
+        font-size: 22px;
+        max-width: 640px;
+        margin: 18px 0 26px;
+      }
+      .btn {
+        display: inline-block;
+        background: #fff;
+        color: #7a3b1d;
+        padding: 12px 30px;
+        font-weight: bold;
+        border-radius: 3px;
+      }
+      .hero svg {
+        position: absolute;
+        right: 50px;
+        top: 60px;
+        opacity: 0.35;
+      }
+      .intro {
+        display: flex;
+        gap: 40px;
+        padding: 50px 60px 20px;
+      }
+      .intro .t {
+        flex: 1.4;
+      }
+      .intro h2 {
+        font:
+          32px Georgia,
+          serif;
+        margin: 0 0 14px;
+        color: #7a3b1d;
+      }
+      .intro p {
+        font-size: 18px;
+        line-height: 1.65;
+        margin: 0 0 14px;
+      }
+      .intro .facts {
+        flex: 1;
+        background: #fff;
+        border: 1px solid #e4dccf;
+        padding: 24px;
+      }
+      .facts h3 {
+        margin: 0 0 12px;
+        font-size: 13px;
+        letter-spacing: 2px;
+        text-transform: uppercase;
+        color: #aa8f78;
+      }
+      .facts div {
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+        font-size: 16px;
+      }
+      .facts b {
+        color: #7a3b1d;
+      }
+      .cards {
+        display: flex;
+        gap: 24px;
+        padding: 20px 60px;
+      }
+      .card {
+        flex: 1;
+        background: #fff;
+        border: 1px solid #e4dccf;
+        padding: 22px;
+      }
+      .card .ph {
+        height: 130px;
+        background: #d7c3ab;
+        margin-bottom: 14px;
+      }
+      .card h4 {
+        margin: 0 0 8px;
+        font:
+          22px Georgia,
+          serif;
+      }
+      .card p {
+        font-size: 15px;
+        line-height: 1.55;
+        margin: 0;
+        color: #555;
+      }
+      .foot {
+        padding: 40px 60px;
+        font-size: 13px;
+        color: #999;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top">
+      <div class="logo">
+        The Riverbend Mill<small>A Town&rsquo;s Engine, 1868&ndash;1974</small>
+      </div>
+      <nav><a class="on">Home</a><a>Timeline</a><a>The Workers</a><a>Gallery</a><a>Sources</a></nav>
+    </div>
+    <div class="hero">
+      <h1>The mill that made Riverbend</h1>
+      <p>
+        For 106 years, the sound of the Riverbend Woolen Mill set the rhythm of the town. This
+        exhibit follows the people, the machines and the river behind it.
+      </p>
+      <span class="btn">Start the timeline</span>
+      <svg width="300" height="260" viewBox="0 0 300 260">
+        <rect x="20" y="90" width="180" height="150" fill="#fff" />
+        <rect x="200" y="140" width="80" height="100" fill="#fff" />
+        <rect x="150" y="20" width="26" height="90" fill="#fff" />
+        <g fill="#b56a3a">
+          <rect x="40" y="110" width="26" height="30" />
+          <rect x="85" y="110" width="26" height="30" />
+          <rect x="130" y="110" width="26" height="30" />
+          <rect x="40" y="160" width="26" height="30" />
+          <rect x="85" y="160" width="26" height="30" />
+          <rect x="130" y="160" width="26" height="30" />
+        </g>
+      </svg>
+    </div>
+    <div class="intro">
+      <div class="t">
+        <h2>Welcome</h2>
+        <p>
+          I made this exhibit for U.S. History because my great-grandfather, Anselmo Vega, worked at
+          the mill from 1921 until it closed. When I started asking questions I found out that
+          almost everyone in our town has someone who worked there.
+        </p>
+        <p>
+          Here you will find a timeline of the mill, profiles of four workers I interviewed or
+          researched, photographs from the county historical society, and a page of sources. Use the
+          menu above to move around.
+        </p>
+        <p>
+          Why does a small wool mill matter? Because it shows, in one place, what industrialization
+          did to an ordinary American town: it brought jobs and a company store, new families and
+          new problems, strikes and, eventually, the end of an era.
+        </p>
+      </div>
+      <div class="facts">
+        <h3>Quick facts</h3>
+        <div><b>Founded:</b> 1868</div>
+        <div><b>Peak workforce:</b> about 900 (1923)</div>
+        <div><b>Product:</b> wool blankets and army cloth</div>
+        <div><b>Power:</b> water wheel, then steam, then electric</div>
+        <div><b>Closed:</b> 1974</div>
+      </div>
+    </div>
+    <div class="cards">
+      <div class="card">
+        <div class="ph"></div>
+        <h4>Timeline</h4>
+        <p>From the first water wheel in 1868 to the final shift in 1974, in 18 steps.</p>
+      </div>
+      <div class="card">
+        <div class="ph"></div>
+        <h4>The Workers</h4>
+        <p>Four profiles, including a weaver, a night watchman and a union organizer.</p>
+      </div>
+      <div class="card">
+        <div class="ph"></div>
+        <h4>The 1934 Strike</h4>
+        <p>Nine weeks that divided the town, with newspaper clippings and one oral history.</p>
+      </div>
+    </div>
+    <div class="foot">
+      &copy; 2025 Carlos Vega &middot; Made for U.S. History, Period 3 &middot; Created with Wix
+    </div>
+  </body>
+</html>

@@ -1,0 +1,210 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Cellular respiration infographic</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        width: 1200px;
+        background: #1e2433;
+        color: #eef2ff;
+        font-family: Helvetica, Arial, sans-serif;
+      }
+      header {
+        padding: 40px 60px 20px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 58px;
+        letter-spacing: 1px;
+      }
+      h1 span {
+        color: #ffb454;
+      }
+      .sub {
+        font-size: 24px;
+        color: #aab4d4;
+        margin-top: 8px;
+      }
+      .eq {
+        margin: 10px 60px 28px;
+        padding: 18px 28px;
+        background: #2b3350;
+        border-radius: 14px;
+        font-size: 30px;
+        text-align: center;
+      }
+      .steps {
+        display: flex;
+        gap: 20px;
+        margin: 0 60px;
+      }
+      .s {
+        flex: 1;
+        border-radius: 16px;
+        padding: 22px 22px 26px;
+        position: relative;
+      }
+      .s .num {
+        font-size: 70px;
+        font-weight: bold;
+        opacity: 0.35;
+        line-height: 1;
+      }
+      .s h2 {
+        margin: 2px 0 6px;
+        font-size: 30px;
+      }
+      .s .where {
+        font-size: 18px;
+        opacity: 0.85;
+        margin-bottom: 10px;
+      }
+      .s p {
+        font-size: 20px;
+        line-height: 1.4;
+        margin: 6px 0;
+      }
+      .atp {
+        display: inline-block;
+        margin-top: 10px;
+        background: #fff;
+        color: #1e2433;
+        border-radius: 30px;
+        padding: 6px 18px;
+        font-size: 24px;
+        font-weight: bold;
+      }
+      .a {
+        background: #3b5bdb;
+      }
+      .b {
+        background: #c2255c;
+      }
+      .c {
+        background: #2b8a3e;
+      }
+      .bars {
+        margin: 34px 60px 10px;
+        background: #2b3350;
+        border-radius: 14px;
+        padding: 24px 30px;
+      }
+      .bars h3 {
+        margin: 0 0 14px;
+        font-size: 26px;
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        margin: 10px 0;
+        font-size: 20px;
+      }
+      .bar .l {
+        width: 260px;
+      }
+      .bar .f {
+        height: 30px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        padding-left: 10px;
+        font-weight: bold;
+        color: #1e2433;
+      }
+      .facts {
+        display: flex;
+        gap: 20px;
+        margin: 20px 60px 36px;
+      }
+      .facts div {
+        flex: 1;
+        background: #2b3350;
+        border-radius: 14px;
+        padding: 18px 22px;
+        font-size: 20px;
+        line-height: 1.4;
+      }
+      .facts b {
+        color: #ffb454;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>How your cells make <span>ATP</span></h1>
+      <div class="sub">
+        Cellular respiration in three steps &middot; Felix Aarons &middot; Biology
+      </div>
+    </header>
+    <div class="eq">
+      C<sub>6</sub>H<sub>12</sub>O<sub>6</sub> + 6 O<sub>2</sub> &rarr; 6 CO<sub>2</sub> + 6
+      H<sub>2</sub>O + <b style="color: #ffb454">ATP</b>
+    </div>
+    <div class="steps">
+      <div class="s a">
+        <div class="num">1</div>
+        <h2>Glycolysis</h2>
+        <div class="where">Where: cytoplasm</div>
+        <p>One glucose (6 carbons) is split into two pyruvate (3 carbons each).</p>
+        <p>No oxygen needed.</p>
+        <div class="atp">net +2 ATP</div>
+      </div>
+      <div class="s b">
+        <div class="num">2</div>
+        <h2>Krebs cycle</h2>
+        <div class="where">Where: mitochondrial matrix</div>
+        <p>
+          Pyruvate is broken down and CO<sub>2</sub> is released (this is the CO<sub>2</sub> you
+          breathe out).
+        </p>
+        <p>Loads up electron carriers NADH and FADH<sub>2</sub>.</p>
+        <div class="atp">+2 ATP</div>
+      </div>
+      <div class="s c">
+        <div class="num">3</div>
+        <h2>Electron transport chain</h2>
+        <div class="where">Where: inner mitochondrial membrane</div>
+        <p>
+          Electrons from NADH and FADH<sub>2</sub> pass down a chain. Oxygen is the final acceptor
+          and makes water.
+        </p>
+        <p>The energy pumps H<sup>+</sup> ions, which drive ATP synthase.</p>
+        <div class="atp">about +32 to 34 ATP</div>
+      </div>
+    </div>
+    <div class="bars">
+      <h3>ATP made per glucose (approximate)</h3>
+      <div class="bar">
+        <div class="l">Glycolysis</div>
+        <div class="f" style="width: 60px; background: #748ffc">2</div>
+      </div>
+      <div class="bar">
+        <div class="l">Krebs cycle</div>
+        <div class="f" style="width: 60px; background: #f783ac">2</div>
+      </div>
+      <div class="bar">
+        <div class="l">Electron transport chain</div>
+        <div class="f" style="width: 760px; background: #69db7c">about 32&ndash;34</div>
+      </div>
+      <div class="bar">
+        <div class="l"><b>Total</b></div>
+        <div class="f" style="width: 860px; background: #ffb454">about 36&ndash;38</div>
+      </div>
+    </div>
+    <div class="facts">
+      <div>
+        <b>Without oxygen?</b> Cells can only do glycolysis and then fermentation, so they make just
+        2 ATP. That is why your muscles burn when you sprint.
+      </div>
+      <div>
+        <b>Plants do this too!</b> Plants make glucose in photosynthesis, but they still need
+        mitochondria to break it down into ATP.
+      </div>
+    </div>
+  </body>
+</html>

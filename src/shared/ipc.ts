@@ -205,7 +205,8 @@ type Register = (
   listener: (sender: string | null, input: unknown) => Promise<unknown>,
 ) => void;
 
-const serve = <C extends ChannelName>(channel: C, handler: Handlers[C], input: unknown) =>
+/** Main's own path for one call: the input is parsed before the handler sees it. */
+export const serve = <C extends ChannelName>(channel: C, handler: Handlers[C], input: unknown) =>
   handler(v.parse(ipc[channel].input, input));
 
 /**

@@ -1,0 +1,148 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Lab data sheet</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 1320px;
+        position: relative;
+        font-family: "Bradley Hand", "Comic Sans MS", "Segoe Print", cursive;
+        color: #14213d;
+        background:
+          #fbfbf3 repeating-linear-gradient(0deg, transparent 0 39px, #cfe3d4 39px 40px),
+          repeating-linear-gradient(90deg, transparent 0 39px, #cfe3d4 39px 40px);
+      }
+      h1 {
+        position: absolute;
+        left: 60px;
+        top: 30px;
+        margin: 0;
+        font-size: 46px;
+        transform: rotate(-1deg);
+      }
+      .who {
+        position: absolute;
+        right: 60px;
+        top: 36px;
+        font-size: 26px;
+        text-align: right;
+      }
+      table {
+        position: absolute;
+        left: 60px;
+        top: 150px;
+        border-collapse: collapse;
+        font-size: 30px;
+        background: rgba(255, 255, 255, 0.55);
+      }
+      th,
+      td {
+        border: 3px solid #14213d;
+        padding: 8px 18px;
+        text-align: center;
+      }
+      .q {
+        position: absolute;
+        font-size: 28px;
+        line-height: 1.35;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Catalase lab DATA &mdash; liver + H2O2</h1>
+    <div class="who">Kai T.<br />10/9, per. 2<br />partner: Jun</div>
+    <table>
+      <tr>
+        <th>Temp</th>
+        <th>trial 1</th>
+        <th>trial 2</th>
+        <th>trial 3</th>
+        <th>avg</th>
+      </tr>
+      <tr>
+        <td>ice (about 5)</td>
+        <td>1.5</td>
+        <td>1.0</td>
+        <td>1.2</td>
+        <td>1.2</td>
+      </tr>
+      <tr>
+        <td>room (22)</td>
+        <td>3.5</td>
+        <td>4.0</td>
+        <td>4.2</td>
+        <td>3.9</td>
+      </tr>
+      <tr>
+        <td>body (37)</td>
+        <td>6.5</td>
+        <td>7</td>
+        <td>6.0</td>
+        <td>6.5</td>
+      </tr>
+      <tr>
+        <td>hot (60)</td>
+        <td>0.5</td>
+        <td>0</td>
+        <td>1</td>
+        <td>0.5</td>
+      </tr>
+    </table>
+    <div class="q" style="left: 60px; top: 560px; width: 540px">
+      Foam height in <u>cm</u> at 60 sec.<br />5 mL H2O2 (3%), 1 cube liver each.<br /><span
+        style="color: #b00020"
+        >hot liver turned GRAY + shrank!!</span
+      ><br />room temp trial 3 maybe too big a cube?
+    </div>
+    <svg
+      style="position: absolute; left: 620px; top: 540px"
+      width="540"
+      height="520"
+      viewBox="0 0 540 520"
+      fill="none"
+      stroke="#14213d"
+      stroke-width="4"
+      stroke-linecap="round"
+      font-family="Bradley Hand,Comic Sans MS,cursive"
+    >
+      <path d="M70 20 V440 H520" />
+      <g stroke-width="2" stroke="#789">
+        <path d="M70 356 H520 M70 272 H520 M70 188 H520 M70 104 H520" />
+      </g>
+      <g stroke="none" fill="#14213d" font-size="24">
+        <text x="30" y="446">0</text>
+        <text x="30" y="362">2</text>
+        <text x="30" y="278">4</text>
+        <text x="30" y="194">6</text>
+        <text x="30" y="110">8</text>
+        <text x="130" y="480">5</text>
+        <text x="235" y="480">22</text>
+        <text x="340" y="480">37</text>
+        <text x="450" y="480">60</text>
+        <text x="220" y="512">temp</text>
+      </g>
+      <path d="M145 392 L250 276 L355 168 L465 428" stroke="#c1121f" stroke-width="5" />
+      <g fill="#c1121f" stroke="none">
+        <circle cx="145" cy="392" r="8" />
+        <circle cx="250" cy="276" r="8" />
+        <circle cx="355" cy="168" r="8" />
+        <circle cx="465" cy="428" r="8" />
+      </g>
+      <text x="360" y="150" font-size="26" fill="#c1121f" stroke="none">best!</text>
+      <text transform="translate(18,300) rotate(-90)" font-size="24" fill="#14213d" stroke="none">
+        foam
+      </text>
+    </svg>
+    <div class="q" style="left: 60px; top: 1100px; width: 1080px; font-size: 30px">
+      Conclusion?? enzyme works best at 37 bc thats body temp. At 60 the enzyme is
+      <u>denatured</u> (shape changed). Hypothesis I wrote: "room temp is best" &rarr;
+      <b>wrong</b>.<br />TODO: write up the full report + error section by Friday
+    </div>
+  </body>
+</html>

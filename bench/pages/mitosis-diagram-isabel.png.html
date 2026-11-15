@@ -1,0 +1,156 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Mitosis diagram</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 1180px;
+        background: #fdfcf4 repeating-linear-gradient(transparent 0 37px, #bcd6ee 37px 38px);
+        font-family: "Bradley Hand", "Comic Sans MS", "Segoe Print", cursive;
+        color: #1a2a6c;
+        position: relative;
+      }
+      body:before {
+        content: "";
+        position: absolute;
+        left: 90px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e88;
+      }
+      h1 {
+        position: absolute;
+        left: 120px;
+        top: 24px;
+        margin: 0;
+        font-size: 54px;
+        transform: rotate(-1deg);
+      }
+      .n {
+        position: absolute;
+        right: 50px;
+        top: 30px;
+        font-size: 26px;
+        transform: rotate(2deg);
+      }
+      svg {
+        position: absolute;
+        left: 0;
+        top: 0;
+      }
+      .note {
+        position: absolute;
+        font-size: 27px;
+        line-height: 1.3;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Mitosis: 4 phases</h1>
+    <div class="n">Isabel Cruz &mdash; Bio 5<br />Oct 17</div>
+    <svg
+      width="1200"
+      height="1180"
+      viewBox="0 0 1200 1180"
+      font-family="Bradley Hand,Comic Sans MS,cursive"
+      fill="none"
+      stroke="#1a2a6c"
+      stroke-width="3"
+      stroke-linecap="round"
+    >
+      <g transform="translate(120,150)">
+        <ellipse cx="170" cy="150" rx="150" ry="125" fill="#e8f1ff" />
+        <circle cx="170" cy="150" r="60" stroke-dasharray="6 5" />
+        <path
+          d="M140 125 q15 -25 30 0 M175 160 q20 -30 35 5 M150 170 q10 25 30 5"
+          stroke="#c0392b"
+          stroke-width="5"
+        />
+        <circle cx="50" cy="60" r="7" fill="#1a2a6c" />
+        <circle cx="290" cy="240" r="7" fill="#1a2a6c" />
+        <text x="130" y="310" font-size="30" fill="#1a2a6c" stroke="none">1. PROPHASE</text>
+        <path d="M60 70 l60 40" stroke-width="2" />
+        <text x="20" y="45" font-size="22" fill="#1a2a6c" stroke="none">centriole</text>
+        <path d="M230 100 l-50 20" stroke-width="2" />
+        <text x="238" y="95" font-size="22" fill="#1a2a6c" stroke="none">chromosomes</text>
+        <text x="240" y="125" font-size="22" fill="#1a2a6c" stroke="none">condensing</text>
+      </g>
+      <g transform="translate(640,150)">
+        <ellipse cx="170" cy="150" rx="150" ry="125" fill="#e8f1ff" />
+        <line x1="20" y1="150" x2="320" y2="150" stroke-dasharray="3 6" stroke-width="2" />
+        <g stroke="#c0392b" stroke-width="6">
+          <path d="M150 120 l12 20 M150 140 l12 -20" />
+          <path d="M180 132 l12 20 M180 152 l12 -20" />
+          <path d="M200 140 l12 20 M200 160 l12 -20" />
+          <path d="M130 150 l12 20 M130 170 l12 -20" />
+        </g>
+        <g stroke-width="2">
+          <path d="M35 70 L160 150 M35 230 L160 150 M305 70 L185 150 M305 230 L185 150" />
+        </g>
+        <circle cx="30" cy="60" r="7" fill="#1a2a6c" />
+        <circle cx="310" cy="240" r="7" fill="#1a2a6c" />
+        <text x="110" y="310" font-size="30" fill="#1a2a6c" stroke="none">2. METAPHASE</text>
+        <path d="M170 128 l0 -60" stroke-width="2" />
+        <text x="100" y="60" font-size="22" fill="#1a2a6c" stroke="none">chromosomes line up</text>
+        <text x="60" y="355" font-size="21" fill="#1a2a6c" stroke="none">
+          (in the middle = equator)
+        </text>
+      </g>
+      <g transform="translate(120,620)">
+        <ellipse cx="170" cy="150" rx="150" ry="125" fill="#e8f1ff" />
+        <g stroke="#c0392b" stroke-width="6">
+          <path d="M150 70 l10 20 M150 90 l10 -20" />
+          <path d="M185 75 l10 20 M185 95 l10 -20" />
+          <path d="M135 215 l10 20 M135 235 l10 -20" />
+          <path d="M190 215 l10 20 M190 235 l10 -20" />
+        </g>
+        <g stroke-width="2">
+          <path d="M30 60 L150 85 M310 240 L190 225 M30 240 L130 225 M310 60 L190 80" />
+        </g>
+        <text x="110" y="330" font-size="30" fill="#1a2a6c" stroke="none">3. ANAPHASE</text>
+        <path d="M170 130 l0 -20" stroke-width="2" />
+        <text x="215" y="150" font-size="22" fill="#1a2a6c" stroke="none">
+          sister chromatids pulled apart
+        </text>
+        <text x="215" y="172" font-size="22" fill="#1a2a6c" stroke="none">
+          by the spindle fibers
+        </text>
+      </g>
+      <g transform="translate(640,620)">
+        <path
+          d="M20 150 q0 -120 150 -120 q150 0 150 120 q0 120 -150 120 q-150 0 -150 -120 z"
+          fill="#e8f1ff"
+        />
+        <path d="M165 40 q-18 110 5 220" stroke-width="3" />
+        <circle cx="95" cy="150" r="38" stroke-dasharray="5 4" />
+        <circle cx="245" cy="150" r="38" stroke-dasharray="5 4" />
+        <g stroke="#c0392b" stroke-width="5">
+          <path d="M80 135 q14 -12 25 4 M82 160 q14 12 25 -4" />
+          <path d="M232 135 q14 -12 25 4 M232 160 q14 12 25 -4" />
+        </g>
+        <text x="95" y="330" font-size="30" fill="#1a2a6c" stroke="none">4. TELOPHASE</text>
+        <text x="60" y="95" font-size="21" fill="#1a2a6c" stroke="none">new nuclear envelope</text>
+        <path d="M110 105 l-8 18" stroke-width="2" />
+        <text x="20" y="358" font-size="21" fill="#1a2a6c" stroke="none">
+          cell membrane pinches =
+        </text>
+        <text x="250" y="358" font-size="21" fill="#1a2a6c" stroke="none">cytokinesis</text>
+      </g>
+    </svg>
+    <div class="note" style="left: 120px; top: 1010px; width: 960px">
+      Result: 2 identical daughter cells with the same # of chromosomes as the parent (diploid, 46
+      in humans). Used for growth and repair.
+      <span style="color: #c0392b">Interphase is NOT part of mitosis</span> but DNA is copied then,
+      in S phase.<br /><span style="font-size: 22px; color: #667"
+        >p.s. meiosis makes 4 cells, I think? (ask Mr. Okafor)</span
+      >
+    </div>
+  </body>
+</html>
