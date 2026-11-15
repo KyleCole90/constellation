@@ -588,7 +588,7 @@ describe("the inbox", () => {
 });
 
 const submission = (over: Partial<Submission>) =>
-  ({ workflow: "graded", lateDays: 0, ...over }) as Submission;
+  ({ workflow: "graded", lateDays: 0, grade: null, ...over }) as Submission;
 const cell = (over: Partial<GradebookCell>): GradebookCell => ({
   assignment: "a" as LmsRef<"assignment">,
   submission: submission({}),
@@ -610,7 +610,7 @@ describe("gradebook cells", () => {
       cellMarks(cell({ grade: null, submission: submission({ workflow: "missing" }) })),
     ).toEqual(["missing"]);
     expect(
-      cellMarks(cell({ grade: 70, submission: submission({ workflow: "submitted" }) })),
+      cellMarks(cell({ grade: 70, submission: submission({ workflow: "submitted", grade: 70 }) })),
     ).toEqual(["resubmitted"]);
     expect(cellMarks(cell({ submission: submission({ lateDays: 2 }) }))).toEqual(["late"]);
     expect(cellMarks(cell({}))).toEqual([]);

@@ -111,6 +111,10 @@ export interface Submission {
   page: string | null;
 }
 
+/** New work after the grade: the LMS reopens a graded submission as submitted and keeps the earlier grade (#133). */
+export const resubmitted = (submission: Pick<Submission, "workflow" | "grade">): boolean =>
+  submission.workflow === "submitted" && submission.grade !== null;
+
 /** The text a rationale can anchor to: paragraphs of writing or posts, or the transcript of a recording. */
 export const passagesOf = (submission: Submission): readonly string[] => {
   switch (submission.body.kind) {

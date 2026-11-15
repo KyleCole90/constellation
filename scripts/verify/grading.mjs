@@ -1326,6 +1326,39 @@ const resubmission = async (t) => {
     "the preview says in words which grade this replaces",
   );
   await t.shot("resubmission-preview");
+  const luisRow = `[...document.querySelectorAll('${LIST} [data-row]')].find((row) => row.innerText.includes("Luis Cardenas"))`;
+  await expandQueue(t);
+  t.assert(
+    await t.eval(`${luisRow}?.innerText.includes("Resubmitted")`),
+    "the list row says Resubmitted while the grade belongs to the earlier attempt",
+  );
+
+  await approve(t, "Luis Cardenas, Essay 2");
+  await t.click("[data-send]");
+  await sendAndWaitSent(t, "Luis Cardenas, Essay 2");
+  await t.reload();
+  await t.waitFor(
+    `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.cache).some((c) => c.submissions.some((s) => s.studentName === "Luis Cardenas" && c.assignments.find((a) => a.ref === s.assignment)?.shortTitle === "Essay 2" && s.attempt === 2 && s.workflow === "graded"))`,
+    "a sync reads the grade on attempt 2 back from the LMS",
+    15_000,
+  );
+  await expandQueue(t);
+  await t.waitFor(`${luisRow}?.innerText.includes("Sent")`, "the sent row stays in the list");
+  t.assert(
+    !(await t.eval(`${luisRow}.innerText.includes("Resubmitted")`)),
+    "once graded on its current attempt, the row no longer says Resubmitted (#133)",
+    await t.eval(`${luisRow}.innerText`),
+  );
+  await t.eval(`${luisRow}.querySelector("button").click()`);
+  await t.waitFor(
+    `document.querySelector('[data-testid="paper"]') && document.body.innerText.includes("Attempt 2")`,
+    "the graded attempt opens on its submission",
+  );
+  t.assert(
+    !(await t.has('[data-testid="prior-attempt"]')),
+    "and the pane no longer labels its current grade a previous attempt's (#133)",
+  );
+  await t.shot("resubmission-graded");
 };
 
 const BATCH = [

@@ -1,4 +1,4 @@
-import type { Assignment } from "~/shared/domain/lms";
+import { resubmitted, type Assignment } from "~/shared/domain/lms";
 import type { GradebookCell, GradebookRow } from "~/renderer/stores/selectors";
 
 import type { SubmissionStatus } from "../ui/badge";
@@ -10,7 +10,7 @@ export const cellMarks = (cell: GradebookCell): readonly SubmissionStatus[] => {
   const late: readonly SubmissionStatus[] = submission.lateDays > 0 ? ["late"] : [];
   if (submission.workflow !== "submitted") return submission.workflow === "graded" ? late : [];
   if (cell.asked) return ["asked", ...late];
-  if (cell.grade !== null) return ["resubmitted", ...late];
+  if (resubmitted(submission)) return ["resubmitted", ...late];
   // A pending grade says the cell's state itself, so "ungraded" beside it reads as a contradiction.
   return cell.pending ? late : ["ungraded", ...late];
 };
