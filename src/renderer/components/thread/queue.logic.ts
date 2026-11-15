@@ -76,9 +76,9 @@ export const fromConversationRows = (rows: readonly InboxRow[]): readonly WorkRo
     draftable: true,
   }));
 
-/** A course's queue of messages: what is unread or already being worked on. */
+/** A course's queue of messages: what waits on a reply or is already being worked on. */
 export const fromInboxRows = (rows: readonly InboxRow[]): readonly WorkRow[] =>
-  fromConversationRows(rows.filter((row) => row.conversation.unread || row.change));
+  fromConversationRows(rows.filter((row) => awaitsYou(row) || row.change));
 
 /** What a row adds to its thread's title: where it sits, ending with its due date. */
 export const rowLine = (row: WorkRow, thread: Pick<Thread, "course" | "assignment">): string =>

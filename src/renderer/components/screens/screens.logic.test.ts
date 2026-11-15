@@ -541,7 +541,7 @@ const row = (
   ({
     school,
     conversation: { unread: over.unread ?? false },
-    last: { mine: over.mine ?? false, text: "When is it due?" },
+    last: { mine: over.mine ?? false, text: "When is it due?", at: "2026-10-31T09:00:00.000Z" },
     summary: over.summary ?? null,
   }) as unknown as InboxRow;
 

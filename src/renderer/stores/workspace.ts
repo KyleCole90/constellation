@@ -63,7 +63,6 @@ import {
   type ThreadId,
 } from "~/shared/domain/ids";
 import {
-  awaitsReply,
   bySchoolName,
   isDemoSchool,
   namingAssignment,
@@ -127,11 +126,13 @@ import { builtInThreads } from "./builtInThreads";
 import { seedThreads } from "./seedThreads";
 import {
   DEFAULT_THREAD_UI,
+  awaitsYou,
   canSettle,
   NORTH_STAR_THREAD,
   selectAssignment,
   selectCourse,
   selectDueExtras,
+  selectInboxRows,
   selectThreadUi,
   selectUndrafted,
   selectWhatsDue,
@@ -1290,9 +1291,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
         };
 
         const awaitingReply = (course: LmsRef<"course">) =>
-          allCaches()
-            .flatMap((cache) => cache.conversations)
-            .filter((c) => c.course === course && awaitsReply(c));
+          selectInboxRows(get())
+            .filter((row) => row.course.ref === course && awaitsYou(row))
+            .map((row) => row.conversation);
 
         const startWork = async (
           thread: ThreadId,

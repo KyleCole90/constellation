@@ -24,6 +24,7 @@ import {
 import { workName } from "~/shared/domain/workName";
 import {
   askedInLms,
+  awaitsReply,
   type Announcement,
   type Assignment,
   type Conversation,
@@ -597,7 +598,7 @@ const courseOverview = memoByState(
       .flatMap((group) => group.items)
       .filter((item) => item.course.ref === course);
     const messages = selectInboxRows(state).filter((row) => row.course.ref === course);
-    const unanswered = messages.filter((row) => row.conversation.unread);
+    const unanswered = messages.filter(awaitsYou);
     const replying = new Set(unanswered.map((row) => row.conversation.ref as string));
     const open = Object.values(state.changes).filter(
       (change) =>
@@ -682,12 +683,12 @@ const changesOfThread = (state: WorkspaceData, thread: Thread): readonly ChangeR
     );
   });
 
-export const awaitsYou = (row: Pick<InboxRow, "summary" | "last">): boolean =>
-  row.summary?.sentAt == null && row.last?.mine !== true;
+export const awaitsYou = (row: Pick<InboxRow, "last" | "summary">): boolean =>
+  awaitsReply(row.last, row.summary?.sentAt ?? null);
 
-/** The student wrote last and no reply is under way. Messages' Needs reply and What's due count this, read or not. */
-export const needsReply = (row: Pick<InboxRow, "summary" | "last">): boolean =>
-  row.last?.mine === false && (row.summary === null || row.summary.sentAt !== null);
+/** Waiting on a reply nobody has started: Messages' Needs reply and What's due's count. */
+export const needsReply = (row: Pick<InboxRow, "last" | "summary">): boolean =>
+  awaitsYou(row) && (row.summary === null || row.summary.sentAt !== null);
 
 export const selectThreadName = memoByState((state: WorkspaceData, id: ThreadId): string => {
   const thread = state.threads[id];
@@ -709,10 +710,7 @@ export const selectThreadName = memoByState((state: WorkspaceData, id: ThreadId)
     case "messages": {
       const { current } = selectThreadUi(state, id);
       const waiting = selectInboxRows(state).filter(
-        (row) =>
-          row.course.ref === thread.course &&
-          (row.conversation.unread || row.change) &&
-          awaitsYou(row),
+        (row) => row.course.ref === thread.course && awaitsYou(row),
       );
       const people = [
         ...waiting.filter((row) => row.conversation.ref === current),
@@ -779,11 +777,11 @@ export const selectThreadStatus = memoByState(
         : { label: "Done", tone: "done" };
     }
     if (thread.kind === "messages") {
-      const unread = caches(state)
-        .flatMap((cache) => cache.conversations)
-        .filter((c) => c.course === thread.course && c.unread).length;
-      return unread > 0
-        ? { label: `${unread} unread`, tone: "unread" }
+      const waiting = selectInboxRows(state).filter(
+        (row) => row.course.ref === thread.course && awaitsYou(row),
+      ).length;
+      return waiting > 0
+        ? { label: `${waiting} waiting`, tone: "unread" }
         : { label: "Done", tone: "done" };
     }
     if (thread.kind === "setup")
@@ -861,7 +859,7 @@ export const selectDueExtras = memoByState((state: WorkspaceData): DueExtras => 
   });
   return {
     drafts,
-    replies: selectInboxRows(state).filter((row) => row.last !== null && awaitsYou(row)),
+    replies: selectInboxRows(state).filter(awaitsYou),
   };
 });
 

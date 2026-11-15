@@ -296,9 +296,15 @@ export interface Conversation {
   messages: readonly ConversationMessage[];
 }
 
-/** Unread and the last word isn't mine. A reply isn't reused the way a sent grade is, so opening an answered one would draft another. */
-export const awaitsReply = (conversation: Conversation): boolean =>
-  conversation.unread && conversation.messages.at(-1)?.mine !== true;
+/**
+ * The conversation's last message is the student's and no reply to it has gone out. What's due, Messages, a course's threads and North Star all
+ * ask this, so they agree. Reading or opening the conversation answers nothing (#127). A reply the app sent counts
+ * before the next sync brings it back as the last word.
+ */
+export const awaitsReply = (
+  last: Pick<ConversationMessage, "mine" | "at"> | null | undefined,
+  repliedAt: IsoTime | null,
+): boolean => last?.mine === false && (repliedAt === null || repliedAt < last.at);
 
 export interface Announcement {
   ref: LmsRef<"announcement">;

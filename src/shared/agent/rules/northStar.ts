@@ -1,4 +1,4 @@
-import { summarize, type ChangeRecord } from "~/shared/domain/change";
+import { repliedAt, summarize, type ChangeRecord } from "~/shared/domain/change";
 import { awaitsReply, type Assignment, type Conversation, type Course } from "~/shared/domain/lms";
 
 import type {
@@ -221,6 +221,9 @@ const startedLine = (courses: readonly Course[], what: string): string =>
 const staysPrivate = (drafts: number): string =>
   `Students see nothing until you approve ${plural(drafts, "it", "them")}.`;
 
+const waitsOnReply = (scope: AgentScope, conversation: Conversation): boolean =>
+  awaitsReply(conversation.messages.at(-1), repliedAt(scope.changes, conversation.ref));
+
 const hasOpenChange = (scope: AgentScope, target: string): boolean =>
   scope.changes.some(
     (change) =>
@@ -358,7 +361,7 @@ function* replies(ask: Ask): Generator<AgentEffect, void> {
       inScope.filter((c) => people.includes(c.from)),
     );
   if (to !== undefined) {
-    const waiting = inScope.filter(awaitsReply).map((c) => c.from);
+    const waiting = inScope.filter((c) => waitsOnReply(ask.scope, c)).map((c) => c.from);
     yield question(
       people.length === 0
         ? `I can't find a message from ${to}. Who should I reply to?`
@@ -371,31 +374,33 @@ function* replies(ask: Ask): Generator<AgentEffect, void> {
   }
   const named = namedCourses(ask);
   const waiting = (named.length > 0 ? named : ask.scope.courses).flatMap((course) => {
-    const unread = ask.scope.conversations.filter((c) => c.course === course.ref && awaitsReply(c));
-    return unread.length > 0
+    const awaiting = ask.scope.conversations.filter(
+      (c) => c.course === course.ref && waitsOnReply(ask.scope, c),
+    );
+    return awaiting.length > 0
       ? [
           {
             course,
-            unread: unread.length,
-            undrafted: unread.filter((c) => !hasOpenChange(ask.scope, c.ref)).length,
+            awaiting: awaiting.length,
+            undrafted: awaiting.filter((c) => !hasOpenChange(ask.scope, c.ref)).length,
           },
         ]
       : [];
   });
   if (waiting.length === 0) {
-    yield say("No unread message is waiting on a reply, so there's nothing to start.");
+    yield say("No message is waiting on a reply, so there's nothing to start.");
     return;
   }
   const left = leftOut(ask, ask.request);
   const fresh = waiting.filter((entry) => entry.undrafted > 0).map((entry) => entry.course);
   const drafted = waiting.filter((entry) => entry.undrafted === 0).map((entry) => entry.course);
-  if (fresh.length > 0) yield work("Read your unread messages");
+  if (fresh.length > 0) yield work("Read your messages");
   for (const { course, undrafted } of waiting)
     yield handoff(
       course,
       { kind: "replies" },
       undrafted > 0
-        ? `Draft ${plural(undrafted, "a reply", "replies")} to ${undrafted} unread ${plural(undrafted, "message")} in ${course.code}.`
+        ? `Draft ${plural(undrafted, "a reply", "replies")} to ${undrafted} ${plural(undrafted, "message")} in ${course.code}.`
         : "Replies already drafted. Open them to review.",
       ask.request,
       left,
@@ -405,7 +410,7 @@ function* replies(ask: Ask): Generator<AgentEffect, void> {
       ? ""
       : `${boldCodes(drafted)} ${drafted.length === 1 ? "already has its replies drafted" : "already have their replies drafted"}, so I didn't start more. `;
   const started = waiting.reduce((sum, entry) => sum + entry.undrafted, 0);
-  const total = waiting.reduce((sum, entry) => sum + entry.unread, 0);
+  const total = waiting.reduce((sum, entry) => sum + entry.awaiting, 0);
   yield say(
     `${startedLine(fresh, plural(started, "a draft reply", "draft replies"))}${already}${leftOutLine(left)}${staysPrivate(total)}`,
   );
@@ -722,7 +727,7 @@ const askFor = (scope: AgentScope, { course, work: next }: NextWork): string | n
       return hasOpenChange(scope, course) ? null : `Open the draft announcement for ${code}`;
     case "replies":
       return scope.conversations.some(
-        (c) => c.course === course && awaitsReply(c) && !hasOpenChange(scope, c.ref),
+        (c) => c.course === course && waitsOnReply(scope, c) && !hasOpenChange(scope, c.ref),
       )
         ? `Draft replies in ${code}`
         : null;
