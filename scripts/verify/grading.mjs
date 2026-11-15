@@ -1881,6 +1881,21 @@ const handApproveThenSend = async (t, student) => {
     "hand form: the button says Approve, not Approve and send (#51)",
     label,
   );
+  if (scores > 0) {
+    const SCORE = `document.querySelector('${CARD} [data-typed-score]')`;
+    await t.eval(`(() => { const input = ${SCORE}; input.focus(); input.select(); })()`);
+    await t.type("999");
+    await t.click(`${CARD} [data-approve]`);
+    await t.waitFor(
+      `document.querySelector('${CARD}').innerText.includes("The draft changed. Check it and approve again.")`,
+      "hand form: a score capped by the Approve click is shown, not approved unseen (#116)",
+    );
+    t.assert(
+      (await t.eval(`${SCORE}.value`)) !== "999" && !(await t.has(`${CARD} [data-undo-approval]`)),
+      "hand form: the card shows the capped score and stays a draft",
+      await t.eval(`${SCORE}.value`),
+    );
+  }
   const writes = await lms(
     t,
     `lms.submissions.flatMap((s) => s.comments).filter((c) => c.mine).length`,

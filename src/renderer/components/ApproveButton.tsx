@@ -1,4 +1,5 @@
 import { useState, type MouseEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 
 import { ApprovalWitness, fingerprintOf, type ApprovalTarget } from "~/shared/domain/approval";
 import { riskOf, type ChangeRecord } from "~/shared/domain/change";
@@ -65,12 +66,23 @@ export function ApproveButton({
       return;
     }
     // Focus moves here on release, not press, so a field's commit on blur can't reflow the card under the pointer (#116).
-    // That commit is the person's own text on screen, so it is approved, unless something else moved a draft since this render.
+    // That commit is approved only as the person saw it typed: nothing else moved a draft since this render, and the
+    // field still reads the same once it renders the commit, which a capped score does not.
     const before = workspaceStore().getState().changes;
-    const unmoved = targets.every((record) => before[record.id] === record);
-    event.currentTarget.focus();
+    const field = document.activeElement;
+    const reads = () =>
+      field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement
+        ? field.value
+        : null;
+    const typed = reads();
+    const button = event.currentTarget;
+    flushSync(() => button.focus());
+    const asTyped = reads() === typed;
     const after = workspaceStore().getState().changes;
-    const shown = unmoved ? targets.map((record) => after[record.id] ?? record) : targets;
+    const shown =
+      asTyped && targets.every((record) => before[record.id] === record)
+        ? targets.map((record) => after[record.id] ?? record)
+        : targets;
     mint(
       event,
       shown.map((record) => ({ changeId: record.id, fingerprint: fingerprintOf(record) })),
