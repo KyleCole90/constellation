@@ -310,7 +310,8 @@ function* draftMessage({
   };
   yield {
     type: "say",
-    text: `Here's a message to ${name}. Nothing is graded. Edit anything before you send it.`,
+    text: `Here's a message to ${name}. Nothing is graded. You can review it before sending.`,
+    replies: ["Make the message shorter", "Add a deadline for resubmitting"],
   };
 }
 

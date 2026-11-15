@@ -2436,6 +2436,11 @@ const cantSee = async (t) => {
       await t.text(CARD),
     );
     t.assert((await t.eval(savedChanges)) === before + 1, `${label}: one message is saved`);
+    t.assert(
+      !(await t.has(`${CHAT} [data-testid="replies"]`)),
+      `${label}: none of Claude's chips sit beside the app's own "Make it shorter" under the draft (#81, walk 12)`,
+      await t.text(CHAT),
+    );
   };
 
   await t.click(`[data-row="${row}"] button`);
@@ -2489,9 +2494,14 @@ const cantSee = async (t) => {
     onward,
   );
   t.assert(
-    !/approve and send|edit anything|before you send/i.test(await t.text(CHAT)),
+    !/approve and send|edit anything|before you send|before sending/i.test(await t.text(CHAT)),
     "resubmit: under the Sent card, no line of Claude's still tells the teacher to edit, approve or send it (#81)",
     (await t.text(CHAT)).slice(-400),
+  );
+  t.assert(
+    !(await t.has(`${CHAT} [data-testid="replies"]`)),
+    "resubmit: under the Sent card, no chip of Claude's offers to change what already went (#81, walk 12)",
+    await t.text(CHAT),
   );
   await t.shot("cant-see-message-sent");
 
