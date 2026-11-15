@@ -790,8 +790,13 @@ const nextUp = async (t) => {
     JSON.stringify({ reply, replies }),
   );
   await t.waitFor(
+    `document.querySelector("[data-draft-reply]") && !document.querySelector("[data-approve]")`,
+    "the reply row opens the conversation and drafts nothing until asked (#48, #120)",
+  );
+  await t.click("[data-draft-reply]");
+  await t.waitFor(
     `[...document.querySelectorAll("button")].some((button) => button.hasAttribute("data-approve"))`,
-    "the reply row's click starts a draft",
+    "Draft a reply starts the draft",
   );
   const quoteState = () =>
     t.eval(
