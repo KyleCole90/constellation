@@ -2,6 +2,7 @@ import { courseName, type CourseShell } from "~/shared/domain/content";
 import type { LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
 import {
   canResetDemo,
+  type Assignment,
   type Course,
   type School,
   type Student,
@@ -15,6 +16,7 @@ type PaletteTarget =
   | { kind: "course"; course: Course }
   | { kind: "setup"; course: LmsRef<"course"> }
   | { kind: "course-page"; course: Course; page: "gradebook" | "announcements" }
+  | { kind: "assignment"; assignment: Assignment }
   | { kind: "student"; student: Student; submission: Submission | null }
   | { kind: "screen"; to: "/due" | "/inbox" | "/calendar" | "/settings" }
   | { kind: "reset-demo" }
@@ -22,7 +24,14 @@ type PaletteTarget =
 
 export interface PaletteEntry {
   key: string;
-  group: "Screens" | "Actions" | "Threads" | "Courses" | "Course pages" | "Students";
+  group:
+    | "Screens"
+    | "Actions"
+    | "Threads"
+    | "Courses"
+    | "Assignments"
+    | "Course pages"
+    | "Students";
   title: string;
   hint: string;
   school: School["id"] | null;
@@ -79,11 +88,15 @@ export const buildEntries = (input: {
   connections: Readonly<Record<SchoolId, ConnectionRecord>>;
   courses: readonly Course[];
   shells: readonly CourseShell[];
+  assignments: readonly Assignment[];
   students: readonly Student[];
-  submissions: readonly Submission[];
+  /** The work every to-grade count counts, so a result that says "to grade" opens work that is. */
+  toGrade: readonly Submission[];
 }): readonly PaletteEntry[] => {
   const codeOf = (ref: Thread["course"]) =>
     input.courses.find((course) => course.ref === ref)?.code ?? "All courses";
+  const withCount = (code: string, count: number) =>
+    count > 0 ? `${code}, ${count} to grade` : code;
   return [
     ...SCREENS,
     ...(canResetDemo(input.schools) ? [RESET_DEMO] : []),
@@ -128,6 +141,17 @@ export const buildEntries = (input: {
       school: shell.school,
       target: { kind: "setup", course: shell.ref },
     })),
+    ...input.assignments.map((assignment): PaletteEntry => ({
+      key: `assignment:${assignment.ref}`,
+      group: "Assignments",
+      title: assignment.title,
+      hint: withCount(
+        codeOf(assignment.course),
+        input.toGrade.filter((s) => s.assignment === assignment.ref).length,
+      ),
+      school: assignment.school,
+      target: { kind: "assignment", assignment },
+    })),
     ...input.courses.flatMap((course) =>
       (["gradebook", "announcements"] as const).map((page): PaletteEntry => ({
         key: `${page}:${course.ref}`,
@@ -140,8 +164,7 @@ export const buildEntries = (input: {
     ),
     ...input.students.map((student): PaletteEntry => {
       const submission =
-        input.submissions.find((s) => s.student === student.ref && s.workflow === "submitted") ??
-        null;
+        input.toGrade.find((s) => s.student === student.ref && s.course === student.course) ?? null;
       return {
         key: `student:${student.ref}`,
         group: "Students",
@@ -159,6 +182,7 @@ const MID_WORD_MIN_LENGTH = 3;
 const HINT_HIT_PENALTY = 1;
 const HIDDEN_UNTIL_TYPED: ReadonlySet<PaletteEntry["group"]> = new Set([
   "Students",
+  "Assignments",
   "Course pages",
 ]);
 
@@ -167,11 +191,14 @@ interface Token {
   inTitle: boolean;
 }
 
-const tokensOf = (text: string, inTitle: boolean): readonly Token[] => {
-  const words = text
+const wordsOf = (text: string): readonly string[] =>
+  text
     .toLowerCase()
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean);
+
+const tokensOf = (text: string, inTitle: boolean): readonly Token[] => {
+  const words = wordsOf(text);
   const pairs = words.slice(1).map((word, i) => `${words[i]}${word}`);
   return [...words, ...pairs].map((token) => ({ text: token, inTitle }));
 };
@@ -212,7 +239,7 @@ export const filterEntries = (
   entries: readonly PaletteEntry[],
   query: string,
 ): readonly PaletteEntry[] => {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const words = wordsOf(query);
   const groups = new Map<PaletteEntry["group"], { entry: PaletteEntry; score: number }[]>();
   for (const entry of entries) {
     const score =
