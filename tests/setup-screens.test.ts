@@ -250,6 +250,25 @@ describe("each stage's screen", () => {
     expect(shown(screen(shell.ref), "occupied-warning")).toBe(true);
   });
 
+  it("the dates card follows the course as the latest sync read it, not as it was when setup began (#147)", () => {
+    const shell = rig.state().newCourses[RSU]?.find((entry) => entry.code === "HUM 150");
+    if (!shell) throw new Error("Not offered.");
+    rig.state().startSetup(shell.ref);
+    rig.state().chooseSource(shell.ref, { kind: "cartridge", name: "x.imscc", kb: 1, hint: null });
+    const emptied = { ...shell, studentCount: 0, itemCount: 0, startAt: "2027-01-11" as const };
+    rig.store.setState({
+      newCourses: {
+        ...rig.state().newCourses,
+        [RSU]: (rig.state().newCourses[RSU] ?? []).map((entry) =>
+          entry.ref === shell.ref ? emptied : entry,
+        ),
+      },
+    });
+    const html = screen(shell.ref);
+    expect(shown(html, "occupied-warning")).toBe(false);
+    expect(html).toContain('value="2027-01-11"');
+  });
+
   it("copying shows progress, and a failed job shows its message, its issues, and Copy again", async () => {
     const { course, copy } = await toCopy();
     approve(copy);
