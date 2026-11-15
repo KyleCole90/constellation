@@ -1,5 +1,5 @@
 import { Tooltip } from "@base-ui/react/tooltip";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
@@ -18,7 +18,7 @@ import { EmptyState } from "../EmptyState";
 import { SchoolBadge } from "../SchoolBadge";
 import { ScreenHeader } from "../ScreenHeader";
 import { SCREEN_ICON } from "../screenIcons";
-import { Button } from "../ui/button";
+import { Button, buttonVariants } from "../ui/button";
 import {
   calendarDays,
   calendarSearch,
@@ -33,6 +33,7 @@ import {
   weeksThatFit,
   wideLaneFits,
   type CalendarDay,
+  undatedToGrade,
   type CalendarView,
 } from "./calendar.logic";
 import { dueProgress, inSchool } from "./due.logic";
@@ -430,6 +431,8 @@ export function CalendarScreen() {
 
   const days = calendarDays(data.today, week, weeks);
   const shown = data.items.filter((item) => inSchool(school, item.school.id));
+  const undated = data.undated.filter((item) => inSchool(school, item.school.id));
+  const waitingUndated = undatedToGrade(undated);
   const lanes = data.lanes.filter((lane) => inSchool(school, lane.school.id));
   const pickedDay = days.find((day) => day.daysFromToday === picked);
   const inWindow = shown.filter((item) => days.some((day) => day.daysFromToday === item.days));
@@ -450,8 +453,18 @@ export function CalendarScreen() {
       <ScreenHeader icon={SCREEN_ICON.calendar} title="Calendar" />
       <div className="flex flex-none flex-wrap items-center gap-x-4 gap-y-1 border-b border-border px-4 py-1.5">
         <p data-testid="calendar-summary" className="min-w-0 flex-1 text-body text-secondary-label">
-          {calendarSummary(inWindow, school === "all" ? data.undated : 0)}
+          {calendarSummary(inWindow, undated.length)}
         </p>
+        {waitingUndated && (
+          <Link
+            to="/due"
+            data-testid="calendar-undated-to-grade"
+            data-slot="button"
+            className={buttonVariants({ variant: "link", size: "sm" })}
+          >
+            {waitingUndated}
+          </Link>
+        )}
         <LoadLegend lanes={lanes} />
         <SchoolChips value={school} onChange={setSchool} />
       </div>

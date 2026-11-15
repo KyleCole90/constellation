@@ -1999,6 +1999,26 @@ const undatedWork = async (t) => {
     `document.querySelectorAll('[data-testid="queue-list"] [data-row]').length > ${tile}`,
     "undated: All undoes the course filter",
   );
+  await t.goto("/calendar");
+  await t.waitFor(
+    `document.querySelector('[data-testid="calendar-summary"]')`,
+    "undated: the Calendar opens",
+  );
+  const undatedLink = '[data-testid="calendar-undated-to-grade"]';
+  t.assert(
+    (await t.has(undatedLink)) &&
+      (await t.text(undatedLink)) === `${tile} to grade with no due date`,
+    "undated: the Calendar names the work to grade that has no day on its grid, at the To grade count",
+    (await t.has(undatedLink))
+      ? await t.text(undatedLink)
+      : await t.text('[data-testid="calendar-summary"]'),
+  );
+  await t.shot("calendar-undated", null);
+  await t.click(undatedLink);
+  await t.waitFor(
+    `location.pathname === "/due" && /no deadline coming up|No due date\\./.test(document.body.innerText)`,
+    "undated: the Calendar's line opens What's due, which lists the undated work",
+  );
 };
 
 const palette = async (t) => {

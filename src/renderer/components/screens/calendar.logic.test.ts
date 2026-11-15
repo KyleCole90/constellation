@@ -14,6 +14,7 @@ import {
   parseCalendarSearch,
   rangeLabel,
   toneOf,
+  undatedToGrade,
   weekOf,
   weeksThatFit,
   wideLaneFits,
@@ -195,6 +196,18 @@ describe("calendarSummary", () => {
     expect(calendarSummary(nineteen, 2)).toBe(
       "19 due, 10 with work to grade, 2 without a due date",
     );
+  });
+});
+
+describe("undatedToGrade", () => {
+  it("names the work waiting to be graded that has no day on the grid", () => {
+    expect(undatedToGrade([item({ toGrade: 4 }), item({ toGrade: 0 }), item({ toGrade: 3 })])).toBe(
+      "7 to grade with no due date",
+    );
+  });
+
+  it("says nothing when no undated work waits", () => {
+    expect(undatedToGrade([item({ toGrade: 0 })])).toBeNull();
   });
 });
 

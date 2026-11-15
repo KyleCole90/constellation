@@ -368,7 +368,7 @@ export interface CalendarData {
   /** Start of today, epoch ms. Every item's `days` counts from here. */
   today: number;
   items: readonly DatedItem[];
-  undated: number;
+  undated: readonly DueItem[];
   lanes: readonly { school: School; courses: readonly Course[] }[];
 }
 
@@ -377,7 +377,7 @@ const calendar = memoByState((state: WorkspaceData, today: number): CalendarData
   return {
     today,
     items: dated,
-    undated: undated.length,
+    undated,
     lanes: state.schools.flatMap((school) => {
       const cache = state.cache[school.id];
       return cache ? [{ school, courses: cache.courses }] : [];

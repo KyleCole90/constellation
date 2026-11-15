@@ -1088,7 +1088,7 @@ describe("selectors", () => {
     const closed = items.filter((item) => item.days < 0 && item.toGrade === 0);
 
     expect(items).toHaveLength(19);
-    expect(undated).toBe(0);
+    expect(undated).toHaveLength(0);
     expect(today).toBe(new Date(now).setHours(0, 0, 0, 0));
     expect(closed.length).toBeGreaterThan(0);
     expect(dueRefs).toHaveLength(19 - closed.length);
@@ -1116,7 +1116,7 @@ describe("selectors", () => {
       },
       state.now(),
     );
-    expect(undated).toBe(1);
+    expect(undated).toHaveLength(1);
     expect(items.map((item) => item.assignment.ref)).not.toContain(first.ref);
   });
 
