@@ -1469,6 +1469,66 @@ const ai = async (t, shot) => {
   await assertNoLeak(t, "after switching between the key and Claude Code");
 };
 
+const TOGGLE = '[data-testid="usage-data"] input[type="checkbox"]';
+const sinkLines = async (t) => (await t.telemetrySink()).split("\n").filter(Boolean);
+const sinkEvents = (lines) =>
+  lines.flatMap((line) => JSON.parse(line).batch.map((event) => event.event));
+
+/** The one opt-out: on by default, the sink holds only typed events, and off sends nothing more. */
+const usageData = async (t, shot) => {
+  await openSection(t, "Privacy");
+  await t.waitFor(`document.querySelector('${TOGGLE}')`, "Privacy shows the usage-data toggle");
+  t.assert(
+    await t.eval(`document.querySelector('${TOGGLE}').checked`),
+    "usage data and crash reports are on by default",
+  );
+  await shot("privacy-on");
+  await t.sleep(1_500);
+  const before = await sinkLines(t);
+  const sent = sinkEvents(before);
+  for (const event of [
+    "app_opened",
+    "onboarding_step_completed",
+    "onboarding_finished",
+    "ai_source_changed",
+  ])
+    t.assert(sent.includes(event), `the sink holds ${event}`, sent.join(", "));
+  const text = before.join("\n");
+  const leaks = [...Object.values(SECRETS), LCC, RSU, "lakeshore", "riverbend"].filter((value) =>
+    text.includes(value),
+  );
+  t.assert(leaks.length === 0, "the sink holds no token and no school address", leaks.join(", "));
+
+  await t.click(TOGGLE);
+  await t.waitFor(`!document.querySelector('${TOGGLE}').checked`, "the toggle turns off");
+  await shot("privacy-off");
+  const row = '[data-testid="ai-source-row"]';
+  await openSection(t, "AI");
+  await t.click("Remove key", { within: row });
+  await t.click("Remove key", { within: DIALOG });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(row)})?.innerText.includes("Off")`,
+    "with usage data off, removing the key still turns AI off",
+  );
+  await t.click("Use a key", { within: row });
+  await enter(t, DIALOG_FIELD, SECRETS.aiAgain);
+  await t.key("Enter");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(row)})?.innerText.includes("Anthropic key")`,
+    "with usage data off, the key is the source again",
+  );
+  await t.sleep(1_500);
+  const after = await sinkLines(t);
+  t.assert(
+    after.length === before.length,
+    "with usage data off, changing the AI source sends nothing",
+    sinkEvents(after.slice(before.length)).join(", "),
+  );
+  await openSection(t, "Privacy");
+  await t.click(TOGGLE);
+  await t.waitFor(`document.querySelector('${TOGGLE}').checked`, "the toggle turns back on");
+};
+
 const pick = async (t, trigger, option) => {
   await t.click(trigger);
   await t.waitFor(
@@ -2635,6 +2695,7 @@ export const run = async (t) => {
   await onboarding(t, shot);
   await connections(t, shot);
   await ai(t, shot);
+  await usageData(t, shot);
   await noiseDials(t, shot);
   await expireFlow(t, shot);
   await failureLab(t, shot);
