@@ -11,7 +11,7 @@ import {
   type RemoteState,
   type SetContent,
 } from "~/shared/domain/change";
-import type { IsoTime, LmsRef } from "~/shared/domain/ids";
+import type { IsoDate, IsoTime, LmsRef } from "~/shared/domain/ids";
 import { mintSendPermit } from "~/shared/domain/permit";
 import { copyMigration } from "~/shared/domain/setup";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
@@ -26,6 +26,7 @@ import {
   CanvasTermHttp,
   QUIZ_MS,
   STORAGE_ORIGIN,
+  SELF_ID,
   SHELL_ID,
   SOURCE_ID,
   TEMPLATE_ID,
@@ -176,13 +177,45 @@ describe("Canvas term setup reads", () => {
     );
     const counting = setup.newCourses();
     while (started.length < 2) await tick();
-    const asked = started.length;
     const progress = setup.migrations(SHELL);
-    while (!started.slice(asked).some((url) => url.includes("/content_migrations"))) await tick();
-    const ahead = started.slice(asked).findIndex((url) => url.includes("/content_migrations"));
-    expect(ahead).toBeLessThanOrEqual(8);
+    const first = await Promise.race([
+      progress.then(() => "progress"),
+      counting.then(() => "counting"),
+    ]);
+    expect(first).toBe("progress");
     expect(await unwrap(counting)).toHaveLength(21);
     await unwrap(progress);
+  });
+
+  it("calls a shell set up once a copy the teacher started finishes in it, but not for a school's own copy (#155)", async () => {
+    const http = new CanvasTermHttp();
+    const setup = setupOf(canvasOver(http));
+    const setUp = async () =>
+      (await unwrap(setup.newCourses())).find((entry) => entry.ref === SHELL)?.setUp;
+    expect(await setUp()).toBe(false);
+    const copy = {
+      course: SHELL_ID,
+      source: SOURCE_ID,
+      createdMs: http.now(),
+      startedMs: http.now(),
+      shift: {
+        oldStart: "2026-08-24" as IsoDate,
+        oldEnd: "2026-12-11" as IsoDate,
+        newStart: "2027-01-19" as IsoDate,
+        newEnd: "2027-05-14" as IsoDate,
+        substitutions: {},
+      },
+      failAt: null,
+      landed: false,
+      cartridge: null,
+    };
+    http.jobs.push({ ...copy, id: 901, by: null });
+    http.advance(60_000);
+    expect(await setUp()).toBe(false);
+    http.jobs.push({ ...copy, id: 902, by: SELF_ID, startedMs: http.now() });
+    expect(await setUp()).toBe(false);
+    http.advance(60_000);
+    expect(await setUp()).toBe(true);
   });
 
   it("offers the shell and its source with null dates when Canvas hides the term's dates from teachers", async () => {

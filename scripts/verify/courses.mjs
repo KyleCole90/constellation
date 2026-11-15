@@ -457,6 +457,19 @@ const dueReplies = async (t) => {
   if (!quiet) return;
   const { ref, from, code } = quiet;
   await t.click("Messages", { within: SIDEBAR });
+  await t.waitFor(
+    `document.querySelector('[data-conversation="${ref}"]')`,
+    "Messages lists the reply",
+  );
+  const strays = await stored(
+    t,
+    `(() => { const caches = Object.values(state.cache); const students = caches.flatMap((c) => c.students); const conversations = caches.flatMap((c) => c.conversations); return [...document.querySelectorAll("[data-conversation]")].flatMap((row) => { const c = conversations.find((x) => x.ref === row.dataset.conversation); const shown = row.querySelector('input[aria-label^="Select "]')?.getAttribute("aria-label").slice("Select ".length); const roster = students.filter((s) => c?.students.includes(s.ref)).map((s) => s.name); return roster.length > 0 && !roster.includes(shown) ? [shown + " (roster: " + roster.join(", ") + ")"] : []; }); })()`,
+  );
+  t.assert(
+    strays.length === 0,
+    "Messages names each student as the roster and Gradebook do (#154)",
+    strays.join("; "),
+  );
   await t.click(`[data-conversation="${ref}"]`);
   await t.waitFor(
     `document.querySelector('[data-conversation="${ref}"]').dataset.unread === "false"`,

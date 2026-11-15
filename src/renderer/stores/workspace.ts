@@ -1093,7 +1093,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           const listed = await writeback.laneRead(school, () => lms.courses());
           if (!listed.ok) return fail(listed.error);
           if (gone()) return false;
-          const courses = [
+          let courses = [
             ...listed.value,
             ...selectSetUpCourses(get(), school).filter(
               (course) => !listed.value.some((c) => c.ref === course.ref),
@@ -1125,6 +1125,12 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               : ({ ok: true, value: [] } as const),
           ]);
           await shells;
+          // A course set up from another install is one as soon as its shell says so, not a sync later.
+          const late = selectSetUpCourses(get(), school).filter(
+            (course) => !courses.some((c) => c.ref === course.ref),
+          );
+          courses = [...courses, ...late];
+          perCourse.push(...(await fewAtATime(late, readCourse)));
           if (!conversations.ok) return fail(conversations.error);
           const readThrough = get().prefs.readThrough ?? {};
           const seen = conversations.value.map((c) =>

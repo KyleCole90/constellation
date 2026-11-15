@@ -12,7 +12,7 @@ const ORIGIN = `https://${TERM_HOST}`;
 /** Where Canvas sends a package upload: file storage on another host, which must never see the token. */
 export const STORAGE_ORIGIN = "https://files.storage.example";
 export const TERM_TOKEN = "SENTINEL-canvas-token-71c3";
-const SELF_ID = 4101;
+export const SELF_ID = 4101;
 export const SOURCE_ID = 2201;
 export const TEMPLATE_ID = 2301;
 export const SHELL_ID = 3301;
@@ -83,6 +83,8 @@ interface Job {
   id: number;
   course: number;
   source: number;
+  /** Who started it: the teacher, or null for a copy the school made, as when a shell is made from a template. */
+  by: number | null;
   createdMs: number;
   startedMs: number;
   shift: {
@@ -364,7 +366,7 @@ export class CanvasTermHttp {
         migration_type: "common_cartridge_importer",
         migration_type_title: "Common Cartridge 1.x Package",
         workflow_state,
-        user_id: SELF_ID,
+        user_id: job.by,
         created_at: at(job.createdMs),
         started_at: waiting ? null : at(job.startedMs),
         finished_at:
@@ -381,7 +383,7 @@ export class CanvasTermHttp {
       migration_type: "course_copy_importer",
       migration_type_title: "Copy a Canvas Course",
       workflow_state,
-      user_id: SELF_ID,
+      user_id: job.by,
       started_at: at(job.startedMs),
       finished_at:
         workflow_state === "completed" || workflow_state === "failed"
@@ -589,6 +591,7 @@ export class CanvasTermHttp {
       id: (this.#seq += 10),
       course,
       source,
+      by: SELF_ID,
       createdMs: this.#now,
       startedMs: this.#now,
       shift: {

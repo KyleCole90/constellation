@@ -1878,6 +1878,62 @@ const newCourseWithoutSync = async (t) => {
   await shot(t, "auto-sync-focus");
 };
 
+/** #155: a fresh install knows a course set up elsewhere from Canvas, so it lists it as a course and doesn't offer it again. */
+const setUpOnAnotherInstall = async (t) => {
+  const code = "BIO 105";
+  await openOffer(t, code);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(id("source-sample-1"))})`,
+    `${code}: sample packages list`,
+  );
+  await t.click(id("source-sample-1"));
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(id("dates-card"))})`,
+    `${code}: the sample opens Dates`,
+  );
+  await t.click(id("review-copy"));
+  await approveCopy(t, code);
+  await t.click(id("copy-send"));
+  await waitReview(t, code);
+  await syncSettled(t);
+  const course = await lms(
+    t,
+    `(() => { const shell = lms.term.shells.find((s) => s.code === ${JSON.stringify(code)}); return lms.term.migrations.some((m) => m.course_id === shell.canvasId && m.workflow_state === "completed") ? shell.school + ":course:" + shell.canvasId : null; })()`,
+  );
+  t.assert(course !== null, `${code}: Canvas holds the finished copy, still unpublished`);
+  if (!course) return;
+  const ref = JSON.stringify(course);
+  const page = `/courses/${encodeURIComponent(course)}`;
+  await t.eval(`(() => {
+    const key = "lms-app.v1";
+    const data = JSON.parse(localStorage.getItem(key));
+    const state = data.state;
+    delete state.setups[${ref}];
+    for (const [id, thread] of Object.entries(state.threads)) if (thread.course === ${ref}) delete state.threads[id];
+    for (const [id, change] of Object.entries(state.changes)) if (change.course === ${ref}) delete state.changes[id];
+    state.newCourses = {};
+    for (const cache of Object.values(state.cache)) cache.courses = cache.courses.filter((c) => c.ref !== ${ref});
+    localStorage.setItem(key, JSON.stringify(data));
+  })()`);
+  await t.reload();
+  await t.waitFor(
+    `JSON.parse(localStorage.getItem("lms-app.v1")).state.newCourses[${JSON.stringify(course.split(":")[0])}]?.some((shell) => shell.ref === ${ref})`,
+    "the relaunch reads the new-term courses from Canvas again",
+    WAIT,
+  );
+  await syncSettled(t);
+  await unfoldSidebarOffers(t);
+  t.assert(
+    await t.has(`${SIDEBAR_LIST} a[href="${page}"]`),
+    `${code}: with no local record of its setup, the sidebar lists it as a course`,
+  );
+  t.assert(
+    !(await t.has(`[data-testid="setup-offer"][data-course="${course}"]`)),
+    `${code}: with no local record of its setup, it is not offered to set up again`,
+  );
+  await shot(t, "set-up-on-another-install");
+};
+
 export const run = async (t) => {
   await clearOwnShots(t);
   shots = 0;
@@ -1893,4 +1949,5 @@ export const run = async (t) => {
   await afterPublish(t);
   await writesLogRowsDiffer(t);
   await newCourseWithoutSync(t);
+  await setUpOnAnotherInstall(t);
 };

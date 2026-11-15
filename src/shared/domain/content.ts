@@ -10,6 +10,8 @@ export interface CourseShell extends Course {
   startAt: IsoDate | null;
   endAt: IsoDate | null;
   itemCount: number;
+  /** A copy or package import the teacher started has finished in it, from this install or any other. */
+  setUp: boolean;
   copyTarget: LmsRef<"migrations">;
   stateTarget: LmsRef<"course-state">;
 }

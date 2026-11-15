@@ -279,6 +279,7 @@ export const CourseShellSchema: v.GenericSchema<CourseShell> = v.object({
   startAt: nullable(IsoDateSchema),
   endAt: nullable(IsoDateSchema),
   itemCount: count,
+  setUp: v.boolean(),
   copyTarget: lmsRef<"migrations">(),
   stateTarget: lmsRef<"course-state">(),
 });

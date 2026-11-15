@@ -234,7 +234,12 @@ export const canvasTermSetup = (client: CanvasClient) => {
     end: dateOf(row.end_at ?? row.term?.end_at ?? null),
   });
 
-  const shellOf = (row: SetupCourseRow, itemCount: number): CourseShell => {
+  const shellOf = (
+    row: SetupCourseRow,
+    itemCount: number,
+    jobs: readonly MigrationRow[],
+    mine: number,
+  ): CourseShell => {
     const { start, end } = datesOf(row);
     return {
       ref: refs.course(school.id, row.id),
@@ -248,6 +253,8 @@ export const canvasTermSetup = (client: CanvasClient) => {
       startAt: start,
       endAt: end,
       itemCount,
+      // A school's own template copy has no user, or an admin's, so only a copy the teacher started counts.
+      setUp: jobs.some((job) => job.user_id === mine && job.workflow_state === "completed"),
       copyTarget: refs.migrations(school.id, row.id),
       stateTarget: refs.courseState(school.id, row.id),
     };
@@ -286,14 +293,18 @@ export const canvasTermSetup = (client: CanvasClient) => {
         row.workflow_state === "unpublished" &&
         isComing({ ...row, startAt: datesOf(row).start }, today),
     );
+    const mine = await client.me();
+    if (!mine.ok) return mine;
     const counted = await fewAtATime(shells, async (row) => ({
       row,
       count: await itemCount(row.id),
+      jobs: await migrationRows(row.id),
     }));
     const out: CourseShell[] = [];
-    for (const { row, count } of counted) {
+    for (const { row, count, jobs } of counted) {
       if (!count.ok) return count;
-      out.push(shellOf(row, count.value));
+      if (!jobs.ok) return jobs;
+      out.push(shellOf(row, count.value, jobs.value, mine.value));
     }
     return { ok: true, value: out };
   };
@@ -425,7 +436,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
     if (id === undefined) return Promise.resolve(NOT_FOUND);
     return (async () => {
       // A publish check waits on this read, so its requests go out together rather than one after another.
-      const [row, pages, assignments, topics, files, modules, tools, jobs, profile] =
+      const [row, pages, assignments, topics, files, modules, tools, jobs, profile, mine] =
         await Promise.all([
           course(id),
           list(`/courses/${id}/pages`, PageRow),
@@ -436,6 +447,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
           list(`/courses/${id}/external_tools`, ToolRow),
           migrationRows(id),
           one("/users/self/profile", Profile),
+          client.me(),
         ]);
       if (!row.ok) return row;
       if (!pages.ok) return pages;
@@ -446,6 +458,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
       if (!tools.ok) return tools;
       if (!jobs.ok) return jobs;
       if (!profile.ok) return profile;
+      if (!mine.ok) return mine;
       const reads = await Promise.all(
         pages.value.map(
           async (page) =>
@@ -575,6 +588,8 @@ export const canvasTermSetup = (client: CanvasClient) => {
         shell: shellOf(
           row.value,
           pages.value.length + topics.value.length + assignments.value.length + files.value.length,
+          jobs.value,
+          mine.value,
         ),
         version: hashOf([row.value, items, modules.value, tools.value]),
         items,
