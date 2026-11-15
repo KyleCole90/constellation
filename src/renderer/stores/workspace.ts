@@ -2444,12 +2444,12 @@ const browserDeps = (): WorkspaceDeps => ({
   vault: createAppVault(),
   backend: desktopBridge ? bridgeBackend(desktopBridge) : fakeCanvasBackend({}),
   agent:
-    desktopBridge?.agent === "claude"
+    desktopBridge && !desktopBridge.fakes
       ? createBridgeAgent(desktopBridge)
       : standInFor(createRuleAgent()),
   ...(desktopBridge ? { connectivity: { online: isOnline, subscribe: onConnectivity } } : {}),
   // Verify and the web demo run the fake LMS, which changes only when a test changes it, so no timer races their steps.
-  ...(desktopBridge?.agent === "claude"
+  ...(desktopBridge && !desktopBridge.fakes
     ? {
         timer: (run, ms) => {
           const id = setTimeout(run, ms);

@@ -17,7 +17,7 @@ import electronUpdater from "electron-updater";
 
 import * as v from "valibot";
 
-import { RULES_AGENT_SWITCH, errorReport, handle } from "../shared/ipc";
+import { FAKES_SWITCH, errorReport, handle } from "../shared/ipc";
 
 import {
   APP_SCHEME,
@@ -171,7 +171,7 @@ const start = async () => {
     },
   );
   const window = new BrowserWindow({
-    ...windowOptions(PRELOAD, FAKE_ONLY ? [RULES_AGENT_SWITCH] : []),
+    ...windowOptions(PRELOAD, FAKE_ONLY ? [FAKES_SWITCH] : []),
     show: !HIDDEN,
   });
   lockNavigation(window.webContents, (url) => void shell.openExternal(url));

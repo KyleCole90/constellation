@@ -60,7 +60,7 @@ const desktop = () => {
     },
   );
   const bridge: Bridge = {
-    agent: "rules",
+    fakes: true,
     invoke: invoker(async (channel, input) => {
       const listener = listeners.get(channel);
       if (!listener) throw new Error(`no listener for ${channel}`);

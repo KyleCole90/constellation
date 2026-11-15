@@ -224,13 +224,16 @@ export const handle = (
     });
 };
 
-/** The switch main hands the preload, in `additionalArguments`, when verify runs the app: drafts come from the rules agent. */
-export const RULES_AGENT_SWITCH = "--constellation-agent=rules";
+/**
+ * The switch main hands the preload, in `additionalArguments`, when verify runs the app: the fake LMS and the rules agent,
+ * with nothing leaving the Mac.
+ */
+export const FAKES_SWITCH = "--constellation-fakes";
 
 /** What the preload exposes to the renderer as `window.constellation`. */
 export interface Bridge {
-  /** Where drafts come from: Claude in main, or the rules agent when verify runs the app with nothing leaving it. */
-  readonly agent: "claude" | "rules";
+  /** Verify's world: demo schools on the fake LMS, and drafts from the rules agent. Otherwise real schools and Claude. */
+  readonly fakes: boolean;
   invoke<C extends ChannelName>(channel: C, input: Input<C>): Promise<Output<C>>;
 }
 

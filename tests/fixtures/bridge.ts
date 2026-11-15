@@ -108,7 +108,7 @@ export const bridgedLms = (
     return structuredClone(await listen(sender, structuredClone(input)));
   };
   const bridge: Bridge = {
-    agent: "rules",
+    fakes: true,
     invoke: invoker((channel, input) => call(channel, input)),
   };
   const fake = bridgeFakeLms(bridge, FAKE_CANVAS, FAKE_CANVAS_FACE, clock.now);

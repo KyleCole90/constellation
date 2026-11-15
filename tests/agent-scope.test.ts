@@ -16,7 +16,7 @@ const wire = async () => {
   const sent: { request: string; scope: AgentScope }[] = [];
   const rules = createRuleAgent();
   const bridge: Bridge = {
-    agent: "claude",
+    fakes: false,
     invoke: invoker(async (channel, raw) => {
       if (channel !== "agent.run") throw new Error(`unexpected ${channel}`);
       const input = raw as {
