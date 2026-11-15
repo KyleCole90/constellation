@@ -18,6 +18,10 @@ const DEMO_PROVIDER: Readonly<Record<ProviderKind, boolean>> = {
 
 export const isDemoSchool = (school: School): boolean => DEMO_PROVIDER[school.provider];
 
+/** Resetting the demo forgets every saved token, so it is offered only while no real school would lose one. */
+export const canResetDemo = (schools: readonly School[]): boolean =>
+  schools.length > 0 && schools.every(isDemoSchool);
+
 /** The one order schools take in every list and filter: by name. */
 export const bySchoolName = (a: School, b: School): number => a.name.localeCompare(b.name);
 

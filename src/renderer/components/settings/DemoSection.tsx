@@ -1,7 +1,7 @@
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { FIELD_LABEL } from "~/shared/domain/change";
-import { isDemoSchool } from "~/shared/domain/lms";
+import { canResetDemo, isDemoSchool } from "~/shared/domain/lms";
 import type { LmsRef, SchoolId } from "~/shared/domain/ids";
 import { faultLab, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
@@ -321,6 +321,7 @@ function WritesLog() {
 
 export function DemoSection() {
   const [resetting, setResetting] = useState(false);
+  const resettable = useWorkspace((state) => canResetDemo(state.schools));
   return (
     <div className="flex flex-col gap-8">
       <SettingsSection
@@ -339,19 +340,21 @@ export function DemoSection() {
         </p>
       </SettingsSection>
       <WritesLog />
-      <SettingsSection title="Reset">
-        <SettingsCard>
-          <SettingsRow
-            title="Reset demo data"
-            description="Wipes changes, threads, tokens, and the fake LMS, then starts over at the welcome screen."
-            control={
-              <Button variant="destructive-outline" onClick={() => setResetting(true)}>
-                Reset demo data
-              </Button>
-            }
-          />
-        </SettingsCard>
-      </SettingsSection>
+      {resettable && (
+        <SettingsSection title="Reset">
+          <SettingsCard>
+            <SettingsRow
+              title="Reset demo data"
+              description="Wipes changes, threads, tokens, and the fake LMS, then starts over at the welcome screen."
+              control={
+                <Button variant="destructive-outline" onClick={() => setResetting(true)}>
+                  Reset demo data
+                </Button>
+              }
+            />
+          </SettingsCard>
+        </SettingsSection>
+      )}
       <ResetDemoDialog open={resetting} onOpenChange={setResetting} />
     </div>
   );

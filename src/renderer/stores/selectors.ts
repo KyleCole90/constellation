@@ -769,6 +769,15 @@ export const withoutChatThreads = <T extends Pick<Thread, "kind">>(
   ai: boolean,
 ): readonly T[] => (ai ? threads : threads.filter((thread) => !isChatThread(thread)));
 
+/** The demo's seeded threads, and a removed school's, stay saved but belong to no school the teacher has added. */
+export const ofAddedSchools = <T extends Pick<Thread, "school">>(
+  threads: readonly T[],
+  schools: readonly Pick<School, "id">[],
+): readonly T[] =>
+  threads.filter(
+    (thread) => thread.school === null || schools.some((school) => school.id === thread.school),
+  );
+
 /** Course threads and chats settle. North Star and the grading list stay put. */
 export const canSettle = (thread: Pick<Thread, "course" | "kind">): boolean =>
   thread.course !== null || thread.kind === "north-star-chat";

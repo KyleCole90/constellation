@@ -1,7 +1,13 @@
 import { courseName, type CourseShell } from "~/shared/domain/content";
 import type { LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
-import type { Course, School, Student, Submission } from "~/shared/domain/lms";
-import { INBOX_THREAD } from "~/renderer/stores/selectors";
+import {
+  canResetDemo,
+  type Course,
+  type School,
+  type Student,
+  type Submission,
+} from "~/shared/domain/lms";
+import { INBOX_THREAD, ofAddedSchools } from "~/renderer/stores/selectors";
 import type { ConnectionRecord, Thread } from "~/renderer/stores/types";
 
 type PaletteTarget =
@@ -80,7 +86,7 @@ export const buildEntries = (input: {
     input.courses.find((course) => course.ref === ref)?.code ?? "All courses";
   return [
     ...SCREENS,
-    RESET_DEMO,
+    ...(canResetDemo(input.schools) ? [RESET_DEMO] : []),
     ...input.schools
       .filter((school) => input.connections[school.id]?.status === "connected")
       .map((school): PaletteEntry => ({
@@ -91,7 +97,7 @@ export const buildEntries = (input: {
         school: school.id,
         target: { kind: "sync", school: school.id },
       })),
-    ...input.threads
+    ...ofAddedSchools(input.threads, input.schools)
       .filter((thread) => thread.id !== INBOX_THREAD)
       .map((thread): PaletteEntry => ({
         key: `thread:${thread.id}`,
