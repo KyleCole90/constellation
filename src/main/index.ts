@@ -55,17 +55,17 @@ const FAKE_ONLY = !app.isPackaged && process.env.CONSTELLATION_LMS === "fake";
  * place of the native dialog, which CDP can't reach. An empty or missing file is a cancel. A packaged app never reads it.
  */
 const PICKED_PACKAGE_FILE = app.isPackaged ? undefined : process.env.CONSTELLATION_PICKED_PACKAGE;
-/** Only the unpackaged app takes CDP. A packaged app quits before it opens a window (`npm run smoke:packaged`). */
-/**
- * Baked in by `CONSTELLATION_UPDATES=on npm run build`, which only the release workflow runs. Every other build bakes
- * in `false`, so an unsigned build (`npm run smoke:packaged`, a local package) never checks.
- */
 /** Set by verify to a fake `claude`, so a run never reaches the teacher's own. A packaged app never reads it. */
 const CLAUDE_OVERRIDE = app.isPackaged ? undefined : process.env.CONSTELLATION_CLAUDE;
 const AI_OFF = {
   ok: false,
   reason: "AI drafts are off. Choose an AI source in Settings to turn them on.",
 } as const;
+/** Only the unpackaged app takes CDP. A packaged app quits before it opens a window (`npm run smoke:packaged`). */
+/**
+ * Baked in by `CONSTELLATION_UPDATES=on npm run build`, which only the release workflow runs. Every other build bakes
+ * in `false`, so an unsigned build (`npm run smoke:packaged`, a local package) never checks.
+ */
 const UPDATES = app.isPackaged && process.env.CONSTELLATION_UPDATES === "on";
 const DEBUGGER_ASKED =
   app.isPackaged &&
