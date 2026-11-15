@@ -198,7 +198,13 @@ const ConversationDetail = v.object({
     v.object({ courses: v.nullish(v.record(v.string(), v.unknown()), {}) }),
     null,
   ),
-  participants: v.array(v.object({ id: Id, name: v.string() })),
+  /** By the name the roster lists (`full_name`), not the display name the person picked in Canvas (`name`). */
+  participants: v.array(
+    v.pipe(
+      v.object({ id: Id, name: v.string(), full_name: v.nullish(v.string(), null) }),
+      v.transform((person) => ({ id: person.id, name: person.full_name ?? person.name })),
+    ),
+  ),
   /** Newest first. */
   messages: v.array(v.object({ id: Id, author_id: Id, body: v.string(), created_at: Time })),
 });

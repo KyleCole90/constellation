@@ -1126,6 +1126,31 @@ describe("a course just set up, unpublished with no students yet (#140)", () => 
     expect(selectSetupOffers(rig.state()).some((offer) => offer.shell.ref === course)).toBe(false);
   });
 
+  it("is a course on a fresh install too, since Canvas holds the copy the teacher made (#155)", async () => {
+    const rig = await connected();
+    const { course, copy } = await toDraftCopy(rig, LCC, "ENG 101", {
+      course: "ENG 101",
+      term: "Fall 2026",
+    });
+    approve(rig, copy);
+    await send(rig, [copy]);
+    await stageIs(rig, course, "review");
+
+    rig.storage.removeItem(WORKSPACE_STORAGE_KEY);
+    const fresh = await connected({
+      storage: rig.storage,
+      clock: new VirtualClock(rig.clock.now()),
+    });
+    expect(fresh.state().setups).toEqual({});
+    expect(fresh.state().cache[LCC]?.courses.some((c) => c.ref === course)).toBe(true);
+    expect(selectSetupOffers(fresh.state()).some((offer) => offer.shell.ref === course)).toBe(
+      false,
+    );
+    expect(selectCourseOverview(fresh.state(), course, fresh.state().now())?.course.ref).toBe(
+      course,
+    );
+  });
+
   it("lists a post in Posted as soon as Canvas confirms it, while the rest of the school syncs (#146)", async () => {
     const rig = await connected();
     const { course, copy } = await toDraftCopy(rig, LCC, "ENG 101", {

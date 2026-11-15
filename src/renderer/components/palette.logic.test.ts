@@ -205,6 +205,7 @@ describe("filterEntries", () => {
         startAt: null,
         endAt: null,
         itemCount: 0,
+        setUp: false,
         copyTarget: "m" as LmsRef<"migrations">,
         stateTarget: "s" as LmsRef<"course-state">,
       } satisfies CourseShell;

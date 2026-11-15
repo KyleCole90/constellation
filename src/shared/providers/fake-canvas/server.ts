@@ -810,6 +810,10 @@ export class FakeCanvasServer implements FaultLab {
       termName: row.termName,
       ...this.#dates(row),
       itemCount: body.items.length,
+      // Every copy here is one the app sent, so any that finished was the teacher's.
+      setUp: this.#state.term.migrations.some(
+        (record) => record.course_id === courseId && record.workflow_state === "completed",
+      ),
       copyTarget: refs.migrations(row.school, courseId),
       stateTarget: refs.courseState(row.school, courseId),
     };

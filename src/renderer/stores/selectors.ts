@@ -1104,13 +1104,14 @@ export const selectSchoolGap = (state: WorkspaceData): SchoolGap | null => {
 
 /**
  * Courses the LMS leaves out of `courses()` because they're unpublished, but that are the teacher's from the moment a
- * setup's copy is sent: no students and a term still ahead, yet they have content and take announcements. A shell
- * the LMS stops offering (deleted, or started without being published) drops out.
+ * setup's copy is sent: no students and a term still ahead, yet they have content and take announcements. The LMS
+ * says so once the copy finishes, so a new install knows too; this install knows from the send. A shell the LMS stops
+ * offering (deleted, or started without being published) drops out.
  */
 export const selectSetUpCourses = (state: WorkspaceData, school: SchoolId): readonly Course[] =>
   (state.newCourses[school] ?? []).flatMap((shell): Course[] => {
     const copy = state.setups[shell.ref]?.copy;
-    return copy && state.changes[copy]?.state.tag === "sent"
+    return shell.setUp || (copy && state.changes[copy]?.state.tag === "sent")
       ? [
           {
             ref: shell.ref,

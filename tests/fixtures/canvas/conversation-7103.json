@@ -6,8 +6,8 @@
   "context_name": "Introduction to Composition",
   "audience_contexts": { "courses": { "2201": ["StudentEnrollment"] }, "groups": {} },
   "participants": [
-    { "id": 4101, "name": "Sample Instructor" },
-    { "id": 6401, "name": "Avery Sample" }
+    { "id": 4101, "name": "Sample Instructor", "full_name": "Sample Instructor" },
+    { "id": 6401, "name": "Ave", "full_name": "Avery Sample" }
   ],
   "messages": [
     {
