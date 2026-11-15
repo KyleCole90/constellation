@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
-import { MODEL, anthropicAgent } from "~/main/providers/anthropic";
+import { MODEL } from "~/main/agent";
+import { anthropicAgent } from "~/main/providers/anthropic";
 import type { Handlers } from "~/shared/ipc";
 import { Secret } from "~/shared/providers/provider";
 
