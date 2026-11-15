@@ -3,13 +3,17 @@ import { describe, expect, it } from "vite-plus/test";
 import { planWork } from "~/renderer/components/screens/due.logic";
 import { filterInbox, statusCount } from "~/renderer/components/screens/inbox.logic";
 import { fromInboxRows } from "~/renderer/components/thread/queue.logic";
-import type { ChangeId, LmsRef, ThreadId } from "~/shared/domain/ids";
+import type { ChangeId, IsoTime, LmsRef, ThreadId } from "~/shared/domain/ids";
+import { awaitsReply } from "~/shared/domain/lms";
 import { LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
 import {
   INBOX_THREAD,
+  selectCourseOverview,
   selectDueExtras,
   selectInboxRows,
   selectQueueRows,
+  selectThreadName,
+  selectThreadStatus,
   selectWhatsDue,
   selectWorkStages,
 } from "~/renderer/stores/selectors";
@@ -167,6 +171,49 @@ describe("What's due and Messages count the same replies (#110)", () => {
     rig.state().setConversationRead(inboxRow(rig, "Wren Calloway").conversation.ref, true);
     expect(counts(rig)).toEqual(before);
     expect(counts(rig).steps).toBe(true);
+  });
+});
+
+describe("every screen reads a waiting reply the way What's due does (#127)", () => {
+  const MESSAGE = { mine: false, at: "2026-10-30T07:05:00.000Z" as IsoTime };
+
+  it("waits while the student spoke last, read or not, until a reply goes out after it", () => {
+    expect(awaitsReply(MESSAGE, null)).toBe(true);
+    expect(awaitsReply(MESSAGE, "2026-10-29T12:00:00.000Z" as IsoTime)).toBe(true);
+    expect(awaitsReply(MESSAGE, "2026-10-30T08:00:00.000Z" as IsoTime)).toBe(false);
+    expect(awaitsReply({ ...MESSAGE, mine: true }, null)).toBe(false);
+    expect(awaitsReply(undefined, null)).toBe(false);
+  });
+
+  it("a read, unanswered message keeps its course's Messages thread waiting, not Done", async () => {
+    const rig = await connected();
+    const wren = inboxRow(rig, "Wren Calloway");
+    rig.state().setConversationRead(wren.conversation.ref, true);
+    expect(inboxRow(rig, "Wren Calloway").conversation.unread).toBe(false);
+
+    const extras = selectDueExtras(rig.state());
+    const due = extras.replies.filter((row) => row.course.ref === wren.course.ref);
+    expect(due.map((row) => row.conversation.from)).toContain("Wren Calloway");
+
+    const thread = rig.state().threadForWork(wren.course, { kind: "replies" });
+    const strip = fromInboxRows(
+      selectInboxRows(rig.state()).filter((row) => row.course.ref === wren.course.ref),
+    );
+    expect(strip.filter((row) => row.open).map((row) => row.title)).toEqual(
+      due.map((row) => row.conversation.from),
+    );
+    expect(selectThreadStatus(rig.state(), thread)).toEqual({
+      label: `${due.length} waiting`,
+      tone: "unread",
+    });
+    expect(selectThreadName(rig.state(), thread)).toContain("Wren");
+    expect(
+      selectCourseOverview(rig.state(), wren.course.ref, rig.clock.now())
+        ?.needsYou.flatMap((item) =>
+          item.kind === "conversation" ? [item.row.conversation.from] : [],
+        )
+        .sort(),
+    ).toEqual(due.map((row) => row.conversation.from).sort());
   });
 });
 

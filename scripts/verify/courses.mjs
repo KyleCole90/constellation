@@ -439,13 +439,59 @@ const gradableAgrees = async (t) => {
   );
 };
 
+/** A message read but not answered still waits: its thread's strip and the course's Threads list agree with What's due (#127). */
 const dueReplies = async (t) => {
   await t.click("What's due", { within: SIDEBAR });
-  await t.click("[data-due-unread]");
+  const refs = await t.eval(
+    `[...document.querySelectorAll("[data-due-unread]")].map((button) => button.dataset.dueUnread)`,
+  );
+  const quiet = await stored(
+    t,
+    `(() => { const caches = Object.values(state.cache); const open = new Set(Object.values(state.changes).filter((c) => c.state.tag !== "sent" && c.state.tag !== "discarded").map((c) => c.course)); return ${JSON.stringify(refs)}.flatMap((ref) => { const c = caches.flatMap((x) => x.conversations).find((x) => x.ref === ref); return c && !open.has(c.course) ? [{ ref, from: c.from, code: caches.flatMap((x) => x.courses).find((x) => x.ref === c.course).code }] : []; })[0] ?? null; })()`,
+  );
+  t.assert(
+    quiet !== null,
+    "What's due has a reply waiting in a course with no draft open",
+    refs.join(", "),
+  );
+  if (!quiet) return;
+  const { ref, from, code } = quiet;
+  await t.click("Messages", { within: SIDEBAR });
+  await t.click(`[data-conversation="${ref}"]`);
+  await t.waitFor(
+    `document.querySelector('[data-conversation="${ref}"]').dataset.unread === "false"`,
+    `reading ${from}'s message in Messages marks it read`,
+  );
+  await t.click("What's due", { within: SIDEBAR });
+  const step = `[data-due-unread="${ref}"]`;
+  await t.eval(
+    `(() => { const button = document.querySelector(${JSON.stringify(step)}); const course = button.closest("details"); if (course) course.open = true; button.scrollIntoView({ block: "center" }); })()`,
+  );
+  await t.click(step);
   await t.waitFor(
     `location.pathname.startsWith("/threads/") && document.querySelector('[data-testid="pinned-queue"]')`,
     "a reply row opens its messages thread",
   );
+  const strip = await t.text(QUEUE_STRIP);
+  t.assert(
+    !strip.includes("No messages waiting") && strip.includes(from),
+    `the strip above ${from}'s unanswered message names it as waiting`,
+    strip,
+  );
+  await t.shot("issue-127-thread", null);
+  const thread = (await path(t)).split("/").at(-1);
+  await goCourse(t, code);
+  const row = `[data-course-thread="${thread}"]`;
+  await t.eval(
+    `document.querySelector(${JSON.stringify(row)}).scrollIntoView({ block: "center" })`,
+  );
+  const status = await t.text(row);
+  t.assert(
+    !/\bDone\b/.test(status) && /\d+ waiting/.test(status),
+    `${code}'s Threads list says its messages still wait, not Done`,
+    status,
+  );
+  await t.shot("issue-127-overview", null);
 };
 
 // The day column weeksThatFit wants before it shows two weeks, past the 160px course lane.
