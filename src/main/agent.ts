@@ -73,7 +73,12 @@ const FINDING_TYPES = [
 const text = { type: "string" } as const;
 const ref = (what: string) => ({ type: "string", description: what }) as const;
 interface Tool extends BetaTool {
-  input_schema: { type: "object"; properties: Record<string, unknown>; required: string[] };
+  input_schema: {
+    type: "object";
+    properties: Record<string, unknown>;
+    required: string[];
+    additionalProperties?: false;
+  };
 }
 const object = (
   properties: Record<string, unknown>,
@@ -213,28 +218,32 @@ export const TOOLS: readonly Tool[] = [
     name: "edit",
     description:
       "Change a draft in scope.changes. The patch's kind must match the draft's kind; include only the fields that change.",
-    input_schema: object(
-      {
-        change: ref("The change's id."),
-        why: ref("What you changed, in a few words."),
-        patch: {
-          type: "object",
-          description:
-            "grade: rubricPoints (criterion ref to points), points, comment. reply and message: body. announcement: title, body. text-fix: after.",
-          properties: {
-            kind: { enum: ["grade", "reply", "message", "announcement", "text-fix"] },
-            rubricPoints: { type: "object", additionalProperties: { type: "number" } },
-            points: { type: "number" },
-            comment: { type: ["string", "null"] },
-            body: text,
-            title: text,
-            after: text,
+    // Non-empty and closed: Claude Code's structured output returned empty `edit` stubs on fresh grades (#82's bench).
+    input_schema: {
+      ...object(
+        {
+          change: { ...ref("The change's id."), minLength: 1 },
+          why: { ...ref("What you changed, in a few words."), minLength: 1 },
+          patch: {
+            type: "object",
+            description:
+              "grade: rubricPoints (criterion ref to points), points, comment. reply and message: body. announcement: title, body. text-fix: after.",
+            properties: {
+              kind: { enum: ["grade", "reply", "message", "announcement", "text-fix"] },
+              rubricPoints: { type: "object", additionalProperties: { type: "number" } },
+              points: { type: "number" },
+              comment: { type: ["string", "null"] },
+              body: text,
+              title: text,
+              after: text,
+            },
+            required: ["kind"],
           },
-          required: ["kind"],
         },
-      },
-      ["change", "why", "patch"],
-    ),
+        ["change", "why", "patch"],
+      ),
+      additionalProperties: false,
+    },
   },
   {
     name: "annotate",

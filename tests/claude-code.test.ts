@@ -170,6 +170,11 @@ describe("a Claude Code run", () => {
       "handoff",
     ]);
     for (const item of items) expect(item.required).toContain("type");
+    // The CLI rejects output that breaks the schema, so an empty `edit` aimed at no draft can't come back.
+    expect(items.find((item) => item.properties.type.const === "edit")).toMatchObject({
+      additionalProperties: false,
+      properties: { change: { minLength: 1 }, why: { minLength: 1 } },
+    });
   });
 
   it("pays with the teacher's subscription: no API key, token or base URL, and no background traffic", async () => {
