@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { MODEL } from "~/main/agent";
 import { anthropicAgent } from "~/main/providers/anthropic";
+import { claudeCodeAgent } from "~/main/providers/claude-code";
 import type { Handlers } from "~/shared/ipc";
 import { Secret } from "~/shared/providers/provider";
 
@@ -22,14 +23,14 @@ interface OpenSource {
   weeklyUsed(): Promise<number | null>;
 }
 
-/** An AI source to bench. #82 adds Claude Code by replacing its entry below; the harness doesn't change. */
+/** An AI source to bench. */
 export interface BenchSource {
   id: SourceId;
   model: string;
   /** The startup-overhead guard's p50 limit, or null where it doesn't apply. */
   overheadLimitMs: number | null;
   /** What this source still needs before it can run, in words for the maintainer. Empty when it can run. */
-  missing(env: Env): readonly string[];
+  missing(env: Env): Promise<readonly string[]>;
   open(env: Env, meter: Meter): Promise<OpenSource>;
 }
 
@@ -72,7 +73,8 @@ const apiKey: BenchSource = {
   id: "api-key",
   model: MODEL,
   overheadLimitMs: null,
-  missing: (env) => (env["ANTHROPIC_API_KEY"] ? [] : ["ANTHROPIC_API_KEY, for the api-key source"]),
+  missing: async (env) =>
+    env["ANTHROPIC_API_KEY"] ? [] : ["ANTHROPIC_API_KEY, for the api-key source"],
   open: async (env, meter) => ({
     run: anthropicAgent({
       lease: {
@@ -99,28 +101,57 @@ const apiKey: BenchSource = {
   }),
 };
 
-/** Not built yet: #82 replaces this entry with the real provider, a signed-in check, its version and its weekly reading. */
+/** The `claude` on this Mac, or the one `CONSTELLATION_CLAUDE` names, as main runs it, with its usage read from each result. */
+const claudeCodeFor = (env: Env, meter?: Meter) => {
+  const binary = env["CONSTELLATION_CLAUDE"];
+  return claudeCodeAgent({
+    env,
+    ...(binary ? { locate: async () => binary } : {}),
+    ...(meter ? { onUsage: (calls, modelMs) => meter.request(calls, modelMs) } : {}),
+  });
+};
+
 const claudeCode: BenchSource = {
   id: "claude-code",
   model: MODEL,
   overheadLimitMs: 300,
-  missing: () => ["a signed-in Claude Code, for the claude-code source, which #82 adds"],
-  open: () => Promise.reject(new Error("The claude-code source arrives with #82.")),
+  missing: async (env) => {
+    const status = await claudeCodeFor(env).status();
+    return status.installed && status.signedIn && !status.tooOld
+      ? []
+      : ["a signed-in, current Claude Code, for the claude-code source"];
+  },
+  open: async (env, meter) => {
+    const agent = claudeCodeFor(env, meter);
+    const status = await agent.status();
+    return {
+      run: agent.run,
+      claudeCodeVersion: status.installed ? status.version : null,
+      // Claude Code reports the week's usage only as a run's rate-limit event, so there's none before the first draft.
+      weeklyUsed: async () => (await agent.status()).weekly?.usedPercent ?? null,
+    };
+  },
 };
 
 export const SOURCES: readonly BenchSource[] = [apiKey, claudeCode];
 
 /** Which sources have what they need, and what the rest are missing. */
-export const sortSources = (sources: readonly BenchSource[], env: Env) => ({
-  ready: sources.filter((source) => source.missing(env).length === 0),
-  unavailable: sources.flatMap((source) => {
-    const missing = source.missing(env);
-    return missing.length > 0 ? [{ id: source.id, missing }] : [];
-  }),
-});
+export const sortSources = async (sources: readonly BenchSource[], env: Env) => {
+  const checked = await Promise.all(
+    sources.map(async (source) => ({ source, missing: await source.missing(env) })),
+  );
+  return {
+    ready: checked.filter(({ missing }) => missing.length === 0).map(({ source }) => source),
+    unavailable: checked.flatMap(({ source, missing }) =>
+      missing.length > 0 ? [{ id: source.id, missing }] : [],
+    ),
+  };
+};
 
 /** Why the benchmark won't start: nothing it could run, and each missing credential by name. */
-export const refusal = (unavailable: ReturnType<typeof sortSources>["unavailable"]): string =>
+export const refusal = (
+  unavailable: Awaited<ReturnType<typeof sortSources>>["unavailable"],
+): string =>
   [
     "No AI source has the credentials it needs, so the benchmark didn't start. Missing:",
     ...unavailable.flatMap(({ missing }) => missing.map((what) => `- ${what}`)),
