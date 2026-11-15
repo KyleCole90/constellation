@@ -626,6 +626,16 @@ export const SEED: SeedData = {
           at: "2026-10-30T07:05",
           history: [
             {
+              at: "2026-10-26T21:40",
+              mine: false,
+              text: "My Speech 2 video keeps stopping partway through the upload. I tried twice from the library and once from home, and it gets stuck every time. It's due tonight. Will it count as late if it doesn't go through?",
+            },
+            {
+              at: "2026-10-26T22:05",
+              mine: true,
+              text: "It won't count as late if you started before the deadline. Try again on wifi rather than cellular, and keep the app open until it finishes. If it still stalls, email me the file name and I'll note it.",
+            },
+            {
               at: "2026-10-27T19:15",
               mine: false,
               text: "Speech 2 finally uploaded after I switched to wifi. Thanks for the tip.",

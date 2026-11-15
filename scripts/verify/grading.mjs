@@ -2176,6 +2176,11 @@ const replyDiscard = async (t) => {
     `[...document.querySelectorAll("[data-row]")].find((row) => !row.innerText.includes("Sent"))?.dataset.row`,
   );
   await t.click(`[data-row="${row}"] button`);
+  await t.waitFor(
+    `document.querySelector('${CHAT} [data-draft-reply]') && !document.querySelector(${JSON.stringify(CARD)})`,
+    "reply discard: opening a conversation offers Draft a reply and drafts nothing",
+  );
+  await t.click("[data-draft-reply]");
   await replyCard(t);
   await settled(t, "reply discard: agent finished");
   await ask(t, "make it warmer");

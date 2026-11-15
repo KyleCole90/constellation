@@ -987,6 +987,37 @@ const realSchoolCalendar = async (t) => {
   );
 };
 
+/** The student's latest message, the first since the teacher last wrote, shows whole above the reply at 1280×800 and 1440×900 (#120). */
+const answeredInView = async (t, what, reply) => {
+  const [width0, height0] = await t.eval(`[innerWidth, innerHeight]`);
+  for (const [width, height] of [
+    [1280, 800],
+    [1440, 900],
+  ]) {
+    await t.viewport(width, height);
+    await t.eval(`new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))`);
+    const seen = await t.eval(`(() => {
+      const chat = document.querySelector('[data-testid="chat"]').getBoundingClientRect();
+      const messages = [...document.querySelectorAll('[data-testid="history"] [data-message]')];
+      const mine = messages.findLastIndex((m) => m.dataset.mine === "true");
+      const asked = messages[mine + 1]?.getBoundingClientRect();
+      const answer = document.querySelector(${JSON.stringify(reply)})?.getBoundingClientRect();
+      return { chat: [chat.top, chat.bottom], asked: asked && [asked.top, asked.bottom], answer: answer?.top };
+    })()`);
+    t.assert(
+      seen.asked &&
+        seen.answer !== undefined &&
+        seen.asked[0] >= seen.chat[0] &&
+        seen.asked[1] <= seen.answer &&
+        seen.answer < seen.chat[1] - 40,
+      `at ${width}x${height}, the student's message shows above ${what}`,
+      JSON.stringify(seen),
+    );
+    await shot(t, `inbox-answered-${reply === CARD ? "draft" : "open"}-${width}`);
+  }
+  await t.viewport(width0, height0);
+};
+
 const inbox = async (t) => {
   await t.click("Messages", { within: SIDEBAR });
   await t.waitFor(
@@ -1068,11 +1099,27 @@ const inbox = async (t) => {
   );
   await t.click(`[data-conversation="${target}"] button`);
   await t.waitFor(
+    `document.querySelector("[data-draft-reply]")`,
+    "opening a conversation offers Draft a reply",
+  );
+  await settled(t, "opening is quiet");
+  t.assert(
+    !(await t.has(CARD)) &&
+      (await stored(
+        t,
+        `Object.values(state.changes).filter((c) => c.content.target === ${JSON.stringify(target)}).length`,
+      )) === 0,
+    "opening a conversation drafts nothing, since a draft costs a model call (#120, #48)",
+  );
+  await answeredInView(t, "Draft a reply", "[data-draft-reply]");
+  await t.click("[data-draft-reply]");
+  await t.waitFor(
     `document.querySelector(${JSON.stringify(CARD)})`,
-    "opening a conversation drafts a reply",
+    "Draft a reply drafts one",
     15_000,
   );
   await settled(t, "the draft is done");
+  await answeredInView(t, "the draft", CARD);
   t.assert(
     (await t.eval(`document.querySelectorAll('[data-testid="history"] [data-message]').length`)) ===
       (await lms(
@@ -1177,6 +1224,8 @@ const inbox = async (t) => {
     `document.querySelector('[data-conversation][data-unread="true"]').dataset.conversation`,
   );
   await t.click(`[data-conversation="${other}"] button`);
+  await t.waitFor(`document.querySelector("[data-draft-reply]")`, "another conversation opens");
+  await t.click("[data-draft-reply]");
   await t.waitFor(
     `document.querySelector(${JSON.stringify(CARD)})?.dataset`,
     "another conversation drafts too",
@@ -2121,6 +2170,8 @@ const layouts = async (t) => {
     await t.goto("/inbox");
     await t.waitFor(`document.querySelector(${JSON.stringify(LIST)})`, `inbox at ${width}: loaded`);
     await t.click('[data-conversation][data-unread="true"] button');
+    await t.waitFor(`document.querySelector("[data-draft-reply]")`, `inbox at ${width}: open`);
+    await t.click("[data-draft-reply]");
     await t.waitFor(
       `document.querySelector(${JSON.stringify(CARD)})`,
       `inbox at ${width}: a conversation drafts`,

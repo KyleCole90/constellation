@@ -431,12 +431,14 @@ describe("drafting", () => {
     });
   });
 
-  it("opening a conversation drafts a reply that a thread can edit", async () => {
+  it("opening a conversation spends nothing; Draft a reply drafts one a thread can edit (#120)", async () => {
     const rig = await makeStoreRig();
     await rig.connectAll();
     const conversation = rig.state().cache["lcc" as never]?.conversations[0];
     if (!conversation) throw new Error("no conversation");
-    const id = await rig.state().openConversation(QUEUE, conversation.ref);
+    expect(await rig.state().openConversation(QUEUE, conversation.ref)).toBeNull();
+    expect(Object.keys(rig.state().changes)).toHaveLength(0);
+    const id = await rig.state().openConversation(QUEUE, conversation.ref, { fill: "draft" });
     const record = id && rig.state().changes[id];
     expect(record && record.content.kind).toBe("reply");
   });
@@ -451,7 +453,7 @@ describe("drafting", () => {
       .cache["lcc" as never]?.conversations.find((c) => c.course === course);
     if (!conversation) throw new Error("no conversation");
     rig.state().setThreadUi(mail, { current: conversation.ref });
-    const first = await rig.state().openConversation(mail, conversation.ref);
+    const first = await rig.state().openConversation(mail, conversation.ref, { fill: "draft" });
     if (!first) throw new Error("nothing drafted");
     rig.state().dispatchUser(first, { type: "discard", at: AT });
     rig.state().focusChange(mail, null);
@@ -587,7 +589,7 @@ describe("free-text corrections", () => {
     await rig.connectAll();
     const conversation = rig.state().cache["lcc" as never]?.conversations[0];
     if (!conversation) throw new Error("no conversation");
-    const id = await rig.state().openConversation(QUEUE, conversation.ref);
+    const id = await rig.state().openConversation(QUEUE, conversation.ref, { fill: "draft" });
     if (!id) throw new Error("no change");
     await rig.state().sendToAgent(QUEUE, "warmer");
     const content = rig.state().changes[id]?.content;
