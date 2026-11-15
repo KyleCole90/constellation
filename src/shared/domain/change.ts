@@ -652,6 +652,19 @@ export interface ChangeRecord {
   activity: readonly ActivityEntry[];
 }
 
+/** When the teacher's latest reply to a conversation went out, which `awaitsReply` weighs against the student's last word. */
+export const repliedAt = (changes: readonly ChangeRecord[], conversation: string): IsoTime | null =>
+  changes.reduce<IsoTime | null>(
+    (latest, change) =>
+      change.content.kind === "reply" &&
+      change.content.target === conversation &&
+      change.state.tag === "sent" &&
+      (latest === null || change.state.at > latest)
+        ? change.state.at
+        : latest,
+    null,
+  );
+
 // ---- Events. Screens get UserEvent. The store adds HostEvent. Only the writeback runner gets RunEvent. ----
 
 export type ConflictChoice = "keep-mine" | "use-theirs" | "it-landed";

@@ -495,15 +495,18 @@ const sidebarMap = async (t) => {
   );
   const collapsedPlain = await plainCount(unreadSignal(unreadCourse));
   await expandCourse(t, unreadCourse);
-  const threadPlain = await plainCount(`${SIDEBAR} li a[href^="/threads/"] [aria-label$="unread"]`);
+  // A course's messages thread counts the replies waiting on the teacher, read or not (#127).
+  const threadPlain = await plainCount(
+    `${SIDEBAR} li a[href^="/threads/"] [aria-label$=" waiting"]`,
+  );
   t.assert(
     collapsedPlain && threadPlain,
-    "unread is a plain count on the course and its thread, with no dot to decode",
+    "unread is a plain count on the course, and waiting replies on its thread, with no dot to decode",
     JSON.stringify({ collapsedPlain, threadPlain }),
   );
   await t.click(`[aria-label="Collapse ${unreadCourse}"]`);
   t.assert(
-    !(await t.has(`${SIDEBAR} li a[href^="/threads/"] [aria-label$="unread"]`)),
+    !(await t.has(`${SIDEBAR} li a[href^="/threads/"] [aria-label$=" waiting"]`)),
     "collapsing from elsewhere hides its threads again",
   );
 

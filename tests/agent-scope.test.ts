@@ -5,7 +5,7 @@ import { createRuleAgent } from "~/shared/agent/rules";
 import type { ChangeId, ThreadId } from "~/shared/domain/ids";
 import { invoker, type Bridge } from "~/shared/ipc";
 import { createBridgeAgent } from "~/renderer/providers/agent";
-import { selectGradebook } from "~/renderer/stores/selectors";
+import { selectGradebook, selectInboxRows } from "~/renderer/stores/selectors";
 
 import { makeStoreRig } from "./fixtures/store-rig";
 
@@ -108,5 +108,22 @@ describe("what a turn sends Claude", () => {
     }
     expect(grades.flatMap((course) => course.students).some((s) => s.percent !== null)).toBe(true);
     expect(chat.scope.assignments.filter((a) => Array.isArray(a.rubric))).toEqual([]);
+  });
+
+  it("a North Star question marks a reply waiting the way What's due does, even once the teacher opened it (#127)", async () => {
+    const { rig, sent } = await wire();
+    const wren = selectInboxRows(rig.state()).find(
+      (row) => row.conversation.from === "Wren Calloway",
+    );
+    if (!wren) throw new Error("no conversation from Wren");
+    rig.state().setConversationRead(wren.conversation.ref, true);
+    const started = rig.state().startChat("What's left this week?");
+    if (!started) throw new Error("No chat started.");
+    await rig.clock.run(started.done);
+
+    const [chat] = sent;
+    const sentWren = chat?.scope.conversations.find((c) => c.ref === wren.conversation.ref);
+    expect(sentWren).toMatchObject({ awaitingReply: true });
+    expect(sentWren).not.toHaveProperty("unread");
   });
 });

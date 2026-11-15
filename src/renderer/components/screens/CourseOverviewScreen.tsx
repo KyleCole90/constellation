@@ -7,6 +7,7 @@ import type { Course } from "~/shared/domain/lms";
 import { cn, formatDay, formatDayTime } from "~/renderer/lib/utils";
 import {
   isSettled,
+  NOT_STARTED,
   selectCourseOverview,
   selectThreadName,
   selectThreadStatus,
@@ -131,11 +132,7 @@ function NeedsYouRow({ item, course }: { item: NeedsYou; course: Course }) {
               {item.row.conversation.from}{" "}
               <span className="text-muted-foreground">· {item.row.conversation.subject}</span>
             </span>
-            {item.row.summary ? (
-              <StatusPill tone={item.row.summary.tone} label={item.row.summary.label} />
-            ) : (
-              <StatusPill tone="unread" label="Unread" />
-            )}
+            <StatusPill {...(item.row.summary ?? NOT_STARTED)} />
             <OpensChevron />
           </button>
         </li>
