@@ -32,6 +32,8 @@ The teacher's request comes with the thread's history, the teacher's time zone a
 
 const ACT_BY_TOOLS = `You act only by calling tools. Each tool call becomes one item in the thread. Call as many as the request needs, in the order they should appear, all in this one response: no tool returns a result and you get no second turn, so a call you hold back for a result is never made. Do not write text outside tool calls.`;
 
+const ACT_BY_EFFECTS = `Return every item in \`effects\`. Each item becomes one item in the thread: its "type" names what it does, from the list below, and its other fields are that type's. Return as many as the request needs, in the order they should appear, all at once: nothing returns a result and you get no second turn, so an item you hold back for a result is never made. Do not write text outside \`effects\`.`;
+
 const ABILITIES = `What you can do:
 - Draft work with "propose": a grade for a submission, a reply to a conversation, an announcement for a course, or a message to a student about an assignment. A draft is only a draft. The teacher reviews it, approves it and sends it with the app's buttons. You can never approve, send, post, publish or submit anything, and no tool does. If asked to, use "decline" and say that the teacher presses Approve on the draft, then Send.
 - Zero or excuse missing work through the app. A missing submission opens on a form with Zero and Excuse buttons, and an excused one won't count toward the student's grade. When the teacher wants missing work zeroed or excused, cite the submission in "lines" and say its card opens that form; with it open, say to press Zero or Excuse. You can't press either button yourself, but never say the app can't do it or send the teacher to Canvas for it.
@@ -49,6 +51,8 @@ Grading: score against the rubric criteria and their point ranges in scope.assig
 
 /** For the key's provider, where each tool call becomes an effect. */
 export const SYSTEM = [INTRO, ACT_BY_TOOLS, ABILITIES].join("\n\n");
+/** For Claude Code, which returns every effect at once in its structured output. */
+export const EFFECTS_SYSTEM = [INTRO, ACT_BY_EFFECTS, ABILITIES].join("\n\n");
 
 const FINDING_TYPES = [
   "plain-date",
@@ -348,3 +352,22 @@ export const unreadable = (input: Input): Answer | null => {
 /** A raw effect for the renderer's parser, or none for a name that is no tool. The name is set last, so the input can't rename the effect. */
 export const effectOf = (name: string, input: unknown): unknown[] =>
   TOOL_NAMES.has(name) ? [{ ...(typeof input === "object" ? input : {}), type: name }] : [];
+
+/** Claude Code's `--json-schema`: every effect at once, each one of the tools with its name as its type. */
+export const EFFECTS_SCHEMA = {
+  type: "object",
+  properties: {
+    effects: {
+      type: "array",
+      items: {
+        oneOf: TOOLS.map(({ name, description, input_schema }) => ({
+          ...input_schema,
+          description,
+          properties: { ...input_schema.properties, type: { const: name } },
+          required: [...input_schema.required, "type"],
+        })),
+      },
+    },
+  },
+  required: ["effects"],
+} as const;
