@@ -1041,9 +1041,40 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           inFlight.set(`sync:${school}`, run);
           return run;
         };
-        /** A read already out may predate what just happened, so this waits it out and reads again. */
-        const syncFresh = async (school: SchoolId): Promise<boolean> => {
+        /**
+         * A read already out may predate what just happened, so this waits it out and reads again. A course a sent
+         * announcement posted to reads its announcements first, so Posted lists the post before the whole school is read.
+         */
+        const syncFresh = async (
+          school: SchoolId,
+          sent: readonly ChangeId[] = [],
+        ): Promise<boolean> => {
           await Promise.allSettled([inFlight.get(`sync:${school}`)]);
+          const lms = provider(school);
+          const postedTo = new Set(
+            sent.flatMap((id) => {
+              const record = get().changes[id];
+              return record?.school === school &&
+                record.state.tag === "sent" &&
+                record.content.kind === "announcement"
+                ? [record.content.target]
+                : [];
+            }),
+          );
+          await Promise.all(
+            [...postedTo].map(async (course) => {
+              if (!lms) return;
+              const read = await writeback.laneRead(school, () => lms.announcements(course));
+              const cache = get().cache[school];
+              if (!read.ok || !cache || get().connections[school]?.status === "disconnected")
+                return;
+              const announcements = [
+                ...cache.announcements.filter((a) => a.course !== course),
+                ...read.value,
+              ];
+              set({ cache: { ...get().cache, [school]: { ...cache, announcements } } });
+            }),
+          );
           return syncSchool(school);
         };
 
@@ -2262,7 +2293,12 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             await Promise.all(
               [...touched]
                 .filter((school) => writeback.laneStatus(school).state !== "closed")
-                .map((school) => syncFresh(school)),
+                .map((school) =>
+                  syncFresh(
+                    school,
+                    results.map((result) => result.id),
+                  ),
+                ),
             );
             await setup.afterSend(results.map((result) => result.id));
             return results;
@@ -2295,7 +2331,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             if (!checked.ok) return "unreachable";
             const finished = checked.value.state.tag === "sent";
             if (finished) {
-              await syncFresh(checked.value.school);
+              await syncFresh(checked.value.school, [id]);
               await setup.afterSend([id]);
             }
             return finished ? "confirmed" : "still-unconfirmed";
