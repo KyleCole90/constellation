@@ -452,6 +452,68 @@ const publish = async (t, code) => {
   );
 };
 
+const stored = (t, expression) =>
+  t.eval(
+    `(() => { const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; return ${expression}; })()`,
+  );
+
+/** #134: a link to a sent setup fix stays in setup, and the course drafts its welcome announcement before it is published. */
+const announceBeforePublish = async (t, code, course) => {
+  const ref = JSON.stringify(course);
+  const setupPath = await t.eval("location.pathname");
+  const fix = await stored(
+    t,
+    `Object.values(state.changes).find((c) => c.course === ${ref} && c.state.tag === "sent" && c.content.kind !== "course-copy")?.id ?? null`,
+  );
+  t.assert(fix !== null, `${code}: a setup fix was sent`);
+  await t.eval(
+    `(() => { const key = "lms-app.v1"; const data = JSON.parse(localStorage.getItem(key)); const thread = data.state.threads[data.state.setups[${ref}].thread]; thread.messages.push({ type: "agent", text: "Sent the fixes.", at: new Date().toISOString(), lines: [{ source: { kind: "change", ref: ${JSON.stringify(fix)} }, title: "The fix that was sent" }] }); localStorage.setItem(key, JSON.stringify(data)); })()`,
+  );
+  await t.reload();
+  await t.click('[data-source="change"]');
+  await t.sleep(300);
+  t.assert(
+    (await t.eval("location.pathname")) === setupPath,
+    `${code}: a link to a sent setup fix stays in the setup thread`,
+    await t.eval("location.pathname"),
+  );
+  t.assert(
+    !(await stored(
+      t,
+      `Object.values(state.threads).some((th) => th.kind === "announcement" && th.course === ${ref})`,
+    )),
+    `${code}: the setup fix makes no announcement thread`,
+  );
+
+  await t.goto(`/courses/${encodeURIComponent(course)}/announcements`);
+  await t.click("New announcement");
+  await t.waitFor(
+    `document.querySelector('[aria-label="Announcement"]')?.closest("[data-focused]")`,
+    `${code}: New announcement drafts the welcome announcement before the course is published`,
+    15_000,
+  );
+  await t.waitFor(
+    `!document.querySelector('[data-testid="agent-working"]')`,
+    `${code}: the announcement draft settles`,
+  );
+  t.assert(
+    !(await t.eval(`document.body.innerText.includes("didn't come through")`)),
+    `${code}: the thread doesn't say the draft failed`,
+  );
+  await shot(t, "announcement-before-publish");
+  await t.click("Discard", { within: "[data-focused]" });
+  await t.waitFor(
+    `!document.querySelector('[aria-label="Announcement"]')`,
+    `${code}: the announcement draft is discarded`,
+  );
+  await t.goto(setupPath);
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(id("run-check"))})`,
+    `${code}: back in setup, the publish check is offered`,
+    WAIT,
+  );
+};
+
 const until = async (t, expression, ms = 3000) => {
   const end = Date.now() + ms;
   while (Date.now() < end) {
@@ -1175,6 +1237,7 @@ const previousCourseFlow = async (t) => {
     `${code}: no review row names a raw ISO date`,
     isoNames.join(" | "),
   );
+  await announceBeforePublish(t, code, shellRef);
   await publish(t, code);
   await shot(t, "publish-approved");
   await t.waitFor(
