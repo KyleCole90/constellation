@@ -332,6 +332,59 @@ describe("a real school", () => {
   });
 });
 
+describe("the teacher's desktop app, which has no demo", () => {
+  const WALL = Date.UTC(2026, 10, 13, 20, 37);
+
+  it("starts with no seeded threads, no demo offer, and real time", async () => {
+    const rig = await makeStoreRig({ noDemo: true, clock: new VirtualClock(WALL) });
+    expect(rig.state().threads).toEqual({});
+    expect(rig.state().demoHosts()).toEqual([]);
+    expect(rig.state().now()).toBe(WALL);
+  });
+
+  it("leaves a real school, its token and the AI key alone when asked to reset demo data", async () => {
+    const rig = await makeStoreRig({ noDemo: true, realSchools: [LCC] });
+    await rig.connect(LCC);
+    await rig.state().addAiKey(new Secret(STORE_TOKEN));
+    const before = rig.storage.getItem(WORKSPACE_STORAGE_KEY);
+    await rig.state().resetDemoData();
+    expect(await rig.vault.has(LCC)).toBe(true);
+    expect(await rig.vault.has("ai-key")).toBe(true);
+    expect(rig.state().schools.map((school) => school.id)).toEqual([LCC]);
+    expect(rig.state().notice).toBeNull();
+    expect(rig.storage.getItem(WORKSPACE_STORAGE_KEY)).toBe(before);
+  });
+
+  it("drops a demo school and the seeded messages an earlier version saved, and keeps the real school's work", async () => {
+    const first = await makeStoreRig({ realSchools: [LCC] });
+    await first.connectAll();
+    const id = await openFor(first, "Maya Ortiz");
+    const seeded = (rig: StoreRig) =>
+      Object.values(rig.state().threads)
+        .flatMap((thread) => thread.messages)
+        .filter((message) => message.seeded);
+    expect(seeded(first).length).toBeGreaterThan(0);
+
+    const second = await makeStoreRig({
+      storage: first.storage,
+      vault: first.vault,
+      clock: first.clock,
+      realSchools: [LCC],
+      noDemo: true,
+    });
+    await second.state().boot();
+    expect(second.state().schools.map((school) => school.id)).toEqual([LCC]);
+    expect(second.state().connections[RSU]).toBeUndefined();
+    expect(await second.vault.has(RSU)).toBe(false);
+    expect(await second.vault.has(LCC)).toBe(true);
+    expect(second.state().changes[id]?.state.tag).toBe("draft");
+    expect(seeded(second)).toEqual([]);
+    expect(Object.values(second.state().threads).some((thread) => thread.messages.length > 0)).toBe(
+      true,
+    );
+  });
+});
+
 describe("a second tab", () => {
   const twoTabs = async () => {
     let notify = () => undefined as void;

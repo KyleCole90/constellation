@@ -179,7 +179,7 @@ describe("the lms channels", () => {
 describe("the teacher's app, on real Canvas", () => {
   const requests: string[] = [];
   const fetch: Fetch = async (url) => {
-    requests.push(String(url));
+    requests.push(url);
     throw new TypeError("fetch failed");
   };
   const lms = () => fakeLmsHandlers({ fetch });

@@ -18,8 +18,15 @@ const PARTIAL_ERROR = { kind: "unavailable", status: 500 } as const;
 const THROTTLE_MS = 3000;
 const REGRADE_BY = "Jordan Pike (TA)";
 
-const useLab = () => {
+/** This section shows only while a demo school exists, and only a backend with a demo has one. */
+const theLab = () => {
   const lab = faultLab();
+  if (!lab) throw new Error("This app has no failure lab.");
+  return lab;
+};
+
+const useLab = () => {
+  const lab = theLab();
   useSyncExternalStore(lab.subscribe, lab.version);
   return lab;
 };
@@ -141,7 +148,7 @@ function ExpireFault() {
   );
   const expire = () => {
     if (!school) return;
-    faultLab().expireToken(school);
+    theLab().expireToken(school);
     void workspaceStore().getState().syncSchool(school);
   };
   return (
@@ -198,7 +205,7 @@ function RegradeFault() {
   const grade = parseGrade(text);
   const change = () => {
     if (!current || grade === null) return;
-    faultLab().changeGradeOutOfBand(current as LmsRef<"submission">, grade, REGRADE_BY);
+    theLab().changeGradeOutOfBand(current as LmsRef<"submission">, grade, REGRADE_BY);
     setDone(`${items.find((item) => item.value === current)?.label} is now ${grade}`);
   };
   return (

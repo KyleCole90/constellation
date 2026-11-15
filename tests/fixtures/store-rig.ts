@@ -33,6 +33,8 @@ export interface StoreRigOptions {
   connectivity?: { online(): boolean; subscribe(onChange: () => void): void };
   /** These seeded schools join as real Canvas, served by the same fake. */
   realSchools?: readonly SchoolId[];
+  /** Runs as the teacher's desktop app, whose backend has no demo. */
+  noDemo?: boolean;
   timer?: (run: () => void, ms: number) => () => void;
 }
 
@@ -67,6 +69,7 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
       const real = options.realSchools ?? [];
       return {
         ...backend,
+        demo: options.noDemo ? null : backend.demo,
         schoolAt: async (host) => {
           const school = await backend.schoolAt(host);
           return school && real.includes(school.id) ? { ...school, provider: "canvas" } : school;

@@ -261,7 +261,7 @@ interface WorkspaceActions extends SetupActions {
   enrollmentFor(school: SchoolId): ProviderDescriptor["enrollment"] | null;
   /** What the add-a-school form renders, before any school exists. */
   newSchoolEnrollment(): ProviderDescriptor["enrollment"] | null;
-  /** Addresses the demo fill offers. Empty against a real LMS. */
+  /** Addresses the demo fill offers. Empty without a demo. */
   demoHosts(): readonly SchoolHost[];
   laneStatus(school: SchoolId): ReturnType<Writeback["laneStatus"]>;
   setOnboarding(step: OnboardingStep): void;
@@ -294,14 +294,17 @@ export type WorkspaceState = WorkspaceData &
 export interface Backend {
   /** The school at this address, or null when there is none. The desktop app asks main, which knows real Canvas. */
   schoolAt(host: SchoolHost): Promise<School | null>;
-  demoHosts: readonly SchoolHost[];
   /** The vendor a newly added school uses. The app is single-vendor today. */
   newSchoolProvider: School["provider"];
   descriptors: Readonly<Partial<Record<School["provider"], ProviderDescriptor>>>;
-  /** Demo clock start, epoch ms. */
-  epoch: number;
-  seedThreads(): Readonly<Record<ThreadId, Thread>>;
-  reset(): void;
+  /** The demo schools and what comes with them. Null in the teacher's desktop app, which has none. */
+  demo: {
+    hosts: readonly SchoolHost[];
+    /** Demo clock start, epoch ms. */
+    epoch: number;
+    seedThreads(): Readonly<Record<ThreadId, Thread>>;
+    reset(): void;
+  } | null;
 }
 
 export interface WorkspaceDeps {
@@ -488,7 +491,7 @@ const initialData = (backend: Backend, resetAt: number): WorkspaceData => ({
   aiSource: "none",
   cache: {},
   changes: {},
-  threads: backend.seedThreads(),
+  threads: backend.demo?.seedThreads() ?? {},
   setups: {},
   newCourses: {},
   prefs: { sidebarOpen: true, collapsed: {}, expandedThreads: {}, threadUi: {} },
@@ -725,6 +728,46 @@ const sameWords = (a: ChangeContent, b: ChangeContent): boolean => {
   const trimmed = (_key: string, value: unknown) =>
     typeof value === "string" ? value.trim() : value;
   return JSON.stringify(a, trimmed) === JSON.stringify(b, trimmed);
+};
+
+/**
+ * An alpha install of the desktop app could add demo schools, and seeded its threads. The app has no demo now, so boot
+ * drops them and every seeded message, and the vault check after it forgets the demo schools' tokens.
+ */
+const withoutDemo = (
+  data: Pick<
+    WorkspaceData,
+    "schools" | "connections" | "cache" | "newCourses" | "changes" | "threads"
+  >,
+): Pick<
+  WorkspaceData,
+  "schools" | "connections" | "cache" | "newCourses" | "changes" | "threads"
+> => {
+  const demo: ReadonlySet<string> = new Set(
+    data.schools.filter(isDemoSchool).map((school) => school.id),
+  );
+  const kept = <T>(
+    record: Readonly<Record<string, T>>,
+    school: (key: string, value: T) => string,
+  ) =>
+    Object.fromEntries(
+      Object.entries(record).filter(([key, value]) => !demo.has(school(key, value))),
+    );
+  return {
+    schools: data.schools.filter((school) => !demo.has(school.id)),
+    connections: kept(data.connections, (key) => key),
+    cache: kept(data.cache, (key) => key),
+    newCourses: kept(data.newCourses, (key) => key),
+    changes: kept(data.changes, (_key, change) => change.school),
+    threads: Object.fromEntries(
+      Object.values(data.threads).flatMap((thread) => {
+        const messages = thread.messages.filter((message) => !message.seeded);
+        return messages.length === 0 && thread.messages.length > 0
+          ? []
+          : [[thread.id, { ...thread, messages }]];
+      }),
+    ),
+  };
 };
 
 const withoutFocus = (
@@ -1764,12 +1807,13 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           aiOn: () => deps.aiAlways === true || get().aiSource !== "none",
 
           boot: async () => {
+            if (!backend.demo) set(withoutDemo(get()));
             const { changes, blanks } = get();
             const { threads, prefs } = withoutFocus(
               get(),
               (focus) => !changes[focus] && !blanks[focus],
             );
-            const seeded = backend.seedThreads();
+            const seeded = backend.demo?.seedThreads() ?? {};
             // A saved workspace keeps its grading messages but not the old name for the list.
             const renamed = Object.values(threads)
               .filter((thread) => thread.kind === "queue")
@@ -2252,7 +2296,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           },
           newSchoolEnrollment: () =>
             backend.descriptors[backend.newSchoolProvider]?.enrollment ?? null,
-          demoHosts: () => backend.demoHosts,
+          demoHosts: () => backend.demo?.hosts ?? [],
 
           laneStatus: (school) => writeback.laneStatus(school),
           setOnboarding: (step) => set({ onboarding: step }),
@@ -2273,8 +2317,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           dismissNotice: () => set({ notice: null }),
 
           resetDemoData: async () => {
+            if (!backend.demo) return;
             await deps.vault.forgetAll();
-            backend.reset();
+            backend.demo.reset();
             deps.storage.removeItem(WORKSPACE_STORAGE_KEY);
             inFlight.clear();
             writeback = makeWriteback();
@@ -2333,8 +2378,8 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
   // school puts the whole app on real time, so nothing it stamps or counts for that school is ever off.
   clock.now = () => {
     const { schools, resetAt } = store.getState();
-    return schools.every(isDemoSchool)
-      ? backend.epoch + (deps.realNow() - resetAt)
+    return backend.demo && schools.every(isDemoSchool)
+      ? backend.demo.epoch + (deps.realNow() - resetAt)
       : deps.realNow();
   };
 
@@ -2442,7 +2487,11 @@ const standInFor = (agent: Agent): Agent => ({
 const browserDeps = (): WorkspaceDeps => ({
   storage: localStorage,
   vault: createAppVault(),
-  backend: desktopBridge ? bridgeBackend(desktopBridge) : fakeCanvasBackend({}),
+  backend: !desktopBridge
+    ? fakeCanvasBackend({})
+    : desktopBridge.fakes
+      ? bridgeFakeBackend(desktopBridge)
+      : bridgeCanvasBackend(desktopBridge),
   agent:
     desktopBridge && !desktopBridge.fakes
       ? createBridgeAgent(desktopBridge)
@@ -2473,12 +2522,9 @@ const FAKE_HOSTS = FAKE_SCHOOLS.map((school) => school.host);
 
 const fakeBackend = (descriptor: ProviderDescriptor, reset: () => void): Backend => ({
   schoolAt: async (host) => FAKE_SCHOOLS.find((school) => school.host === host) ?? null,
-  demoHosts: FAKE_HOSTS,
   newSchoolProvider: "fake-canvas",
   descriptors: { "fake-canvas": descriptor },
-  epoch: new Date(SEED.now).getTime(),
-  seedThreads,
-  reset,
+  demo: { hosts: FAKE_HOSTS, epoch: new Date(SEED.now).getTime(), seedThreads, reset },
 });
 
 /** Wires the fake LMS in. A real provider replaces this one function and the screens never notice. */
@@ -2505,30 +2551,33 @@ export const fakeCanvasBackend =
     return fakeBackend(createFakeCanvasDescriptor(server, now), () => server.reset());
   };
 
-/** The desktop app's fake LMS runs in main, so here it is a client of the bridge (docs/electron-spec.md, step 10). */
-const bridgeBackend =
+/** Under verify, the desktop app's fake LMS runs in main, so here it is a client of the bridge (docs/electron-spec.md, step 10). */
+const bridgeFakeBackend =
   (bridge: Bridge) =>
   (now: () => number): Backend => {
     const fake = bridgeFakeLms(bridge, FAKE_CANVAS, FAKE_CANVAS_FACE, now);
     lab = fake.lab;
-    const backend = fakeBackend(fake.descriptor, fake.reset);
-    return {
-      ...backend,
-      schoolAt: (host) => bridge.invoke("lms.schoolAt", { host }).catch(() => null),
-      descriptors: {
-        ...backend.descriptors,
-        canvas: bridgeCanvas(bridge, CANVAS, CANVAS_FACE, now),
-      },
-    };
+    return fakeBackend(fake.descriptor, fake.reset);
   };
+
+/** The teacher's desktop app: real Canvas through main, with no demo. */
+const bridgeCanvasBackend =
+  (bridge: Bridge) =>
+  (now: () => number): Backend => ({
+    schoolAt: (host) => bridge.invoke("lms.schoolAt", { host }).catch(() => null),
+    newSchoolProvider: "canvas",
+    descriptors: { canvas: bridgeCanvas(bridge, CANVAS, CANVAS_FACE, now) },
+    demo: null,
+  });
 
 let instance: WorkspaceStore | null = null;
 export const workspaceStore = (): WorkspaceStore =>
   (instance ??= createWorkspaceStore(browserDeps()));
 
-export const faultLab = (): FaultLab => {
+/** The fake LMS's failure lab, or null when the app runs no fake. */
+export const faultLab = (): FaultLab | null => {
   workspaceStore();
-  return lab as FaultLab;
+  return lab;
 };
 
 export const useWorkspace = <T>(selector: (state: WorkspaceState) => T): T =>

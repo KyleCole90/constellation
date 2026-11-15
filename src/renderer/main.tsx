@@ -14,9 +14,12 @@ const start = async () => {
   window.addEventListener("unhandledrejection", (event) => reportError(event.reason));
   if (import.meta.env.DEV) {
     const lab = faultLab();
-    Object.assign(window, { __faultLab: lab, __setAgentStandIn: setAgentStandIn });
+    Object.assign(window, {
+      __setAgentStandIn: setAgentStandIn,
+      ...(lab ? { __faultLab: lab } : {}),
+    });
     const noise = sessionStorage.getItem("verify.noise");
-    if (noise) {
+    if (lab && noise) {
       // oxlint-disable-next-line typescript/no-unsafe-argument -- TS review debt: parse verify.noise into a Noise patch
       lab.setNoise(JSON.parse(noise));
       lab.setDemoScript(false);
