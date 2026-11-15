@@ -28,8 +28,11 @@ const registered = () => {
       "vault.keys": async () => [],
       "vault.forget": record,
       "vault.standIn": async () => null,
-      "agent.source": async () => {},
-      "claudeCode.status": async () => ({ installed: false, weekly: null }),
+      "agent.source": record,
+      "claudeCode.status": async (input) => {
+        handled.push(input);
+        return { installed: false, weekly: null };
+      },
       "agent.run": async (input) => {
         handled.push(input);
         return { ok: false, reason: "no agent in this rig" };
@@ -129,6 +132,10 @@ describe("main's handlers", () => {
       { request: "Draft a grade.", history: [{ role: "system", text: "x" }], scope: {} },
     ],
     ["agent.run", { request: "Draft a grade.", history: [], scope: {}, model: "claude-fable-5-2" }],
+    ["agent.source", "key"],
+    ["agent.source", { source: "on-device" }],
+    ["agent.source", { source: "key", token: "sk-ant-x" }],
+    ["claudeCode.status", { path: "/bin/sh" }],
   ])("reject %s with a bad input %j", async (channel, input) => {
     const main = registered();
     await expect(main.call(channel, input)).rejects.toThrow();
