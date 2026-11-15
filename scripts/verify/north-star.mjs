@@ -1846,6 +1846,13 @@ const missingWork = async (t) => {
     "the row is the missing one, in that assignment's grading list",
     await t.text(row),
   );
+  const list = await t.text('[data-testid="queue-list"]');
+  const progress = await t.text('[data-testid="queue-progress"]');
+  t.assert(
+    /\b1 missing\b/.test(progress) && !/Marcus Bell|Test Student/.test(list),
+    "the list calls Imani's work missing, not to grade, and holds no one off the roster (#151)",
+    `${progress} | ${list}`,
+  );
   t.assert(
     !(await t.has('[data-testid="agent-working"]')) && !(await t.has(ACTION)),
     "following the link drafts nothing",

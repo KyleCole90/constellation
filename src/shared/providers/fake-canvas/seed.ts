@@ -70,6 +70,8 @@ export interface SeedCourse {
   section: string;
   canvasId: number;
   students: readonly string[];
+  /** A concluded enrollment, or Canvas's Test Student: Canvas still returns their submissions, after `students` in each status string, but not them on the roster. */
+  offRoster?: readonly string[];
   assignments: readonly SeedAssignment[];
   threads: readonly SeedThread[];
   messages: readonly SeedMessage[];
@@ -123,6 +125,7 @@ export const SEED: SeedData = {
         "Rosa Delgado",
         "Owen Tierney",
       ],
+      offRoster: ["Marcus Bell", "Test Student"],
       assignments: [
         {
           id: "e101-rr5",
@@ -194,7 +197,7 @@ export const SEED: SeedData = {
           due: "2026-10-26T23:59",
           pts: 100,
           lateRate: 2.5,
-          statuses: "NGNGLGGRNGMGGG",
+          statuses: "NGNGLGGRNGMGGGMN",
           lateDays: { "4": 2 },
           canvasId: 310442,
           prior: {

@@ -245,6 +245,14 @@ describe("queueProgress", () => {
     });
   });
 
+  it("a grading list calls missing work missing, never work to grade (#151)", () => {
+    const missing = (key: string) => row(key, { missing: true });
+    expect(queueProgress([missing("a"), missing("b")]).label).toBe("0 graded · 2 missing");
+    expect(queueProgress([row("a", { open: false }), missing("b"), row("c")]).label).toBe(
+      "1 graded · 1 missing · 1 to grade",
+    );
+  });
+
   it("a message queue counts replies sent", () => {
     expect(queueProgress([row("a", { kind: "conversation" })]).label).toBe("0 of 1 sent");
     expect(

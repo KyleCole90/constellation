@@ -298,6 +298,12 @@ const pinnedQueue = async (t) => {
     "with nothing open the list offers Start grading",
   );
   await t.click("All", { within: QUEUE });
+  const roster = await t.text(QUEUE);
+  t.assert(
+    roster.includes("0 graded · 32 to grade") && !/Marcus Bell|Test Student/.test(roster),
+    "the grading list counts only the roster: no concluded student, no Test Student (#151)",
+    roster,
+  );
 
   await openStudent(t, "Maya Ortiz", "Essay 2");
   t.assert(

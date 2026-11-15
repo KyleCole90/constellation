@@ -322,7 +322,7 @@ const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): 
         course: courseRef,
         assignment: assignmentRef,
         student: refs.student(school, userId(i)),
-        studentName: course.students[i] ?? "",
+        studentName: [...course.students, ...(course.offRoster ?? [])][i] ?? "",
         workflow: WORKFLOW[status] ?? "unsubmitted",
         attempt: !hasWork ? 0 : prior ? 2 : 1,
         lateDays,
