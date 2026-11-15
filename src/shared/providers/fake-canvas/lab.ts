@@ -104,6 +104,11 @@ export const LabCommandSchema = v.variant("do", [
   v.object({ do: v.literal("enrollStudents"), course: lmsRef<"course">(), count }),
   v.object({ do: v.literal("clearDueDates"), course: lmsRef<"course">() }),
   v.object({
+    do: v.literal("addAssignments"),
+    course: lmsRef<"course">(),
+    titles: v.array(v.string()),
+  }),
+  v.object({
     do: v.literal("createShell"),
     school: SchoolIdSchema,
     code: v.string(),

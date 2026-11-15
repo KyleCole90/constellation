@@ -71,6 +71,8 @@ export interface FaultLab {
   enrollStudents(course: LmsRef<"course">, count: number): void;
   /** Every assignment in the course loses its due date, as in a real Canvas course that never set one. */
   clearDueDates(course: LmsRef<"course">): void;
+  /** Puts assignments with nothing turned in at the front of the course, so a search word can match many of them. */
+  addAssignments(course: LmsRef<"course">, titles: readonly string[]): void;
   /** Adds a next-term course the teacher hasn't seen, so a test can watch it arrive without a manual sync. */
   createShell(school: SchoolId, code: string, title: string): void;
   /** While hidden, every new-term and past course reads with no dates, as at a school whose terms have no teacher dates. */

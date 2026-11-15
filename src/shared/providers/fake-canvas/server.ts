@@ -1461,6 +1461,26 @@ export class FakeCanvasServer implements FaultLab {
     this.#push();
     this.#changed();
   };
+  addAssignments = (course: LmsRef<"course">, titles: readonly string[]): void => {
+    this.#pull();
+    const school = this.#state.courses.find((row) => row.ref === course)?.school;
+    if (!school) return;
+    const courseId = Number(refParts(course)[2]);
+    const added = titles.map((title, i): Assignment => ({
+      ref: refs.assignment(school, courseId, 990_000 + this.#state.assignments.length + i),
+      school,
+      course,
+      title,
+      shortTitle: title,
+      dueAt: null,
+      pointsPossible: 10,
+      rubric: null,
+      latePointsPerDay: null,
+    }));
+    this.#state.assignments.unshift(...added);
+    this.#push();
+    this.#changed();
+  };
   demoScript = () => ({
     enabled: this.#state.script.enabled,
     fired: DEMO_FAULTS.filter((fault) => this.#state.script.fired.includes(fault)),

@@ -2140,6 +2140,31 @@ const palette = async (t) => {
   );
   await t.waitFor(`document.querySelector('[data-testid="queue-list"]')`, "its list shows");
   await shot(t, "palette-assignment-open");
+
+  const waiting = await stored(
+    t,
+    `(() => { const caches = Object.values(state.cache); const first = caches.flatMap((c) => c.courses)[0]; const a = caches.flatMap((c) => c.assignments).find((a) => a.course !== first.ref && caches.some((c) => c.submissions.some((s) => s.assignment === a.ref && s.workflow === "submitted"))); return a ? { title: a.title, word: a.title.split(/[^A-Za-z]+/).find((w) => w.length > 3), first: first.ref, firstCode: first.code } : null; })()`,
+  );
+  t.assert(waiting?.word, "an assignment with work in, outside the first course");
+  await t.eval(
+    `window.__faultLab.addAssignments(${JSON.stringify(waiting.first)}, ${JSON.stringify(Array.from({ length: 6 }, (_, i) => `${waiting.word} journal #${i + 1}`))})`,
+  );
+  await goCourse(t, waiting.firstCode);
+  await t.click("Sync now", { within: '[data-testid="sync-line"]' });
+  await t.waitFor(
+    `(() => { const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; return Object.values(state.cache).flatMap((c) => c.assignments).filter((a) => a.title.includes(" journal #")).length === 6; })()`,
+    "six more matching assignments with nothing to grade land in the first course",
+    15_000,
+  );
+  await t.click("Search threads and students", { within: SIDEBAR });
+  await t.waitFor(`document.querySelector('[data-testid="palette"]')`, "the palette opens");
+  await t.type(waiting.word);
+  await t.waitFor(
+    `(() => { const header = [...document.querySelectorAll('[data-testid="palette"] div')].find((d) => d.children.length === 0 && d.innerText === "Assignments"); const top = header?.parentElement.querySelector("button"); return top?.querySelector(".truncate")?.innerText === ${JSON.stringify(waiting.title)} && top.innerText.includes("to grade"); })()`,
+    "the assignment with work to grade tops its group, ahead of matches in an earlier course (#121)",
+  );
+  await shot(t, "palette-assignment-waiting-first");
+  await t.key("Escape");
 };
 
 const layouts = async (t) => {

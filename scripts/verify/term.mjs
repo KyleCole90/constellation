@@ -1478,6 +1478,14 @@ const occupiedCourse = async (t) => {
     (await t.eval(`${dialog}.innerText`)).includes("14 students"),
     `${code}: the dialog names the students`,
   );
+  const from = (await t.eval(`${dialog}.innerText`)).match(
+    /The copy adds the content from (.+) to HUM 150, on top of what is there now/,
+  )?.[1];
+  t.assert(
+    from === "HUM 150 Film & Society (Fall 2026)",
+    `${code}: the dialog names the previous course as the source and HUM 150 as the target (#128)`,
+    String(from),
+  );
   t.assert(
     !(await t.eval(enabled(id("copy-send")))),
     `${code}: Send stays off while the dialog is open`,

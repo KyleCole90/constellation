@@ -34,6 +34,8 @@ export interface PaletteEntry {
     | "Students";
   title: string;
   hint: string;
+  /** Work waits on the teacher here, so it ranks first in its group and no cap hides it. */
+  waiting: boolean;
   school: School["id"] | null;
   target: PaletteTarget;
 }
@@ -44,6 +46,7 @@ const SCREENS: readonly PaletteEntry[] = [
     group: "Screens",
     title: "What's due",
     hint: "Screen",
+    waiting: false,
     school: null,
     target: { kind: "screen", to: "/due" },
   },
@@ -52,6 +55,7 @@ const SCREENS: readonly PaletteEntry[] = [
     group: "Screens",
     title: "Messages",
     hint: "Inbox",
+    waiting: false,
     school: null,
     target: { kind: "screen", to: "/inbox" },
   },
@@ -60,6 +64,7 @@ const SCREENS: readonly PaletteEntry[] = [
     group: "Screens",
     title: "Calendar",
     hint: "Screen",
+    waiting: false,
     school: null,
     target: { kind: "screen", to: "/calendar" },
   },
@@ -68,6 +73,7 @@ const SCREENS: readonly PaletteEntry[] = [
     group: "Screens",
     title: "Settings",
     hint: "Screen",
+    waiting: false,
     school: null,
     target: { kind: "screen", to: "/settings" },
   },
@@ -78,6 +84,7 @@ const RESET_DEMO: PaletteEntry = {
   group: "Actions",
   title: "Reset demo data",
   hint: "Asks first",
+  waiting: false,
   school: null,
   target: { kind: "reset-demo" },
 };
@@ -107,6 +114,7 @@ export const buildEntries = (input: {
         group: "Actions",
         title: `Sync ${school.name}`,
         hint: "Reads the LMS",
+        waiting: false,
         school: school.id,
         target: { kind: "sync", school: school.id },
       })),
@@ -122,6 +130,7 @@ export const buildEntries = (input: {
             : thread.toApprove
               ? `${codeOf(thread.course)}, to approve`
               : codeOf(thread.course),
+        waiting: thread.toApprove,
         school: thread.school,
         target: { kind: "thread", id: thread.id },
       })),
@@ -130,6 +139,7 @@ export const buildEntries = (input: {
       group: "Courses",
       title: courseName(course),
       hint: course.section ?? "",
+      waiting: false,
       school: course.school,
       target: { kind: "course", course },
     })),
@@ -138,26 +148,29 @@ export const buildEntries = (input: {
       group: "Courses",
       title: courseName(shell),
       hint: shell.termName ? `${shell.termName} setup` : "Setup",
+      waiting: false,
       school: shell.school,
       target: { kind: "setup", course: shell.ref },
     })),
-    ...input.assignments.map((assignment): PaletteEntry => ({
-      key: `assignment:${assignment.ref}`,
-      group: "Assignments",
-      title: assignment.title,
-      hint: withCount(
-        codeOf(assignment.course),
-        input.toGrade.filter((s) => s.assignment === assignment.ref).length,
-      ),
-      school: assignment.school,
-      target: { kind: "assignment", assignment },
-    })),
+    ...input.assignments.map((assignment): PaletteEntry => {
+      const count = input.toGrade.filter((s) => s.assignment === assignment.ref).length;
+      return {
+        key: `assignment:${assignment.ref}`,
+        group: "Assignments",
+        title: assignment.title,
+        hint: withCount(codeOf(assignment.course), count),
+        waiting: count > 0,
+        school: assignment.school,
+        target: { kind: "assignment", assignment },
+      };
+    }),
     ...input.courses.flatMap((course) =>
       (["gradebook", "announcements"] as const).map((page): PaletteEntry => ({
         key: `${page}:${course.ref}`,
         group: "Course pages",
         title: `${course.code} ${page}`,
         hint: course.title,
+        waiting: false,
         school: course.school,
         target: { kind: "course-page", course, page },
       })),
@@ -170,6 +183,7 @@ export const buildEntries = (input: {
         group: "Students",
         title: student.name,
         hint: submission ? `${codeOf(student.course)}, to grade` : codeOf(student.course),
+        waiting: submission !== null,
         school: student.school,
         target: { kind: "student", student, submission },
       };
@@ -251,8 +265,13 @@ export const filterEntries = (
     group.push({ entry, score });
     groups.set(entry.group, group);
   }
+  const best = (hits: readonly { score: number }[]) => Math.max(...hits.map((hit) => hit.score));
   return [...groups.values()]
-    .map((hits) => hits.sort((a, b) => b.score - a.score).slice(0, CAP_PER_GROUP))
-    .sort((a, b) => (b[0]?.score ?? 0) - (a[0]?.score ?? 0))
+    .map((hits) => {
+      hits.sort((a, b) => Number(b.entry.waiting) - Number(a.entry.waiting) || b.score - a.score);
+      const waiting = hits.filter((hit) => hit.entry.waiting).length;
+      return hits.slice(0, Math.max(CAP_PER_GROUP, waiting));
+    })
+    .sort((a, b) => best(b) - best(a))
     .flatMap((hits) => hits.map((hit) => hit.entry));
 };

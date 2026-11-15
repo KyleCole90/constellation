@@ -241,6 +241,49 @@ describe("filterEntries", () => {
     expect(filterEntries(many, "essay")).toHaveLength(6);
   });
 
+  it("an assignment with work to grade ranks first and is never capped away by matches in an earlier course (#121)", () => {
+    const music = { ...course, ref: "lcc:course:2" as LmsRef<"course">, code: "MUS 110" };
+    const assignmentIn = (owner: Course, n: number, title: string): Assignment => ({
+      ref: `${owner.ref}:assignment:${n}` as LmsRef<"assignment">,
+      school,
+      course: owner.ref,
+      title,
+      shortTitle: title,
+      dueAt: null,
+      pointsPossible: 10,
+      rubric: null,
+      latePointsPerDay: null,
+    });
+    const journals = Array.from({ length: 6 }, (_, i) =>
+      assignmentIn(course, i, `${i + 2}.4 WEEK ${i + 2} JOURNAL REFLECTION #${i + 1}`),
+    );
+    const waiting = assignmentIn(music, 9, "Reflection: one concept that finally clicked");
+    const shown = filterEntries(
+      buildEntries({
+        ...demoSchool,
+        threads: [],
+        courses: [course, music],
+        shells: [],
+        students: [],
+        assignments: [...journals, waiting],
+        toGrade: Array.from({ length: 4 }, (_, i) => ({
+          ...submission,
+          ref: `w${i}` as LmsRef<"submission">,
+          course: music.ref,
+          assignment: waiting.ref,
+        })),
+      }),
+      "Reflection",
+    );
+    expect(shown[0]).toEqual(
+      expect.objectContaining({
+        title: "Reflection: one concept that finally clicked",
+        hint: "MUS 110, 4 to grade",
+      }),
+    );
+    expect(shown).toHaveLength(6);
+  });
+
   it("eng101, typed without the space, finds the ENG 101 course first", () => {
     expect(filterEntries(entries, "eng101")[0]?.target).toEqual({ kind: "course", course });
   });
