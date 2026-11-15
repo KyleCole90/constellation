@@ -92,7 +92,7 @@ function TelemetryToggle() {
     <label data-testid="usage-data" className="flex cursor-pointer items-start gap-3">
       <input
         type="checkbox"
-        className="mt-1 accent-primary"
+        className="mt-1 size-3.5 flex-none accent-primary"
         checked={status.enabled}
         onChange={(event) => void telemetryChoice.choose(event.target.checked)}
       />
