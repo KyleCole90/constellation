@@ -90,6 +90,7 @@ import {
 } from "~/shared/providers/fake-canvas/provider";
 import { SEED } from "~/shared/providers/fake-canvas/seed";
 import {
+  fewAtATime,
   revealSecret,
   type AccountInfo,
   type Capabilities,
@@ -1107,19 +1108,18 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               courseReads: { ...get().courseReads, [school]: { courses, read } },
             });
           progress([]);
+          const readCourse = async (course: (typeof courses)[number]) => {
+            const reads = await Promise.all([
+              writeback.laneRead(school, () => lms.assignments(course.ref)),
+              writeback.laneRead(school, () => lms.students(course.ref)),
+              writeback.laneRead(school, () => lms.submissions(course.ref)),
+              writeback.laneRead(school, () => lms.announcements(course.ref)),
+            ]);
+            progress([...(get().courseReads[school]?.read ?? []), course.ref]);
+            return reads;
+          };
           const [perCourse, conversations] = await Promise.all([
-            Promise.all(
-              courses.map(async (course) => {
-                const reads = await Promise.all([
-                  writeback.laneRead(school, () => lms.assignments(course.ref)),
-                  writeback.laneRead(school, () => lms.students(course.ref)),
-                  writeback.laneRead(school, () => lms.submissions(course.ref)),
-                  writeback.laneRead(school, () => lms.announcements(course.ref)),
-                ]);
-                progress([...(get().courseReads[school]?.read ?? []), course.ref]);
-                return reads;
-              }),
-            ),
+            fewAtATime(courses, readCourse),
             lms.capabilities.messaging
               ? writeback.laneRead(school, () => lms.conversations())
               : ({ ok: true, value: [] } as const),
@@ -2290,8 +2290,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   : [];
               }),
             );
-            await Promise.all(
-              [...touched]
+            // Side by side: a copy's watcher reads only its job, and a whole-school sync can take many seconds.
+            await Promise.all([
+              ...[...touched]
                 .filter((school) => writeback.laneStatus(school).state !== "closed")
                 .map((school) =>
                   syncFresh(
@@ -2299,8 +2300,8 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                     results.map((result) => result.id),
                   ),
                 ),
-            );
-            await setup.afterSend(results.map((result) => result.id));
+              setup.afterSend(results.map((result) => result.id)),
+            ]);
             return results;
           },
 
@@ -2331,8 +2332,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             if (!checked.ok) return "unreachable";
             const finished = checked.value.state.tag === "sent";
             if (finished) {
-              await syncFresh(checked.value.school, [id]);
-              await setup.afterSend([id]);
+              await Promise.all([syncFresh(checked.value.school, [id]), setup.afterSend([id])]);
             }
             return finished ? "confirmed" : "still-unconfirmed";
           },
