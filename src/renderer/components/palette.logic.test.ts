@@ -149,7 +149,7 @@ describe("filterEntries", () => {
     });
   });
 
-  it("an assignment's name finds it, says how many are to grade, and opens its grading list (#121)", () => {
+  it("an assignment's name finds it, says how many are to grade, and opens its grading list, or its gradebook column with nothing to grade (#121, #135)", () => {
     const reflection = {
       ref: "lcc:assignment:9" as LmsRef<"assignment">,
       school,
@@ -188,8 +188,8 @@ describe("filterEntries", () => {
     );
     expect(filterEntries(withWork, "quiz")).toEqual([
       expect.objectContaining({
-        hint: "ENG 101",
-        target: { kind: "assignment", assignment: quiz },
+        hint: "ENG 101, gradebook",
+        target: { kind: "gradebook-column", assignment: quiz },
       }),
     ]);
     expect(filterEntries(withWork, "").map((entry) => entry.group)).not.toContain("Assignments");

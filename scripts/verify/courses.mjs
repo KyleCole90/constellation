@@ -2211,6 +2211,33 @@ const palette = async (t) => {
   );
   await shot(t, "palette-assignment-waiting-first");
   await t.key("Escape");
+
+  const idle = await stored(
+    t,
+    `(() => { const a = Object.values(state.cache).flatMap((c) => c.assignments).find((a) => a.title === ${JSON.stringify(`${waiting.word} journal #1`)}); return a ? { ref: a.ref, title: a.title, threads: Object.keys(state.threads).length } : null; })()`,
+  );
+  t.assert(idle, "an assignment with nothing to grade");
+  await t.click("Search threads and students", { within: SIDEBAR });
+  await t.waitFor(`document.querySelector('[data-testid="palette"]')`, "the palette opens");
+  await t.type(idle.title);
+  await t.waitFor(
+    `[...document.querySelectorAll('[data-testid="palette"] button')][0]?.querySelector(".truncate")?.innerText === ${JSON.stringify(idle.title)}`,
+    "the assignment with nothing to grade is the top result",
+  );
+  await t.key("Enter");
+  await t.waitFor(
+    `decodeURIComponent(location.pathname) === ${JSON.stringify(`/courses/${waiting.first}/gradebook`)} && document.querySelector('[data-column=${JSON.stringify(idle.ref)}]')?.dataset.highlighted === "true"`,
+    "an assignment with nothing to grade opens on its gradebook column, not an empty grading list (#135)",
+  );
+  t.assert(
+    (await stored(t, `Object.keys(state.threads).length`)) === idle.threads &&
+      !(await stored(
+        t,
+        `Object.values(state.threads).some((thread) => thread.assignment === ${JSON.stringify(idle.ref)})`,
+      )),
+    "and looking it up leaves no thread behind to read Done later (#135)",
+  );
+  await shot(t, "palette-assignment-nothing-to-grade");
 };
 
 const layouts = async (t) => {

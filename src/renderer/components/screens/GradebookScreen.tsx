@@ -179,11 +179,13 @@ function StudentRow({
   columns,
   assignments,
   highlighted,
+  column,
 }: {
   row: GradebookRow;
   columns: readonly Assignment[];
   assignments: readonly Assignment[];
   highlighted: boolean;
+  column: string;
 }) {
   const ref = useRef<HTMLTableRowElement>(null);
   useEffect(() => {
@@ -210,7 +212,14 @@ function StudentRow({
       {columns.map((assignment) => {
         const cell = row.cells[assignments.indexOf(assignment)];
         return (
-          <td key={assignment.ref} className={cn(LINE, "h-row-table border-r p-0")}>
+          <td
+            key={assignment.ref}
+            className={cn(
+              LINE,
+              "h-row-table border-r p-0",
+              assignment.ref === column && "bg-row-highlight",
+            )}
+          >
             {cell && <Cell cell={cell} assignment={assignment} />}
           </td>
         );
@@ -241,7 +250,7 @@ function StudentRow({
 
 export function GradebookScreen({ courseId }: { courseId: LmsRef<"course"> }) {
   const book = useWorkspace((state) => selectGradebook(state, courseId));
-  const hash = useRouterState({ select: (state) => state.location.hash });
+  const hash = decodeURIComponent(useRouterState({ select: (state) => state.location.hash }));
   const [sort, setSort] = useState<RowSort>({ by: "student", descending: false });
   const [order, setOrder] = useState<ColumnOrder>("due");
   const [picked, setFilter] = useState<RowFilter>("all");
@@ -255,6 +264,13 @@ export function GradebookScreen({ courseId }: { courseId: LmsRef<"course"> }) {
   );
   const columns = useMemo(() => orderColumns(assignments, order), [assignments, order]);
   const onSort = (by: RowSort["by"]) => setSort((prior) => nextSort(prior, by));
+  const hasColumn = columns.some((assignment) => assignment.ref === hash);
+  useEffect(() => {
+    if (!hasColumn) return;
+    document
+      .querySelector(`[data-column="${CSS.escape(hash)}"]`)
+      ?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [hasColumn, hash]);
 
   return (
     <CoursePage courseId={courseId}>
@@ -325,9 +341,11 @@ export function GradebookScreen({ courseId }: { courseId: LmsRef<"course"> }) {
                         key={assignment.ref}
                         scope="col"
                         data-column={assignment.ref}
+                        data-highlighted={assignment.ref === hash}
                         className={cn(
                           STICKY_TOP,
                           "min-w-[148px] snap-start border-r border-b border-border px-cell-x py-cell-y align-top font-normal",
+                          assignment.ref === hash && "bg-row-highlight",
                         )}
                       >
                         <SortHeader
@@ -364,7 +382,8 @@ export function GradebookScreen({ courseId }: { courseId: LmsRef<"course"> }) {
                       row={row}
                       columns={columns}
                       assignments={assignments}
-                      highlighted={decodeURIComponent(hash) === row.student.ref}
+                      highlighted={hash === row.student.ref}
+                      column={hash}
                     />
                   ))}
                 </tbody>

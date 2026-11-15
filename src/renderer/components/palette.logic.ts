@@ -17,6 +17,8 @@ type PaletteTarget =
   | { kind: "setup"; course: LmsRef<"course"> }
   | { kind: "course-page"; course: Course; page: "gradebook" | "announcements" }
   | { kind: "assignment"; assignment: Assignment }
+  /** An assignment with nothing to grade opens on its scores, not an empty grading list (#135). */
+  | { kind: "gradebook-column"; assignment: Assignment }
   | { kind: "student"; student: Student; submission: Submission | null }
   | { kind: "screen"; to: "/due" | "/inbox" | "/calendar" | "/settings" }
   | { kind: "reset-demo" }
@@ -158,10 +160,14 @@ export const buildEntries = (input: {
         key: `assignment:${assignment.ref}`,
         group: "Assignments",
         title: assignment.title,
-        hint: withCount(codeOf(assignment.course), count),
+        hint:
+          count > 0
+            ? withCount(codeOf(assignment.course), count)
+            : `${codeOf(assignment.course)}, gradebook`,
         waiting: count > 0,
         school: assignment.school,
-        target: { kind: "assignment", assignment },
+        target:
+          count > 0 ? { kind: "assignment", assignment } : { kind: "gradebook-column", assignment },
       };
     }),
     ...input.courses.flatMap((course) =>
