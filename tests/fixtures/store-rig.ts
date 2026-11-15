@@ -45,6 +45,7 @@ export interface StoreRigOptions {
   noDemo?: boolean;
   timer?: (run: () => void, ms: number) => () => void;
   agentMain?: WorkspaceDeps["agentMain"];
+  track?: WorkspaceDeps["track"];
 }
 
 export const makeStoreRig = async (options: StoreRigOptions = {}) => {
@@ -101,6 +102,7 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
     ...(options.connectivity ? { connectivity: options.connectivity } : {}),
     ...(options.timer ? { timer: options.timer } : {}),
     ...(options.agentMain ? { agentMain: options.agentMain } : {}),
+    ...(options.track ? { track: options.track } : {}),
   });
 
   const state = () => store.getState();
