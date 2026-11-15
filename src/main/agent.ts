@@ -360,10 +360,11 @@ export const EFFECTS_SCHEMA = {
     effects: {
       type: "array",
       items: {
+        // `type` first, so the model names an item's kind before its fields and never fills one kind's fields as another's.
         oneOf: TOOLS.map(({ name, description, input_schema }) => ({
           ...input_schema,
           description,
-          properties: { ...input_schema.properties, type: { const: name } },
+          properties: { type: { const: name }, ...input_schema.properties },
           required: [...input_schema.required, "type"],
         })),
       },
