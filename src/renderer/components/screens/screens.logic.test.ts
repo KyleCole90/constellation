@@ -660,14 +660,15 @@ describe("gradebook cells", () => {
     expect(pendingWords(cell({}))).toBeNull();
   });
 
-  it("a click goes to the work, the record, or the submission", () => {
+  it("a click goes to the work, the missing work, the record, or the submission", () => {
     expect(cellTarget(cell({ pending: summary({}) }))).toBe("work");
     expect(
       cellTarget(cell({ grade: null, submission: submission({ workflow: "submitted" }) })),
     ).toBe("work");
     expect(cellTarget(cell({ sent: true }))).toBe("record");
     expect(cellTarget(cell({}))).toBe("view");
-    expect(cellTarget(cell({ submission: submission({ workflow: "missing" }) }))).toBe("none");
+    expect(cellTarget(cell({ submission: submission({ workflow: "missing" }) }))).toBe("missing");
+    expect(cellTarget(cell({ submission: submission({ workflow: "unsubmitted" }) }))).toBe("none");
     expect(cellTarget(cell({ submission: null }))).toBe("none");
   });
 });
