@@ -132,6 +132,19 @@ export const ASSIGNMENTS: readonly AuthoredAssignment[] = [
       { name: "Artist statement", maxPoints: 7 },
     ],
   },
+  {
+    key: "art-statement",
+    course: "art",
+    title: "Artist Statement: Self-Portrait Project",
+    shortTitle: "Artist Statement",
+    pointsPossible: 20,
+    rubric: [
+      { name: "Describes the work", maxPoints: 5 },
+      { name: "Explains choices and intent", maxPoints: 8 },
+      { name: "Reflection", maxPoints: 4 },
+      { name: "Writing", maxPoints: 3 },
+    ],
+  },
 ];
 
 export const SUBMISSIONS: readonly AuthoredSubmission[] = [
@@ -390,7 +403,7 @@ export const SUBMISSIONS: readonly AuthoredSubmission[] = [
   {
     id: "mira-portrait",
     student: "Mira Castellano",
-    assignment: "art-portrait",
+    assignment: "art-statement",
     work: { kind: "document", file: "artist-statement-mira.md" },
   },
   {
