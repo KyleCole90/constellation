@@ -12,6 +12,7 @@ import {
   type SetContent,
   type TextFixContent,
 } from "./change";
+import { sourceName } from "./content";
 import { parseIsoTime, type IsoDate, type IsoTime } from "./ids";
 import { paragraphAfter } from "./splice";
 import { isoDate, type TermBreak, type TermDates, type Weekday } from "./term";
@@ -162,12 +163,7 @@ const copyBody = ({ source, plan, shift }: CourseCopyContent, remote: RemoteStat
       : null;
   return {
     kind: "copy",
-    source:
-      source.kind === "cartridge"
-        ? source.name
-        : source.termName
-          ? `${source.label} (${source.termName})`
-          : source.label,
+    source: sourceName(source),
     oldTerm:
       plan.oldTerm.start === plan.newTerm.start && plan.oldTerm.end === plan.newTerm.end
         ? "The same dates, so nothing moves"

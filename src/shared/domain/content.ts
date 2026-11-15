@@ -68,6 +68,12 @@ export type CopySource =
   | { kind: "course"; ref: LmsRef<"course">; label: string; termName: string }
   | { kind: "cartridge"; name: string; kb: number; hint: PackageTerm | null };
 
+/** How a copy names where it comes from: a course with its term, when it has one, or a package by its file name. */
+export const sourceName = (source: CopySource): string => {
+  if (source.kind === "cartridge") return source.name;
+  return source.termName === "" ? source.label : `${source.label} (${source.termName})`;
+};
+
 /**
  * What a package says about its own term, and the due days it holds, as written in the course's own time zone. A real
  * export may leave out its end date, or have no due dates to read days from.

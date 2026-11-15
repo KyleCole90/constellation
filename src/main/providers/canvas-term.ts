@@ -10,7 +10,7 @@ import type {
   SetContent,
   TextFixContent,
 } from "../../shared/domain/change";
-import { copySignature } from "../../shared/domain/change";
+import { copySignature, fieldText } from "../../shared/domain/change";
 import {
   isContentItemType,
   type ContentItem,
@@ -123,7 +123,6 @@ const FileItem = v.object({
   id: Id,
   display_name: v.string(),
   locked: v.nullish(v.boolean(), false),
-  hidden: v.nullish(v.boolean(), false),
   created_at: OptionalTime,
 });
 const ModuleRow = v.object({
@@ -170,6 +169,15 @@ const IssueRow = v.object({
 });
 
 const ACTIVE = new Set(["pre_processing", "pre_processed", "waiting_for_select", "running"]);
+/** New Quizzes copies a course's quizzes after the migration reports done, each one unpublished until it lands. */
+const ARRIVING = new Set(["duplicating", "importing", "migrating", "outcome_alignment_cloning"]);
+const AssignmentState = v.object({ workflow_state: v.nullish(v.string(), null) });
+/** A real school's quizzes took about 15 seconds. A quiz still arriving past this is stuck, so the copy reads done and the scan flags it. */
+const ARRIVE_MS = 5 * 60_000;
+const arrivingAt = (row: MigrationRow, now: number): boolean =>
+  row.workflow_state === "completed" &&
+  row.finished_at !== null &&
+  now - Date.parse(row.finished_at) < ARRIVE_MS;
 const stateOf = (row: MigrationRow, progress: string | null): Migration["state"] => {
   if (row.workflow_state === "completed") return "completed";
   if (row.workflow_state === "failed" || progress === "failed") return "failed";
@@ -385,6 +393,23 @@ export const canvasTermSetup = (client: CanvasClient) => {
           issues,
         });
       }
+      const recent = rows.value.flatMap((row, index) =>
+        arrivingAt(row, client.now()) ? [index] : [],
+      );
+      if (recent.length > 0) {
+        const quizzes = await list(`/courses/${id}/assignments`, AssignmentState);
+        if (!quizzes.ok) return quizzes;
+        if (quizzes.value.some((row) => ARRIVING.has(row.workflow_state ?? "")))
+          for (const index of recent) {
+            const job = out[index];
+            if (job)
+              out[index] = {
+                ...job,
+                state: "running",
+                message: "Canvas is still copying the quizzes.",
+              };
+          }
+      }
       return { ok: true, value: out };
     })();
   };
@@ -530,7 +555,8 @@ export const canvasTermSetup = (client: CanvasClient) => {
           item("file", file.id, {
             title: file.display_name,
             body: "",
-            published: !file.locked && !file.hidden,
+            // A `hidden` file, or one in a hidden folder such as Uploaded Media, is one students open from a link.
+            published: !file.locked,
             dueAt: null,
             openUrl: `${origin}/courses/${id}/files/${file.id}`,
             copied: copied(file.created_at),
@@ -681,7 +707,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
         return {
           read: `${at.base}/files/${at.id}`,
           path: `/files/${at.id}`,
-          form: { locked: "false", hidden: "false" },
+          form: { locked: "false" },
         };
       case "syllabus":
         return null;
@@ -690,7 +716,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
   const Published = v.object({
     published: v.nullish(v.boolean(), null),
     locked: v.nullish(v.boolean(), false),
-    hidden: v.nullish(v.boolean(), false),
   });
 
   const courseStateAt = (ref: string) => idsIn(ref, "course-state", 1)?.[0];
@@ -760,56 +785,78 @@ export const canvasTermSetup = (client: CanvasClient) => {
       }
       case "item-set": {
         if (field !== "value") break;
-        const { intent } = content;
-        switch (intent.set) {
-          case "course-published":
-          case "course-template": {
-            const id = courseStateAt(content.target);
-            if (id === undefined) return refused("That course isn't at this school.");
-            return write(
-              "PUT",
-              `/courses/${id}`,
-              new URLSearchParams(
-                intent.set === "course-published"
-                  ? { "course[event]": "offer" }
-                  : { "course[template]": "true" },
-              ),
-            );
-          }
-          case "due-at": {
-            const at = itemAt(content.target);
-            if (at?.type !== "assignment")
-              return refused("Only an assignment's due date is set from here.");
-            return write(
-              "PUT",
-              `${at.base}/assignments/${at.id}`,
-              new URLSearchParams({ "assignment[due_at]": intent.at }),
-            );
-          }
-          case "item-published": {
-            const at = itemAt(content.target);
-            const publish = at && publishOf(at);
-            if (!publish) return refused("That item can't be published from here.");
-            // A file id is global in Canvas, so it is written only once its own course says it holds it.
-            if (publish.read !== undefined) {
-              const held = await one(publish.read, FileItem);
-              if (!held.ok) return { status: "failed", error: held.error };
-            }
-            return write("PUT", publish.path, new URLSearchParams(publish.form));
-          }
-          case "item-deleted": {
-            const at = itemAt(content.target);
-            if (at?.type !== "announcement")
-              return refused("Only an announcement is deleted from here.");
-            return write("DELETE", `${at.base}/discussion_topics/${at.id}`, new URLSearchParams());
-          }
-        }
+        const sent = await setOf(content);
+        return sent.status === "landed" ? confirmed(content, sent) : sent;
       }
     }
     return {
       status: "failed",
       error: { kind: "unsupported", capability: `${content.kind} ${field}` },
     };
+  };
+
+  /**
+   * Canvas can answer 200 to a setting it doesn't apply, as with a file its hidden folder keeps hidden. A setting lands
+   * only once Canvas reads back the value it was sent.
+   */
+  const confirmed = async (content: SetContent, sent: Outcome): Promise<Outcome> => {
+    const read = await observe(content);
+    if (!read.ok) return { status: "unknown", since: isoTime(client.now()) };
+    const now = read.value.kind === "item-set" ? read.value.value : null;
+    const wanted = fieldText(content, "value");
+    // Canvas stores a due time of exactly midnight as 11:59:59 the night before, which is the date that was sent.
+    const same =
+      content.intent.set === "due-at" && now !== null
+        ? Math.abs(Date.parse(now) - Date.parse(wanted)) <= 1000
+        : now === wanted;
+    return same ? sent : refused(`Canvas answered, but didn't change ${content.where}.`);
+  };
+
+  const setOf = async (content: SetContent): Promise<Outcome> => {
+    const { intent } = content;
+    switch (intent.set) {
+      case "course-published":
+      case "course-template": {
+        const id = courseStateAt(content.target);
+        if (id === undefined) return refused("That course isn't at this school.");
+        return write(
+          "PUT",
+          `/courses/${id}`,
+          new URLSearchParams(
+            intent.set === "course-published"
+              ? { "course[event]": "offer" }
+              : { "course[template]": "true" },
+          ),
+        );
+      }
+      case "due-at": {
+        const at = itemAt(content.target);
+        if (at?.type !== "assignment")
+          return refused("Only an assignment's due date is set from here.");
+        return write(
+          "PUT",
+          `${at.base}/assignments/${at.id}`,
+          new URLSearchParams({ "assignment[due_at]": intent.at }),
+        );
+      }
+      case "item-published": {
+        const at = itemAt(content.target);
+        const publish = at && publishOf(at);
+        if (!publish) return refused("That item can't be published from here.");
+        // A file id is global in Canvas, so it is written only once its own course says it holds it.
+        if (publish.read !== undefined) {
+          const held = await one(publish.read, FileItem);
+          if (!held.ok) return { status: "failed", error: held.error };
+        }
+        return write("PUT", publish.path, new URLSearchParams(publish.form));
+      }
+      case "item-deleted": {
+        const at = itemAt(content.target);
+        if (at?.type !== "announcement")
+          return refused("Only an announcement is deleted from here.");
+        return write("DELETE", `${at.base}/discussion_topics/${at.id}`, new URLSearchParams());
+      }
+    }
   };
 
   const valueOf = (targetVersion: string, value: string | null): Read<RemoteState> =>
@@ -879,10 +926,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
           case "due-at":
             return valueOf("present", read.value.due_at);
           case "item-published": {
-            const shown =
-              at.type === "file"
-                ? !read.value.locked && !read.value.hidden
-                : read.value.published !== false;
+            const shown = at.type === "file" ? !read.value.locked : read.value.published !== false;
             return valueOf("present", shown ? "published" : "unpublished");
           }
           case "item-deleted":

@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ChangeRecord } from "~/shared/domain/change";
 import type { LmsRef } from "~/shared/domain/ids";
@@ -96,7 +96,6 @@ function ReviewStage({
 }) {
   const view = useWorkspace((state) => selectSetupView(state, course));
   const [opened, setOpened] = useState<string | null>(null);
-  if (!view.setup) return null;
   const openRow = (key: string) => {
     setOpened(key);
     requestAnimationFrame(() =>
@@ -105,6 +104,24 @@ function ReviewStage({
         ?.scrollIntoView({ block: "center" }),
     );
   };
+  // A link to a fix, such as one in Claude's summary, focuses it in this thread, so its row opens and comes into view.
+  const focused = view.rows.find((row) => row.change && row.change.id === thread.focus)?.key;
+  const [shown, setShown] = useState<string | undefined>(undefined);
+  const [jump, setJump] = useState<string | null>(null);
+  if (focused !== shown) {
+    setShown(focused);
+    if (focused !== undefined && focused !== opened) {
+      setOpened(focused);
+      setJump(focused);
+    }
+  }
+  useEffect(() => {
+    if (jump !== null)
+      document
+        .querySelector(`[data-finding-key="${CSS.escape(jump)}"]`)
+        ?.scrollIntoView({ block: "center" });
+  }, [jump]);
+  if (!view.setup) return null;
   return (
     <>
       <ReviewCard
