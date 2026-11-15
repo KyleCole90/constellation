@@ -99,9 +99,11 @@ export const ipc = {
 
 ### AI (D26, D27, D28, D41)
 
-- Anthropic only, through the official SDK, in main, with the user's key from the vault. Use the newest Claude model that fits each task.
+- Claude, from one of two sources the teacher picks, with neither preselected and no fallback from one to the other. Main runs both behind `agent.run`, with one agent definition (`src/main/agent.ts`): the same model, effort, prompt and tools.
+  - **API key:** the official SDK, in main, with the user's key from the vault.
+  - **Claude Code (#82):** the teacher's installed, unmodified `claude`, signed in to their own Claude subscription, which pays. Main spawns it with every built-in tool, MCP server, setting source and slash command off, in an empty folder, one run at a time, and refuses a run whose init lists any tool but `StructuredOutput`. `claudeCode.status` reports install, version, sign-in and the last weekly-limit reading, never the account.
 - The model replaces the rules agent behind `Agent` and `parseAgentEffect`. It covers drafts (grades, replies, announcements, messages), the setup scan and North Star chat, and nothing new.
-- Each thread shows its token use and cost. Settings links to Anthropic's console spend limits. There is no in-app cap.
+- With the API key, each thread shows its token use and cost, and Settings links to Anthropic's console spend limits. With Claude Code, a thread shows no dollar cost, and Settings shows the plan's weekly limit use. There is no in-app cap.
 - The web demo keeps the rules agent.
 
 ### Offline (D28)
