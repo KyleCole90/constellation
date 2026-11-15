@@ -102,7 +102,13 @@ import {
   type SecretRefusal,
   type Vault,
 } from "~/shared/providers/provider";
-import { OFFLINE_SEND_REASON, desktopBridge, isOnline, onConnectivity } from "~/renderer/desktop";
+import {
+  OFFLINE_SEND_REASON,
+  REAL_AI,
+  desktopBridge,
+  isOnline,
+  onConnectivity,
+} from "~/renderer/desktop";
 import { createAutoSync, type AutoSyncDeps } from "~/renderer/stores/autoSync";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 import { bridgeCanvas, bridgeFakeLms } from "~/renderer/providers/lms";
@@ -2491,12 +2497,10 @@ const browserDeps = (): WorkspaceDeps => ({
       ? bridgeFakeBackend(desktopBridge)
       : bridgeCanvasBackend(desktopBridge),
   agent:
-    desktopBridge && !desktopBridge.fakes
-      ? createBridgeAgent(desktopBridge)
-      : standInFor(createRuleAgent()),
+    REAL_AI && desktopBridge ? createBridgeAgent(desktopBridge) : standInFor(createRuleAgent()),
   ...(desktopBridge ? { connectivity: { online: isOnline, subscribe: onConnectivity } } : {}),
   // Verify and the web demo run the fake LMS, which changes only when a test changes it, so no timer races their steps.
-  ...(desktopBridge && !desktopBridge.fakes
+  ...(REAL_AI
     ? {
         timer: (run, ms) => {
           const id = setTimeout(run, ms);
