@@ -1634,11 +1634,16 @@ const gradebook = async (t) => {
     "past-due work with nothing turned in says missing, not a dash",
   );
   const everyone = await count(t, "tr[data-student]");
+  const allColumns = await count(t, "[data-column]");
   for (const mark of ["missing", "late"]) {
     await t.click(`[data-filter="${mark}"]`);
     await t.waitFor(
       `(() => { const rows = [...document.querySelectorAll("tr[data-student]")]; return rows.length > 0 && rows.length < ${everyone} && rows.every((row) => row.querySelector('[data-mark="${mark}"]')); })()`,
       `the ${mark} filter shows only students with ${mark} work`,
+    );
+    await t.waitFor(
+      `(() => { const columns = document.querySelectorAll("[data-column]").length; const rows = [...document.querySelectorAll("tr[data-student]")]; return columns > 0 && columns < ${allColumns} && [...Array(columns).keys()].every((i) => rows.some((row) => row.querySelectorAll("td")[i].querySelector('[data-mark="${mark}"]'))); })()`,
+      `the ${mark} filter shows only the assignments that are ${mark} (#145)`,
     );
     if (mark === "missing") await shot(t, "gradebook-missing");
   }
@@ -1970,6 +1975,20 @@ const overview = async (t) => {
     `document.querySelector('[data-highlighted="true"]')`,
     "a student leads to their row in the gradebook",
   );
+  // A real course runs to ~50 columns; columns this wide put even the first one's missing mark past the visible table.
+  await goCourse(t, "ENG 101");
+  await t.eval(
+    `document.head.append(Object.assign(document.createElement("style"), { id: "wide-columns", textContent: "th[data-column] { min-width: 1600px }" }))`,
+  );
+  await t.eval(
+    `[...document.querySelectorAll("[data-roster]")].find((row) => row.querySelector("[data-missing-flag]")).click()`,
+  );
+  await t.waitFor(
+    `(() => { const row = document.querySelector('tr[data-highlighted="true"]'); const mark = row?.querySelector('[data-mark="missing"]')?.getBoundingClientRect(); if (!mark) return false; const scroller = document.querySelector(${JSON.stringify(SCROLL)}).getBoundingClientRect(); const left = document.querySelector("[data-corner]").getBoundingClientRect().right; const right = row.querySelector("[data-total]").getBoundingClientRect().left; return mark.left >= left - 1 && mark.right <= right + 1 && mark.top >= scroller.top && mark.bottom <= scroller.bottom; })()`,
+    "a student marked missing on the roster opens with the missing cell on screen (#145)",
+  );
+  await shot(t, "roster-missing-cell");
+  await t.eval(`document.getElementById("wide-columns").remove()`);
   await goCourse(t, "ENG 101");
   await t.click("[data-course-announcement]");
   await t.waitFor(

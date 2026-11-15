@@ -37,10 +37,12 @@ import {
 import {
   cellMarks,
   cellTarget,
+  filterColumns,
   filterRows,
   nextSort,
   pendingWords,
   sortRows,
+  type RowFilter,
 } from "./gradebook.logic";
 import { filterInbox, messagingNotes, preview, statusCount } from "./inbox.logic";
 
@@ -721,7 +723,7 @@ describe("who is behind", () => {
     }) as unknown as GradebookRow;
   const rows = [
     student("Ana", { workflow: "graded" }),
-    student("Bea", { workflow: "missing" }, { workflow: "graded" }),
+    student("Bea", { workflow: "graded" }, { workflow: "missing" }),
     student("Cal", { workflow: "submitted", lateDays: 2 }),
   ];
   const names = (shown: readonly { student: { name: string } }[]) =>
@@ -731,6 +733,18 @@ describe("who is behind", () => {
     expect(names(filterRows(rows, "all"))).toEqual(["Ana", "Bea", "Cal"]);
     expect(names(filterRows(rows, "missing"))).toEqual(["Bea"]);
     expect(names(filterRows(rows, "late"))).toEqual(["Cal"]);
+  });
+
+  it("a filter keeps only the assignments that hold what it filters for", () => {
+    const first = { ref: "a1" } as Assignment;
+    const second = { ref: "a2" } as Assignment;
+    const all = [first, second];
+    const refs = (filter: RowFilter, columns = all) =>
+      filterColumns(filterRows(rows, filter), columns, all, filter).map((a) => a.ref);
+    expect(refs("all")).toEqual(["a1", "a2"]);
+    expect(refs("missing")).toEqual(["a2"]);
+    expect(refs("late")).toEqual(["a1"]);
+    expect(refs("missing", [second, first])).toEqual(["a2"]);
   });
 
   it("the roster puts the most missing work first, then the lowest grade", () => {

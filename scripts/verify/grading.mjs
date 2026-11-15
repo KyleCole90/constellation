@@ -2099,6 +2099,58 @@ const handFormTypedBackToClaude = async (t) => {
   );
 };
 
+/** Grading a rubric from the keyboard: Tab from the last score lands in the comment, so a typed comment can't press Override total (#144). */
+const handFormKeyboard = async (t) => {
+  await t.goto("/threads/t-e101-essay2");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(QUEUE)})`,
+    "keyboard form: the list loads",
+  );
+  await expandQueue(t);
+  const row = await t.eval(
+    `[...document.querySelectorAll('${LIST} [data-row]')].find((row) => row.innerText.includes("Not started"))?.dataset.row`,
+  );
+  const student = await t.eval(
+    `document.querySelector('[data-row="${row}"] button span[title]').title`,
+  );
+  await t.click(`[data-row="${row}"] button`);
+  await opensUndrafted(t, student, "keyboard form");
+  await t.click("Grade it yourself", { within: OPEN });
+  const typed = `${CARD} [data-typed-score]`;
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(typed)})`,
+    "keyboard form: the hand form opens",
+  );
+  const scores = await t.eval(`document.querySelectorAll(${JSON.stringify(typed)}).length`);
+  t.assert(scores >= 2, "keyboard form: Essay 2 is graded on a rubric", String(scores));
+  await t.eval(
+    `(() => { const input = document.querySelector(${JSON.stringify(typed)}); input.focus(); input.select(); })()`,
+  );
+  for (let i = 0; i < scores; i++) {
+    await t.type("2");
+    await t.key("Tab");
+  }
+  const comment = `${CARD} [aria-label="Feedback comment"]`;
+  t.assert(
+    await t.eval(`document.activeElement === document.querySelector(${JSON.stringify(comment)})`),
+    "keyboard form: Tab after the last score lands in the feedback comment (#144)",
+    await t.eval(
+      `document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.innerText`,
+    ),
+  );
+  const words = "nice job, keep going";
+  await t.type(words);
+  t.assert(
+    (await t.eval(`document.querySelector(${JSON.stringify(comment)}).value`)) === words &&
+      !(await t.has(`${CARD} [aria-label="Type total"]`)),
+    "keyboard form: the typed comment stays in the box and presses nothing (#144)",
+    await t.eval(`document.querySelector(${JSON.stringify(comment)}).value`),
+  );
+  await t.shot("hand-form-keyboard");
+  await t.click("Discard", { within: '[data-testid="card-actions"]' });
+  await opensUndrafted(t, student, "keyboard form: Discard leaves the student undrafted");
+};
+
 const discard = async (t) => {
   await t.goto("/threads/t-queue");
   await t.waitFor(
@@ -2869,6 +2921,7 @@ export const run = async (t) => {
   await replyDiscard(t);
   await handFormBackToClaude(t);
   await handFormTypedBackToClaude(t);
+  await handFormKeyboard(t);
   await failedDraft(t);
   await submissionTypes(t);
   await cantSee(t);
