@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { CourseShell } from "~/shared/domain/content";
 import type { IsoTime, LmsRef, SchoolHost, SchoolId, ThreadId } from "~/shared/domain/ids";
-import type { Course, School, Student, Submission } from "~/shared/domain/lms";
+import type { Assignment, Course, School, Student, Submission } from "~/shared/domain/lms";
 import type { ConnectionRecord, Thread } from "~/renderer/stores/types";
 
 import { INBOX_THREAD } from "~/renderer/stores/selectors";
@@ -54,6 +54,7 @@ const thread: Thread & { toApprove: boolean } = {
 const submission = {
   ref: "sub" as LmsRef<"submission">,
   student: "s1" as LmsRef<"student">,
+  course: course.ref,
   workflow: "submitted",
 } as Submission;
 const entries = buildEntries({
@@ -62,7 +63,8 @@ const entries = buildEntries({
   courses: [course],
   shells: [],
   students,
-  submissions: [submission],
+  assignments: [],
+  toGrade: [submission],
 });
 
 describe("filterEntries", () => {
@@ -82,7 +84,8 @@ describe("filterEntries", () => {
         courses: [course],
         shells: [],
         students,
-        submissions: [submission],
+        assignments: [],
+        toGrade: [submission],
       }),
       "due this week",
     );
@@ -122,7 +125,8 @@ describe("filterEntries", () => {
       courses: [],
       shells: [],
       students: [],
-      submissions: [],
+      assignments: [],
+      toGrade: [],
     });
     expect(withInbox.filter((entry) => entry.group === "Threads")).toEqual([]);
   });
@@ -133,10 +137,62 @@ describe("filterEntries", () => {
     ]);
   });
 
-  it("a student with work waiting carries the submission, and one without does not", () => {
-    const target = (name: string) => entries.find((entry) => entry.title === name)?.target;
-    expect(target("Maya Ortiz")).toMatchObject({ kind: "student", submission });
-    expect(target("Luis Cardenas")).toMatchObject({ kind: "student", submission: null });
+  it("a student with work to grade carries it and says to grade, and one without opens the course", () => {
+    const of = (name: string) => entries.find((entry) => entry.title === name);
+    expect(of("Maya Ortiz")).toMatchObject({
+      hint: "ENG 101, to grade",
+      target: { kind: "student", submission },
+    });
+    expect(of("Luis Cardenas")).toMatchObject({
+      hint: "ENG 101",
+      target: { kind: "student", submission: null },
+    });
+  });
+
+  it("an assignment's name finds it, says how many are to grade, and opens its grading list (#121)", () => {
+    const reflection = {
+      ref: "lcc:assignment:9" as LmsRef<"assignment">,
+      school,
+      course: course.ref,
+      title: "Reflection: one concept that finally clicked",
+      shortTitle: "Reflection",
+      dueAt: null,
+      pointsPossible: 10,
+      rubric: null,
+      latePointsPerDay: null,
+    } satisfies Assignment;
+    const quiz = {
+      ...reflection,
+      ref: "lcc:assignment:10" as LmsRef<"assignment">,
+      title: "Quiz 1",
+    };
+    const withWork = buildEntries({
+      ...demoSchool,
+      threads: [],
+      courses: [course],
+      shells: [],
+      students,
+      assignments: [reflection, quiz],
+      toGrade: [{ ...submission, assignment: reflection.ref }],
+    });
+    expect(filterEntries(withWork, "reflection")).toEqual([
+      expect.objectContaining({
+        group: "Assignments",
+        title: "Reflection: one concept that finally clicked",
+        hint: "ENG 101, 1 to grade",
+        target: { kind: "assignment", assignment: reflection },
+      }),
+    ]);
+    expect(filterEntries(withWork, "Reflection: one concept").map((entry) => entry.target)).toEqual(
+      [{ kind: "assignment", assignment: reflection }],
+    );
+    expect(filterEntries(withWork, "quiz")).toEqual([
+      expect.objectContaining({
+        hint: "ENG 101",
+        target: { kind: "assignment", assignment: quiz },
+      }),
+    ]);
+    expect(filterEntries(withWork, "").map((entry) => entry.group)).not.toContain("Assignments");
   });
 
   it.each(["spring", "setup", "set up", "Set Up"])(
@@ -158,7 +214,8 @@ describe("filterEntries", () => {
         courses: [],
         shells: [shell],
         students: [],
-        submissions: [],
+        assignments: [],
+        toGrade: [],
       });
       expect(filterEntries(withShell, query)).toEqual([
         expect.objectContaining({
@@ -178,7 +235,8 @@ describe("filterEntries", () => {
       courses: [course],
       shells: [],
       students: [],
-      submissions: [],
+      assignments: [],
+      toGrade: [],
     });
     expect(filterEntries(many, "essay")).toHaveLength(6);
   });
@@ -199,7 +257,8 @@ describe("filterEntries", () => {
       courses: [],
       shells: [],
       students: [],
-      submissions: [],
+      assignments: [],
+      toGrade: [],
       schools: [
         schoolNamed("lcc", "Lansing CC"),
         schoolNamed("wmu", "Western Michigan"),
@@ -227,7 +286,8 @@ describe("filterEntries", () => {
       courses: [course],
       shells: [],
       students: [],
-      submissions: [],
+      assignments: [],
+      toGrade: [],
     });
     expect(filterEntries(awaiting, "approve")).toEqual([
       expect.objectContaining({
@@ -249,7 +309,8 @@ describe("filterEntries", () => {
         { ref: "s3" as LmsRef<"student">, school, course: course.ref, name: "Bo Shortiz" },
         ...students,
       ],
-      submissions: [],
+      assignments: [],
+      toGrade: [],
     });
     expect(filterEntries(ranked, "ortiz").map((entry) => entry.title)).toEqual([
       "Maya Ortiz",
@@ -279,7 +340,8 @@ describe("buildEntries for a real school", () => {
         courses: [],
         shells: [],
         students: [],
-        submissions: [],
+        assignments: [],
+        toGrade: [],
       }),
       "",
     ).map((entry) => entry.title);

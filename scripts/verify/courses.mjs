@@ -2012,28 +2012,6 @@ const palette = async (t) => {
   await t.key("Enter");
   await t.waitFor(`location.pathname.endsWith("/gradebook")`, "and goes there");
 
-  const assignment = await stored(
-    t,
-    `(() => { const caches = Object.values(state.cache); return caches.flatMap((c) => c.assignments).find((a) => a.title !== a.shortTitle && caches.some((c) => c.submissions.some((s) => s.assignment === a.ref && s.workflow === "submitted"))) ?? null; })()`,
-  );
-  t.assert(assignment, "an assignment with work in, whose full name no thread carries");
-  await t.click("Search threads and students", { within: SIDEBAR });
-  await t.waitFor(`document.querySelector('[data-testid="palette"]')`, "the palette opens");
-  await t.type(assignment.title);
-  const found = `[...document.querySelectorAll('[data-testid="palette"] button')].find((b) => b.querySelector(".truncate")?.innerText === ${JSON.stringify(assignment.title)})`;
-  await t.waitFor(
-    `${found}?.innerText.includes("to grade")`,
-    "an assignment's full name finds it and says how many are to grade (#121)",
-  );
-  await shot(t, "palette-assignment");
-  await t.eval(`${found}.click()`);
-  await t.waitFor(
-    `(() => { const id = decodeURIComponent(location.pathname.split("/threads/")[1] ?? ""); const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; return state.threads[id]?.assignment === ${JSON.stringify(assignment.ref)} && state.prefs.threadUi[id]?.queueOpen === true; })()`,
-    "and opens that assignment's grading list (#121)",
-  );
-  await t.waitFor(`document.querySelector('[data-testid="queue-list"]')`, "its list shows");
-  await shot(t, "palette-assignment-open");
-
   await t.eval(threeHoursBack);
   await t.reload();
   await t.waitFor(
@@ -2071,6 +2049,28 @@ const palette = async (t) => {
     `location.pathname.startsWith("/threads/")`,
     "Enter opens the thread; the palette approves nothing",
   );
+
+  const assignment = await stored(
+    t,
+    `(() => { const caches = Object.values(state.cache); return caches.flatMap((c) => c.assignments).find((a) => a.title !== a.shortTitle && caches.some((c) => c.submissions.some((s) => s.assignment === a.ref && s.workflow === "submitted"))) ?? null; })()`,
+  );
+  t.assert(assignment, "an assignment with work in, whose full name no thread carries");
+  await t.click("Search threads and students", { within: SIDEBAR });
+  await t.waitFor(`document.querySelector('[data-testid="palette"]')`, "the palette opens");
+  await t.type(assignment.title);
+  const found = `[...document.querySelectorAll('[data-testid="palette"] button')].find((b) => b.querySelector(".truncate")?.innerText === ${JSON.stringify(assignment.title)})`;
+  await t.waitFor(
+    `${found}?.innerText.includes("to grade")`,
+    "an assignment's full name finds it and says how many are to grade (#121)",
+  );
+  await shot(t, "palette-assignment");
+  await t.eval(`${found}.click()`);
+  await t.waitFor(
+    `(() => { const id = decodeURIComponent(location.pathname.split("/threads/")[1] ?? ""); const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; return state.threads[id]?.assignment === ${JSON.stringify(assignment.ref)} && state.prefs.threadUi[id]?.queueOpen === true; })()`,
+    "and opens that assignment's grading list (#121)",
+  );
+  await t.waitFor(`document.querySelector('[data-testid="queue-list"]')`, "its list shows");
+  await shot(t, "palette-assignment-open");
 };
 
 const layouts = async (t) => {

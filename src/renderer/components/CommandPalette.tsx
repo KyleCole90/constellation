@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react"
 
 import { cn } from "~/renderer/lib/utils";
 import {
+  selectGradingRefs,
   selectSetupOffers,
   selectThreadName,
   selectThreadStatus,
@@ -54,6 +55,7 @@ export function CommandPalette({
   const entries = useMemo(() => {
     const caches = Object.values(cache);
     const state = workspaceStore().getState();
+    const toGrade = new Set(selectGradingRefs(state).toGrade);
     return buildEntries({
       threads: withoutChatThreads(Object.values(threads), ai).map((thread) => ({
         ...thread,
@@ -64,10 +66,11 @@ export function CommandPalette({
       connections,
       courses: caches.flatMap((c) => c.courses),
       shells: offers.map((offer) => offer.shell),
+      assignments: caches.flatMap((c) => c.assignments),
       students: caches.flatMap((c) => c.students),
-      submissions: caches.flatMap((c) => c.submissions),
+      toGrade: caches.flatMap((c) => c.submissions).filter((s) => toGrade.has(s.ref)),
     });
-    // oxlint-disable-next-line react/memo-dependencies -- names and approval state come from a store snapshot, so each opening rebuilds them
+    // oxlint-disable-next-line react/memo-dependencies -- names, approval and to-grade state come from a store snapshot, so each opening rebuilds them
   }, [threads, cache, offers, ai, schools, connections, open]);
   const shown = useMemo(() => filterEntries(entries, query), [entries, query]);
 
@@ -101,6 +104,8 @@ export function CommandPalette({
         return setResetting(true);
       case "sync":
         return void workspaceStore().getState().syncSchool(target.school);
+      case "assignment":
+        return links.assignment(target.assignment);
       case "student": {
         const { submission } = target;
         if (!submission)
@@ -147,7 +152,7 @@ export function CommandPalette({
                 setIndex(0);
               }}
               onKeyDown={onKeyDown}
-              placeholder="Search threads, courses, students, screens, and actions"
+              placeholder="Search threads, courses, assignments, students, screens, and actions"
               className="min-w-0 flex-1 bg-transparent text-body text-foreground outline-none placeholder:text-muted-foreground"
             />
           </div>
