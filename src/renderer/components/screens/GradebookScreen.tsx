@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentProps } from "react
 
 import type { LmsRef } from "~/shared/domain/ids";
 import type { Assignment } from "~/shared/domain/lms";
-import { cn } from "~/renderer/lib/utils";
+import { cn, formatDay } from "~/renderer/lib/utils";
 import {
   selectGradebook,
   type GradebookCell,
@@ -14,7 +14,7 @@ import { useWorkspace } from "~/renderer/stores/workspace";
 
 import { EmptyState } from "../EmptyState";
 import { STATUS_TONE } from "../StatusPill";
-import { Badge, SUBMISSION_STATUS, SubmissionBadge } from "../ui/badge";
+import { Badge, SUBMISSION_STATUS, SubmissionBadge, type SubmissionStatus } from "../ui/badge";
 import { TAB, toggleState } from "../ui/toggle";
 import { CoursePage } from "./CourseHeader";
 import {
@@ -121,6 +121,14 @@ function Cell({ cell, assignment }: { cell: GradebookCell; assignment: Assignmen
   const pending = pendingWords(cell);
   const lateDays = cell.submission?.lateDays ?? 0;
   const compact = cell.grade !== null || pending !== null;
+  const said = (mark: SubmissionStatus) => {
+    if (mark === "late") return { words: `${lateDays}d late`, short: `${lateDays}d` };
+    if (mark === "asked" && cell.asked) {
+      const day = formatDay(cell.asked);
+      return { words: `${SUBMISSION_STATUS.asked.word} · ${day}`, short: `Asked · ${day}` };
+    }
+    return { words: SUBMISSION_STATUS[mark].word, short: undefined };
+  };
   const body = (
     <span className="relative flex h-5 items-center justify-end gap-1.5 whitespace-nowrap">
       {marks.map((mark) => (
@@ -129,9 +137,8 @@ function Cell({ cell, assignment }: { cell: GradebookCell; assignment: Assignmen
           data-mark={mark}
           tone={SUBMISSION_STATUS[mark].tone}
           icon={SUBMISSION_STATUS[mark].icon}
-          words={mark === "late" ? `${lateDays}d late` : SUBMISSION_STATUS[mark].word}
-          short={mark === "late" ? `${lateDays}d` : undefined}
-          compact={compact}
+          {...said(mark)}
+          compact={compact || mark === "asked"}
         />
       ))}
       {pending && cell.pending && (
@@ -413,9 +420,11 @@ export function GradebookScreen({ courseId }: { courseId: LmsRef<"course"> }) {
                   Pending
                 </Badge>
               </li>
-              <li>
-                <SubmissionBadge status="resubmitted" />
-              </li>
+              {(["asked", "resubmitted"] as const).map((status) => (
+                <li key={status}>
+                  <SubmissionBadge status={status} />
+                </li>
+              ))}
               <li>
                 <Badge tone="success" icon="sent">
                   Sent

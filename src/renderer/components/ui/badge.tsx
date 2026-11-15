@@ -7,6 +7,7 @@ import {
   Clock,
   FileUp,
   PenLine,
+  Reply,
   Send,
   Unplug,
   type LucideIcon,
@@ -19,6 +20,7 @@ import { cn } from "~/renderer/lib/utils";
 const STATUS_ICON = {
   late: Clock,
   resubmitted: FileUp,
+  asked: Reply,
   missing: CircleSlash,
   ungraded: Circle,
   draft: PenLine,
@@ -72,6 +74,8 @@ export const SUBMISSION_STATUS = {
   late: { icon: "late", tone: "neutral", word: "Late" },
   missing: { icon: "missing", tone: "danger", word: "Missing" },
   resubmitted: { icon: "resubmitted", tone: "neutral", word: "Resubmitted" },
+  // Waiting on the student, not the teacher, so it stays neutral like the other facts about the work.
+  asked: { icon: "asked", tone: "neutral", word: "Asked to resubmit" },
 } as const satisfies Record<string, { icon: StatusIcon; tone: BadgeTone; word: string }>;
 
 export type SubmissionStatus = keyof typeof SUBMISSION_STATUS;

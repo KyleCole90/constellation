@@ -9,6 +9,7 @@ export const cellMarks = (cell: GradebookCell): readonly SubmissionStatus[] => {
   if (submission.workflow === "missing") return ["missing"];
   const late: readonly SubmissionStatus[] = submission.lateDays > 0 ? ["late"] : [];
   if (submission.workflow !== "submitted") return submission.workflow === "graded" ? late : [];
+  if (cell.asked) return ["asked", ...late];
   if (cell.grade !== null) return ["resubmitted", ...late];
   // A pending grade says the cell's state itself, so "ungraded" beside it reads as a contradiction.
   return cell.pending ? late : ["ungraded", ...late];

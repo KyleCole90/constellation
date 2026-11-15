@@ -404,6 +404,8 @@ export interface GradebookCell {
   /** The change behind this cell, whether still pending or the record of what was sent. */
   change: ChangeRecord | null;
   sent: boolean;
+  /** When the student was asked to resubmit, as the grading list says, until they turn it in again. */
+  asked: IsoTime | null;
 }
 export interface GradebookRow {
   student: Student;
@@ -432,6 +434,7 @@ export const selectGradebook = memoByState(
     const parent = cache?.courses.find((c) => c.ref === course);
     if (!cache || !parent) return null;
     const byTarget = changesByTarget(state);
+    const messages = messagesOf(state);
     const assignments = cache.assignments
       .filter((a) => a.course === course)
       .sort((a, b) => dueMs(a) - dueMs(b));
@@ -443,13 +446,7 @@ export const selectGradebook = memoByState(
             cache.submissions.find(
               (s) => s.assignment === assignment.ref && s.student === student.ref,
             ) ?? null;
-          const known = submission ? (byTarget.get(submission.ref) ?? null) : null;
-          const change =
-            known?.state.tag === "sent" &&
-            submission?.submittedAt &&
-            submission.submittedAt > known.state.at
-              ? null
-              : known;
+          const change = submission ? liveChange(submission, byTarget) : null;
           const open = change !== null && isOpenChange(change);
           return {
             assignment: assignment.ref,
@@ -459,6 +456,7 @@ export const selectGradebook = memoByState(
             proposed: open && change.content.kind === "grade" ? finalGrade(change.content) : null,
             change,
             sent: change?.state.tag === "sent",
+            asked: submission ? askedAt(submission, change, messages, cache, assignment) : null,
           };
         });
         const graded = assignments.filter((_, index) => cells[index]?.grade !== null);
