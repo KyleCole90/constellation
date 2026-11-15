@@ -273,7 +273,7 @@ function DatesForm({
   const checked = checkPlan(plan, undated);
   const problems = checked.ok ? [] : checked.error;
   const unchanged = confirmed && JSON.stringify(plan) === JSON.stringify(setup.plan);
-  const occupied = occupiedWords(setup.shell);
+  const occupied = occupiedWords(shell);
   const packageTerm = packageTermWords(setup.source, plan.oldTerm);
   const hint = setup.source?.kind === "cartridge" ? setup.source.hint : null;
   const guessed = guessedEnd(hint, plan.newTerm);

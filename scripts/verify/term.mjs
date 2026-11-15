@@ -1116,7 +1116,16 @@ const previousCourseFlow = async (t) => {
     `${code}: with the reviewed dates back, the approved copy can send`,
   );
   t.assert(!(await t.has(id("copy-stale"))), `${code}: the out-of-date mark clears`);
+  // Slow enough that the sync after the send takes seconds, as it does against a real school.
+  await t.eval(`window.__faultLab.setNoise({ latencyMs: [400, 400] })`);
   await t.click(id("copy-send"));
+  await t.waitFor(
+    `/\\d+%/.test(document.querySelector(${JSON.stringify(id("copy-percent"))})?.innerText ?? "") &&
+      Boolean(document.querySelector('[data-testid="school-row"][data-connection="syncing"]'))`,
+    `${code}: the copy's percent shows while the sync after the send is still reading (#147)`,
+    WAIT,
+  );
+  await t.eval(`window.__faultLab.setNoise({ latencyMs: [20, 60] })`);
   await t.waitFor(
     `document.querySelector(${JSON.stringify(id("copy-progress"))})`,
     `${code}: copy progress shows in the thread`,

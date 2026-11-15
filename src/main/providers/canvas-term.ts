@@ -33,7 +33,12 @@ import { applySplice, spliceState } from "../../shared/domain/splice";
 import { dateOfTime, meetingDaysOf } from "../../shared/domain/term";
 import { classifyLink } from "../../shared/providers/canvas-links";
 import { refParts, refs } from "../../shared/providers/canvas-refs";
-import type { FieldOutcomes, Read, TermSetup } from "../../shared/providers/provider";
+import {
+  fewAtATime,
+  type FieldOutcomes,
+  type Read,
+  type TermSetup,
+} from "../../shared/providers/provider";
 
 type Outcome = NonNullable<FieldOutcomes[FieldKey]>;
 type SetupContent = CourseCopyContent | TextFixContent | SetContent;
@@ -281,9 +286,10 @@ export const canvasTermSetup = (client: CanvasClient) => {
         row.workflow_state === "unpublished" &&
         isComing({ ...row, startAt: datesOf(row).start }, today),
     );
-    const counted = await Promise.all(
-      shells.map(async (row) => ({ row, count: await itemCount(row.id) })),
-    );
+    const counted = await fewAtATime(shells, async (row) => ({
+      row,
+      count: await itemCount(row.id),
+    }));
     const out: CourseShell[] = [];
     for (const { row, count } of counted) {
       if (!count.ok) return count;

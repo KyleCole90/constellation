@@ -29,6 +29,24 @@ import type { CommentEffect } from "~/shared/domain/preview";
 
 export type Read<T> = Promise<Result<T, LmsError>>;
 
+/**
+ * Main sends a school's requests through a few slots, first come first served. A read that asks for every course at
+ * once puts a long line in front of any read someone is waiting on, like a copy's progress (#147), so a read over
+ * many courses works through them two at a time. Results keep the order of `items`.
+ */
+export const fewAtATime = async <T, R>(
+  items: readonly T[],
+  work: (item: T) => Promise<R>,
+): Promise<R[]> => {
+  const out: R[] = [];
+  const queue = items.entries();
+  const worker = async () => {
+    for (const [index, item] of queue) out[index] = await work(item);
+  };
+  await Promise.all([worker(), worker()]);
+  return out;
+};
+
 export interface Capabilities {
   /** False hides the inbox for this school. */
   messaging: boolean;

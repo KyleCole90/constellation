@@ -150,6 +150,41 @@ describe("Canvas term setup reads", () => {
     expect(most).toBeLessThanOrEqual(8);
   });
 
+  it("counting many new shells leaves room for a copy's progress, so the progress isn't read last (#147)", async () => {
+    const http = new CanvasTermHttp();
+    const [shell] = http.courses.filter((row) => row.id === SHELL_ID);
+    if (!shell) throw new Error("the fixture has a shell");
+    for (let id = 1; id <= 20; id++)
+      http.courses.push({ ...shell, id: SHELL_ID + id, name: `Shell ${id}` });
+    const started: string[] = [];
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 1));
+    const setup = setupOf(
+      createCanvasProvider({
+        school: SCHOOL,
+        lease: {
+          use: (work) => work({ kind: "bearer", token: new Secret(TERM_TOKEN) }),
+          replace: async () => {},
+        },
+        fetch: async (url, init) => {
+          started.push(url);
+          await tick();
+          return http.fetch(url, init);
+        },
+        now: http.now,
+        packageFile: async () => null,
+      }),
+    );
+    const counting = setup.newCourses();
+    while (started.length < 2) await tick();
+    const asked = started.length;
+    const progress = setup.migrations(SHELL);
+    while (!started.slice(asked).some((url) => url.includes("/content_migrations"))) await tick();
+    const ahead = started.slice(asked).findIndex((url) => url.includes("/content_migrations"));
+    expect(ahead).toBeLessThanOrEqual(8);
+    expect(await unwrap(counting)).toHaveLength(21);
+    await unwrap(progress);
+  });
+
   it("offers the shell and its source with null dates when Canvas hides the term's dates from teachers", async () => {
     const http = new CanvasTermHttp();
     http.hideTermDates = true;

@@ -1026,6 +1026,48 @@ describe("the lane", () => {
   });
 });
 
+describe("the copy's progress (#147)", () => {
+  it("shows while the sync after the send is still reading", async () => {
+    const rig = await connected();
+    const { course, copy } = await toDraftCopy(rig, LCC, "ENG 101", {
+      course: "ENG 101",
+      term: "Fall 2026",
+    });
+    approve(rig, copy);
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const real = rig.server.call.bind(rig.server);
+    rig.server.call = async (route, credential, work) => {
+      if (route.label.includes("state[]=unpublished")) await held;
+      return real(route, credential, work);
+    };
+    const sending = rig.state().sendChanges([copy]);
+    await until(rig, () => rig.state().setupLive[course]?.migration != null, "the copy's job");
+    expect(stage(rig, course).tag).not.toBe("approve-copy");
+    release();
+    await rig.clock.run(sending);
+    await stageIs(rig, course, "review");
+  });
+
+  it("isn't last in line behind a sync, which reads two courses at a time", async () => {
+    const rig = await connected();
+    let out = 0;
+    let most = 0;
+    const real = rig.server.call.bind(rig.server);
+    rig.server.call = async (route, credential, work) => {
+      most = Math.max(most, ++out);
+      try {
+        return await real(route, credential, work);
+      } finally {
+        out--;
+      }
+    };
+    expect(await rig.clock.run(rig.state().syncSchool(LCC))).toBe(true);
+    expect(rig.state().cache[LCC]?.courses.length).toBeGreaterThan(2);
+    expect(most).toBeLessThanOrEqual(2 * 4 + 2);
+  });
+});
+
 describe("the sync", () => {
   it("a failed read of the new courses leaves the sync successful and the old list in place", async () => {
     const rig = await connected();
