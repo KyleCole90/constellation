@@ -1706,7 +1706,9 @@ describe("what a Next up row promises", () => {
     expect(replies).toMatchObject({ verb: "Reply to", detail: "Not started" });
     const [ezra, amara] = replies.work.rows;
     await rig.clock.run(
-      rig.state().openConversation("t-h150-mail" as ThreadId, ezra.conversation.ref),
+      rig.state().openConversation("t-h150-mail" as ThreadId, ezra.conversation.ref, {
+        fill: "draft",
+      }),
     );
     const after = stepsOf(rig).filter(
       (step) => step.work.kind === "replies" && step.courseCode === "HUM 150",

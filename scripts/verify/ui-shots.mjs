@@ -86,6 +86,7 @@ export const run = async (t) => {
   });
 
   await t.click("Maya Ortiz", { within: id("queue-list") });
+  await t.click("Draft with Claude");
   await t.waitFor(
     `document.querySelector("[data-focused]")?.innerText.includes("Maya Ortiz, Essay 2")`,
     "Maya's draft",
@@ -124,6 +125,8 @@ export const run = async (t) => {
     `document.querySelector('[data-conversation][data-unread="true"]').dataset.conversation`,
   );
   await t.click(`[data-conversation="${target}"] button`);
+  await t.waitFor(`document.querySelector("[data-draft-reply]")`, "conversation open");
+  await t.click("[data-draft-reply]");
   await t.waitFor(`document.querySelector("[data-focused]")`, "reply drafted", 15_000);
   await settled(t, "reply settled");
   await t.click("Preview", { within: id("card-actions") });

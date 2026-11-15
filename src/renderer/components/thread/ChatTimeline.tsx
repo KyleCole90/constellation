@@ -189,6 +189,15 @@ type ScrollAnchor = "bottom" | "card" | "free";
 
 const nearBottom = (el: HTMLElement): boolean =>
   el.scrollHeight - el.scrollTop - el.clientHeight < STICK_PX;
+/** The first of the conversation's messages after the teacher's last one, when the open card replies below them. */
+const unanswered = (card: Element): Element | null => {
+  const history = card
+    .closest(".focused-slot")
+    ?.parentElement?.querySelector(':scope > [data-testid="history"]');
+  const messages = [...(history?.children ?? [])];
+  const lastMine = messages.findLastIndex((message) => message.matches('[data-mine="true"]'));
+  return messages[lastMine + 1] ?? null;
+};
 const countUserMessages = (thread: Thread): number =>
   thread.messages.filter((message) => message.type === "user").length;
 
@@ -215,6 +224,15 @@ const useChatScroll = (thread: Thread, ui: ThreadUi, stickOn: string | undefined
     const wanted = el.scrollTop + cardDelta(el, card);
     const lowest = el.scrollHeight - el.clientHeight;
     const inScroll = (y: number) => y - el.getBoundingClientRect().top + el.scrollTop;
+    // A reply rests below what it answers, the student's messages since the teacher last wrote, so both show together.
+    const answering = unanswered(card);
+    if (answering) {
+      const rest = Math.max(
+        inScroll(answering.getBoundingClientRect().top) - FADE_PX,
+        wanted - el.clientHeight / 2,
+      );
+      return Math.min(rest, lowest);
+    }
     if (wanted <= lowest) {
       const trace = card.closest(".focused-slot")?.previousElementSibling;
       if (!trace?.matches("[data-trace]")) return wanted;

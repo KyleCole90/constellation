@@ -177,10 +177,10 @@ describe("the inbox thread", () => {
     const harper = inboxRow(rig, "Harper Vance");
     expect(wren.school.id).not.toBe(harper.school.id);
     const first = await rig.clock.run(
-      rig.state().openConversation(INBOX_THREAD, wren.conversation.ref),
+      rig.state().openConversation(INBOX_THREAD, wren.conversation.ref, { fill: "draft" }),
     );
     const second = await rig.clock.run(
-      rig.state().openConversation(INBOX_THREAD, harper.conversation.ref),
+      rig.state().openConversation(INBOX_THREAD, harper.conversation.ref, { fill: "draft" }),
     );
     if (!first || !second) throw new Error("Expected two drafts.");
     expect(rig.state().changes[first]?.content.target).toBe(wren.conversation.ref);
