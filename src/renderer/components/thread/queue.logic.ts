@@ -213,17 +213,28 @@ export const liveFilter = (rows: readonly WorkRow[], filter: QueueFilter): Queue
     ? filter
     : "all";
 
+/** Grades and requests to resubmit both take work off the list, but a teacher reads "sent" as grades, so a grading list counts each by name. */
 export const queueProgress = (
   rows: readonly WorkRow[],
   currentKey: string | null = null,
-): { label: string; place: string | null; sent: string; fraction: number } => {
-  const sent = rows.filter((row) => !row.open).length;
+): { label: string; place: string | null; done: string; fraction: number } => {
+  const done = rows.filter((row) => !row.open).length;
+  const asked = rows.filter((row) => !row.open && row.asked !== null).length;
   const index = rows.findIndex((row) => row.key === currentKey);
+  const grading = rows.some((row) => row.kind === "submission");
   return {
-    label: `${sent} of ${rows.length} sent`,
+    label: grading
+      ? [
+          `${done - asked} graded`,
+          asked > 0 && `${asked} asked to resubmit`,
+          `${rows.length - done} to grade`,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : `${done} of ${rows.length} sent`,
     place: index < 0 ? null : `${index + 1} of ${rows.length}`,
-    sent: `${sent} sent`,
-    fraction: rows.length ? sent / rows.length : 0,
+    done: grading ? `${done - asked} graded` : `${done} sent`,
+    fraction: rows.length ? done / rows.length : 0,
   };
 };
 

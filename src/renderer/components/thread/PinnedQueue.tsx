@@ -51,14 +51,14 @@ function Progress({
   currentKey?: string | null;
   placeOnly?: boolean;
 }) {
-  const { label, place, sent, fraction } = queueProgress(rows, currentKey);
+  const { label, place, done, fraction } = queueProgress(rows, currentKey);
   return (
     <>
       <span className="flex flex-none items-baseline gap-x-1 text-meta tabular-nums">
         <span data-testid="queue-progress" className="text-secondary-label">
           {place ?? label}
         </span>
-        {place && !placeOnly && <span className="text-muted-foreground">· {sent}</span>}
+        {place && !placeOnly && <span className="text-muted-foreground">· {done}</span>}
       </span>
       <span className="h-[3px] w-16 flex-none overflow-hidden rounded-full bg-foreground/8 @max-[600px]/queue:hidden">
         <span

@@ -310,8 +310,9 @@ const pinnedQueue = async (t) => {
   );
   const strip = (await t.text(QUEUE)).replace(/\s+/g, " ");
   t.assert(
-    strip.includes("Maya Ortiz") && strip.indexOf("Maya Ortiz") < strip.indexOf("8 of 32 · 0 sent"),
-    "collapsed queue names the current student first, then the place in the queue and what's sent",
+    strip.includes("Maya Ortiz") &&
+      strip.indexOf("Maya Ortiz") < strip.indexOf("8 of 32 · 0 graded"),
+    "collapsed queue names the current student first, then the place in the queue and what's graded",
     strip,
   );
   t.assert(
@@ -920,7 +921,7 @@ const approval = async (t) => {
     "the chat shows a receipt",
   );
   t.assert(
-    /of 32\s+·\s+1 sent\b|\b1 of 32 sent\b/.test(await t.text(QUEUE)),
+    /of 32\s+·\s+1 graded\b|\b1 graded · 31 to grade\b/.test(await t.text(QUEUE)),
     "queue progress moved",
     await t.text(QUEUE),
   );
@@ -1624,7 +1625,7 @@ const keyboardAndClear = async (t) => {
     `document.querySelector(${JSON.stringify(QUEUE)}).innerText.includes("The queue is clear.")`,
     "the queue reports clear when all are done",
   );
-  t.assert((await t.text(QUEUE)).includes("3 of 3 sent"), "progress reads 3 of 3");
+  t.assert((await t.text(QUEUE)).includes("3 graded · 0 to grade"), "progress reads 3 graded");
   const onward = `${CARD} [data-card-primary]`;
   t.assert(
     await t.eval(`document.querySelector('[data-connection="syncing"]') !== null`),
@@ -2604,6 +2605,12 @@ const cantSee = async (t) => {
     toGradeBefore !== null && toGradeAfter === toGradeBefore - 1,
     "resubmit, in the list: the course's To grade count leaves out the work waiting on the student (#98)",
     `${toGradeBefore} -> ${toGradeAfter}`,
+  );
+  const progress = await t.text('[data-testid="queue-progress"]');
+  t.assert(
+    /^\d+ graded · 1 asked to resubmit · \d+ to grade$/.test(progress),
+    "resubmit, in the list: the header counts the request to resubmit by name, never as sent (#122)",
+    progress,
   );
   await t.shot("cant-see-asked-row");
 

@@ -231,13 +231,21 @@ describe("rowLine", () => {
 });
 
 describe("queueProgress", () => {
-  it("counts what's been sent, the same way for grades and replies", () => {
+  it("a grading list counts grades, requests to resubmit, and what's left, each by name (#122)", () => {
+    const asked = (key: string) =>
+      row(key, { open: false, asked: "2026-11-14T12:00:00Z" as never });
+    expect(queueProgress([asked("a"), asked("b"), row("c")]).label).toBe(
+      "0 graded · 2 asked to resubmit · 1 to grade",
+    );
     expect(queueProgress(ROWS)).toEqual({
-      label: "1 of 5 sent",
+      label: "1 graded · 4 to grade",
       place: null,
-      sent: "1 sent",
+      done: "1 graded",
       fraction: 1 / 5,
     });
+  });
+
+  it("a message queue counts replies sent", () => {
     expect(queueProgress([row("a", { kind: "conversation" })]).label).toBe("0 of 1 sent");
     expect(
       queueProgress([
@@ -259,9 +267,9 @@ describe("queueProgress", () => {
     expect(queueProgress([]).fraction).toBe(0);
   });
 
-  it("with a current row, its place in the queue stands apart from what's been sent", () => {
+  it("with a current row, its place in the queue stands apart from what's been graded", () => {
     const rows = [row("a"), row("b"), row("c", { open: false })];
-    expect(queueProgress(rows, "b")).toMatchObject({ place: "2 of 3", sent: "1 sent" });
+    expect(queueProgress(rows, "b")).toMatchObject({ place: "2 of 3", done: "1 graded" });
     expect(queueProgress(rows, "gone").place).toBeNull();
   });
 });

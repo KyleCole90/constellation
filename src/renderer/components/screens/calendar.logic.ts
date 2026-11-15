@@ -1,7 +1,7 @@
 import { lastOf, type NonEmpty } from "~/renderer/lib/nonEmpty";
 import type { SchoolId } from "~/shared/domain/ids";
 import { formatDay } from "~/renderer/lib/utils";
-import { hasWorkToGrade, type DatedItem } from "~/renderer/stores/selectors";
+import { hasWorkToGrade, type DatedItem, type DueItem } from "~/renderer/stores/selectors";
 
 import type { SchoolFilter } from "./due.logic";
 
@@ -70,6 +70,12 @@ export const calendarSummary = (inWindow: readonly DatedItem[], undated: number)
   const toGrade = inWindow.filter((item) => toneOf(item) === "to-grade").length;
   const summary = `${inWindow.length} due, ${toGrade} with work to grade`;
   return undated > 0 ? `${summary}, ${undated} without a due date` : summary;
+};
+
+/** Work with no due date has no day to sit on, so the Calendar names how much of it waits to be graded instead of letting it vanish. */
+export const undatedToGrade = (undated: readonly DueItem[]): string | null => {
+  const toGrade = undated.reduce((sum, item) => sum + item.toGrade, 0);
+  return toGrade > 0 ? `${toGrade} to grade with no due date` : null;
 };
 
 const shortDate = (date: Date): string => formatDay(date.toISOString());
