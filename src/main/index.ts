@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { appendFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
@@ -15,8 +15,6 @@ import {
 } from "electron";
 import electronUpdater from "electron-updater";
 
-import * as v from "valibot";
-
 import { FAKES_SWITCH, errorReport, handle, type Handlers } from "../shared/ipc";
 
 import {
@@ -32,7 +30,7 @@ import { createFileStorage, fakeServer, lmsHandlers } from "./lms";
 import { anthropicAgent } from "./providers/anthropic";
 import { claudeCodeAgent } from "./providers/claude-code";
 import { jsonFile } from "./json-file";
-import { createTelemetry } from "./telemetry";
+import { TelemetrySavedSchema, createTelemetry } from "./telemetry";
 import { startUpdates } from "./updates";
 import { createVault } from "./vault";
 
@@ -57,6 +55,11 @@ const FAKE_ONLY = !app.isPackaged && process.env.CONSTELLATION_LMS === "fake";
 const PICKED_PACKAGE_FILE = app.isPackaged ? undefined : process.env.CONSTELLATION_PICKED_PACKAGE;
 /** Set by verify to a fake `claude`, so a run never reaches the teacher's own. A packaged app never reads it. */
 const CLAUDE_OVERRIDE = app.isPackaged ? undefined : process.env.CONSTELLATION_CLAUDE;
+/**
+ * Set by verify: a file each telemetry batch is appended to, one JSON line each, in place of PostHog. Without it an
+ * unpackaged app sends nothing. A packaged app never reads it.
+ */
+const TELEMETRY_SINK = app.isPackaged ? undefined : process.env.CONSTELLATION_TELEMETRY_SINK;
 const AI_OFF = {
   ok: false,
   reason: "AI drafts are off. Choose an AI source in Settings to turn them on.",
@@ -102,25 +105,35 @@ const start = async () => {
   );
   protocol.handle(APP_SCHEME, serve);
   const userData = app.getPath("userData");
-  const choice = jsonFile(
-    join(userData, "telemetry.json"),
-    v.strictObject({ enabled: v.boolean() }),
-    { enabled: true },
-  );
   const telemetry = createTelemetry({
-    // Both are baked in by `vp pack` from the build's environment (vite.config.ts). A build without a key sends nothing.
-    key: process.env.CONSTELLATION_POSTHOG_KEY ?? "",
-    appRoot: APP_ROOT,
+    // Both are baked in by `vp pack` from the build's environment (vite.config.ts). A build without a key sends
+    // nothing; verify's sink takes any key, since nothing it writes reaches PostHog.
+    key: TELEMETRY_SINK ? "sink" : (process.env.CONSTELLATION_POSTHOG_KEY ?? ""),
     host: process.env.CONSTELLATION_POSTHOG_HOST || "https://us.i.posthog.com",
+    appRoot: APP_ROOT,
     env: process.env.CONSTELLATION_TELEMETRY_ENABLED,
-    offline: FAKE_ONLY,
-    choice: { read: () => choice.read().enabled, write: (enabled) => choice.write({ enabled }) },
+    offline: !app.isPackaged && TELEMETRY_SINK === undefined,
+    saved: jsonFile(join(userData, "telemetry.json"), TelemetrySavedSchema, { enabled: true }),
     appVersion: app.getVersion(),
     os: `${process.platform} ${process.arch}`,
     osVersion: process.getSystemVersion(),
-    send: (url, body) =>
-      net.fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body }),
+    flushMs: TELEMETRY_SINK ? 500 : 10_000,
+    send: TELEMETRY_SINK
+      ? async (_url, body) => {
+          await appendFile(TELEMETRY_SINK, `${body}\n`);
+          return 200;
+        }
+      : async (url, body) =>
+          (
+            await net.fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body,
+            })
+          ).status,
   });
+  telemetry.track({ event: "app_opened" });
+  app.on("before-quit", () => void telemetry.flush());
   const reportMain = (error: unknown) => {
     const { type, stack } = errorReport(error);
     void telemetry.report(type, stack, "main");
@@ -181,6 +194,7 @@ const start = async () => {
       ipcMain.handle(channel, (event, input) => listener(event.senderFrame?.url ?? null, input)),
     trustedSender(DEV_ORIGIN),
     {
+      "analytics.track": async (event) => telemetry.track(event),
       "error.report": ({ type, stack }) => telemetry.report(type, stack, "renderer"),
       "telemetry.status": async () => telemetry.status(),
       "telemetry.choose": async ({ enabled }) => telemetry.choose(enabled),

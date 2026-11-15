@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { AnalyticsEventSchema } from "./analytics";
 import { LabCommandSchema, LabSnapshotSchema } from "./providers/fake-canvas/lab";
 import type { VaultKey } from "./providers/provider";
 import {
@@ -129,7 +130,9 @@ interface Channel {
 /** Every channel between the renderer and main, declared once. */
 const ipc = {
   "error.report": { input: RendererError, output: v.void() },
-  /** Whether crash reports are on (the teacher's choice), and whether this build and launch can send any. */
+  /** One usage event, which main sends only if the teacher allows it. */
+  "analytics.track": { input: AnalyticsEventSchema, output: v.void() },
+  /** Whether usage data and crash reports are on (the teacher's choice), and whether this launch can send any. */
   "telemetry.status": {
     input: v.void(),
     output: v.strictObject({ enabled: v.boolean(), available: v.boolean() }),

@@ -407,6 +407,7 @@ describe("an AI-drafted grade, end to end", () => {
       {
         "error.report": async () => {},
         "telemetry.status": async () => ({ enabled: true, available: false }),
+        "analytics.track": async () => {},
         "telemetry.choose": async () => {},
         "vault.enroll": async () => {},
         "vault.keys": async () => [],
