@@ -109,8 +109,19 @@ export function* scanCourseStream(scope: AgentScope): Generator<unknown, void> {
     };
     return;
   }
+  const drafted = scope.changes.filter(
+    (change) =>
+      change.state.tag === "draft" &&
+      findings.some((finding) => finding.fix?.target === change.content.target),
+  );
   yield {
     type: "say",
     text: `I found ${count(findings.length, "thing")} to look at in ${content.shell.code}. ${fixable} ${fixable === 1 ? "fix" : "fixes"} drafted for your approval, and ${manual} for you to do in the LMS yourself.`,
+    ...(drafted.length > 0 && {
+      lines: drafted.map((change) => ({
+        source: { kind: "change", ref: change.id },
+        title: change.subject,
+      })),
+    }),
   };
 }

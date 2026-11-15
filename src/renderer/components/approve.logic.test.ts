@@ -90,6 +90,12 @@ describe("riskPrompt", () => {
       "The copy adds the content from source-export.imscc to HUM 150, on top of what is there now.",
     );
   });
+  it("names a source course with no term without an empty parenthesis (#136)", () => {
+    const noTerm = copyInto(0, 1, { ...FALL_COURSE, label: "Music Theory", termName: "" });
+    expect(riskPrompt(noTerm)?.body).toContain(
+      "The copy adds the content from Music Theory to HUM 150,",
+    );
+  });
   it("drops the part that is zero and singularizes one", () => {
     expect(riskPrompt(copyInto(1, 0))?.title).toBe("HUM 150 already has 1 student");
     expect(riskPrompt(copyInto(0, 2))?.title).toBe("HUM 150 already has 2 items");

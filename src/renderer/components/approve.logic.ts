@@ -1,4 +1,5 @@
 import { riskOf, type ChangeRecord } from "~/shared/domain/change";
+import { sourceName } from "~/shared/domain/content";
 
 export interface RiskPrompt {
   title: string;
@@ -21,13 +22,9 @@ export const riskPrompt = (record: ChangeRecord): RiskPrompt | null => {
   ]
     .filter((part) => part !== null)
     .join(" and ");
-  const from =
-    content.source.kind === "course"
-      ? `${content.source.label} (${content.source.termName})`
-      : content.source.name;
   return {
     title: `${content.into.code} already has ${has}`,
-    body: `The copy adds the content from ${from} to ${content.into.code}, on top of what is there now. Nothing in the course is removed, and students who are enrolled will see the new items. Type ${content.into.code} to confirm.`,
+    body: `The copy adds the content from ${sourceName(content.source)} to ${content.into.code}, on top of what is there now. Nothing in the course is removed, and students who are enrolled will see the new items. Type ${content.into.code} to confirm.`,
     code: content.into.code,
   };
 };
