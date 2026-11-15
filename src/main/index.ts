@@ -167,6 +167,8 @@ const start = async () => {
             lease: vault.lease("ai-key"),
             fetch: (url, init) => net.fetch(url, init),
           }),
+      "agent.source": async () => {},
+      "claudeCode.status": async () => ({ installed: false, weekly: null }),
       ...lms,
     },
   );

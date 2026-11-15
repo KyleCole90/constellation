@@ -155,6 +155,8 @@ const bridged = () => {
       "vault.keys": async () => main.keys(),
       "vault.forget": async ({ key }) => main.forget(key),
       "vault.standIn": ({ key }) => main.standIn(key),
+      "agent.source": async () => {},
+      "claudeCode.status": async () => ({ installed: false, weekly: null }),
       "agent.run": async () => ({ ok: false, reason: "no agent in this rig" }),
       ...fakeLmsHandlers(),
     },

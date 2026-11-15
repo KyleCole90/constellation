@@ -28,6 +28,8 @@ const registered = () => {
       "vault.keys": async () => [],
       "vault.forget": record,
       "vault.standIn": async () => null,
+      "agent.source": async () => {},
+      "claudeCode.status": async () => ({ installed: false, weekly: null }),
       "agent.run": async (input) => {
         handled.push(input);
         return { ok: false, reason: "no agent in this rig" };
@@ -56,6 +58,8 @@ describe("main's handlers", () => {
       "vault.forget",
       "vault.standIn",
       "agent.run",
+      "agent.source",
+      "claudeCode.status",
       "lms.schoolAt",
       "lms.verify",
       "lms.courses",

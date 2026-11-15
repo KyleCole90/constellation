@@ -94,6 +94,8 @@ export const bridgedLms = (
       "vault.keys": async () => [],
       "vault.forget": record,
       "vault.standIn": async () => null,
+      "agent.source": async () => {},
+      "claudeCode.status": async () => ({ installed: false, weekly: null }),
       "agent.run": async () => ({ ok: false, reason: "no agent in this rig" }),
       ...fakeLmsHandlers({
         clock,

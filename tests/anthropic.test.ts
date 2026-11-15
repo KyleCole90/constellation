@@ -411,6 +411,8 @@ describe("an AI-drafted grade, end to end", () => {
         "vault.keys": async () => [],
         "vault.forget": async () => {},
         "vault.standIn": async () => null,
+        "agent.source": async () => {},
+        "claudeCode.status": async () => ({ installed: false, weekly: null }),
         "agent.run": anthropicAgent({ lease: leaseOf(KEY), fetch: api.fetch }),
         ...fakeLmsHandlers(),
       },
