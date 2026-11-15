@@ -512,31 +512,39 @@ const NO_HOSTS: readonly SchoolHost[] = [];
 
 const notAvailable: SecretRefusal = { message: "That school isn't available.", wrongSecret: false };
 
-/** Only a refused token is the token's fault. Anything else leaves it filled in, since Canvas shows a token only once. */
-const verifyRefusal = (error: LmsError, vendor: string): SecretRefusal => {
-  const kept = (problem: string): SecretRefusal => ({
-    message: `${problem} Your token is still filled in.`,
-    wrongSecret: false,
-  });
+const kept = (problem: string): SecretRefusal => ({
+  message: `${problem} Your token is still filled in.`,
+  wrongSecret: false,
+});
+
+const noSchoolAt = (host: SchoolHost): string =>
+  `Couldn't find a school at ${host}. Check it against your browser's address bar when you sign in to your school's LMS, or ask your school's IT help desk for it.`;
+
+/**
+ * Only a refused token is the token's fault. Anything else leaves it filled in, since Canvas shows a token only once.
+ * A typo'd host can still answer (every `*.instructure.com` name does, with a 404), so the account read is where the address is checked.
+ */
+const verifyRefusal = (error: LmsError, vendor: string, host: SchoolHost): SecretRefusal => {
   switch (error.kind) {
     case "auth_expired":
+    case "forbidden":
       return {
         message: "That token was refused. Generate a new one and try again.",
         wrongSecret: true,
       };
+    case "not_found":
+    case "rejected":
+    case "unsupported":
+      return kept(noSchoolAt(host));
     case "unavailable":
       if (error.status === 503)
         return kept(`${vendor} is down for maintenance right now. Try again in a few minutes.`);
       return error.status === null
-        ? kept(`${vendor} didn't answer. Check your internet connection and try again.`)
+        ? kept(`Nothing answered at ${host}. Check the address, then your internet connection.`)
         : kept(`${vendor} is having trouble right now. Try again in a few minutes.`);
     case "rate_limited":
       return kept(`${vendor} asked us to slow down. Try again in a minute.`);
-    case "forbidden":
-    case "not_found":
-    case "rejected":
     case "lost_response":
-    case "unsupported":
       return kept(`${vendor} couldn't check the token right now. Try again in a few minutes.`);
   }
 };
@@ -1759,7 +1767,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           if (!account.ok) {
             const kept = previous !== null && (await restoreToken(school, previous));
             if (!kept) await deps.vault.forget(school);
-            const refusal = verifyRefusal(account.error, descriptor.label);
+            const refusal = verifyRefusal(account.error, descriptor.label, target.host);
             if (!known) {
               providers.delete(school);
               return { ok: false, error: refusal };
@@ -1873,13 +1881,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               get().schools.find((school) => school.host === host) ??
               (await backend.schoolAt(host));
             if (!target)
-              return {
-                ok: false,
-                error: {
-                  message: `Couldn't find a school at ${host}. Check it against your browser's address bar when you sign in to your school's LMS, or ask your school's IT help desk for it.`,
-                  wrongSecret: false,
-                },
-              };
+              return { ok: false, error: { message: noSchoolAt(host), wrongSecret: false } };
             const result = await enroll(target, secret, onStage);
             return result.ok ? { ok: true, value: target } : result;
           },
