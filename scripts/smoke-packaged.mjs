@@ -1,5 +1,5 @@
 // Boots the packaged app and checks what only a packaged build can show: its fuses, that its window runs the
-// app from app://, that it seeds no demo, and that it lets no debugger in. Takes the .app path, or finds this Mac's `electron-builder --dir`
+// app from app://, that it seeds no demo but keeps the built-in threads, and that it lets no debugger in. Takes the .app path, or finds this Mac's `electron-builder --dir`
 // output. A packaged app takes no CDP, so the window check reads the renderer's store from a scratch user-data
 // folder. Starts its own app processes, and stops only those.
 import { spawn } from "node:child_process";
@@ -71,6 +71,9 @@ const launch = async (args) => {
   return { userData, exited, running: () => running, stop };
 };
 
+/** Routes and links point at these, so a first store without one sends the teacher into a redirect loop (#114). */
+const BUILT_IN_THREADS = ["t-north-star", "t-queue", "t-inbox"];
+
 const storeLog = async (userData) => {
   const folder = join(userData, "Local Storage/leveldb");
   const files = await readdir(folder).catch(() => []);
@@ -116,7 +119,14 @@ const checkWindowAndInspect = async () => {
     if (!inStore(log, '"threads":')) throw new Error("the saved store has no threads to check");
     if (inStore(log, '"seeded":true'))
       throw new Error("the packaged app saved a seeded demo thread");
-    console.log("ok no demo: the packaged app's first store holds no seeded demo thread");
+    const missing = BUILT_IN_THREADS.filter((id) => !inStore(log, `"id":"${id}"`));
+    if (missing.length > 0)
+      throw new Error(
+        `the packaged app's first store has no built-in thread ${missing.join(", ")}`,
+      );
+    console.log(
+      "ok no demo: the packaged app's first store holds North Star, the grading list and Messages, and no seeded demo thread",
+    );
     console.log(`ok --inspect=${port}: ignored, nothing listens`);
   } finally {
     await app.stop();

@@ -2,7 +2,8 @@ import { isoTime, type SchoolId, type ThreadId } from "~/shared/domain/ids";
 import { refs } from "~/shared/providers/canvas-refs";
 import { assignmentCanvasId, SEED, type SeedAssignment } from "~/shared/providers/fake-canvas/seed";
 
-import { GRADING_LIST_THREAD, INBOX_THREAD, NORTH_STAR_THREAD } from "./selectors";
+import { builtInThreads } from "./builtInThreads";
+import { GRADING_LIST_THREAD } from "./selectors";
 import type { Thread, ThreadMessage, ThreadSubject } from "./types";
 
 const OPEN = "NLR";
@@ -23,17 +24,6 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
   const epoch = new Date(SEED.now).getTime();
   const at = (minutesAgo: number) => isoTime(epoch - minutesAgo * MINUTE);
   const threads: Thread[] = [];
-
-  threads.push({
-    id: NORTH_STAR_THREAD,
-    school: null,
-    course: null,
-    kind: "north-star",
-    title: "North Star",
-    focus: null,
-    updatedAt: at(0),
-    messages: [],
-  });
 
   const queueAt = at(0);
   threads.push({
@@ -146,16 +136,6 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
   });
 
   threads.push({
-    id: INBOX_THREAD,
-    school: null,
-    course: null,
-    kind: "messages",
-    title: "Messages",
-    messages: [],
-    focus: null,
-    updatedAt: at(0),
-  });
-  threads.push({
     id: "t-general" as ThreadId,
     school: null,
     course: null,
@@ -165,10 +145,13 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
     focus: null,
     updatedAt: at(0),
   });
-  return Object.fromEntries(
-    threads.map((thread) => [
-      thread.id,
-      { ...thread, messages: thread.messages.map((message) => ({ ...message, seeded: true })) },
-    ]),
-  );
+  return {
+    ...builtInThreads(at(0)),
+    ...Object.fromEntries(
+      threads.map((thread) => [
+        thread.id,
+        { ...thread, messages: thread.messages.map((message) => ({ ...message, seeded: true })) },
+      ]),
+    ),
+  };
 };

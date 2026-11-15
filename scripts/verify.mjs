@@ -23,6 +23,7 @@ const WEB = process.argv.includes("--web");
 const ONLY = process.argv.find((arg) => arg.startsWith("--only="))?.slice(7);
 const ALL_MODULES = [
   "shell",
+  "first-run",
   "settings",
   "grading",
   "grading-list",
@@ -395,6 +396,8 @@ const main = async () => {
         return () => listeners.delete(method);
       },
       eval: evaluate,
+      /** Starts again as a first-time visitor, in a fresh app on a fresh profile. */
+      fresh: freshPage,
       /** Evaluates `expression` until its value holds across painted frames with no animation running, and returns it. */
       steady: (expression, timeout = WAIT_MS) =>
         steady(expression, () => true, timeout, `never held still: ${expression.slice(0, 80)}`),

@@ -123,6 +123,7 @@ import {
   type Writeback,
 } from "~/renderer/writeback/writeback";
 
+import { builtInThreads } from "./builtInThreads";
 import { seedThreads } from "./seedThreads";
 import {
   DEFAULT_THREAD_UI,
@@ -497,7 +498,7 @@ const initialData = (backend: Backend, resetAt: number): WorkspaceData => ({
   aiSource: "none",
   cache: {},
   changes: {},
-  threads: backend.demo?.seedThreads() ?? {},
+  threads: backend.demo?.seedThreads() ?? builtInThreads(isoTime(resetAt)),
   setups: {},
   newCourses: {},
   prefs: { sidebarOpen: true, collapsed: {}, expandedThreads: {}, threadUi: {} },
@@ -1820,7 +1821,8 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               get(),
               (focus) => !changes[focus] && !blanks[focus],
             );
-            const seeded = backend.demo?.seedThreads() ?? {};
+            // Every workspace gets the built-in threads, including one saved by a build that dropped them.
+            const seeded = backend.demo?.seedThreads() ?? builtInThreads(isoTime(clock.now()));
             // A saved workspace keeps its grading messages but not the old name for the list.
             const renamed = Object.values(threads)
               .filter((thread) => thread.kind === "queue")
@@ -2565,6 +2567,10 @@ const bridgeFakeBackend =
     const backend = fakeBackend(fake.descriptor, fake.reset);
     return {
       ...backend,
+      // Verify's stand-in for a real account's first run, which seeds nothing.
+      ...(import.meta.env.DEV && sessionStorage.getItem("verify.demo") === "off"
+        ? { demo: null }
+        : {}),
       // Main refuses every Canvas read here, but verify still renders a saved real school's screens through it.
       descriptors: {
         ...backend.descriptors,
