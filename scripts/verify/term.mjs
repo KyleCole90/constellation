@@ -796,7 +796,7 @@ const hiddenTermDates = async (t) => {
       `${code}: the package opens Dates`,
     );
   };
-  // A Default Term shell: no term dates, and the course's own dates not set yet (walk 5, #58).
+  // A Default Term shell: no term dates, and the course's own dates not set yet (#58).
   await changeToPackage();
   const opened = await t.eval(
     `["old-term-start", "old-term-end", "new-term-start", "new-term-end"].map((name) => document.querySelector('[data-testid="' + name + '"]').value)`,

@@ -26,7 +26,7 @@ export interface TermContractHarness {
   loseNext(): void;
   failNextMigration(stage: "pre_processing" | "running", message: string): void;
   writeCount(): number;
-  /** Whether the LMS lists sample packages to import. Real Canvas has none until package upload (step 14). */
+  /** Whether the LMS lists sample packages to import. Real Canvas lists none. */
   offersPackages: boolean;
 }
 

@@ -7,8 +7,8 @@ export const desktopBridge: Bridge | undefined =
   typeof window === "undefined" ? undefined : window.constellation;
 
 /**
- * Hands an error's type and stack to main, which scrubs them and decides whether a report leaves (docs/electron-spec.md,
- * D23). The web demo has no main, so it sends nothing.
+ * Hands an error's type and stack to main, which scrubs them and decides whether a report leaves.
+ * The web demo has no main, so it sends nothing.
  */
 export const reportError = (error: unknown) => {
   void desktopBridge?.invoke("error.report", errorReport(error)).catch(() => {});
@@ -26,7 +26,7 @@ export const CLAUDE_CODE_SETUP_URL = "https://code.claude.com/docs/en/setup";
 /** Where saved tokens and keys live, as the UI names it. */
 export const VAULT_PLACE = desktopBridge ? "your Mac's Keychain" : "this browser's vault";
 
-/** Claude needs the network; the rules agent doesn't. Offline, AI is disabled up front rather than queued (D28). */
+/** Claude needs the network; the rules agent doesn't. Offline, AI is disabled up front rather than queued. */
 export const OFFLINE_REASON =
   "You're offline, so Claude can't draft or chat. Nothing is queued. Ask again once you're back online.";
 
@@ -34,7 +34,7 @@ export const OFFLINE_REASON =
 export const isOnline = (): boolean =>
   (globalThis.navigator as { onLine?: boolean } | undefined)?.onLine !== false;
 
-/** Sending needs the school; offline, Send is disabled up front, and a queued send could post twice (D28). */
+/** Sending needs the school; offline, Send is disabled up front, and a queued send could post twice. */
 export const OFFLINE_SEND_REASON =
   "You're offline, so nothing can be sent. Nothing is queued. Send once you're back online.";
 

@@ -118,7 +118,7 @@ const claudeCode: BenchSource = {
   id: "claude-code",
   model: MODEL,
   overheadLimitMs: 300,
-  // Kyle's call on 2026-11-15 (#82): 90% first-try valid is enough for Claude Code.
+  // 90% first-try valid is enough for Claude Code (#82).
   minValidPercent: 90,
   missing: async (env) => {
     const status = await claudeCodeFor(env).status();

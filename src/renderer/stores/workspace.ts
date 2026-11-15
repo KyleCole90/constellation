@@ -296,7 +296,7 @@ export type WorkspaceState = WorkspaceData &
     syncing: Readonly<Record<SchoolId, boolean>>;
     /** A running sync's courses and the ones it has finished reading, so a first read shows progress. Not persisted. */
     courseReads: Readonly<Record<SchoolId, CourseRead>>;
-    /** False only on desktop with the Mac offline. Send is disabled then, and nothing queues (D28). Not persisted. */
+    /** False only on desktop with the Mac offline. Send is disabled then, and nothing queues. Not persisted. */
     online: boolean;
     /** By course ref. Not persisted: the next read of the job restores it. */
     setupLive: Readonly<Record<string, SetupLive>>;
@@ -2688,7 +2688,7 @@ export const fakeCanvasBackend =
     return fakeBackend(createFakeCanvasDescriptor(server, now), () => server.reset());
   };
 
-/** Under verify, the desktop app's fake LMS runs in main, so here it is a client of the bridge (docs/electron-spec.md, step 10). */
+/** Under verify, the desktop app's fake LMS runs in main, so here it is a client of the bridge. */
 const bridgeFakeBackend =
   (bridge: Bridge) =>
   (now: () => number): Backend => {

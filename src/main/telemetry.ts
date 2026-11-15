@@ -1,5 +1,5 @@
 /**
- * Crash reports to PostHog, sent from main only (docs/electron-spec.md, D20, D23, D24). A report carries an error's
+ * Crash reports to PostHog, sent from main only. A report carries an error's
  * type, its stack frames (file, line, column), the app version and the OS. It never carries message text:
  * every value counts as student data, so anything the scrubber can't prove is ours is dropped.
  *

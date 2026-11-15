@@ -142,7 +142,7 @@ export const summarizeFor = (
   online = true,
 ): ChangeSummary => {
   const summary = withConnection(summarize(change), connection);
-  // Offline, Send is disabled up front rather than tried and held, and nothing queues (D28).
+  // Offline, Send is disabled up front rather than tried and held, and nothing queues.
   return online ? summary : { ...summary, canSend: false };
 };
 const withConnection = (

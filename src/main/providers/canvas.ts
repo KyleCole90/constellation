@@ -88,7 +88,7 @@ const retryAfterMs = (response: Response): number | null => {
     : null;
 };
 
-/** Canvas throttles with a 403 whose body says so, not a 429 (docs/electron-spec.md, Canvas). */
+/** Canvas throttles with a 403 whose body says so, not a 429. */
 const errorOf = async (response: Response): Promise<LmsError> => {
   if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400))
     return {
@@ -407,7 +407,7 @@ const MAX_ROWS = 10_000;
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 
 /**
- * A school's real Canvas, run in main with the token from main's vault (docs/electron-spec.md, step 11). Each read
+ * A school's real Canvas, run in main with the token from main's vault. Each read
  * follows `Link: rel="next"` to the end, so it returns the whole list. A throttle comes back as `rate_limited` at once:
  * the runner pauses the lane, and this never sleeps. Each written field is its own request, so it reports its own
  * outcome, and a request whose answer never came back is `unknown` until a read says otherwise.

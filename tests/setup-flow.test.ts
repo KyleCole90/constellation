@@ -669,7 +669,7 @@ describe("a fix", () => {
   });
 });
 
-describe("the scan's own summary (walk 5, #65)", () => {
+describe("the scan's own summary (#65)", () => {
   it("survives a line that points at the course being set up and a finding whose quote isn't there", async () => {
     // Claude's real answer to a cartridge scan, in a setup thread whose cache has no courses yet.
     const agent: Agent = {

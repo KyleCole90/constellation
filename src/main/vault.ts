@@ -24,7 +24,7 @@ const standInFor = (token: string) =>
   `${STAND_IN}${createHash("sha256").update(token).digest("hex")}`;
 
 /**
- * Tokens, encrypted with `safeStorage`, in one file under `userData` (docs/electron-spec.md, step 6).
+ * Tokens, encrypted with `safeStorage`, in one file under `userData`.
  * The renderer can enroll, list and forget a token, and get a stand-in that restores it, but never read it back.
  * Main's providers lease the token itself.
  * Every read and write of the file runs without an await between them, so two calls can't interleave.

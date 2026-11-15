@@ -112,7 +112,7 @@ const ask = async (client: Anthropic, input: Input): Promise<Answer> => {
 };
 
 /**
- * `agent.run` in main: Claude with the key from main's vault (docs/electron-spec.md, AI). The key is read for each run
+ * `agent.run` in main: Claude with the key from main's vault. The key is read for each run
  * and never kept, logged or sent anywhere but Anthropic. What comes back is raw: the renderer's `parseAgentEffect`
  * decides what of it counts, and nothing it yields can approve or send.
  */

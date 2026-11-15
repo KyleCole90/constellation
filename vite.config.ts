@@ -17,15 +17,15 @@ const IGNORED = [
 ];
 
 const ELECTRON_ONLY_IN_MAIN =
-  "`electron` belongs to src/main and src/preload. The renderer reaches main through `window.constellation` (docs/electron-spec.md, D16).";
+  "`electron` belongs to src/main and src/preload. The renderer reaches main through `window.constellation`.";
 const ANTHROPIC_ONLY_IN_MAIN =
-  "The Anthropic SDK runs in src/main, with the key from main's vault. The renderer asks over `agent.run` (docs/electron-spec.md, AI).";
+  "The Anthropic SDK runs in src/main, with the key from main's vault. The renderer asks over `agent.run`.";
 const NODE_ONLY_IN_MAIN =
-  "Node builtins belong to src/main. src/shared is pure code both processes run, and the renderer gets no Node access (docs/electron-spec.md, D5, D15).";
+  "Node builtins belong to src/main. src/shared is pure code both processes run, and the renderer gets no Node access.";
 const IPC_THROUGH_THE_MAP =
-  "`ipcMain` belongs to src/main/index.ts and `ipcRenderer` to src/preload/index.ts. Add a channel to src/shared/ipc.ts instead (docs/electron-spec.md, D16).";
+  "`ipcMain` belongs to src/main/index.ts and `ipcRenderer` to src/preload/index.ts. Add a channel to src/shared/ipc.ts instead.";
 const RENDERER_IS_UNTRUSTED =
-  "The renderer is untrusted and gets no network or Node access. Ask main over IPC (docs/electron-spec.md, D5).";
+  "The renderer is untrusted and gets no network or Node access. Ask main over IPC.";
 
 export default defineConfig({
   plugins: [
@@ -68,7 +68,7 @@ export default defineConfig({
   ],
   test: {
     environment: "node",
-    // `npm run contract:live` reaches a real Canvas, so its tests run only through that script (docs/electron-spec.md, D25).
+    // `npm run contract:live` reaches a real Canvas, so its tests run only through that script.
     // `npm run bench:claude-code` spends real quota, so the benchmark runs only through that script (#85).
     include: process.env.CONTRACT_LIVE
       ? ["tests/**/*.live.ts"]

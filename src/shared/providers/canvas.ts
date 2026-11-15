@@ -40,7 +40,7 @@ export const CANVAS_FACE = {
   describeScope: (scope: string) => SCOPE_WORDS[scope] ?? scope,
 } satisfies Pick<LmsProvider, "vendorLabel" | "capabilities" | "describeScope">;
 
-/** Paste-token enrolment: a school's address and a personal access token (docs/electron-spec.md, D7). */
+/** Paste-token enrolment: a school's address and a personal access token. */
 export const CANVAS: Omit<ProviderDescriptor, "create"> = {
   kind: "canvas",
   label: "Canvas",

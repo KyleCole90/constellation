@@ -82,8 +82,8 @@ const processBoundary = {
     type: "problem",
     messages: {
       cross:
-        "`src/{{from}}` can't import from `src/{{to}}`. A process folder imports only itself and `src/shared` " +
-        "(docs/electron-spec.md, D15). Move what both sides need into `src/shared`.",
+        "`src/{{from}}` can't import from `src/{{to}}`. A process folder imports only itself and `src/shared`. " +
+        "Move what both sides need into `src/shared`.",
     },
   },
   create(context) {

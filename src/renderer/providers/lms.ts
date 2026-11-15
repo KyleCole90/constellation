@@ -31,7 +31,7 @@ const read = async <T>(call: () => Promise<Result<T, LmsError>>): Read<T> => {
 
 /**
  * A school's provider in the desktop app: every call goes to main, which runs the provider with the token from its
- * vault (docs/electron-spec.md, step 10). The renderer never holds the token, so the lease it is handed goes unused.
+ * vault. The renderer never holds the token, so the lease it is handed goes unused.
  * Same interface as the provider it stands for, so the store and the screens can't tell them apart.
  */
 const createBridgeProvider = (

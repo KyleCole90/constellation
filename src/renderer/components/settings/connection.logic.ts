@@ -46,7 +46,7 @@ export const connectionStatus = (
 ): ConnectionStatus => {
   if (!record || record.status === "disconnected") return "disconnected";
   if (record.status === "expired") return "expired";
-  // The app opens from saved state, so the school's data is still there; only reaching it waits (D28).
+  // The app opens from saved state, so the school's data is still there; only reaching it waits.
   if (!online) return "offline";
   if (syncing) return "syncing";
   return record.syncError ? "sync-failed" : "connected";
