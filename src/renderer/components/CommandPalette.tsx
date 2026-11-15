@@ -112,15 +112,14 @@ export function CommandPalette({
           params: { courseId: target.assignment.course },
           hash: target.assignment.ref,
         });
-      case "student": {
-        const { submission } = target;
-        if (!submission)
-          return void navigate({
-            to: "/courses/$courseId",
-            params: { courseId: target.student.course },
-          });
-        return links.submission(submission.ref);
-      }
+      case "gradebook-row":
+        return void navigate({
+          to: "/courses/$courseId/gradebook",
+          params: { courseId: target.student.course },
+          hash: target.student.ref,
+        });
+      case "student":
+        return links.submission(target.submission.ref);
     }
   };
 

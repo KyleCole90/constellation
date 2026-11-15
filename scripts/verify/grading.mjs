@@ -2504,8 +2504,8 @@ const searchStudent = async (t, student, asked, label) => {
   );
   if (!hint.includes("to grade")) {
     await t.waitFor(
-      `location.pathname.startsWith("/courses/")`,
-      `${label}: with nothing to grade, the result opens the course`,
+      `location.pathname.endsWith("/gradebook") && document.querySelector('tr[data-highlighted="true"]')?.innerText.includes(${JSON.stringify(student)})`,
+      `${label}: with nothing to grade, the result opens the student's gradebook row (#141)`,
     );
     return;
   }

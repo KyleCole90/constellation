@@ -2238,6 +2238,26 @@ const palette = async (t) => {
     "and looking it up leaves no thread behind to read Done later (#135)",
   );
   await shot(t, "palette-assignment-nothing-to-grade");
+
+  const caughtUp = await stored(
+    t,
+    `(() => { const caches = Object.values(state.cache); const names = caches.flatMap((c) => c.students).map((s) => s.name); return caches.flatMap((c) => c.students).find((s) => names.filter((n) => n === s.name).length === 1 && !caches.some((c) => c.submissions.some((sub) => sub.student === s.ref && sub.course === s.course && sub.workflow === "submitted"))) ?? null; })()`,
+  );
+  t.assert(caughtUp, "a student in one course with nothing in to grade");
+  await t.click("Search threads and students", { within: SIDEBAR });
+  await t.waitFor(`document.querySelector('[data-testid="palette"]')`, "the palette opens");
+  await t.type(caughtUp.name);
+  const student = `[...document.querySelectorAll('[data-testid="palette"] button')].find((b) => b.querySelector(".truncate")?.innerText === ${JSON.stringify(caughtUp.name)})`;
+  await t.waitFor(
+    `${student} && !${student}.innerText.includes("to grade")`,
+    "search finds the student, with nothing to grade",
+  );
+  await t.eval(`${student}.click()`);
+  await t.waitFor(
+    `decodeURIComponent(location.pathname) === ${JSON.stringify(`/courses/${caughtUp.course}/gradebook`)} && document.querySelector('tr[data-student=${JSON.stringify(caughtUp.ref)}]')?.dataset.highlighted === "true"`,
+    "a student with nothing to grade opens on their gradebook row, not the course overview (#141)",
+  );
+  await shot(t, "palette-student-nothing-to-grade");
 };
 
 const layouts = async (t) => {
