@@ -2430,6 +2430,40 @@ const submissionTypes = async (t) => {
 };
 
 /** Issues #81 and #91: once Claude says it can't see the work, the app's own message for that submission leads, and the unchanged submission offers no paid redraft, reload included. The same student's next unreadable link gets its own decline and its own message. */
+/** A student result says "to grade" only when it opens work that is, never the row waiting on them to resubmit (#121). */
+const searchStudent = async (t, student, asked, label) => {
+  await t.key("Meta+k");
+  await t.waitFor(
+    `document.querySelector('[data-testid="palette"] input')`,
+    `${label}: search opens`,
+  );
+  await t.type(student);
+  const found = `[...document.querySelectorAll('[data-testid="palette"] button')].find((b) => b.querySelector(".truncate")?.innerText === ${JSON.stringify(student)})`;
+  await t.waitFor(found, `${label}: search finds ${student}`);
+  const hint = await t.eval(`${found}.innerText`);
+  await t.shot("cant-see-asked-search");
+  await t.eval(`${found}.click()`);
+  await t.waitFor(
+    `!document.querySelector('[data-testid="palette"]')`,
+    `${label}: the result opens`,
+  );
+  if (!hint.includes("to grade")) {
+    await t.waitFor(
+      `location.pathname.startsWith("/courses/")`,
+      `${label}: with nothing to grade, the result opens the course`,
+    );
+    return;
+  }
+  const opened = await t.eval(
+    `(() => { const id = decodeURIComponent(location.pathname.split("/threads/")[1] ?? ""); return JSON.parse(localStorage.getItem("lms-app.v1")).state.prefs.threadUi[id]?.current ?? null; })()`,
+  );
+  t.assert(
+    opened && opened !== asked,
+    `${label}: "to grade" opens work to grade, not the row asked to resubmit (#121)`,
+    `${hint.replace(/\n/g, " ")} -> ${opened}`,
+  );
+};
+
 const cantSee = async (t) => {
   const openRow = async (label) => {
     await t.goto("/threads/t-queue");
@@ -2606,6 +2640,7 @@ const cantSee = async (t) => {
     `${toGradeBefore} -> ${toGradeAfter}`,
   );
   await t.shot("cant-see-asked-row");
+  await searchStudent(t, student, row, "resubmit, search");
 
   await openOn(second, secondStudent, "second link");
   await opensUndrafted(t, secondStudent, "second link");
