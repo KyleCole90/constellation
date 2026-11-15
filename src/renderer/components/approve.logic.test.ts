@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import type { CopySource } from "~/shared/domain/content";
 import { newChangeRecord, type ChangeRecord, type RemoteState } from "~/shared/domain/change";
 import type { ChangeId, IsoDate, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
 import { termName } from "~/shared/domain/term";
@@ -23,7 +24,18 @@ const PLAN = {
   breaks: [],
 };
 
-const copyInto = (students: number, items: number): ChangeRecord => {
+const FALL_COURSE: CopySource = {
+  kind: "course",
+  ref: "rsu:course:12190" as LmsRef<"course">,
+  label: "HUM 150 Film & Society",
+  termName: "Fall 2026",
+};
+
+const copyInto = (
+  students: number,
+  items: number,
+  source: CopySource = FALL_COURSE,
+): ChangeRecord => {
   const remote: RemoteState = {
     kind: "course-copy",
     targetVersion: `students:${students}|items:${items}`,
@@ -40,12 +52,7 @@ const copyInto = (students: number, items: number): ChangeRecord => {
       kind: "course-copy",
       target: "rsu:migrations:12103" as LmsRef<"migrations">,
       into: { code: "HUM 150", title: "Introduction to Humanities" },
-      source: {
-        kind: "course",
-        ref: "rsu:course:12190" as LmsRef<"course">,
-        label: "HUM 150, Fall 2026",
-        termName: "Fall 2026",
-      },
+      source,
       plan: PLAN,
       shift: {
         oldStart: PLAN.oldTerm.start,
@@ -68,6 +75,20 @@ describe("riskPrompt", () => {
     expect(prompt?.title).toBe("HUM 150 already has 14 students and 3 items");
     expect(prompt?.body).toContain("Type HUM 150 to confirm");
     expect(prompt?.code).toBe("HUM 150");
+  });
+  it("names where the content comes from, not the course being filled (#128)", () => {
+    expect(riskPrompt(copyInto(0, 1))?.body).toContain(
+      "The copy adds the content from HUM 150 Film & Society (Fall 2026) to HUM 150, on top of what is there now.",
+    );
+    const fromPackage = copyInto(0, 1, {
+      kind: "cartridge",
+      name: "source-export.imscc",
+      kb: 120,
+      hint: null,
+    });
+    expect(riskPrompt(fromPackage)?.body).toContain(
+      "The copy adds the content from source-export.imscc to HUM 150, on top of what is there now.",
+    );
   });
   it("drops the part that is zero and singularizes one", () => {
     expect(riskPrompt(copyInto(1, 0))?.title).toBe("HUM 150 already has 1 student");
