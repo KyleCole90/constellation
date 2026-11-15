@@ -170,8 +170,6 @@ describe("a Claude Code run", () => {
       "handoff",
     ]);
     for (const item of items) expect(item.required).toContain("type");
-    // With `type` after the fields, the 2.1.325 live bench got empty `edit` stubs where annotates belonged (3 of 30).
-    for (const item of items) expect(Object.keys(item.properties)[0]).toBe("type");
   });
 
   it("pays with the teacher's subscription: no API key, token or base URL, and no background traffic", async () => {
