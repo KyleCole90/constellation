@@ -88,13 +88,25 @@ export function keepFocusOnThePage(doc: Document) {
     heading = doc.querySelector("h1")?.textContent ?? "";
   });
   // Clicking somewhere blank puts focus on the body on purpose. Forget the control, so a later re-render can't pull focus back.
-  doc.addEventListener("focusout", (event) => {
-    const target = event.target;
-    if (target !== ancestors[0] || !(target instanceof Element)) return;
-    queueMicrotask(() => {
-      if (lost() && target.isConnected && !target.matches(":disabled")) ancestors = [];
-    });
-  });
+  doc.addEventListener(
+    "focusout",
+    (event) => {
+      const target = event.target;
+      if (target !== ancestors[0] || !(target instanceof Element)) return;
+      // Focus is on its way to a control the person picked. A blur handler that drops this one mid-move, such as a field
+      // whose commit swaps it for text, must not pull focus elsewhere. Capture runs this before the app's own handlers.
+      // A dialog's controls don't count, so its opener stays the place to land when it closes.
+      const next = event.relatedTarget;
+      if (next instanceof Element && !next.closest('[role="dialog"]')) {
+        ancestors = [];
+        return;
+      }
+      queueMicrotask(() => {
+        if (lost() && target.isConnected && !target.matches(":disabled")) ancestors = [];
+      });
+    },
+    true,
+  );
   new MutationObserver(() => {
     if (!lost()) return;
     if (screen && doc.location.pathname !== screen) {

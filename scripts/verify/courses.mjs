@@ -1439,12 +1439,13 @@ const announcements = async (t) => {
   await t.key("Enter");
   await t.waitFor(
     `document.activeElement?.matches('[aria-label="Title"]') && document.activeElement.value === "" && !document.querySelector(${JSON.stringify(HEADING)})`,
-    "clearing the title asks for one in a plain Title field",
+    "clearing the title asks for one in the heading's own slot",
   );
   await shot(t, "announcement-title-empty");
   t.assert(
-    !(await t.has(`${CARD} [data-card-line]`)),
-    "an untitled announcement's heading already says its kind and course",
+    (await t.text(`${CARD} [data-card-line]`)) === "Announcement to ENG 101",
+    "an untitled announcement still says its kind and course under the Title field",
+    await t.text(`${CARD} [data-card-line]`),
   );
   await t.click("Preview", { within: ACTIONS });
   t.assert(
@@ -1457,12 +1458,12 @@ const announcements = async (t) => {
   await t.waitFor(`!document.querySelector(${JSON.stringify(PANEL)})`, "Escape closes the preview");
   await t.click('[aria-label="Title"]');
   await t.type(original);
-  // A click on the body here lands on the action bar: the committed title folds the Title field away mid-click (#118).
-  await t.key("Tab");
+  await t.click(BODY);
   await t.waitFor(
-    `document.querySelector(${JSON.stringify(HEADING)})?.innerText === ${JSON.stringify(original)} && !document.querySelector('[aria-label="Title"]')`,
-    "a new title goes back to being the heading",
+    `document.querySelector(${JSON.stringify(HEADING)})?.innerText === ${JSON.stringify(original)} && !document.querySelector('[aria-label="Title"]') && document.activeElement?.matches(${JSON.stringify(BODY)})`,
+    "one click in the body commits the new title as the heading and puts the cursor in the body",
   );
+  await shot(t, "announcement-title-committed");
 
   await t.click('[aria-label="Edit title"]');
   await t.type(" (edited)");

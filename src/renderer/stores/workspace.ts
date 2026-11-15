@@ -139,6 +139,7 @@ import {
   selectWorkStages,
   selectCourseGrades,
   selectGradingRefs,
+  selectSetUpCourses,
 } from "./selectors";
 import { createSetupActions, type SetupActions, type SetupOptions } from "./setup";
 import type {
@@ -1057,22 +1058,27 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             patchConnection(school, { syncError: error.kind });
             return false;
           };
-          const courses = await writeback.laneRead(school, () => lms.courses());
-          if (!courses.ok) return fail(courses.error);
+          const listed = await writeback.laneRead(school, () => lms.courses());
+          if (!listed.ok) return fail(listed.error);
           if (gone()) return false;
+          const courses = [
+            ...listed.value,
+            ...selectSetUpCourses(get(), school).filter(
+              (course) => !listed.value.some((c) => c.ref === course.ref),
+            ),
+          ];
           // A course added or removed in the LMS shows now. Its details fill in when the reads below finish.
           const known = get().cache[school];
-          if (known)
-            set({ cache: { ...get().cache, [school]: { ...known, courses: courses.value } } });
+          if (known) set({ cache: { ...get().cache, [school]: { ...known, courses } } });
           const shells = setup.readNewCourses(school, gone);
           const progress = (read: readonly LmsRef<"course">[]) =>
             set({
-              courseReads: { ...get().courseReads, [school]: { courses: courses.value, read } },
+              courseReads: { ...get().courseReads, [school]: { courses, read } },
             });
           progress([]);
           const [perCourse, conversations] = await Promise.all([
             Promise.all(
-              courses.value.map(async (course) => {
+              courses.map(async (course) => {
                 const reads = await Promise.all([
                   writeback.laneRead(school, () => lms.assignments(course.ref)),
                   writeback.laneRead(school, () => lms.students(course.ref)),
@@ -1094,7 +1100,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             readThrough[c.ref] === c.messages.at(-1)?.id ? { ...c, unread: false } : c,
           );
           const cache: { -readonly [K in keyof SchoolCache]: SchoolCache[K][number][] } = {
-            courses: [...courses.value],
+            courses: [...courses],
             assignments: [],
             students: [],
             submissions: [],

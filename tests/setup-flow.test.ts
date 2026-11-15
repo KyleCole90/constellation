@@ -10,6 +10,8 @@ import { draftOf, type TermDates, type TermPlan } from "~/shared/domain/term";
 import {
   selectChangesShown,
   selectCourse,
+  selectCourseAnnouncements,
+  selectCourseOverview,
   selectSetupOffers,
   selectSetupView,
 } from "~/renderer/stores/selectors";
@@ -1040,6 +1042,60 @@ describe("the sync", () => {
   });
 });
 
+describe("a course just set up, unpublished with no students yet (#140)", () => {
+  it("is a course from the copy on: it syncs, lists with the others, and shows what Canvas posted to it", async () => {
+    let rig = await connected();
+    const { course, copy } = await toDraftCopy(rig, LCC, "ENG 101", {
+      course: "ENG 101",
+      term: "Fall 2026",
+    });
+    expect(rig.state().cache[LCC]?.courses.some((c) => c.ref === course)).toBe(false);
+    approve(rig, copy);
+    await send(rig, [copy]);
+    await stageIs(rig, course, "review");
+
+    expect(rig.state().newCourses[LCC]?.some((shell) => shell.ref === course)).toBe(true);
+    expect(rig.state().cache[LCC]?.courses.some((c) => c.ref === course)).toBe(true);
+    expect(selectSetupOffers(rig.state()).some((offer) => offer.shell.ref === course)).toBe(false);
+    const overview = selectCourseOverview(rig.state(), course, rig.state().now());
+    expect(overview?.course.ref).toBe(course);
+    expect(overview?.roster).toEqual([]);
+
+    const id = await rig.clock.run(
+      rig.state().openAnnouncement(setupOf(rig, course).thread, course),
+    );
+    if (!id) throw new Error("Nothing opened.");
+    const edited = rig.state().dispatchUser(id, {
+      type: "edit",
+      by: "you",
+      patch: { kind: "announcement", title: "Welcome", body: "See you in January." },
+      at: nowIso(rig),
+    });
+    if (!edited.ok) throw new Error(edited.error);
+    approve(rig, id);
+    await send(rig, [id]);
+    const posted = () => selectCourseAnnouncements(rig.state(), course).posted.map((a) => a.title);
+    expect(rig.server.announcements(course).map((a) => a.title)).toEqual(["Welcome"]);
+    expect(posted()).toEqual(["Welcome"]);
+
+    rig = await reload(rig);
+    expect(rig.state().cache[LCC]?.courses.some((c) => c.ref === course)).toBe(true);
+    expect(posted()).toEqual(["Welcome"]);
+    expect(selectSetupOffers(rig.state()).some((offer) => offer.shell.ref === course)).toBe(false);
+  });
+
+  it("is still only an offer while its copy is unsent", async () => {
+    const rig = await connected();
+    const { course } = await toDraftCopy(rig, LCC, "ENG 101", {
+      course: "ENG 101",
+      term: "Fall 2026",
+    });
+    expect(await rig.clock.run(rig.state().syncSchool(LCC))).toBe(true);
+    expect(rig.state().cache[LCC]?.courses.some((c) => c.ref === course)).toBe(false);
+    expect(selectSetupOffers(rig.state()).some((offer) => offer.shell.ref === course)).toBe(true);
+  });
+});
+
 describe("the source", () => {
   it("copy sources list the seeded templates first", async () => {
     const rig = await connected();
@@ -1116,7 +1172,7 @@ describe("cancelling a setup", () => {
       course: "ENG 101",
       term: "Fall 2026",
     });
-    expect(offerOf(rig, course)?.cancellable).toBe(false);
+    expect(offerOf(rig, course)).toBeUndefined();
     expect(rig.state().cancelSetup(course)).toMatchObject({
       ok: false,
       error: expect.stringMatching(/already gone to the LMS/),
@@ -1137,7 +1193,7 @@ describe("a course set up but not yet published (#134)", () => {
       course: "ENG 101",
       term: "Fall 2026",
     });
-    expect(rig.state().cache[LCC]?.courses.some((entry) => entry.ref === course)).toBe(false);
+    expect(rig.state().cache[LCC]?.courses.some((entry) => entry.ref === course)).toBe(true);
     const shell = selectCourse(rig.state(), course);
     if (!shell) throw new Error("The shell isn't a course on screen.");
     const thread = rig.state().threadForWork(shell, { kind: "announcement" });

@@ -457,6 +457,66 @@ const stored = (t, expression) =>
     `(() => { const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; return ${expression}; })()`,
   );
 
+const SIDEBAR_LIST = '[data-testid="sidebar-list"]';
+
+/** #140: a course just set up, unpublished with no students, is a course: it lists, shows an Overview, and lists what Canvas posted. */
+const justSetUpCourse = async (t, code, course) => {
+  const ref = JSON.stringify(course);
+  const page = `/courses/${encodeURIComponent(course)}`;
+  if (await t.has('[data-focused] input[aria-label="Title"]')) {
+    await t.click('[data-focused] [aria-label="Title"]');
+    await t.type("Welcome");
+    await t.key("Enter");
+  }
+  await t.click("Preview", { within: '[data-testid="card-actions"]' });
+  await t.click("[data-approve]");
+  await t.waitFor(
+    `document.body.innerText.includes("Undo approval")`,
+    `${code}: the welcome is approved`,
+  );
+  await t.click("Send to", { within: '[data-testid="thread-panel"]' });
+  await t.waitFor(
+    `document.querySelector('[data-testid="sent-banner"]')`,
+    `${code}: the welcome announcement posts before the course is published`,
+    15_000,
+  );
+  const posted = await lms(
+    t,
+    `lms.announcements.filter((a) => a.course === ${ref}).map((a) => a.ref)`,
+  );
+  t.assert(posted.length === 1, `${code}: the fake LMS holds the welcome`, JSON.stringify(posted));
+  const listed = async (when) => {
+    await t.goto(`${page}/announcements`);
+    await t.waitFor(
+      `document.querySelector("[data-posted]")?.dataset.posted === ${JSON.stringify(posted[0])}`,
+      `${code}: Posted lists the welcome from the LMS ${when}`,
+      WAIT,
+    );
+    await t.goto(page);
+    await t.waitFor(
+      `document.querySelector('[data-testid="course-overview"] [data-section="roster"]')?.innerText.includes("No students yet.")`,
+      `${code}: Overview shows the course, with No students yet on the roster, ${when}`,
+      WAIT,
+    );
+    t.assert(
+      await t.has(`[data-testid="course-overview"] [data-course-announcement]`),
+      `${code}: Overview's recent announcements show the welcome ${when}`,
+    );
+    t.assert(
+      await t.has(`${SIDEBAR_LIST} a[href="${page}"]`),
+      `${code}: the sidebar lists it as a course ${when}`,
+    );
+    t.assert(
+      !(await t.has(`[data-testid="setup-offer"][data-course="${course}"]`)),
+      `${code}: it is no longer an offer to set up ${when}`,
+    );
+  };
+  await listed("right after the post");
+  await shot(t, "just-set-up-overview");
+  await t.reload();
+  await listed("after a reload");
+};
+
 /** #134: a link to a sent setup fix stays in setup, and the course drafts its welcome announcement before it is published. */
 const announceBeforePublish = async (t, code, course) => {
   const ref = JSON.stringify(course);
@@ -501,11 +561,7 @@ const announceBeforePublish = async (t, code, course) => {
     `${code}: the thread doesn't say the draft failed`,
   );
   await shot(t, "announcement-before-publish");
-  await t.click("Discard", { within: "[data-focused]" });
-  await t.waitFor(
-    `!document.querySelector('[aria-label="Announcement"]')`,
-    `${code}: the announcement draft is discarded`,
-  );
+  await justSetUpCourse(t, code, course);
   await t.goto(setupPath);
   await t.waitFor(
     `document.querySelector(${JSON.stringify(id("run-check"))})`,
