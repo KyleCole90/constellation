@@ -1,7 +1,7 @@
 import * as v from "valibot";
 
 /**
- * Every usage event the desktop app may send, and every property each may carry (issue #3). Values are only fixed
+ * Every usage event the desktop app may send, and every property each may carry. Values are only fixed
  * words and counts: every free string in this app could be a student's, so none has a slot here. Strict, so an event
  * carrying anything more is rejected rather than trimmed.
  */

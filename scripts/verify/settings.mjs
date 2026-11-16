@@ -999,10 +999,9 @@ const onboarding = async (t, shot) => {
       `document.querySelector('${claudeCode} [data-testid="claude-code-status"]')?.dataset.reading === "${reading}"`,
       tag,
     );
-  t.assert(
-    (await t.text(claudeCode)).includes("Claude, with your Claude Code subscription"),
+  await t.waitFor(
+    `document.querySelector('${claudeCode}')?.innerText.includes("Claude, with your Claude Code subscription")`,
     "the Claude Code option is listed",
-    await t.text(claudeCode),
   );
   await t.signInClaude(false);
   await t.click('input[name="ai-source"][value="claude-code"]');

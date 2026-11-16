@@ -5,7 +5,7 @@ import { AnalyticsEventSchema, type AnalyticsEvent } from "../src/shared/analyti
 
 import { telemetryMain } from "./fixtures/telemetry-main";
 
-/** What a teacher's Mac holds and PostHog must never see (issue #3, Never sent). */
+/** What a teacher's Mac holds and PostHog must never see. */
 const PLANTED = {
   name: "Maria Garcia",
   id: "student-48213",
