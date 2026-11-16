@@ -24,6 +24,12 @@ const NODE_ONLY_IN_MAIN =
   "Node builtins belong to src/main. src/shared is pure code both processes run, and the renderer gets no Node access.";
 const IPC_THROUGH_THE_MAP =
   "`ipcMain` belongs to src/main/index.ts and `ipcRenderer` to src/preload/index.ts. Add a channel to src/shared/ipc.ts instead.";
+// Each override that sets `no-restricted-imports` lists this again: an override replaces the rule's options.
+const NO_POSTHOG_SDK = {
+  group: ["posthog-*", "posthog-*/**", "@posthog/*"],
+  message:
+    "Analytics go through src/main/telemetry.ts's batch POST, so only its typed events and scrubbed crash reports leave the app. No PostHog SDK.",
+};
 const RENDERER_IS_UNTRUSTED =
   "The renderer is untrusted and gets no network or Node access. Ask main over IPC.";
 
@@ -104,6 +110,7 @@ export default defineConfig({
     rules: {
       "constellation/no-vp-server-spawn": "error",
       "constellation/process-boundary": "error",
+      "eslint/no-restricted-imports": ["error", { patterns: [NO_POSTHOG_SDK] }],
       "typescript/no-explicit-any": "error",
       "typescript/switch-exhaustiveness-check": "error",
       "typescript/no-unnecessary-type-assertion": "error",
@@ -176,6 +183,7 @@ export default defineConfig({
                 { group: ["electron/*"], message: ELECTRON_ONLY_IN_MAIN },
                 { group: ["@anthropic-ai/*"], message: ANTHROPIC_ONLY_IN_MAIN },
                 { group: ["node:*", "node:*/**"], message: NODE_ONLY_IN_MAIN },
+                NO_POSTHOG_SDK,
               ],
             },
           ],
@@ -195,6 +203,7 @@ export default defineConfig({
                   message: IPC_THROUGH_THE_MAP,
                 },
               ],
+              patterns: [NO_POSTHOG_SDK],
             },
           ],
         },

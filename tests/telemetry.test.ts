@@ -5,6 +5,8 @@ import { pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vite-plus/test";
 
+import * as v from "valibot";
+
 import { createTelemetry, type TelemetryOptions } from "../src/main/telemetry";
 import { errorReport } from "../src/shared/ipc";
 
@@ -30,23 +32,37 @@ const STUDENT = {
 };
 const PLANTED = Object.values(STUDENT);
 
-const rig = (overrides: Partial<TelemetryOptions> = {}) => {
+type Saved = ReturnType<TelemetryOptions["saved"]["read"]>;
+
+/**
+ * Telemetry over an in-memory `telemetry.json`. Each POST takes the next of `answers`, a status or a thrown network
+ * error, then 200 once they run out. The timer never fires in a test, so only a full queue or `flush` sends.
+ */
+const rig = (overrides: Partial<TelemetryOptions> = {}, answers: (number | Error)[] = []) => {
   const sent: { url: string; body: string }[] = [];
-  let enabled = true;
+  let saved: Saved = { enabled: true };
   const telemetry = createTelemetry({
     key: "phc_test",
-    appRoot: APP_ROOT,
     host: "https://eu.i.posthog.com/",
+    appRoot: APP_ROOT,
     env: undefined,
     offline: false,
-    choice: { read: () => enabled, write: (on) => (enabled = on) },
+    saved: { read: () => saved, write: (next) => (saved = next) },
     appVersion: "0.0.1-alpha.1",
     os: "darwin arm64",
     osVersion: "15.1",
-    send: async (url, body) => void sent.push({ url, body }),
+    flushMs: 3_600_000,
+    send: async (url, body) => {
+      sent.push({ url, body });
+      const answer = answers.shift() ?? 200;
+      if (answer instanceof Error) throw answer;
+      return answer;
+    },
     ...overrides,
   });
-  return { telemetry, sent };
+  /** Every event PostHog was handed, batch by batch, retries included. */
+  const events = () => sent.flatMap((request) => batchOf(request));
+  return { telemetry, sent, events, saved: () => saved };
 };
 
 const expectNoStudentData = (body: string) => {
@@ -98,7 +114,21 @@ const RENDERER_STACK = [
   `${STUDENT.grade} and ${STUDENT.home}`,
 ].join("\n");
 
-const bodyOf = (request: { body: string } | undefined): unknown => JSON.parse(request?.body ?? "");
+const BatchSchema = v.strictObject({
+  api_key: v.string(),
+  batch: v.array(
+    v.strictObject({
+      uuid: v.pipe(v.string(), v.uuid()),
+      event: v.string(),
+      timestamp: v.pipe(v.string(), v.isoTimestamp()),
+      distinct_id: v.string(),
+      properties: v.record(v.string(), v.unknown()),
+    }),
+  ),
+});
+const batchOf = (request: { body: string } | undefined) =>
+  v.parse(BatchSchema, JSON.parse(request?.body ?? "")).batch;
+const bodyOf = (request: { body: string } | undefined): unknown => batchOf(request)[0];
 
 describe("a crash report", () => {
   it("carries no student data from a main error's message, name or function name", async () => {
@@ -135,10 +165,10 @@ describe("a crash report", () => {
     const { telemetry, sent } = rig();
     await telemetry.report("TypeError", RENDERER_STACK, "renderer");
     const request = sent[0];
-    expect(request?.url).toBe("https://eu.i.posthog.com/i/v0/e/");
+    expect(request?.url).toBe("https://eu.i.posthog.com/batch/");
+    expect(JSON.parse(request?.body ?? "")).toMatchObject({ api_key: "phc_test" });
     const body = bodyOf(request);
     expect(body).toMatchObject({
-      api_key: "phc_test",
       event: "$exception",
       properties: {
         $exception_list: [{ type: "TypeError", value: "(message withheld)" }],
@@ -202,17 +232,20 @@ describe("a crash report", () => {
 });
 
 describe("crash reports are sent", () => {
-  it("only when the build has a key, the env allows it, and the teacher hasn't opted out", async () => {
+  it("only when the build has a key, the env allows it, the launch isn't offline, and the teacher hasn't opted out", async () => {
     for (const overrides of [
       { key: "" },
       { env: "false" },
       { env: " FALSE " },
       { offline: true },
     ] satisfies Partial<TelemetryOptions>[]) {
-      const { telemetry, sent } = rig(overrides);
+      const { telemetry, sent, saved } = rig(overrides);
       expect(telemetry.status().available).toBe(false);
       await telemetry.report("TypeError", RENDERER_STACK, "renderer");
+      telemetry.track({ event: "app_opened" });
+      await telemetry.flush();
       expect(sent).toEqual([]);
+      expect(saved().installId).toBeUndefined();
     }
     const { telemetry, sent } = rig({ env: "true" });
     expect(telemetry.status()).toEqual({ enabled: true, available: true });
@@ -226,10 +259,117 @@ describe("crash reports are sent", () => {
   });
 
   it("at most 25 times a launch, and a failed send never throws", async () => {
-    const { telemetry, sent } = rig();
+    const { telemetry, events } = rig();
     for (let i = 0; i < 30; i += 1) await telemetry.report("TypeError", "", "main");
-    expect(sent).toHaveLength(25);
+    expect(events()).toHaveLength(25);
     const failing = rig({ send: async () => Promise.reject(new Error("offline")) });
     await expect(failing.telemetry.report("TypeError", "", "main")).resolves.toBeUndefined();
+  });
+});
+
+const opened = { event: "app_opened" } as const;
+
+describe("usage events", () => {
+  it("each carry their own uuid, this Mac's random id, the app version and no person or location", async () => {
+    const { telemetry, sent, events, saved } = rig();
+    telemetry.track({ event: "draft_requested", kind: "grade" });
+    await telemetry.report("TypeError", "", "main");
+    const [draft, crash] = events();
+    expect(sent).toHaveLength(1);
+    expect(draft).toEqual({
+      uuid: expect.any(String),
+      event: "draft_requested",
+      timestamp: expect.any(String),
+      distinct_id: saved().installId,
+      properties: {
+        kind: "grade",
+        $lib: "constellation-desktop",
+        $lib_version: "0.0.1-alpha.1",
+        $process_person_profile: false,
+        $geoip_disable: true,
+      },
+    });
+    expect(crash?.distinct_id).toBe(saved().installId);
+    expect(crash?.uuid).not.toBe(draft?.uuid);
+  });
+
+  it("go in one POST once 20 wait, and the queue holds at most 200 while PostHog is down", async () => {
+    const { telemetry, sent, events } = rig({}, [503]);
+    for (let i = 0; i < 19; i += 1) telemetry.track(opened);
+    expect(sent).toEqual([]);
+    for (let i = 0; i < 231; i += 1) telemetry.track(opened);
+    expect(sent).toHaveLength(1);
+    await telemetry.flush();
+    await telemetry.flush();
+    expect(sent).toHaveLength(2);
+    expect(batchOf(sent[0])).toHaveLength(20);
+    expect(batchOf(sent[1])).toHaveLength(200);
+    expect(batchOf(sent[1]).slice(0, 20)).toEqual(batchOf(sent[0]));
+    expect(new Set(events().map((event) => event.uuid)).size).toBe(200);
+  });
+
+  it("are sent again with the same uuids after a 429, a 5xx or a network error, and dropped on any other status", async () => {
+    const { telemetry, sent, events } = rig({}, [503, 429, new Error("offline"), 200, 400]);
+    telemetry.track(opened);
+    telemetry.track({ event: "onboarding_finished" });
+    for (let i = 0; i < 4; i += 1) await telemetry.flush();
+    expect(sent.map((request) => batchOf(request).map((event) => event.uuid))).toEqual(
+      Array.from({ length: 4 }, () => batchOf(sent[0]).map((event) => event.uuid)),
+    );
+    await telemetry.flush();
+    expect(sent).toHaveLength(4);
+    telemetry.track(opened);
+    await telemetry.flush();
+    await telemetry.flush();
+    expect(sent).toHaveLength(5);
+    expect(events()).toHaveLength(9);
+  });
+
+  it("send one batch at a time", async () => {
+    let answer = (_status: number) => {};
+    const { telemetry, sent } = rig({
+      send: async (url, body) => {
+        sent.push({ url, body });
+        return new Promise<number>((resolve) => (answer = resolve));
+      },
+    });
+    telemetry.track(opened);
+    const first = telemetry.flush();
+    telemetry.track(opened);
+    expect(telemetry.flush()).toBe(first);
+    expect(sent).toHaveLength(1);
+    answer(200);
+    await first;
+    const second = telemetry.flush();
+    answer(200);
+    await second;
+    expect(sent.map((request) => batchOf(request).length)).toEqual([1, 1]);
+  });
+
+  it("stop at once, queue and all, when the teacher opts out, and a batch out at the time isn't sent again", async () => {
+    let answer = (_status: number) => {};
+    const { telemetry, sent, saved } = rig({
+      send: async (url, body) => {
+        sent.push({ url, body });
+        return new Promise<number>((resolve) => (answer = resolve));
+      },
+    });
+    telemetry.track(opened);
+    const out = telemetry.flush();
+    telemetry.track({ event: "onboarding_finished" });
+    telemetry.choose(false);
+    expect(saved().enabled).toBe(false);
+    answer(503);
+    await out;
+    telemetry.track(opened);
+    await telemetry.report("TypeError", "", "main");
+    await telemetry.flush();
+    expect(sent).toHaveLength(1);
+    telemetry.choose(true);
+    telemetry.track({ event: "draft_requested", kind: "reply" });
+    const back = telemetry.flush();
+    answer(200);
+    await back;
+    expect(batchOf(sent[1]).map((event) => event.event)).toEqual(["draft_requested"]);
   });
 });

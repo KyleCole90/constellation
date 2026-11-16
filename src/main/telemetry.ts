@@ -1,16 +1,20 @@
 /**
- * Crash reports to PostHog, sent from main only. A report carries an error's
- * type, its stack frames (file, line, column), the app version and the OS. It never carries message text:
- * every value counts as student data, so anything the scrubber can't prove is ours is dropped.
+ * Usage events and crash reports to PostHog, sent from main only.
+ * A usage event is one of the fixed shapes in `src/shared/analytics.ts`: fixed words and counts, never free text. A
+ * crash report carries an error's type, its stack frames (file, line, column), the app version and the OS. It never
+ * carries message text: every value counts as student data, so anything the scrubber can't prove is ours is dropped.
  *
- * This is one POST to PostHog's capture endpoint, not posthog-node, so nothing but the scrubbed report can ride along:
- * no person profile, no GeoIP, no autocapture, no breadcrumbs.
+ * Delivery is one POST to PostHog's batch endpoint, not posthog-node, so nothing but these events can ride along: no
+ * person profile, no GeoIP, no autocapture, no breadcrumbs.
  */
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import * as v from "valibot";
+
+import { AnalyticsEventSchema, type AnalyticsEvent } from "../shared/analytics";
 import { MAX_FRAMES } from "../shared/ipc";
 
 /**
@@ -113,70 +117,151 @@ const scrub = (type: string, stack: string, source: Source, appRoot: string): Sc
   };
 };
 
-/** The env var that turns reports off whatever the teacher chose. */
+/** The env var that turns sending off whatever the teacher chose. */
 const isEnvOff = (value: string | undefined) => value?.trim().toLowerCase() === "false";
 
-/** A launch sends at most this many, so an error in a render loop can't flood PostHog. */
+/** A launch sends at most this many crash reports, so an error in a render loop can't flood PostHog. */
 const PER_LAUNCH = 25;
+/** Events held while PostHog can't be reached. Past this, new ones are dropped. */
+const QUEUE_CAP = 200;
+/** A queue this long is sent without waiting for the timer. */
+const BATCH_SIZE = 20;
+
+/** `telemetry.json`: the teacher's choice, and the random id every event names in place of a person. */
+export const TelemetrySavedSchema = v.strictObject({
+  enabled: v.boolean(),
+  installId: v.optional(v.pipe(v.string(), v.uuid())),
+});
+type Saved = v.InferOutput<typeof TelemetrySavedSchema>;
+
+interface Captured {
+  readonly uuid: string;
+  readonly event: string;
+  readonly timestamp: string;
+  readonly distinct_id: string;
+  readonly properties: Readonly<Record<string, unknown>>;
+}
 
 export interface TelemetryOptions {
   /** PostHog's project key, baked in at build time. None means a build that sends nothing. */
   readonly key: string;
+  readonly host: string;
   /** The folder holding this app's `out/`. Only a file that exists under it can name a frame. */
   readonly appRoot: string;
-  readonly host: string;
-  /** `CONSTELLATION_TELEMETRY_ENABLED`; `false` turns reports off. */
+  /** `CONSTELLATION_TELEMETRY_ENABLED`; `false` turns sending off. */
   readonly env: string | undefined;
-  /** True when nothing may leave the app at all, as when verify runs it. */
+  /** True when nothing may leave the app at all, as in every unpackaged run but verify's sink. */
   readonly offline: boolean;
-  /** The teacher's choice, on until they turn it off. */
-  readonly choice: { read(): boolean; write(enabled: boolean): void };
+  /** `telemetry.json`, on until the teacher turns it off. */
+  readonly saved: { read(): Saved; write(saved: Saved): void };
   readonly appVersion: string;
   readonly os: string;
   readonly osVersion: string;
-  readonly send: (url: string, body: string) => Promise<unknown>;
+  /** How often the queue is sent. */
+  readonly flushMs: number;
+  /** POSTs a body and answers its HTTP status. */
+  readonly send: (url: string, body: string) => Promise<number>;
 }
 
 export const createTelemetry = (options: TelemetryOptions) => {
-  const available = options.key !== "" && !isEnvOff(options.env) && !options.offline;
-  // A fresh id each launch, so no report ties to an earlier one or to a person.
-  const launch = crypto.randomUUID();
-  let sent = 0;
-  return {
-    /** Whether the teacher has reports on, and whether this build and launch can send any. */
-    status: () => ({ enabled: options.choice.read(), available }),
-    choose: (enabled: boolean) => options.choice.write(enabled),
-    /** Scrubs and sends one error. Never throws: a report that can't be sent is dropped. */
-    report: async (type: string, stack: string, source: Source): Promise<void> => {
-      if (!available || sent >= PER_LAUNCH || !options.choice.read()) return;
-      sent += 1;
-      const { type: kind, frames } = scrub(type, stack, source, options.appRoot);
-      const body = {
-        api_key: options.key,
-        event: "$exception",
-        distinct_id: launch,
+  const available = options.key !== "" && !options.offline && !isEnvOff(options.env);
+  const batchUrl = `${options.host.replace(/\/+$/, "")}/batch/`;
+  let saved = options.saved.read();
+  let queue: readonly Captured[] = [];
+  let inFlight: Promise<void> | null = null;
+  let reports = 0;
+  const sending = () => available && saved.enabled;
+
+  /** Written on the first event, so a launch that never sends leaves no id behind. */
+  const installId = (): string => {
+    if (saved.installId) return saved.installId;
+    const id = crypto.randomUUID();
+    saved = { ...saved, installId: id };
+    options.saved.write(saved);
+    return id;
+  };
+
+  const enqueue = (event: string, properties: Readonly<Record<string, unknown>>) => {
+    if (!sending() || queue.length >= QUEUE_CAP) return;
+    queue = [
+      ...queue,
+      {
+        uuid: crypto.randomUUID(),
+        event,
+        timestamp: new Date().toISOString(),
+        distinct_id: installId(),
         properties: {
-          $exception_list: [
-            {
-              type: kind,
-              value: "(message withheld)",
-              mechanism: { handled: false, synthetic: false },
-              stacktrace: { type: "raw", frames },
-            },
-          ],
+          ...properties,
+          $lib: "constellation-desktop",
+          $lib_version: options.appVersion,
           $process_person_profile: false,
           $geoip_disable: true,
-          source,
-          app_version: options.appVersion,
-          os: options.os,
-          os_version: options.osVersion,
         },
-      };
-      try {
-        await options.send(`${options.host.replace(/\/+$/, "")}/i/v0/e/`, JSON.stringify(body));
-      } catch {
-        // Nowhere to report a failed report.
-      }
+      },
+    ];
+    if (queue.length >= BATCH_SIZE) void flush();
+  };
+
+  /** Sends the queue in one POST, one at a time. A batch PostHog may take later goes back to the front. */
+  const flush = (): Promise<void> => {
+    if (inFlight) return inFlight;
+    if (!sending()) queue = [];
+    if (queue.length === 0) return Promise.resolve();
+    const batch = queue;
+    queue = [];
+    inFlight = (async () => {
+      const status = await options
+        .send(batchUrl, JSON.stringify({ api_key: options.key, batch }))
+        .catch(() => null);
+      if ((status === null || status === 429 || status >= 500) && sending())
+        queue = [...batch, ...queue].slice(0, QUEUE_CAP);
+    })().finally(() => {
+      inFlight = null;
+    });
+    return inFlight;
+  };
+
+  const timer = setInterval(() => void flush(), options.flushMs);
+  timer.unref();
+
+  return {
+    /** Whether the teacher has sending on, and whether this launch can send anything. */
+    status: () => ({ enabled: saved.enabled, available }),
+    /** Turning it off drops whatever is queued, so nothing more leaves. */
+    choose: (enabled: boolean) => {
+      saved = { ...saved, enabled };
+      options.saved.write(saved);
+      if (!enabled) queue = [];
     },
+    /** Queues one usage event. Its properties are what the schema lets through, so nothing unparsed rides along. */
+    track: (event: AnalyticsEvent) => {
+      const parsed = v.safeParse(AnalyticsEventSchema, event);
+      if (!parsed.success) return;
+      const { event: name, ...properties } = parsed.output;
+      enqueue(name, properties);
+    },
+    /** Scrubs one error and sends it at once. Never throws: a report that can't be sent is dropped. */
+    report: async (type: string, stack: string, source: Source): Promise<void> => {
+      if (!sending() || reports >= PER_LAUNCH) return;
+      reports += 1;
+      const { type: kind, frames } = scrub(type, stack, source, options.appRoot);
+      enqueue("$exception", {
+        $exception_list: [
+          {
+            type: kind,
+            value: "(message withheld)",
+            mechanism: { handled: false, synthetic: false },
+            stacktrace: { type: "raw", frames },
+          },
+        ],
+        source,
+        app_version: options.appVersion,
+        os: options.os,
+        os_version: options.osVersion,
+      });
+      await flush();
+    },
+    flush,
+    stop: () => clearInterval(timer),
   };
 };

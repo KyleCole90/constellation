@@ -32,6 +32,7 @@ import {
 } from "~/shared/domain/blank";
 import {
   FIELD_LABEL,
+  editedByYou,
   errorWords,
   fieldText,
   fieldsOf,
@@ -78,6 +79,7 @@ import {
   type SubmissionBody,
 } from "~/shared/domain/lms";
 import type { SetupLive } from "~/shared/domain/setup";
+import type { AnalyticsEvent, DraftKind } from "~/shared/analytics";
 import type { AgentSource, Bridge, ClaudeCodeStatus } from "~/shared/ipc";
 import { workName } from "~/shared/domain/workName";
 import { FakeCanvasServer, type StorageLike } from "~/shared/providers/fake-canvas/server";
@@ -348,6 +350,8 @@ export interface WorkspaceDeps {
     source(source: AgentSource): Promise<void>;
     claudeCode(): Promise<ClaudeCodeStatus>;
   };
+  /** Hands main one usage event, which it sends only if the teacher allows it. The web demo has none. */
+  track?(event: AnalyticsEvent): void;
 }
 
 export type WorkspaceStore = StoreApi<WorkspaceState> & { syncFromStorage(): void };
@@ -387,6 +391,19 @@ const AGENT_SOURCE: Readonly<Record<AiSource, AgentSource>> = {
   "claude-code": "claude-code",
 };
 const STEPS: readonly unknown[] = ["welcome", "setup", "done"] satisfies readonly OnboardingStep[];
+const STEP_ORDER: readonly OnboardingStep[] = ["welcome", "setup", "done"];
+/** Moving past a step completes it, so `STEP_ORDER` up to `done`. */
+const COMPLETABLE = ["welcome", "setup"] as const;
+/** The changes a usage event may name a draft of. The rest are never drafted from a row. */
+const DRAFT_KIND: Readonly<Record<ChangeContent["kind"], DraftKind | null>> = {
+  grade: "grade",
+  reply: "reply",
+  message: "message",
+  announcement: "announcement",
+  "course-copy": null,
+  "text-fix": null,
+  "item-set": null,
+};
 // Records, so the compiler fails here when a variant is added and a save holding it still loads.
 const CHANGE_KINDS: Readonly<Record<ChangeContent["kind"], true>> = {
   grade: true,
@@ -733,6 +750,8 @@ interface AgentRun {
   started: Promise<unknown>[];
   /** The teacher wrote this run's request in the composer. Only such a run may set guidance, so neither a submission a draft reads nor Claude's own chip text can plant one. */
   typed: boolean;
+  /** What a row's Draft button asked for, so a refused or limited run reports the draft's fate. Null for any other run. */
+  draft: DraftKind | null;
 }
 const withoutReplies = (message: ThreadMessage): ThreadMessage => {
   if (message.type !== "agent") return message;
@@ -751,6 +770,7 @@ const newRun = (
   said: [],
   failed: false,
   started: [],
+  draft: null,
 });
 
 /** "Fill the rest" promises the teacher's entries stay, so Claude's edit keeps only what is still blank. */
@@ -937,6 +957,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
   // Main starts with no source and never falls back, so it hears the teacher's choice on load and on every change.
   const tellMain = (source: AiSource) =>
     deps.agentMain?.source(AGENT_SOURCE[source]).catch(() => {}) ?? Promise.resolve();
+  const track = (event: AnalyticsEvent) => deps.track?.(event);
 
   // Set just below, once the store exists. Actions only run after that.
   let writeback: Writeback;
@@ -1362,6 +1383,13 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           set({ blanks, ...withoutFocus(get(), (focus) => gone.has(focus)) });
         };
 
+        /** The teacher's own choice of source. Boot's repair and another window's change set `aiSource` without it. */
+        const chooseSource = (to: AiSource) => {
+          const from = get().aiSource;
+          set({ aiSource: to });
+          if (from !== to) track({ event: "ai_source_changed", from, to });
+        };
+
         const awaitingReply = (course: LmsRef<"course">) =>
           selectInboxRows(get())
             .filter((row) => row.course.ref === course && awaitsYou(row))
@@ -1510,6 +1538,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
 
         const sinkFor = (thread: ThreadId, run: AgentRun, fill: boolean): AgentSink => {
           let told = false;
+          let refused = false;
           return {
             effect: async (effect) => {
               switch (effect.type) {
@@ -1532,6 +1561,8 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                   });
                 case "limited": {
                   run.failed = true;
+                  if (run.draft)
+                    track({ event: "draft_outcome", kind: run.draft, outcome: "limited" });
                   const { limitHits } = get();
                   set({ limitHits: { ...limitHits, [thread]: (limitHits[thread] ?? 0) + 1 } });
                   return say(thread, run, { type: "declined", text: effect.text, at: nowIso() });
@@ -1577,6 +1608,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             },
             refuse: (violation, effect) => {
               run.failed = true;
+              if (run.draft && !refused)
+                track({ event: "draft_outcome", kind: run.draft, outcome: "invalid" });
+              refused = true;
               logDropped(thread, `${effect ?? "run"}: ${describeViolation(violation)}`);
               const text = effect === null ? STOPPED_PARTWAY : FAILED_ASK[effect];
               if (!text || told) return;
@@ -1800,9 +1834,19 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           const said = selectUndrafted(get(), narrow.submissions?.[0] ?? null)?.said;
           const history: AgentInput["thread"]["history"] =
             content.kind === "message" && said ? [{ role: "agent", text: said }] : [];
+          const drafting = get().aiOn() && fill === "draft";
+          const draft = DRAFT_KIND[content.kind];
+          if (drafting && draft) track({ event: "draft_requested", kind: draft });
           const run = (
-            get().aiOn() && fill === "draft"
-              ? runThreadAgent(thread, request, narrow, newRun(null, []), content.target, history)
+            drafting
+              ? runThreadAgent(
+                  thread,
+                  request,
+                  narrow,
+                  { ...newRun(null, []), draft },
+                  content.target,
+                  history,
+                )
               : openBlank(thread, blank, fill === "by-hand")
           )
             .then(() => existingChange(content, submittedAt)?.id ?? blankOn(content)?.id ?? null)
@@ -2013,25 +2057,25 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
 
           addAiKey: async (secret) => {
             await deps.vault.enroll("ai-key", { kind: "bearer", token: secret });
-            set({ aiSource: "key" });
+            chooseSource("key");
             dropBlanks();
           },
 
           chooseOnDeviceModel: async () => {
             await deps.vault.forget("ai-key");
-            set({ aiSource: "on-device" });
+            chooseSource("on-device");
             dropBlanks();
           },
 
           chooseClaudeCode: async () => {
             await deps.vault.forget("ai-key");
-            set({ aiSource: "claude-code" });
+            chooseSource("claude-code");
             dropBlanks();
           },
 
           turnOffAi: async () => {
             await deps.vault.forget("ai-key");
-            set({ aiSource: "none" });
+            chooseSource("none");
           },
 
           claudeCodeStatus: async () => {
@@ -2310,7 +2354,21 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                 return { ok: true, value: form };
               }
             }
-            if (!blank || saved) return ledger.commit(id, event);
+            if (!blank || saved) {
+              const result = ledger.commit(id, event);
+              const kind = saved && DRAFT_KIND[saved.content.kind];
+              if (result.ok && kind && saved.activity[0]?.actor === "agent") {
+                if (event.type === "approve")
+                  track({
+                    event: "draft_outcome",
+                    kind,
+                    outcome: editedByYou(result.value) ? "edited" : "accepted",
+                  });
+                if (event.type === "discard")
+                  track({ event: "draft_outcome", kind, outcome: "discarded" });
+              }
+              return result;
+            }
             if (event.type !== "edit") return { ok: false, error: "not-editable" };
             const { [id]: _promoted, ...blanks } = get().blanks;
             const open = openOn(blank.content);
@@ -2353,6 +2411,13 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               });
               return ids.map((id) => ({ id, refused: "not-sendable" }));
             }
+            const posted = results.filter(
+              (result) =>
+                "state" in result &&
+                result.state === "sent" &&
+                get().changes[result.id]?.content.kind === "grade",
+            ).length;
+            if (posted > 0) track({ event: "grade_posted", count: posted });
             const touched = new Set(
               results.flatMap((result) => {
                 const record = get().changes[result.id];
@@ -2425,7 +2490,15 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           demoHosts: () => backend.demo?.hosts ?? NO_HOSTS,
 
           laneStatus: (school) => writeback.laneStatus(school),
-          setOnboarding: (step) => set({ onboarding: step }),
+          setOnboarding: (step) => {
+            const from = STEP_ORDER.indexOf(get().onboarding);
+            const to = STEP_ORDER.indexOf(step);
+            set({ onboarding: step });
+            const ai_source = get().aiSource;
+            for (const done of COMPLETABLE.slice(from, Math.max(from, to)))
+              track({ event: "onboarding_step_completed", step: done, ai_source });
+            if (step === "done" && from < to) track({ event: "onboarding_finished" });
+          },
           setPrefs: (patch) => set({ prefs: { ...get().prefs, ...patch } }),
           setThreadUi: (thread, patch) => {
             const { prefs } = get();
@@ -2632,6 +2705,8 @@ const browserDeps = (): WorkspaceDeps => ({
     ? {
         connectivity: { online: isOnline, subscribe: onConnectivity },
         agentMain: agentMainOf(desktopBridge),
+        track: (event: AnalyticsEvent) =>
+          void desktopBridge?.invoke("analytics.track", event).catch(() => {}),
       }
     : {}),
   // Verify and the web demo run the fake LMS, which changes only when a test changes it, so no timer races their steps.

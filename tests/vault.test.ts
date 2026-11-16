@@ -150,6 +150,7 @@ const bridged = () => {
     {
       "error.report": async () => {},
       "telemetry.status": async () => ({ enabled: true, available: false }),
+      "analytics.track": async () => {},
       "telemetry.choose": async () => {},
       "vault.enroll": ({ key, token }) => main.enroll(key, token),
       "vault.keys": async () => main.keys(),

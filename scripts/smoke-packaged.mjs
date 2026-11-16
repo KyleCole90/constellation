@@ -54,10 +54,13 @@ const answers = async (port) => {
   }
 };
 
-/** Launches the app with its own user-data folder, so it never reads or locks a real install's data or Keychain item. */
+/**
+ * Launches the app with its own user-data folder, so it never reads or locks a real install's data or Keychain item,
+ * and with telemetry off, so a build made with a PostHog key still sends nothing from here.
+ */
 const launch = async (args) => {
   const userData = await mkdtemp(join(tmpdir(), "constellation-smoke-"));
-  const env = { ...process.env };
+  const env = { ...process.env, CONSTELLATION_TELEMETRY_ENABLED: "false" };
   delete env.ELECTRON_RUN_AS_NODE;
   const child = spawn(BINARY, [`--user-data-dir=${userData}`, "--use-mock-keychain", ...args], {
     env,

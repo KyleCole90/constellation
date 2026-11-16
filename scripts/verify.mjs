@@ -103,6 +103,8 @@ const { ELECTRON_RUN_AS_NODE: _, ...APP_ENV } = {
 const pickedPackageFile = (profile) => join(profile, "picked-package.txt");
 /** Whether verify's fake `claude` reads as signed in, in this launch. It starts signed out. */
 const fakeClaudeFile = (profile) => join(profile, "fake-claude.txt");
+/** Where main writes each telemetry batch in this launch, one JSON line each, in place of PostHog. */
+const telemetrySinkFile = (profile) => join(profile, "telemetry.jsonl");
 const FAKE_CLAUDE = join(ROOT, "scripts/verify/fake-claude.mjs");
 const launch = (port, profile, origin) =>
   WEB
@@ -136,6 +138,7 @@ const launch = (port, profile, origin) =>
             CONSTELLATION_PICKED_PACKAGE: pickedPackageFile(profile),
             CONSTELLATION_CLAUDE: FAKE_CLAUDE,
             CONSTELLATION_FAKE_CLAUDE_STATE: fakeClaudeFile(profile),
+            CONSTELLATION_TELEMETRY_SINK: telemetrySinkFile(profile),
           },
         },
       );
@@ -398,6 +401,9 @@ const main = async () => {
         WEB
           ? Promise.resolve("{}")
           : readFile(join(profile, "vault.json"), "utf8").catch(() => "{}"),
+      /** The batches main has sent this launch, one JSON line each: `""` before the first, and in the web demo. */
+      telemetrySink: () =>
+        WEB ? Promise.resolve("") : readFile(telemetrySinkFile(profile), "utf8").catch(() => ""),
       shots: SHOTS,
       /** Makes main's "Choose a .imscc file" pick `path` next, or cancel with null. */
       pickPackage: (path) => writeFile(pickedPackageFile(profile), path ?? ""),

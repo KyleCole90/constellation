@@ -36,10 +36,10 @@ interface Status {
 }
 
 /**
- * The crash-report choice main keeps, which the setup page and Settings both show and change. Null until main
- * answers, and always in the web demo, which sends nothing.
+ * The usage-data and crash-report choice main keeps, which the setup page and Settings both show and change. Null
+ * until main answers, and always in the web demo, which sends nothing.
  */
-const createCrashReports = (bridge: Bridge | undefined) => {
+const createTelemetryChoice = (bridge: Bridge | undefined) => {
   let status: Status | null = null;
   const listeners = new Set<() => void>();
   const set = (next: Status) => {
@@ -63,40 +63,45 @@ const createCrashReports = (bridge: Bridge | undefined) => {
   };
 };
 
-export const crashReports = createCrashReports(desktopBridge);
+export const telemetryChoice = createTelemetryChoice(desktopBridge);
 
-const useCrashReports = (): Status | null => {
-  const status = useSyncExternalStore(crashReports.subscribe, crashReports.get, crashReports.get);
-  useEffect(() => void crashReports.load(), []);
+const useTelemetryChoice = (): Status | null => {
+  const status = useSyncExternalStore(
+    telemetryChoice.subscribe,
+    telemetryChoice.get,
+    telemetryChoice.get,
+  );
+  useEffect(() => void telemetryChoice.load(), []);
   return status;
 };
 
 /**
- * The opt-out, on by default. A copy of the app that can't send reports (no build key, or turned off in its
+ * The one opt-out, on by default. A copy of the app that can't send (no build key, not packaged, or turned off in its
  * environment) says so instead of offering a choice that does nothing. Hidden in the web demo, which has nothing to turn off.
  */
-function CrashReportsToggle() {
-  const status = useCrashReports();
+function TelemetryToggle() {
+  const status = useTelemetryChoice();
   if (!status) return null;
   if (!status.available)
     return (
-      <p data-testid="crash-reports" className="text-meta text-muted-foreground">
-        Crash reports are off in this copy of the app, so none are sent.
+      <p data-testid="usage-data" className="text-meta text-muted-foreground">
+        Usage data and crash reports are off in this copy of the app, so nothing is sent.
       </p>
     );
   return (
-    <label data-testid="crash-reports" className="flex cursor-pointer items-start gap-3">
+    <label data-testid="usage-data" className="flex cursor-pointer items-start gap-3">
       <input
         type="checkbox"
-        className="mt-1 accent-primary"
+        className="mt-1 size-3.5 flex-none accent-primary"
         checked={status.enabled}
-        onChange={(event) => void crashReports.choose(event.target.checked)}
+        onChange={(event) => void telemetryChoice.choose(event.target.checked)}
       />
       <span className="flex flex-col">
-        <span className="text-body font-medium">Send crash reports</span>
+        <span className="text-body font-medium">Send usage data and crash reports</span>
         <span className="text-meta text-muted-foreground">
-          Only an error's type and where in the app's code it happened, the app version and the
-          macOS version. Never its message or anything you typed.
+          Which parts of the app you use, and for an error, its type and where in the app's code it
+          happened. Never student data or anything you typed. The privacy notice lists exactly what
+          is sent.
         </span>
       </span>
     </label>
@@ -105,7 +110,7 @@ function CrashReportsToggle() {
 
 /** The setup page's privacy step: the opt-out, then the whole notice behind a disclosure. */
 export function SetupPrivacy({ title }: { title: ReactNode }) {
-  const sends = useCrashReports()?.available === true;
+  const sends = useTelemetryChoice()?.available === true;
   return (
     <section data-testid="setup-privacy" className="flex flex-col gap-3">
       {title}
@@ -113,10 +118,10 @@ export function SetupPrivacy({ title }: { title: ReactNode }) {
         {!desktopBridge
           ? "This web demo sends nothing anywhere."
           : sends
-            ? "There is no Constellation server. Only your school, Anthropic (with your key or through your Claude Code), and scrubbed crash reports hear from this Mac. Constellation never asks for, sees or stores your Claude login."
+            ? "There is no Constellation server. Only your school, Anthropic (with your key or through your Claude Code), and PostHog, for usage data and scrubbed crash reports, hear from this Mac. Constellation never asks for, sees or stores your Claude login."
             : "There is no Constellation server. Only your school, and Anthropic if you add a key or use Claude Code, hear from this Mac. Constellation never asks for, sees or stores your Claude login."}
       </p>
-      <CrashReportsToggle />
+      <TelemetryToggle />
       <details className="rounded-xl border border-border bg-card px-card py-3">
         <summary className="cursor-pointer text-body">Read the privacy notice</summary>
         <div className="pt-3">
@@ -139,8 +144,8 @@ export function PrivacySection() {
     >
       <SettingsCard data-testid="privacy-card">
         {desktopBridge && (
-          <SettingsRow title="Crash reports">
-            <CrashReportsToggle />
+          <SettingsRow title="Usage data and crash reports">
+            <TelemetryToggle />
           </SettingsRow>
         )}
         <SettingsRow title="The full notice">
