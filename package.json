@@ -51,7 +51,7 @@
     "knip": "6.45.1",
     "playwright": "^1.65.0",
     "tailwindcss": "^4.3.3",
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.5.1",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.6.0",
     "vite-plus": "1.6.0"
   },
   "overrides": {
