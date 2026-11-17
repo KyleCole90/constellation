@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { IsoTime, SchoolId } from "~/shared/domain/ids";
+import { type SchoolId, isoTime } from "~/shared/domain/ids";
 import type { ConnectionRecord } from "~/renderer/stores/types";
 
 import {
@@ -26,7 +26,7 @@ const record = (patch: Partial<ConnectionRecord>): ConnectionRecord => ({
   syncError: null,
   ...patch,
 });
-const ago = (ms: number) => new Date(1_000_000_000 - ms).toISOString() as IsoTime;
+const ago = (ms: number) => isoTime(1_000_000_000 - ms);
 
 describe("scopeSummary", () => {
   it("names only the permissions the token holds", () => {
@@ -118,7 +118,7 @@ describe("words", () => {
   });
 
   it("describes a saved token by its date alone", () => {
-    expect(savedWords("2026-10-30T12:00:00.000Z" as IsoTime)).toBe("Token saved Oct 30");
+    expect(savedWords(isoTime("2026-10-30T12:00:00.000Z"))).toBe("Token saved Oct 30");
   });
 
   it("says when a school has never synced", () => {

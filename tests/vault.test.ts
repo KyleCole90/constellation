@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createBridgeVault } from "~/renderer/providers/vault";
-import type { SchoolId } from "~/shared/domain/ids";
+import { type SchoolId, isoTime } from "~/shared/domain/ids";
 import { handle, invoker } from "~/shared/ipc";
 import { Secret, revealSecret, type Credential } from "~/shared/providers/provider";
 
@@ -199,7 +199,7 @@ describe("the desktop renderer's vault", () => {
       kind: "oauth2",
       access: new Secret(TOKEN),
       refresh: null,
-      expiresAt: new Date(0).toISOString() as Extract<Credential, { kind: "oauth2" }>["expiresAt"],
+      expiresAt: isoTime(0),
       scopes: [],
     };
     await expect(vault.enroll(LCC, oauth)).rejects.toThrow("personal access tokens only");

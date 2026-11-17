@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { FILL_GRADE_REQUEST, type Agent } from "~/shared/agent/agent";
 import { createRuleAgent } from "~/shared/agent/rules";
-import type { IsoTime, LmsRef, ThreadId } from "~/shared/domain/ids";
+import { type LmsRef, type ThreadId, isoTime } from "~/shared/domain/ids";
 
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 
@@ -31,7 +31,7 @@ const maya = async () => {
 
 const open = (rig: StoreRig, ref: LmsRef<"submission">, fill?: "draft" | "by-hand") =>
   rig.clock.run(rig.state().openSubmission(QUEUE, ref, fill ? { fill } : {}));
-const atNow = (rig: StoreRig) => new Date(rig.state().now()).toISOString() as IsoTime;
+const atNow = (rig: StoreRig) => isoTime(rig.state().now());
 
 describe("opening a submission with AI on spends nothing until the teacher asks", () => {
   it("opening drafts nothing and opens no form", async () => {

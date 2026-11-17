@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import { planWork } from "~/renderer/components/screens/due.logic";
 import { filterInbox, statusCount } from "~/renderer/components/screens/inbox.logic";
 import { fromInboxRows } from "~/renderer/components/thread/queue.logic";
-import type { ChangeId, IsoTime, LmsRef, ThreadId } from "~/shared/domain/ids";
+import { type ChangeId, type LmsRef, type ThreadId, isoTime } from "~/shared/domain/ids";
 import { awaitsReply } from "~/shared/domain/lms";
 import { LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
 import {
@@ -19,6 +19,7 @@ import {
 } from "~/renderer/stores/selectors";
 
 import { clickWitness } from "./fixtures/changes";
+import { savedLms } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 
 const QUEUE = "t-queue" as ThreadId;
@@ -94,15 +95,11 @@ const inboxRow = (rig: StoreRig, student: string) => {
 };
 
 const studentWritesAgain = (rig: StoreRig, ref: LmsRef<"conversation">): void => {
-  const saved = rig.storage.getItem(LMS_STORAGE_KEY);
-  if (!saved) throw new Error("The fake LMS has saved nothing.");
-  const lms = JSON.parse(saved) as {
-    conversations: { ref: string; unread: boolean; messages: { id: string; at: string }[] }[];
-  };
+  const lms = savedLms(rig.storage);
   const conversation = lms.conversations.find((candidate) => candidate.ref === ref);
   const last = conversation?.messages.at(-1);
   if (!conversation || !last) throw new Error("No conversation to add to.");
-  conversation.messages.push({ ...last, id: `${last.id}-again` });
+  conversation.messages = [...conversation.messages, { ...last, id: `${last.id}-again` }];
   rig.storage.setItem(LMS_STORAGE_KEY, JSON.stringify(lms));
 };
 
@@ -175,12 +172,12 @@ describe("What's due and Messages count the same replies (#110)", () => {
 });
 
 describe("every screen reads a waiting reply the way What's due does (#127)", () => {
-  const MESSAGE = { mine: false, at: "2026-10-30T07:05:00.000Z" as IsoTime };
+  const MESSAGE = { mine: false, at: isoTime("2026-10-30T07:05:00.000Z") };
 
   it("waits while the student spoke last, read or not, until a reply goes out after it", () => {
     expect(awaitsReply(MESSAGE, null)).toBe(true);
-    expect(awaitsReply(MESSAGE, "2026-10-29T12:00:00.000Z" as IsoTime)).toBe(true);
-    expect(awaitsReply(MESSAGE, "2026-10-30T08:00:00.000Z" as IsoTime)).toBe(false);
+    expect(awaitsReply(MESSAGE, isoTime("2026-10-29T12:00:00.000Z"))).toBe(true);
+    expect(awaitsReply(MESSAGE, isoTime("2026-10-30T08:00:00.000Z"))).toBe(false);
     expect(awaitsReply({ ...MESSAGE, mine: true }, null)).toBe(false);
     expect(awaitsReply(undefined, null)).toBe(false);
   });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { GradeContent, RubricScore } from "~/shared/domain/change";
+import type { LmsRef } from "~/shared/domain/ids";
 
 import { composerHints } from "./composer.logic";
 
@@ -41,7 +42,7 @@ describe("composerHints", () => {
     expect(
       composerHints({
         kind: "messages",
-        content: { kind: "reply" } as never,
+        content: { kind: "reply", target: "c" as LmsRef<"conversation">, body: "Thanks!" },
         canEdit: true,
         drafted: true,
       }).examples,

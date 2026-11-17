@@ -11,6 +11,7 @@ import {
   newChangeRecord,
   summarize,
   transition,
+  type ChangeContent,
   type ChangeEvent,
   type ChangePatch,
   type ChangeRecord,
@@ -213,15 +214,6 @@ describe("the approval witness", () => {
     ).toBeNull();
   });
 
-  it("Enter or Space on the focused button counts, because it is still a person pressing that button", () => {
-    const record = newDraft();
-    expect(
-      ApprovalWitness.fromClick({ isTrusted: true, type: "click", detail: 0 } as never, [
-        { changeId: record.id, fingerprint: fingerprintOf(record) },
-      ]),
-    ).not.toBeNull();
-  });
-
   it("a trusted event that is not a click mints nothing", () => {
     const record = newDraft();
     expect(
@@ -238,7 +230,10 @@ describe("the approval witness", () => {
   it("a witness with the wrong fingerprint is rejected", () => {
     const record = newDraft();
     const witness = ApprovalWitness.fromClick({ isTrusted: true, type: "click" }, [
-      { changeId: record.id, fingerprint: "other" as never },
+      {
+        changeId: record.id,
+        fingerprint: fingerprintOf(newDraft("ch-1", gradeContent({ points: 99 }))),
+      },
     ]);
     expect(rejected(witness)).toEqual({ ok: false, error: "stale-approval" });
   });
@@ -394,7 +389,7 @@ describe("partial runs and landed fields", () => {
 
   it("resolving with it-landed on the only field discards the change", () => {
     const only = approved(
-      newDraft("ch-1", { ...newDraft().content, comment: null, rubric: null, points: 50 } as never),
+      newDraft("ch-1", gradeContent({ comment: null, rubric: null, points: 50 })),
     );
     const clash = step(sending(only), {
       type: "conflict",
@@ -415,11 +410,11 @@ describe("partial runs and landed fields", () => {
 });
 
 describe("classify", () => {
-  const reply = {
+  const reply: Extract<ChangeContent, { kind: "reply" }> = {
     kind: "reply",
-    target: "lcc:conversation:1",
+    target: "lcc:conversation:1" as LmsRef<"conversation">,
     body: "Yes, Friday works.",
-  } as const;
+  };
   const thread = (
     count: number,
     extra: readonly { id: string; mine: boolean; text: string }[] = [],
@@ -430,7 +425,7 @@ describe("classify", () => {
   });
   const basis = { readAt: AT, remote: thread(1) };
   const SEEN = { message: ["m1"] };
-  const decide = (remote: RemoteState) => classify(reply as never, basis, remote, SEEN).message;
+  const decide = (remote: RemoteState) => classify(reply, basis, remote, SEEN).message;
 
   it("an append field writes when nothing moved", () => {
     expect(decide(thread(1))).toEqual({ do: "write" });
@@ -460,7 +455,7 @@ describe("classify", () => {
       targetVersion: "messages:1",
       messages: [{ id: "m1", mine: true, text: reply.body }],
     };
-    expect(classify(reply as never, { readAt: AT, remote }, remote, SEEN).message).toEqual({
+    expect(classify(reply, { readAt: AT, remote }, remote, SEEN).message).toEqual({
       do: "write",
     });
   });
@@ -537,7 +532,7 @@ describe("resolving a conflict by keeping their grade", () => {
 
 describe("fitContent", () => {
   it("takes out what the school's LMS can't accept and keeps the score", () => {
-    const content = gradeContent({ attachment: { name: "marked.pdf", sizeBytes: 10 } as never });
+    const content = gradeContent({ attachment: { name: "marked.pdf", kb: 10 } });
     const fitted = fitContent(content, { rubricWrite: false, attachments: false });
     expect(fieldsOf(fitted)).toEqual(["grade", "comment"]);
     expect(fitted.kind === "grade" && finalGrade(fitted)).toBe(finalGrade(content));

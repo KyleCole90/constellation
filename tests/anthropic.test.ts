@@ -1,3 +1,5 @@
+import type { BetaMessage, BetaUsage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import * as v from "valibot";
 import { describe, expect, it } from "vite-plus/test";
 
 import { MODEL } from "~/main/agent";
@@ -5,8 +7,8 @@ import { anthropicAgent, spendOf } from "~/main/providers/anthropic";
 import type { Fetch } from "~/main/providers/canvas";
 import { DRAFT_GRADE_REQUEST } from "~/shared/agent/agent";
 import type { ChangeId, ThreadId } from "~/shared/domain/ids";
-import type { Assignment, Submission } from "~/shared/domain/lms";
 import { handle, invoker, type Bridge } from "~/shared/ipc";
+import { AssignmentSchema, SubmissionSchema } from "~/shared/providers/schemas";
 import { Secret, type CredentialLease } from "~/shared/providers/provider";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 
@@ -44,6 +46,40 @@ const message = (content: readonly unknown[], extra: Record<string, unknown> = {
     cache_read_input_tokens: 0,
   },
   ...extra,
+});
+
+const NO_CACHE = {
+  cache_creation: null,
+  cache_creation_input_tokens: 0,
+  cache_read_input_tokens: 0,
+};
+
+/** A whole message as the SDK hands it to `spendOf`, with only the usage a test sets. */
+const billed = (usage: Partial<BetaUsage>, model = MODEL): BetaMessage => ({
+  id: "msg_test",
+  container: null,
+  content: [],
+  context_management: null,
+  diagnostics: null,
+  model,
+  role: "assistant",
+  stop_details: null,
+  stop_reason: "end_turn",
+  stop_sequence: null,
+  type: "message",
+  usage: {
+    ...NO_CACHE,
+    fallback_credit: null,
+    inference_geo: null,
+    input_tokens: 0,
+    iterations: null,
+    output_tokens: 0,
+    output_tokens_details: null,
+    server_tool_use: null,
+    service_tier: null,
+    speed: null,
+    ...usage,
+  },
 });
 
 const tool = (name: string, input: Record<string, unknown>) => ({
@@ -317,15 +353,14 @@ describe("main's Anthropic agent", () => {
   });
 
   it("counts cache writes and reads at no less than Anthropic bills them", () => {
-    const spend = spendOf({
-      ...message([]),
-      usage: {
+    const spend = spendOf(
+      billed({
         input_tokens: 100,
         output_tokens: 10,
         cache_creation_input_tokens: 1000,
         cache_read_input_tokens: 500,
-      },
-    } as never);
+      }),
+    );
     expect(spend).toEqual({
       tokens: 1610,
       usd: ((100 + 2 * 1000 + 500) * 4 + 10 * 20) / 1_000_000,
@@ -333,23 +368,25 @@ describe("main's Anthropic agent", () => {
   });
 
   it("prices every attempt at its own model's rate when a fallback finished the turn", () => {
-    const spend = spendOf({
-      ...message([]),
-      model: "claude-opus-4-8",
-      usage: {
-        input_tokens: 100,
-        output_tokens: 10,
-        iterations: [
-          { type: "message", model: MODEL, input_tokens: 1000, output_tokens: 0 },
-          {
-            type: "fallback_message",
-            model: "claude-opus-4-8",
-            input_tokens: 100,
-            output_tokens: 10,
-          },
-        ],
-      },
-    } as never);
+    const spend = spendOf(
+      billed(
+        {
+          input_tokens: 100,
+          output_tokens: 10,
+          iterations: [
+            { type: "message", model: MODEL, input_tokens: 1000, output_tokens: 0, ...NO_CACHE },
+            {
+              type: "fallback_message",
+              model: "claude-opus-4-8",
+              input_tokens: 100,
+              output_tokens: 10,
+              ...NO_CACHE,
+            },
+          ],
+        },
+        "claude-opus-4-8",
+      ),
+    );
     expect(spend).toEqual({ tokens: 1110, usd: (1000 * 4 + 100 * 5 + 10 * 25) / 1_000_000 });
   });
 });
@@ -357,10 +394,10 @@ describe("main's Anthropic agent", () => {
 /** A model at Anthropic's transport that grades what it is given: every criterion at full marks, quoting the work. */
 const gradingModel = (body: Record<string, unknown>) => {
   const [turn] = body["messages"] as [{ content: string }];
-  const scope = JSON.parse(/<scope>\n(.*)\n<\/scope>/s.exec(turn.content)?.[1] ?? "{}") as {
-    submissions: Submission[];
-    assignments: Assignment[];
-  };
+  const scope = v.parse(
+    v.object({ submissions: v.array(SubmissionSchema), assignments: v.array(AssignmentSchema) }),
+    JSON.parse(/<scope>\n(.*)\n<\/scope>/s.exec(turn.content)?.[1] ?? "{}"),
+  );
   const [submission] = scope.submissions;
   const assignment = scope.assignments.find((a) => a.ref === submission?.assignment);
   if (!submission || !assignment?.rubric) throw new Error("the scope has no rubric submission");

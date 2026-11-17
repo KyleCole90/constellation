@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ChangeRecord, ChangeSummary } from "~/shared/domain/change";
-import type { ChangeId, IsoTime } from "~/shared/domain/ids";
+import { type ChangeId, isoTime } from "~/shared/domain/ids";
 import type { ThreadMessage } from "~/renderer/stores/types";
 
 import {
@@ -13,7 +13,7 @@ import {
   walkStep,
 } from "./timeline.logic";
 
-const at = (minute: number) => `2026-10-30T10:0${minute}:00.000Z` as IsoTime;
+const at = (minute: number) => isoTime(`2026-10-30T10:0${minute}:00.000Z`);
 const work = (minute: number, line: string): ThreadMessage => ({
   type: "work",
   lines: [line],

@@ -5,7 +5,7 @@ import {
   type AgentScope,
 } from "~/shared/agent/agent";
 import { newChangeRecord, type ChangeRecord } from "~/shared/domain/change";
-import type { ChangeId, IsoTime } from "~/shared/domain/ids";
+import { type ChangeId, isoTime } from "~/shared/domain/ids";
 import { invoker, serve, type Handlers } from "~/shared/ipc";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 
@@ -13,7 +13,7 @@ import type { Fixture } from "./class";
 import type { Call, Draft, Run } from "./metrics";
 import type { BenchSource, Env } from "./sources";
 
-const AT = "2026-11-03T16:00:00Z" as IsoTime;
+const AT = isoTime("2026-11-03T16:00:00Z");
 
 /**
  * One fixture through the path a teacher's "Draft N" takes: the renderer's bridge agent, main's input check and

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { IsoTime, LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
+import { type LmsRef, type SchoolId, type ThreadId, isoTime } from "~/shared/domain/ids";
 import { withoutChatThreads } from "~/renderer/stores/selectors";
 import type { Thread } from "~/renderer/stores/types";
 
@@ -24,7 +24,7 @@ const thread = (id: string): Thread & { kind: "general" } => ({
   title: id,
   messages: [],
   focus: null,
-  updatedAt: "2026-10-30T00:00:00.000Z" as IsoTime,
+  updatedAt: isoTime("2026-10-30T00:00:00.000Z"),
 });
 const ids = (list: readonly Thread[]) => list.map((t) => t.id);
 const FIVE = ["a", "b", "c", "d", "e"].map(thread);
@@ -56,7 +56,7 @@ describe("keptChat", () => {
         type: "handed-off",
         from: chat.id,
         request: "Draft the announcement",
-        at: "2026-10-30T00:00:00.000Z" as IsoTime,
+        at: isoTime("2026-10-30T00:00:00.000Z"),
       },
     ],
   };
@@ -76,7 +76,7 @@ describe("keptChat", () => {
           type: "handed-off",
           from: later.id,
           request: "Draft it again",
-          at: "2026-10-31T00:00:00.000Z" as IsoTime,
+          at: isoTime("2026-10-31T00:00:00.000Z"),
         },
       ],
     };
@@ -93,7 +93,7 @@ describe("keptChat", () => {
           type: "handed-off",
           from: later.id,
           request: "Draft it again",
-          at: "2026-10-31T00:00:00.000Z" as IsoTime,
+          at: isoTime("2026-10-31T00:00:00.000Z"),
         },
       ],
     };
@@ -113,8 +113,8 @@ describe("chatsNewestFirst", () => {
     const chat = (id: string, startedAt: string, updatedAt: string): Thread => ({
       ...thread(id),
       kind: "north-star-chat",
-      updatedAt: updatedAt as IsoTime,
-      messages: [{ type: "user", text: id, at: startedAt as IsoTime }],
+      updatedAt: isoTime(updatedAt),
+      messages: [{ type: "user", text: id, at: isoTime(startedAt) }],
     });
     const older = chat("older", "2026-10-30T01:00:00.000Z", "2026-10-30T09:00:00.000Z");
     const newer = chat("newer", "2026-10-30T02:00:00.000Z", "2026-10-30T02:00:00.000Z");

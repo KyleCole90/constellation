@@ -13,9 +13,10 @@ import {
 } from "~/shared/agent/agent";
 import { createRuleAgent } from "~/shared/agent/rules";
 import type { GradeContent } from "~/shared/domain/change";
-import type { ThreadId } from "~/shared/domain/ids";
+import type { ChangeId, ThreadId } from "~/shared/domain/ids";
 
 import { AT, clickWitness } from "./fixtures/changes";
+import { LCC } from "./fixtures/rig";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 
 const QUEUE = "t-queue" as ThreadId;
@@ -59,8 +60,11 @@ const opened = async (student = "Maya Ortiz", assignment = "Essay 2") => {
   if (!id) throw new Error("Nothing was drafted.");
   return { rig, id };
 };
-const contentOf = (rig: StoreRig, id: string): GradeContent =>
-  rig.state().changes[id as never]?.content as GradeContent;
+const contentOf = (rig: StoreRig, id: ChangeId): GradeContent => {
+  const { content } = rig.change(id);
+  if (content.kind !== "grade") throw new Error(`${id} is a ${content.kind}, not a grade.`);
+  return content;
+};
 const lastMessage = (rig: StoreRig) => rig.state().threads[QUEUE]?.messages.at(-1);
 
 describe("the effect parser", () => {
@@ -334,7 +338,7 @@ describe("drafting", () => {
     expect(record?.rationale.length).toBeGreaterThan(0);
     const submission = rig
       .state()
-      .cache["lcc" as never]?.submissions.find((s) => s.ref === record?.content.target);
+      .cache[LCC]?.submissions.find((s) => s.ref === record?.content.target);
     const paragraphs = submission?.body.kind === "text" ? submission.body.paragraphs : [];
     for (const rationale of record?.rationale ?? []) {
       expect(rationale.anchors.length).toBeGreaterThan(0);
@@ -363,9 +367,7 @@ describe("drafting", () => {
 
   it("opening the same submission twice returns the same change", async () => {
     const { rig, id } = await opened();
-    const again = await rig
-      .state()
-      .openSubmission(QUEUE, rig.state().changes[id]?.content.target as never);
+    const again = await rig.state().openSubmission(QUEUE, contentOf(rig, id).target);
     expect(again).toBe(id);
     expect(Object.keys(rig.state().changes)).toHaveLength(1);
   });
@@ -402,7 +404,7 @@ describe("drafting", () => {
   it("a submission with no bank entry gets a generic draft that says it is only a starting point", async () => {
     const rig = await makeStoreRig();
     await rig.connectAll();
-    const cache = rig.state().cache["lcc" as never];
+    const cache = rig.state().cache[LCC];
     const submission = cache?.submissions.find((s) => s.workflow === "submitted");
     const assignment = cache?.assignments.find((a) => a.ref === submission?.assignment);
     const course = cache?.courses.find((c) => c.ref === submission?.course);
@@ -434,7 +436,7 @@ describe("drafting", () => {
   it("opening a conversation spends nothing; Draft a reply drafts one a thread can edit (#120)", async () => {
     const rig = await makeStoreRig();
     await rig.connectAll();
-    const conversation = rig.state().cache["lcc" as never]?.conversations[0];
+    const conversation = rig.state().cache[LCC]?.conversations[0];
     if (!conversation) throw new Error("no conversation");
     expect(await rig.state().openConversation(QUEUE, conversation.ref)).toBeNull();
     expect(Object.keys(rig.state().changes)).toHaveLength(0);
@@ -448,9 +450,7 @@ describe("drafting", () => {
     await rig.connectAll();
     const mail = "t-e101-mail" as ThreadId;
     const course = rig.state().threads[mail]?.course;
-    const conversation = rig
-      .state()
-      .cache["lcc" as never]?.conversations.find((c) => c.course === course);
+    const conversation = rig.state().cache[LCC]?.conversations.find((c) => c.course === course);
     if (!conversation) throw new Error("no conversation");
     rig.state().setThreadUi(mail, { current: conversation.ref });
     const first = await rig.state().openConversation(mail, conversation.ref, { fill: "draft" });
@@ -468,7 +468,7 @@ describe("drafting", () => {
   it("opening an announcement drafts one for that course", async () => {
     const rig = await makeStoreRig();
     await rig.connectAll();
-    const course = rig.state().cache["lcc" as never]?.courses[0];
+    const course = rig.state().cache[LCC]?.courses[0];
     if (!course) throw new Error("no course");
     const id = await rig.state().openAnnouncement(QUEUE, course.ref);
     const record = id && rig.state().changes[id];
@@ -571,7 +571,7 @@ describe("free-text corrections", () => {
       type: "edit",
       by: "you",
       patch: { kind: "grade", attachment: { name: "notes.pdf", kb: 10 } },
-      at: rig.state().changes[id]?.basis.readAt as never,
+      at: rig.change(id).basis.readAt,
     });
     expect(contentOf(rig, id).attachment).not.toBeNull();
     await rig.state().sendToAgent(QUEUE, "remove the attachment");
@@ -587,7 +587,7 @@ describe("free-text corrections", () => {
   it("a reply can be corrected too", async () => {
     const rig = await makeStoreRig();
     await rig.connectAll();
-    const conversation = rig.state().cache["lcc" as never]?.conversations[0];
+    const conversation = rig.state().cache[LCC]?.conversations[0];
     if (!conversation) throw new Error("no conversation");
     const id = await rig.state().openConversation(QUEUE, conversation.ref, { fill: "draft" });
     if (!id) throw new Error("no change");
@@ -645,7 +645,7 @@ describe("free-text corrections", () => {
     const announcement = async () => {
       const rig = await makeStoreRig();
       await rig.connectAll();
-      const course = rig.state().cache["lcc" as never]?.courses.find((c) => c.code === "ENG 102");
+      const course = rig.state().cache[LCC]?.courses.find((c) => c.code === "ENG 102");
       if (!course) throw new Error("no course");
       const id = await rig.state().openAnnouncement(QUEUE, course.ref);
       if (!id) throw new Error("no change");

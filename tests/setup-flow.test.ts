@@ -4,7 +4,7 @@ import { type Agent } from "~/shared/agent/agent";
 import { ApprovalWitness, fingerprintOf } from "~/shared/domain/approval";
 import { riskOf, summarize, type ChangeRecord } from "~/shared/domain/change";
 import type { CopySource, CourseShell } from "~/shared/domain/content";
-import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
+import { type ChangeId, type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
 import { reviewRows, stageOf, type CourseSetup, type SetupStage } from "~/shared/domain/setup";
 import { draftOf, type TermDates, type TermPlan } from "~/shared/domain/term";
 import {
@@ -20,6 +20,7 @@ import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";
 import { LCC, RSU } from "./fixtures/rig";
+import { rawSave } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 import { planFor, termOf } from "./fixtures/term";
 
@@ -74,7 +75,7 @@ const record = (rig: StoreRig, id: ChangeId): ChangeRecord => {
 };
 const rows = (rig: StoreRig, course: Course) =>
   reviewRows(setupOf(rig, course), rig.state().changes);
-const nowIso = (rig: StoreRig) => new Date(rig.state().now()).toISOString() as IsoTime;
+const nowIso = (rig: StoreRig) => isoTime(rig.state().now());
 
 const approve = (rig: StoreRig, id: ChangeId) => {
   const result = rig
@@ -513,9 +514,7 @@ describe("a reload", () => {
 
   it("a workspace saved before setup existed still loads", async () => {
     const rig = await connected();
-    const saved = JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      state: Record<string, unknown>;
-    };
+    const saved = rawSave(rig.storage);
     delete saved.state["setups"];
     delete saved.state["newCourses"];
     rig.storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(saved));
@@ -738,29 +737,6 @@ describe("the publish check", () => {
   });
 });
 
-/** Another tab holding the watcher's lock until it closes. */
-const otherTab = () => {
-  let closed = false;
-  let close = () => {};
-  const gone = new Promise<void>((resolve) => (close = resolve));
-  const request = async (name: string, ...rest: unknown[]) => {
-    const work = rest.at(-1) as (lock: object | null) => Promise<unknown>;
-    const { ifAvailable } = (rest.length > 1 ? rest[0] : {}) as { ifAvailable?: boolean };
-    if (name.startsWith("setup-watch:") && !closed) {
-      if (ifAvailable) return work(null);
-      await gone;
-    }
-    return work({});
-  };
-  return {
-    locks: { request } as unknown as Pick<LockManager, "request">,
-    close: () => {
-      closed = true;
-      close();
-    },
-  };
-};
-
 describe("a copy that can't be seen clearly", () => {
   it("won't redraft over a copy that may still land, so a dates edit can't copy twice", async () => {
     const rig = await connected();
@@ -821,18 +797,18 @@ describe("a watcher that stopped", () => {
   });
 
   it("waits for another tab's watcher and takes over when that tab closes", async () => {
-    const tab = otherTab();
-    const rig = await connected({ locks: tab.locks });
+    const rig = await connected();
     const { course, copy } = await toDraftCopy(rig, LCC, "ENG 101", {
       course: "ENG 101",
       term: "Fall 2026",
     });
+    const otherTab = await rig.locks.hold(`setup-watch:${course}`);
     approve(rig, copy);
     await send(rig, [copy]);
     await rig.clock.run(rig.clock.sleep(30_000));
     expect(stage(rig, course).tag).toBe("copying");
 
-    tab.close();
+    otherTab.release();
     await stageIs(rig, course, "review");
   });
 

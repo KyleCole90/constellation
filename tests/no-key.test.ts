@@ -7,11 +7,10 @@ import {
   finalGrade,
   summarize,
   transition,
-  type ChangeContent,
   type ChangePatch,
   type ChangeRecord,
 } from "~/shared/domain/change";
-import type { ChangeId, IsoTime, LmsRef, ThreadId } from "~/shared/domain/ids";
+import { type ChangeId, type LmsRef, type ThreadId, isoTime } from "~/shared/domain/ids";
 import type { Assignment, Submission } from "~/shared/domain/lms";
 import { planWork } from "~/renderer/components/screens/due.logic";
 import { visibleMessages } from "~/renderer/components/thread/timeline.logic";
@@ -31,6 +30,7 @@ import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";
 import { LCC, RSU } from "./fixtures/rig";
+import { jsonObject, rawSave, savedWorkspace } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 import { planFor, termOf } from "./fixtures/term";
 
@@ -90,7 +90,7 @@ const draft = async (rig: StoreRig, submission: Submission): Promise<ChangeId> =
   if (!id) throw new Error("Nothing drafted.");
   return id;
 };
-const atNow = (rig: StoreRig) => new Date(rig.state().now()).toISOString() as IsoTime;
+const atNow = (rig: StoreRig) => isoTime(rig.state().now());
 const edit = (rig: StoreRig, id: ChangeId, patch: ChangePatch) =>
   rig.state().dispatchUser(id, { type: "edit", by: "you", patch, at: atNow(rig) });
 const editOk = (rig: StoreRig, id: ChangeId, patch: ChangePatch) => {
@@ -115,10 +115,6 @@ const approveAndSend = async (rig: StoreRig, id: ChangeId) => {
 };
 const onServer = (rig: StoreRig, submission: Submission) =>
   rig.server.submissions(submission.course).find((s) => s.ref === submission.ref);
-const stored = (rig: StoreRig) =>
-  JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-    state: { changes: Record<string, ChangeRecord> };
-  };
 const reload = async (rig: StoreRig, options: Parameters<typeof makeStoreRig>[0] = {}) => {
   const next = await makeStoreRig({
     noKey: true,
@@ -158,7 +154,7 @@ describe("opening with no key", () => {
     expect(form?.rationale ?? []).toHaveLength(0);
     expect(rig.state().threads[QUEUE]?.focus).toBe(id);
     expect(rig.state().changes).toEqual({});
-    expect(stored(rig).state.changes).toEqual({});
+    expect(savedWorkspace(rig.storage).changes).toEqual({});
     expect(runs).toEqual([]);
   });
 
@@ -176,7 +172,7 @@ describe("opening with no key", () => {
       body: "",
     });
     expect(rig.state().changes).toEqual({});
-    expect(stored(rig).state.changes).toEqual({});
+    expect(savedWorkspace(rig.storage).changes).toEqual({});
     expect(runs).toEqual([]);
   });
 
@@ -193,7 +189,7 @@ describe("opening with no key", () => {
       body: "",
     });
     expect(rig.state().changes).toEqual({});
-    expect(stored(rig).state.changes).toEqual({});
+    expect(savedWorkspace(rig.storage).changes).toEqual({});
     expect(runs).toEqual([]);
   });
 
@@ -274,7 +270,7 @@ describe("the first edit", () => {
 
     expect(rig.state().blanks[id]).toBeUndefined();
     expect(saved(rig, id).content).toMatchObject({ comment: "Good start." });
-    expect(stored(rig).state.changes[id]).toBeDefined();
+    expect(savedWorkspace(rig.storage).changes[id]).toBeDefined();
     expect(rig.state().threads[QUEUE]?.focus).toBe(id);
     expect(saved(rig, id).activity[0]?.actor).toBe("you");
   });
@@ -307,6 +303,7 @@ describe("the first edit", () => {
       noKey: true,
       storage: rig.storage,
       vault: rig.vault,
+      locks: rig.locks,
       clock: new VirtualClock(rig.clock.now() + 60_000),
     });
     const theirs = await open(other, submission);
@@ -436,20 +433,18 @@ describe("a partly filled grade", () => {
     });
     expect(approve(rig, id).ok).toBe(true);
 
-    const raw = JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      state: { changes: Record<string, ChangeRecord> };
-    };
-    const record = raw.state.changes[id] as ChangeRecord;
-    if (record.content.kind !== "grade" || record.state.tag !== "approved")
+    const record = savedWorkspace(rig.storage).changes[id];
+    if (record?.content.kind !== "grade" || record.state.tag !== "approved")
       throw new Error("Expected an approved grade.");
-    const forged = {
+    const raw = rawSave(rig.storage);
+    const forged: ChangeRecord = {
       ...record,
       content: {
         ...record.content,
         rubric: (record.content.rubric ?? []).map((score) => ({ ...score, points: null })),
       },
-    } as ChangeRecord;
-    raw.state.changes[id] = {
+    };
+    jsonObject(raw.state.changes)[id] = {
       ...forged,
       state: {
         tag: "approved",
@@ -591,11 +586,11 @@ describe("a form returned to blank", () => {
     const id = await open(rig, submission, thread);
 
     editOk(rig, id, { kind: "grade", rubricPoints: { [first.ref]: 10 } });
-    expect(stored(rig).state.changes[id]).toBeDefined();
+    expect(savedWorkspace(rig.storage).changes[id]).toBeDefined();
     editOk(rig, id, { kind: "grade", rubricPoints: { [first.ref]: null } });
 
     expect(rig.state().changes[id]).toBeUndefined();
-    expect(stored(rig).state.changes[id]).toBeUndefined();
+    expect(savedWorkspace(rig.storage).changes[id]).toBeUndefined();
     expect(rig.state().blanks[id]?.activity).toHaveLength(1);
     expect(rig.state().threads[thread]?.focus).toBe(id);
     expect(selectThreadStatus(rig.state(), thread)).toEqual(before);
@@ -744,6 +739,7 @@ describe("a blank when AI turns on or another tab is open", () => {
       noKey: true,
       storage: rig.storage,
       vault: rig.vault,
+      locks: rig.locks,
       clock: new VirtualClock(rig.clock.now()),
     });
     await other.clock.run(other.state().addAiKey(KEY));
@@ -763,6 +759,7 @@ describe("a blank when AI turns on or another tab is open", () => {
       noKey: true,
       storage: rig.storage,
       vault: rig.vault,
+      locks: rig.locks,
       clock: new VirtualClock(rig.clock.now() + 60_000),
     });
     await other.clock.run(other.state().boot());
@@ -896,16 +893,14 @@ describe("a workspace saved before this", () => {
     late: { days: 1, pointsPerDay: 2 },
     comment: "Strong opening. Keep going.",
     attachment: null,
-  } as unknown as ChangeContent;
+  };
   const FINGERPRINT_AT_549E11D = "1fd3d0b7e7605f";
 
   it("rehydrates, and its approved fingerprint still matches", async () => {
     const { rig } = await noKeyRig();
-    const raw = JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      state: { changes: Record<string, unknown> };
-    };
+    const raw = rawSave(rig.storage);
     const at = "2026-10-30T12:00:00.000Z";
-    raw.state.changes["ch-old"] = {
+    jsonObject(raw.state.changes)["ch-old"] = {
       id: "ch-old",
       school: "lcc",
       course: "lcc:course:1",
@@ -939,6 +934,6 @@ describe("a workspace saved before this", () => {
     expect(record.content.kind === "grade" && finalGrade(record.content)).toBe(16);
     expect(fingerprintOf(record)).toBe(FINGERPRINT_AT_549E11D);
     expect(summarize(record).missing).toEqual([]);
-    expect(transition(record, { type: "begin-send", seen: {}, at: at as IsoTime }).ok).toBe(true);
+    expect(transition(record, { type: "begin-send", seen: {}, at: isoTime(at) }).ok).toBe(true);
   });
 });

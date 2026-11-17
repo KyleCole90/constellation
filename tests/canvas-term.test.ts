@@ -11,7 +11,7 @@ import {
   type RemoteState,
   type SetContent,
 } from "~/shared/domain/change";
-import type { IsoDate, IsoTime, LmsRef } from "~/shared/domain/ids";
+import { type IsoDate, type LmsRef, isoTime } from "~/shared/domain/ids";
 import { mintSendPermit } from "~/shared/domain/permit";
 import { copyMigration } from "~/shared/domain/setup";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
@@ -370,7 +370,6 @@ describe("Canvas term setup writes", () => {
       sleep: clock.sleep,
       random: () => 0.5,
       policy: DEFAULT_RETRY_POLICY,
-      locks: null,
     });
     http.loseNext();
     await clock.run(writeback.send([draft.id]));
@@ -449,7 +448,7 @@ describe("what a Canvas copy brings, as the setup review reads it (#132, #136)",
       kind: "item-set",
       target: essay.ref,
       where: "Essay 1",
-      intent: { set: "due-at", at: "2027-02-04T00:00:00.000Z" as IsoTime },
+      intent: { set: "due-at", at: isoTime("2027-02-04T00:00:00.000Z") },
     };
     const remote = await unwrap(provider.observe(content));
     const permit = mintSendPermit(sending(approved(newDraft("ch-due", content, remote))), [
@@ -506,7 +505,6 @@ describe("what a Canvas copy brings, as the setup review reads it (#132, #136)",
       sleep: clock.sleep,
       random: () => 0.5,
       policy: DEFAULT_RETRY_POLICY,
-      locks: null,
     });
     await clock.run(writeback.send([draft.id]));
     const record = ledger.get(draft.id);
@@ -681,7 +679,6 @@ describe("Canvas .imscc upload", () => {
       sleep: clock.sleep,
       random: () => 0.5,
       policy: DEFAULT_RETRY_POLICY,
-      locks: null,
     });
     http.loseNext();
     await clock.run(writeback.send([draft.id]));

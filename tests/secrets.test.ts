@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { SchoolId } from "~/shared/domain/ids";
+import type { SchoolId, ThreadId } from "~/shared/domain/ids";
 import { LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
 import { Secret, revealSecret } from "~/shared/providers/provider";
 import { createMemoryVault } from "~/renderer/providers/vault";
 import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 
+import { savedLms } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 
 const LCC = "lcc" as SchoolId;
@@ -93,7 +94,7 @@ describe("a token passing through connect", () => {
     await rig.connect(LCC, SENTINEL);
     const ref = rig.state().cache[LCC]?.submissions.find((s) => s.workflow === "submitted")?.ref;
     if (!ref) throw new Error("Nothing to grade.");
-    await rig.clock.run(rig.state().openSubmission("t-queue" as never, ref, { fill: "draft" }));
+    await rig.clock.run(rig.state().openSubmission("t-queue" as ThreadId, ref, { fill: "draft" }));
     expectNoLeak(rig, SENTINEL);
   });
 });
@@ -127,10 +128,7 @@ describe("the fake LMS", () => {
   it("keeps a hash of an accepted token, and the hash is not the token", async () => {
     const rig = await makeStoreRig();
     await rig.connect(LCC, SENTINEL);
-    const stored = JSON.parse(rig.storage.getItem(LMS_STORAGE_KEY) ?? "{}") as {
-      tokens: Record<string, { accepted: string[] }>;
-    };
-    const accepted = stored.tokens["lcc"]?.accepted ?? [];
+    const accepted = savedLms(rig.storage).tokens["lcc"]?.accepted ?? [];
     expect(accepted).toHaveLength(1);
     expect(accepted[0]).not.toBe(SENTINEL);
   });

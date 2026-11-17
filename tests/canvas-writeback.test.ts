@@ -105,7 +105,6 @@ const runnerWith = async (provider: LmsProvider, content: ChangeContent) => {
     sleep: clock.sleep,
     random: () => 0.5,
     policy: DEFAULT_RETRY_POLICY,
-    locks: null,
   });
   const send = () => clock.run(writeback.send([draft.id]));
   return { send, stateOf: () => ledger.get(draft.id)?.state.tag };
@@ -307,7 +306,9 @@ describe("Canvas writes, kind by kind", () => {
 
   it("refuses a target at another school, and asks Canvas nothing", async () => {
     const http = new CanvasHttp();
-    const content = grade({ target: "other.example.edu:submission:2201:5301:6401" as never });
+    const content = grade({
+      target: "other.example.edu:submission:2201:5301:6401" as LmsRef<"submission">,
+    });
     expect(await canvasOver(http).observe(content)).toEqual({
       ok: false,
       error: { kind: "not_found" },

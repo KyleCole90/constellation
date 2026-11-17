@@ -9,7 +9,7 @@ import { SidebarOffers } from "~/renderer/components/Sidebar";
 import { ThreadActionsContext, type ThreadActions } from "~/renderer/components/thread/context";
 import { summarize } from "~/shared/domain/change";
 import type { Migration } from "~/shared/domain/content";
-import type { ChangeId, IsoTime, LmsRef } from "~/shared/domain/ids";
+import { type ChangeId, type LmsRef, isoTime } from "~/shared/domain/ids";
 import { isOpenRow, reviewRows } from "~/shared/domain/setup";
 import { setupGroupKey } from "~/renderer/components/sidebar.logic";
 import type { WorkspaceStore } from "~/renderer/stores/workspace";
@@ -82,7 +82,7 @@ const screen = (course: LmsRef<"course">) => {
 const approve = (id: ChangeId) => {
   const record = rig.state().changes[id];
   if (!record) throw new Error("No change.");
-  const at = new Date(rig.state().now()).toISOString() as IsoTime;
+  const at = isoTime(rig.state().now());
   const result = rig
     .state()
     .dispatchUser(id, { type: "approve", witness: clickWitness(record), at });

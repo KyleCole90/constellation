@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { summarize, type ChangeRecord, type ChangeSummary } from "~/shared/domain/change";
-import type { School } from "~/shared/domain/lms";
-import type { IsoTime, LmsRef } from "~/shared/domain/ids";
+import { summarize, type ChangeRecord } from "~/shared/domain/change";
+import { type LmsRef, isoTime } from "~/shared/domain/ids";
 import type { RowKey } from "~/renderer/stores/types";
 
 import {
@@ -28,39 +27,19 @@ import {
   splitSelection,
   type WorkRow,
 } from "./queue.logic";
+import { approved, changeSummary, held, newDraft, sent } from "../../../../tests/fixtures/changes";
+import { conversationRow, course, school, submissionRow } from "../../../../tests/fixtures/rows";
 
-const school = (id: string): School =>
-  ({ id, abbr: id.toUpperCase(), name: id, host: `${id}.test`, provider: "fake-canvas" }) as School;
-const summary = (patch: Partial<ChangeSummary>) => patch as ChangeSummary;
-// A patch may switch the kind without retyping the key, which a fixture doesn't need to care about.
-const row = (key: string, patch: Partial<WorkRow> = {}): WorkRow =>
-  ({
-    key: key as LmsRef<"submission">,
-    kind: "submission",
-    title: key,
-    detail: "Essay 2",
-    assignment: "a-essay" as WorkRow["assignment"],
-    school: school("lcc"),
-    course: { code: "HUM 150" } as WorkRow["course"],
-    dueAt: null,
-    lateDays: 0,
-    resubmitted: false,
-    change: null,
-    summary: null,
-    open: true,
-    asked: null,
-    missing: false,
-    draftable: true,
-    ...patch,
-  }) as WorkRow;
-const change = {} as ChangeRecord;
+const row = submissionRow;
+/** A row holding this change, summarized as the queue would. */
+const holding = (record: ChangeRecord) => ({ change: record, summary: summarize(record) });
 
 const ROWS = [
   row("none"),
-  row("draft", { change, summary: summary({ canApprove: true, tone: "approval" }) }),
-  row("ready", { change, summary: summary({ tone: "ready" }), school: school("rsu") }),
-  row("stuck", { change, summary: summary({ tone: "attention" }) }),
-  row("sent", { change, summary: summary({ tone: "done" }), open: false }),
+  row("draft", holding(newDraft())),
+  row("ready", { ...holding(approved()), school: school("rsu") }),
+  row("stuck", holding(held())),
+  row("sent", { ...holding(sent()), open: false }),
 ];
 const keys = (rows: readonly WorkRow[]) => rows.map((r) => r.key);
 
@@ -85,7 +64,7 @@ describe("queueChips", () => {
       "LCC",
       "RSU",
       "Not started",
-      "Draft, not sent",
+      "AI draft, not sent",
       "Ready to send",
       "Needs attention",
     ]);
@@ -94,38 +73,27 @@ describe("queueChips", () => {
 
   it("drops the school chips when one school holds all the work", () => {
     expect(
-      queueChips([row("a"), row("b", { change, summary: summary({ tone: "approval" }) })]).map(
-        (chip) => chip.label,
-      ),
+      queueChips([row("a"), row("b", holding(newDraft()))]).map((chip) => chip.label),
     ).not.toContain("LCC");
   });
 
   it("never offers a chip with nothing behind it", () => {
-    const chips = queueChips([
-      row("a"),
-      row("b"),
-      row("c", { change, summary: summary({ canApprove: true }) }),
-    ]);
+    const chips = queueChips([row("a"), row("b"), row("c", holding(newDraft()))]);
     expect(chips.map((chip) => [chip.label, chip.count])).toEqual([
       ["All", 3],
       ["Not started", 2],
-      ["Draft, not sent", 1],
+      ["AI draft, not sent", 1],
     ]);
   });
 
   it("offers no chips when every open row is in the same state", () => {
     expect(queueChips([row("a"), row("b")])).toEqual([]);
-    expect(
-      queueChips([
-        row("a"),
-        row("sent", { change, summary: summary({ tone: "done" }), open: false }),
-      ]),
-    ).toEqual([]);
+    expect(queueChips([row("a"), row("sent", { ...holding(sent()), open: false })])).toEqual([]);
   });
 
   it("a draft's chip says what its rows say, and the words true of them all when authors differ", () => {
     const say = (label: string) =>
-      row(label, { change, summary: summary({ canApprove: true, label }) });
+      row(label, { change: newDraft(), summary: changeSummary({ canApprove: true, label }) });
     const drafts = (...labels: string[]) =>
       queueChips([row("a"), ...labels.map(say)]).find((chip) => chip.filter === "ready-to-approve")
         ?.label;
@@ -134,16 +102,13 @@ describe("queueChips", () => {
   });
 
   it("names a state with the word its row uses", () => {
-    const approved = {
-      state: { tag: "approved", approval: { at: "" } },
-    } as unknown as ChangeRecord;
     const labels = queueChips(ROWS).map((chip) => chip.label);
-    expect(labels).toContain(summarize(approved).label);
+    expect(labels).toContain(summarize(approved()).label);
     expect(labels).toContain(rowStatus(row("none"), false).label);
   });
 
   it("a row whose student was asked to resubmit says so, and isn't Not started (#98)", () => {
-    const asked = row("asked", { open: false, asked: "2026-11-14T15:00:00.000Z" as IsoTime });
+    const asked = row("asked", { open: false, asked: isoTime("2026-11-14T15:00:00.000Z") });
     expect(rowStatus(asked, false).label).toMatch(/^Asked to resubmit · Nov 1[45]$/);
     expect(keys(filterRows([row("none"), asked], "needs-draft"))).toEqual(["none"]);
   });
@@ -155,13 +120,13 @@ describe("assignment choices", () => {
     row("a2"),
     row("m1", {
       detail: "Memo",
-      assignment: "a-memo" as WorkRow["assignment"],
-      course: { code: "ENG 305" } as WorkRow["course"],
+      assignment: "a-memo" as LmsRef<"assignment">,
+      course: course({ code: "ENG 305" }),
     }),
     row("m2", {
       detail: "Memo",
-      assignment: "a-memo" as WorkRow["assignment"],
-      course: { code: "ENG 305" } as WorkRow["course"],
+      assignment: "a-memo" as LmsRef<"assignment">,
+      course: course({ code: "ENG 305" }),
       open: false,
     }),
   ];
@@ -194,7 +159,7 @@ describe("assignment choices", () => {
 });
 
 describe("liveFilter", () => {
-  const drafted = (key: string) => row(key, { change, summary: summary({ canApprove: true }) });
+  const drafted = (key: string) => row(key, holding(newDraft()));
 
   it("keeps a filter that still has rows", () => {
     expect(liveFilter([row("a"), drafted("b")], "ready-to-approve")).toBe("ready-to-approve");
@@ -209,22 +174,22 @@ describe("liveFilter", () => {
 });
 
 describe("rowLine", () => {
-  const grading = { course: "c" as never, assignment: "a" as never };
+  const grading = { course: "c" as LmsRef<"course">, assignment: "a" as LmsRef<"assignment"> };
 
   it("adds nothing in a thread that names the course and the assignment", () => {
-    expect(rowLine(row("a", { dueAt: "2026-10-26T12:00:00Z" as never }), grading)).toBe("");
+    expect(rowLine(row("a", { dueAt: isoTime("2026-10-26T12:00:00Z") }), grading)).toBe("");
   });
 
   it("keeps the subject in a replies thread, which only names the course", () => {
     expect(
-      rowLine(row("a", { kind: "conversation", detail: "Screening time" }), {
-        course: "c" as never,
+      rowLine(conversationRow("a", { detail: "Screening time" }), {
+        course: "c" as LmsRef<"course">,
       }),
     ).toBe("Screening time");
   });
 
   it("ends with the labelled due date, after the course and the assignment, in a list across courses", () => {
-    expect(rowLine(row("a", { dueAt: "2026-10-26T12:00:00Z" as never }), { course: null })).toBe(
+    expect(rowLine(row("a", { dueAt: isoTime("2026-10-26T12:00:00Z") }), { course: null })).toBe(
       "HUM 150 · Essay 2 · Due Oct 26",
     );
   });
@@ -233,7 +198,7 @@ describe("rowLine", () => {
 describe("queueProgress", () => {
   it("a grading list counts grades, requests to resubmit, and what's left, each by name (#122)", () => {
     const asked = (key: string) =>
-      row(key, { open: false, asked: "2026-11-14T12:00:00Z" as never });
+      row(key, { open: false, asked: isoTime("2026-11-14T12:00:00Z") });
     expect(queueProgress([asked("a"), asked("b"), row("c")]).label).toBe(
       "0 graded · 2 asked to resubmit · 1 to grade",
     );
@@ -254,21 +219,15 @@ describe("queueProgress", () => {
   });
 
   it("a message queue counts replies sent", () => {
-    expect(queueProgress([row("a", { kind: "conversation" })]).label).toBe("0 of 1 sent");
-    expect(
-      queueProgress([
-        row("a", { kind: "conversation", open: false }),
-        row("b", { kind: "conversation" }),
-      ]).label,
-    ).toBe("1 of 2 sent");
+    expect(queueProgress([conversationRow("a")]).label).toBe("0 of 1 sent");
+    expect(queueProgress([conversationRow("a", { open: false }), conversationRow("b")]).label).toBe(
+      "1 of 2 sent",
+    );
   });
 
   it("a draft doesn't count as progress", () => {
-    const drafted = row("a", {
-      kind: "conversation",
-      change: { id: "c" } as unknown as ChangeRecord,
-    });
-    expect(queueProgress([drafted, row("b", { kind: "conversation" })]).label).toBe("0 of 2 sent");
+    const drafted = conversationRow("a", { change: newDraft("c") });
+    expect(queueProgress([drafted, conversationRow("b")]).label).toBe("0 of 2 sent");
   });
 
   it("an empty queue has no fraction to divide", () => {
@@ -329,7 +288,7 @@ describe("neighbor and nextOpen", () => {
 });
 
 describe("a course's To grade in the Grading list (#48)", () => {
-  const music = { ref: "c-music", code: "MUS 101" } as WorkRow["course"];
+  const music = course({ ref: "c-music" as LmsRef<"course">, code: "MUS 101" });
   const rows = [row("a", { course: music }), row("b", { course: music }), row("c")];
 
   it("narrows the list to that course, with a chip that names it and All to undo it", () => {
@@ -362,7 +321,7 @@ describe("nextLabel (#48)", () => {
 
   it("is plain Next when nothing would be drafted", () => {
     expect(nextLabel(row("Jean Tuttle"), false)).toBe("Next: Jean Tuttle");
-    const drafted = row("Jean Tuttle", { change: {} as ChangeRecord });
+    const drafted = row("Jean Tuttle", { change: newDraft() });
     expect(nextLabel(drafted, true)).toBe("Next: Jean Tuttle");
   });
 
@@ -436,12 +395,11 @@ describe("selectable", () => {
 });
 
 describe("batchChanges", () => {
-  const change = (id: string) => ({ id }) as unknown as ChangeRecord;
   const rows = [
-    { key: "a", change: change("c1") },
-    { key: "b", change: null },
-    { key: "c", change: change("c3") },
-  ] as unknown as WorkRow[];
+    row("a", { change: newDraft("c1") }),
+    row("b"),
+    row("c", { change: newDraft("c3") }),
+  ];
 
   it("a batch holds only selected rows that have a change", () => {
     expect(batchChanges(rows, ["a", "b", "c"])).toEqual(["c1", "c3"]);
@@ -456,7 +414,7 @@ describe("missing work", () => {
   const rows = [
     row("submitted"),
     row("fiona", { missing: true }),
-    row("bo", { missing: true, change, open: false }),
+    row("bo", { missing: true, change: newDraft(), open: false }),
   ];
 
   it("a Missing chip narrows to students still to settle", () => {

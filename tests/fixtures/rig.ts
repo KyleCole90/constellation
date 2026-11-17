@@ -5,7 +5,7 @@ import {
   type FieldKey,
   type GradeContent,
 } from "~/shared/domain/change";
-import type { ChangeId, IsoTime, SchoolId } from "~/shared/domain/ids";
+import { type ChangeId, type SchoolId, isoTime } from "~/shared/domain/ids";
 import type { Submission } from "~/shared/domain/lms";
 import type { SendPermit } from "~/shared/domain/permit";
 import { QUIET_NOISE } from "~/shared/providers/fake-canvas/faults";
@@ -22,6 +22,7 @@ import {
 import { clickWitness } from "./changes";
 import { VirtualClock } from "./clock";
 import { DurableLedger } from "./ledger";
+import { BrowserLocks } from "./locks";
 import { memoryStorage } from "./storage";
 
 export const LCC = "lcc" as SchoolId;
@@ -96,6 +97,7 @@ export const makeRig = async () => {
   };
   buildProviders();
 
+  let locks = new BrowserLocks();
   const newWriteback = (): Writeback =>
     createWriteback({
       ledger,
@@ -105,7 +107,7 @@ export const makeRig = async () => {
       sleep: clock.sleep,
       random: () => 0.5,
       policy: DEFAULT_RETRY_POLICY,
-      locks: null,
+      locks,
     });
 
   const provider = (school: SchoolId): LmsProvider => {
@@ -134,11 +136,13 @@ export const makeRig = async () => {
   const draft = async (school: SchoolId, content: ChangeContent): Promise<ChangeRecord> => {
     const remote = await provider(school).observe(content);
     if (!remote.ok) throw new Error(`observe failed: ${remote.error.kind}`);
-    const at = new Date(clock.now()).toISOString() as IsoTime;
+    const course = server.courses(school)[0]?.ref;
+    if (!course) throw new Error(`No course at ${school}.`);
+    const at = isoTime(clock.now());
     const record = newChangeRecord({
       id: `ch-${++seq}` as ChangeId,
       school,
-      course: server.courses(school)[0]?.ref ?? ("" as never),
+      course,
       subject: "test",
       content,
       basis: { readAt: at, remote: remote.value },
@@ -155,7 +159,7 @@ export const makeRig = async () => {
     const result = ledger.commit(id, {
       type: "approve",
       witness: clickWitness(record),
-      at: new Date(clock.now()).toISOString() as IsoTime,
+      at: isoTime(clock.now()),
     });
     if (!result.ok) throw new Error(`approve rejected: ${result.error}`);
   };
@@ -179,17 +183,18 @@ export const makeRig = async () => {
     return found;
   };
 
-  /** What a page reload does: new server object and new runner over the same durable state. */
+  /** What a page reload does: new server object and new runner over the same durable state. The old tab's locks go with it. */
   const reload = (): Writeback => {
     server = newServer();
+    locks = new BrowserLocks();
     buildProviders();
     return newWriteback();
   };
 
-  const stateOf = (id: ChangeId): ChangeRecord["state"] => {
+  const recordOf = (id: ChangeId): ChangeRecord => {
     const record = ledger.get(id);
     if (!record) throw new Error("No such change.");
-    return record.state;
+    return record;
   };
 
   return {
@@ -202,6 +207,9 @@ export const makeRig = async () => {
     get server() {
       return server;
     },
+    get locks() {
+      return locks;
+    },
     provider,
     connect,
     toGrade,
@@ -212,7 +220,8 @@ export const makeRig = async () => {
     lmsSubmission,
     newWriteback,
     reload,
-    stateOf,
+    recordOf,
+    stateOf: (id: ChangeId): ChangeRecord["state"] => recordOf(id).state,
   };
 };
 export type Rig = Awaited<ReturnType<typeof makeRig>>;

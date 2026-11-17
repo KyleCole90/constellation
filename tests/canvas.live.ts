@@ -14,7 +14,7 @@ import {
 } from "~/shared/domain/change";
 import type { Migration } from "~/shared/domain/content";
 import { ApprovalWitness, fingerprintOf } from "~/shared/domain/approval";
-import type { ChangeId, IsoTime, LmsRef, Result } from "~/shared/domain/ids";
+import { type ChangeId, type LmsRef, type Result, isoTime } from "~/shared/domain/ids";
 import {
   AccountInfoSchema,
   AnnouncementSchema,
@@ -107,7 +107,7 @@ describe("Canvas reads against a live school", () => {
 
   /** One change read, approved with a trusted click and sent through the runner, as the app sends it. */
   const runnerFor = async (content: ChangeContent, course: LmsRef<"course">) => {
-    const at = new Date().toISOString() as IsoTime;
+    const at = isoTime(Date.now());
     const remote = unwrap("observe", await provider.observe(content));
     const ledger = new DurableLedger();
     const draft = newChangeRecord({
@@ -134,7 +134,6 @@ describe("Canvas reads against a live school", () => {
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       random: () => Math.random(),
       policy: DEFAULT_RETRY_POLICY,
-      locks: null,
     });
     return async () => {
       await writeback.send([draft.id]);
@@ -177,7 +176,7 @@ describe("Canvas reads against a live school", () => {
   writeTest(
     "a grade and comment sent through the runner land once, though the comment's response was lost (set CANVAS_SUBMISSION=<course>/<assignment>/<student> on a sandbox course)",
     async () => {
-      const at = new Date().toISOString() as IsoTime;
+      const at = isoTime(Date.now());
       const content: GradeContent = {
         kind: "grade",
         target: `${school.id}:submission:${course}:${assignment}:${user}` as LmsRef<"submission">,

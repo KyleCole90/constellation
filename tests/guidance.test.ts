@@ -6,7 +6,7 @@ import {
   type Agent,
   type AgentInput,
 } from "~/shared/agent/agent";
-import type { ThreadId } from "~/shared/domain/ids";
+import { type ThreadId, isoTime } from "~/shared/domain/ids";
 
 import { makeStoreRig } from "./fixtures/store-rig";
 
@@ -111,7 +111,7 @@ describe("a preference the teacher states in a thread (#97)", () => {
     const northStar = {
       announcements: [],
       schools: [],
-      now: "2026-01-01T00:00:00Z" as never,
+      now: isoTime("2026-01-01T00:00:00Z"),
       next: [],
       grades: [],
       grading: { toGrade: [], asked: [] },

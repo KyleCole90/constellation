@@ -1,4 +1,5 @@
 import type { Agent, AgentScope } from "~/shared/agent/agent";
+import type { ChangeRecord } from "~/shared/domain/change";
 import type { ChangeId, SchoolId } from "~/shared/domain/ids";
 import { QUIET_NOISE, type NoiseConfig } from "~/shared/providers/fake-canvas/faults";
 import { FAKE_SCHOOLS } from "~/shared/providers/fake-canvas/provider";
@@ -18,9 +19,11 @@ import {
 } from "~/renderer/stores/workspace";
 
 import { VirtualClock } from "./clock";
+import { BrowserLocks } from "./locks";
+import { LCC, RSU } from "./rig";
 import { memoryStorage, type MemoryStorage } from "./storage";
 
-const SCHOOLS: readonly SchoolId[] = ["lcc" as SchoolId, "rsu" as SchoolId];
+const SCHOOLS: readonly SchoolId[] = [LCC, RSU];
 export const STORE_TOKEN = "store-rig-token-long-enough";
 
 export interface StoreRigOptions {
@@ -37,7 +40,8 @@ export interface StoreRigOptions {
   clock?: VirtualClock;
   subscribeStorage?: (onChange: () => void) => void;
   subscribeFocus?: (onFocus: () => void) => void;
-  locks?: Pick<LockManager, "request">;
+  /** Share another rig's to act as a second tab of the same browser. */
+  locks?: BrowserLocks;
   connectivity?: { online(): boolean; subscribe(onChange: () => void): void };
   /** These seeded schools join as real Canvas, served by the same fake. */
   realSchools?: readonly SchoolId[];
@@ -52,6 +56,7 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
   const clock = options.clock ?? new VirtualClock();
   const storage = options.storage ?? memoryStorage();
   const vault = options.vault ?? createMemoryVault();
+  const locks = options.locks ?? new BrowserLocks();
   let server: FakeCanvasServer | null = null;
   let seq = 0;
   const store: WorkspaceStore = createWorkspaceStore({
@@ -94,7 +99,7 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
     realNow: clock.now,
     sleep: clock.sleep,
     random: () => (++seq * 0.137) % 1,
-    locks: options.locks ?? null,
+    locks,
     aiAlways: !options.noKey,
     ...(options.agent ? { agent: options.agent } : {}),
     ...(options.subscribeStorage ? { subscribeStorage: options.subscribeStorage } : {}),
@@ -121,11 +126,18 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
     clock,
     storage,
     vault,
+    locks,
     store,
     state,
     get server(): FakeCanvasServer {
       if (!server) throw new Error("No server.");
       return server;
+    },
+    /** The change, which the test expects to exist. */
+    change: (id: ChangeId): ChangeRecord => {
+      const record = state().changes[id];
+      if (!record) throw new Error(`No change ${id}.`);
+      return record;
     },
     connect,
     connectAll: async () => {

@@ -175,7 +175,6 @@ describe("the runner against a second vendor", () => {
       sleep: clock.sleep,
       random: () => 0.5,
       policy: DEFAULT_RETRY_POLICY,
-      locks: null,
     });
     return { stub, clock, ledger, writeback, id: draft.id };
   };

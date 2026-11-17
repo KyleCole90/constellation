@@ -2,12 +2,18 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { CopySource } from "~/shared/domain/content";
 import { newChangeRecord, type ChangeRecord, type RemoteState } from "~/shared/domain/change";
-import type { ChangeId, IsoDate, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
+import {
+  type ChangeId,
+  type IsoDate,
+  type LmsRef,
+  type SchoolId,
+  isoTime,
+} from "~/shared/domain/ids";
 import { termName } from "~/shared/domain/term";
 
 import { riskPrompt } from "./approve.logic";
 
-const AT = "2026-10-30T12:00:00.000Z" as IsoTime;
+const AT = isoTime("2026-10-30T12:00:00.000Z");
 const PLAN = {
   oldTerm: {
     name: termName("Fall 2026"),

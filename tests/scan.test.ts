@@ -9,7 +9,7 @@ import type {
   MigrationIssue,
   TextFixContent,
 } from "~/shared/domain/content";
-import type { IsoDate, IsoTime, LmsRef } from "~/shared/domain/ids";
+import { type IsoDate, type IsoTime, type LmsRef, isoTime } from "~/shared/domain/ids";
 import {
   RULES,
   scanCourse,
@@ -85,7 +85,7 @@ const issue = (open: boolean): MigrationIssue => ({
   open,
   fixUrl: "https://lms.example/fix",
 });
-const on = (due: string): IsoTime => `${due}T23:59:00Z` as IsoTime;
+const on = (due: string): IsoTime => isoTime(`${due}T23:59:00Z`);
 
 interface RuleCase {
   positive: CourseContent;
@@ -295,7 +295,7 @@ describe("what a fix says", () => {
   it("moves a due date out of the break and keeps its time", () => {
     expect(RULES["date-in-break"](CASES["date-in-break"].positive, CTX)[0]?.fix).toMatchObject({
       kind: "item-set",
-      intent: { set: "due-at", at: "2027-03-15T23:59:00Z" },
+      intent: { set: "due-at", at: "2027-03-15T23:59:00.000Z" },
     });
   });
 
@@ -313,11 +313,11 @@ describe("what a fix says", () => {
     expect(
       RULES["date-outside-term"](course({ items: [item({ dueAt: on("2027-01-04") })] }), CTX)[0]
         ?.fix,
-    ).toMatchObject({ intent: { at: "2027-01-20T23:59:00Z" } });
+    ).toMatchObject({ intent: { at: "2027-01-20T23:59:00.000Z" } });
     expect(
       RULES["date-outside-term"](course({ items: [item({ dueAt: on("2027-06-01") })] }), CTX)[0]
         ?.fix,
-    ).toMatchObject({ intent: { at: "2027-05-05T23:59:00Z" } });
+    ).toMatchObject({ intent: { at: "2027-05-05T23:59:00.000Z" } });
   });
 
   it("an old term name in a title has no text fix", () => {

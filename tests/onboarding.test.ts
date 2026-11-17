@@ -12,6 +12,7 @@ import { Secret } from "~/shared/providers/provider";
 import { createMemoryVault } from "~/renderer/providers/vault";
 import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 
+import { rawSave } from "./fixtures/saved";
 import { STORE_TOKEN, makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 
 const LCC = "lcc" as SchoolId;
@@ -271,10 +272,7 @@ describe("a workspace saved by version 2", () => {
     rig: StoreRig,
     patch: { onboarding: string; aiKeyStatus: "none" | "saved" },
   ): string => {
-    const stored = JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      version: number;
-      state: Record<string, unknown>;
-    };
+    const stored = rawSave(rig.storage);
     const { aiSource: _aiSource, ...state } = stored.state;
     return JSON.stringify({ version: 2, state: { ...state, ...patch } });
   };
@@ -308,7 +306,7 @@ describe("a workspace saved by version 2", () => {
     expect(Object.keys(next.state().threads).sort()).toEqual(Object.keys(before.threads).sort());
     expect(next.state().onboarding).toBe("done");
     expect(next.state().aiSource).toBe("key");
-    expect(JSON.parse(next.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}").version).toBe(3);
+    expect(rawSave(next.storage)["version"]).toBe(3);
   });
 
   it.each([

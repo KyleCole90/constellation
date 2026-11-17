@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { fieldsOf, summarize, type FieldKey, type LmsError } from "~/shared/domain/change";
-import type { ChangeId, IsoTime } from "~/shared/domain/ids";
+import { type ChangeId, isoTime } from "~/shared/domain/ids";
 import type { Submission } from "~/shared/domain/lms";
 import type { Result } from "~/shared/domain/ids";
-import { LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
 import { DEFAULT_RETRY_POLICY, createWriteback } from "~/renderer/writeback/writeback";
 
 import { SimulatedCrash } from "./fixtures/ledger";
 import { LCC, RSU, makeRig, type Rig } from "./fixtures/rig";
+import { savedLms } from "./fixtures/saved";
 
 const heldCause = (rig: Rig, id: ChangeId) => {
   const state = rig.stateOf(id);
@@ -28,7 +28,7 @@ const fieldWrites = (rig: Rig, id: ChangeId, field: FieldKey) =>
   rig.writes.filter((write) => write.change === id && write.fields.includes(field)).length;
 const lmsRequests = (rig: Rig, school = LCC) =>
   rig.server.log.filter((entry) => entry.school === school);
-const iso = (rig: Rig) => new Date(rig.clock.now()).toISOString() as IsoTime;
+const iso = (rig: Rig) => isoTime(rig.clock.now());
 
 describe("a clean send", () => {
   it("lands every field once and reads as sent", async () => {
@@ -79,25 +79,18 @@ describe("a clean send", () => {
     expect(myComments(rig, submission)).toHaveLength(1);
   });
 
-  it("wraps the send in a lock named for the change", async () => {
+  it("waits while another tab sends the same change, then posts once", async () => {
     const rig = await makeRig();
-    const { id } = await rig.approvedGrade(LCC);
-    const names: string[] = [];
-    const locks = {
-      request: async (name: string, work: () => Promise<unknown>) => (names.push(name), work()),
-    } as unknown as Pick<LockManager, "request">;
-    const writeback = createWriteback({
-      ledger: rig.ledger,
-      providerFor: rig.provider,
-      markExpired: () => undefined,
-      now: rig.clock.now,
-      sleep: rig.clock.sleep,
-      random: () => 0.5,
-      policy: DEFAULT_RETRY_POLICY,
-      locks,
-    });
-    await rig.clock.run(writeback.send([id]));
-    expect(names).toEqual([`lms-send:${id}`]);
+    const { id, submission } = await rig.approvedGrade(LCC);
+    const otherTab = await rig.locks.hold(`lms-send:${id}`);
+    const sending = rig.newWriteback().send([id]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(rig.writes).toEqual([]);
+    expect(rig.stateOf(id).tag).toBe("approved");
+
+    otherTab.release();
+    expect(await rig.clock.run(sending)).toEqual([{ id, state: "sent" }]);
+    expect(myComments(rig, submission)).toHaveLength(1);
   });
 });
 
@@ -123,10 +116,7 @@ describe("an expired token mid-batch", () => {
       "sent",
     ]);
     expect(heldCause(rig, second.id)).toEqual({ tag: "reconnect" });
-    expect(
-      summarize(rig.ledger.get(second.id) as NonNullable<ReturnType<Rig["ledger"]["get"]>>)
-        .recovery,
-    ).toBe("reconnect");
+    expect(summarize(rig.recordOf(second.id)).recovery).toBe("reconnect");
     expect(rig.expired).toEqual([LCC]);
     expect(writeback.laneStatus(LCC)).toEqual({ state: "closed", reason: "reconnect" });
     expect(writeback.laneStatus(RSU)).toEqual({ state: "open" });
@@ -164,8 +154,7 @@ describe("a conflict", () => {
     expect(rig.lmsSubmission(submission).grade).toBe(65);
     expect(await rig.clock.run(writeback.send([id]))).toEqual([{ id, refused: "not-sendable" }]);
 
-    const record = rig.ledger.get(id);
-    const remote = await rig.provider(LCC).observe(record?.content as never);
+    const remote = await rig.provider(LCC).observe(rig.recordOf(id).content);
     if (!remote.ok) throw new Error(remote.error.kind);
     const resolved = rig.ledger.commit(id, {
       type: "resolve-conflict",
@@ -202,7 +191,7 @@ describe("a partial write", () => {
     expect(await rig.clock.run(writeback.send([id]))).toEqual([{ id, state: "held" }]);
     expect(fieldStatus(rig, id, "grade")?.status).toBe("landed");
     expect(fieldStatus(rig, id, "comment")?.status).toBe("failed");
-    expect(summarize(rig.ledger.get(id) as never).label).toBe("Partly sent");
+    expect(summarize(rig.recordOf(id)).label).toBe("Partly sent");
     expect(myComments(rig, submission)).toHaveLength(0);
 
     expect(await rig.clock.run(writeback.send([id]))).toEqual([{ id, state: "sent" }]);
@@ -278,7 +267,7 @@ describe("a lost response", () => {
 
     expect(await rig.clock.run(writeback.send([id]))).toEqual([{ id, state: "held" }]);
     expect(heldCause(rig, id)?.tag).toBe("in-doubt");
-    expect(summarize(rig.ledger.get(id) as never).recovery).toBe("resume");
+    expect(summarize(rig.recordOf(id)).recovery).toBe("resume");
     expect(rig.writes).toHaveLength(1);
     expect(myComments(rig, submission)).toHaveLength(0);
 
@@ -426,7 +415,7 @@ describe("a 429", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     const state = rig.stateOf(id);
     expect(state.tag === "sending" && state.run.waitingUntil).toBeGreaterThan(rig.clock.now());
-    expect(summarize(rig.ledger.get(id) as never).label).toBe("Waiting on the LMS");
+    expect(summarize(rig.recordOf(id)).label).toBe("Waiting on the LMS");
     expect(writeback.laneStatus(LCC)).toMatchObject({ state: "paused", reason: "rate-limited" });
     await rig.clock.run(send);
   });
@@ -447,8 +436,7 @@ describe("a 429", () => {
 
 describe("a reload during a send", () => {
   /** Field applications that actually reached the LMS, read from its own durable state. */
-  const landedWrites = (rig: Rig): number =>
-    (JSON.parse(rig.storage.getItem(LMS_STORAGE_KEY) ?? "{}") as { seq: number }).seq;
+  const landedWrites = (rig: Rig): number => savedLms(rig.storage).seq;
 
   const SCENARIOS: Readonly<Record<string, (rig: Rig) => void>> = {
     "a clean send": () => undefined,
@@ -540,7 +528,7 @@ describe("a reload during a send", () => {
     await rig.clock.run(rig.reload().recover());
     expect(rig.writes).toHaveLength(writes);
     expect(heldCause(rig, id)?.tag).toBe("interrupted");
-    expect(summarize(rig.ledger.get(id) as never).recovery).toBe("resume");
+    expect(summarize(rig.recordOf(id)).recovery).toBe("resume");
   });
 
   it("recover leaves a change alone when another tab holds its lock", async () => {
@@ -554,22 +542,11 @@ describe("a reload during a send", () => {
         .catch(() => undefined),
     );
     rig.ledger.armCrash(null);
-    const heldLock = {
-      request: (_name: string, _options: unknown, work: (lock: null) => Promise<unknown>) =>
-        work(null),
-    } as unknown as Pick<LockManager, "request">;
-    const tab = createWriteback({
-      ledger: rig.ledger,
-      providerFor: rig.provider,
-      markExpired: () => undefined,
-      now: rig.clock.now,
-      sleep: rig.clock.sleep,
-      random: () => 0.5,
-      policy: DEFAULT_RETRY_POLICY,
-      locks: heldLock,
-    });
+    const otherTab = await rig.locks.hold(`lms-send:${id}`);
+    const tab = rig.newWriteback();
     await rig.clock.run(tab.recover());
     expect(rig.stateOf(id).tag).toBe("sending");
+    otherTab.release();
   });
 });
 
@@ -607,7 +584,6 @@ describe("laneRead", () => {
         sleep: rig.clock.sleep,
         random: () => 0.5,
         policy: DEFAULT_RETRY_POLICY,
-        locks: null,
       }),
     };
   };

@@ -5,6 +5,7 @@ import {
   type Rejection,
 } from "~/shared/domain/change";
 import type { ChangeId, Result } from "~/shared/domain/ids";
+import { isChange } from "~/renderer/stores/workspace";
 import type { ChangeLedger } from "~/renderer/writeback/writeback";
 
 export interface Crash {
@@ -14,6 +15,13 @@ export interface Crash {
 }
 
 export class SimulatedCrash extends Error {}
+
+/** A row read back through the workspace load's own check, as a reload would. */
+const reread = (row: string): ChangeRecord => {
+  const record: unknown = JSON.parse(row);
+  if (!isChange(record)) throw new Error("A reload would refuse this change.");
+  return record;
+};
 
 /** Records live as JSON, so whatever a reload could not read back is a test failure rather than a lucky reference. */
 export class DurableLedger implements ChangeLedger {
@@ -26,10 +34,10 @@ export class DurableLedger implements ChangeLedger {
   }
   get(id: ChangeId): ChangeRecord | undefined {
     const row = this.#rows.get(id);
-    return row === undefined ? undefined : (JSON.parse(row) as ChangeRecord);
+    return row === undefined ? undefined : reread(row);
   }
   all(): readonly ChangeRecord[] {
-    return [...this.#rows.values()].map((row) => JSON.parse(row) as ChangeRecord);
+    return [...this.#rows.values()].map(reread);
   }
   commit(id: ChangeId, event: ChangeEvent): Result<ChangeRecord, Rejection> {
     const record = this.get(id);

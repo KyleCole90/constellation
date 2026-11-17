@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { Agent } from "~/shared/agent/agent";
 import { createRuleAgent } from "~/shared/agent/rules";
 import type { GradeContent } from "~/shared/domain/change";
-import type { IsoTime, ThreadId } from "~/shared/domain/ids";
+import { type ThreadId, isoTime } from "~/shared/domain/ids";
 
 import { clickWitness } from "./fixtures/changes";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
@@ -45,7 +45,7 @@ const focused = (rig: StoreRig) => {
   if (!record) throw new Error("nothing is open");
   return record;
 };
-const atNow = (rig: StoreRig) => new Date(rig.state().now()).toISOString() as IsoTime;
+const atNow = (rig: StoreRig) => isoTime(rig.state().now());
 
 describe("after a draft fails, the submission on screen is still the one open", () => {
   it('"Draft this one" drafts the submission on screen', async () => {

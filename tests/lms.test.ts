@@ -9,6 +9,7 @@ import type { Fetch } from "~/main/providers/canvas";
 import type { LmsRef } from "~/shared/domain/ids";
 import { invoker } from "~/shared/ipc";
 import { FAKE_SCHOOLS } from "~/shared/providers/fake-canvas/provider";
+import { parseStoredLms } from "~/shared/providers/fake-canvas/server";
 
 import { bridgedLms, fakeLmsHandlers } from "./fixtures/bridge";
 import { LCC } from "./fixtures/rig";
@@ -84,17 +85,9 @@ describe("the lms channels", () => {
 
   it("the renderer rejects a course list that doesn't parse", async () => {
     const invoke = invoker(async () => ({ ok: true, value: [{ ref: "lcc:course:1" }] }));
-    await expect(
-      invoke("lms.courses", {
-        school: {
-          id: LCC,
-          abbr: "LCC",
-          name: "Lakeshore",
-          host: "l.edu" as never,
-          provider: "fake-canvas",
-        },
-      }),
-    ).rejects.toThrow();
+    const school = FAKE_SCHOOLS.find((entry) => entry.id === LCC);
+    if (!school) throw new Error("No seeded LCC.");
+    await expect(invoke("lms.courses", { school })).rejects.toThrow();
   });
 
   it("a provider read over a bridge that fails reads as the LMS being unavailable", async () => {
@@ -168,9 +161,8 @@ describe("the lms channels", () => {
     const submission = lms.server.findSubmission("Maya Ortiz", "Essay 2") as LmsRef<"submission">;
     lms.lab.changeGradeOutOfBand(submission, 65, "A TA");
     await lms.clock.flush();
-    const stored = JSON.parse((await lms.server.stored()) ?? "{}") as {
-      submissions: { ref: string; comments: { at: string }[] }[];
-    };
+    const stored = parseStoredLms(JSON.parse((await lms.server.stored()) ?? "null"));
+    if (!stored) throw new Error("Main's fake would start fresh instead of loading its save.");
     const at = stored.submissions.find((entry) => entry.ref === submission)?.comments.at(-1)?.at;
     expect(Math.abs(Date.parse(at ?? "") - lms.clock.now())).toBeLessThan(1000);
   });

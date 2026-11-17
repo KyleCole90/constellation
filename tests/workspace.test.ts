@@ -3,7 +3,13 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { DRAFT_GRADE_REQUEST } from "~/shared/agent/agent";
 import { ApprovalWitness } from "~/shared/domain/approval";
 import { summarize, zeroPatch, type ChangePatch } from "~/shared/domain/change";
-import type { ChangeId, IsoTime, LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
+import {
+  type ChangeId,
+  type LmsRef,
+  type SchoolId,
+  type ThreadId,
+  isoTime,
+} from "~/shared/domain/ids";
 import { previewOf } from "~/shared/domain/preview";
 import { DEMO_CONFLICT, DEMO_PARTIAL, QUIET_NOISE } from "~/shared/providers/fake-canvas/faults";
 import { FakeCanvasServer, LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
@@ -33,6 +39,7 @@ import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";
+import { jsonObject, rawLms, rawSave, savedWorkspace } from "./fixtures/saved";
 import { memoryStorage } from "./fixtures/storage";
 import { STORE_TOKEN, makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 
@@ -73,12 +80,8 @@ describe("persistence", () => {
   it("a change committed by the ledger is in storage by the time the action returns", async () => {
     const rig = await connected();
     const id = await openFor(rig, "Maya Ortiz");
-    const stored = JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      version: number;
-      state: { changes: Record<string, unknown> };
-    };
-    expect(stored.version).toBe(3);
-    expect(stored.state.changes[id]).toBeDefined();
+    expect(rawSave(rig.storage)["version"]).toBe(3);
+    expect(savedWorkspace(rig.storage).changes[id]).toBeDefined();
   });
 
   it("a reload restores threads and changes and stays connected", async () => {
@@ -125,17 +128,17 @@ describe("persistence", () => {
     const rig = await makeStoreRig({ storage });
     expect(rig.state().notice).toContain("reset");
     expect(Object.keys(rig.state().threads).length).toBeGreaterThan(1);
-    expect(JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}").version).toBe(3);
+    expect(rawSave(rig.storage)["version"]).toBe(3);
     expect(rig.storage.getItem(`${WORKSPACE_STORAGE_KEY}.unreadable`)).toBe(blob);
     expect(error).not.toHaveBeenCalled();
     error.mockRestore();
   });
 
-  type Saved = { state: Record<string, unknown> };
+  type Saved = ReturnType<typeof rawSave>;
   const firstOf = (record: unknown): Record<string, unknown> =>
-    Object.values(record as Record<string, Record<string, unknown>>)[0] ?? {};
+    jsonObject(Object.values(jsonObject(record))[0]);
   const threadOfKind = (saved: Saved, kind: string): Record<string, unknown> => {
-    const threads = Object.values(saved.state.threads as Record<string, Record<string, unknown>>);
+    const threads = Object.values(jsonObject(saved.state.threads)).map(jsonObject);
     const found = threads.find((thread) => thread["kind"] === kind);
     if (!found) throw new Error(`The seed has no ${kind} thread.`);
     return found;
@@ -167,7 +170,7 @@ describe("persistence", () => {
   ])("a saved workspace with %s resets and keeps a backup", async (_name, corrupt) => {
     const first = await connected();
     await openFor(first, "Maya Ortiz");
-    const saved = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as Saved;
+    const saved = rawSave(first.storage);
     corrupt(saved);
     const blob = JSON.stringify(saved);
     first.storage.setItem(WORKSPACE_STORAGE_KEY, blob);
@@ -183,7 +186,7 @@ describe("persistence", () => {
   it("a save from before setups, new courses and handoffs existed still loads", async () => {
     const first = await connected();
     const id = await openFor(first, "Maya Ortiz");
-    const saved = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as Saved;
+    const saved = rawSave(first.storage);
     delete saved.state.setups;
     delete saved.state.newCourses;
     delete saved.state.handoffs;
@@ -203,9 +206,7 @@ describe("persistence", () => {
       const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
       const first = await connected();
       const id = await openFor(first, "Maya Ortiz");
-      const stored = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-        version: number;
-      };
+      const stored = rawSave(first.storage);
       first.storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify({ ...stored, version }));
       const second = await makeStoreRig({
         storage: first.storage,
@@ -222,9 +223,7 @@ describe("persistence", () => {
   it("the transient working flag is not persisted", async () => {
     const rig = await connected();
     await openFor(rig, "Maya Ortiz");
-    expect(
-      JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}").state.working,
-    ).toBeUndefined();
+    expect(rawSave(rig.storage).state.working).toBeUndefined();
   });
 });
 
@@ -248,10 +247,7 @@ describe("resetDemoData", () => {
     expect(rig.state().onboarding).toBe("welcome");
     expect(rig.state().aiSource).toBe("none");
     expect(rig.state().notice).toContain("reset");
-    const persisted = JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      state: { changes: object };
-    };
-    expect(persisted.state.changes).toEqual({});
+    expect(savedWorkspace(rig.storage).changes).toEqual({});
   });
 
   it("after a reset the seeded LMS comes back, ungraded", async () => {
@@ -357,9 +353,7 @@ describe("the teacher's desktop app, which has no demo", () => {
   it("gives a profile the broken build saved with no threads its built-in threads at boot", async () => {
     const first = await makeStoreRig({ noDemo: true, realSchools: [LCC] });
     first.state().setOnboarding("done");
-    const saved = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      state: Record<string, unknown>;
-    };
+    const saved = rawSave(first.storage);
     first.storage.setItem(
       WORKSPACE_STORAGE_KEY,
       JSON.stringify({ ...saved, state: { ...saved.state, threads: {} } }),
@@ -449,6 +443,7 @@ describe("a second tab", () => {
     const second = await makeStoreRig({
       storage: first.storage,
       vault: first.vault,
+      locks: first.locks,
       clock: first.clock,
       subscribeStorage: (onChange) => (notify = onChange),
     });
@@ -480,14 +475,9 @@ describe("a second tab", () => {
     second.state().setThreadUi(QUEUE, { scrollTop: 10 });
     second.state().setPrefs({ sidebarOpen: false });
 
-    const stored = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      state: {
-        changes: Record<string, { state: { tag: string } }>;
-        prefs: { sidebarOpen: boolean };
-      };
-    };
-    expect(stored.state.changes[id]?.state.tag).toBe("approved");
-    expect(stored.state.prefs.sidebarOpen).toBe(false);
+    const stored = savedWorkspace(first.storage);
+    expect(stored.changes[id]?.state.tag).toBe("approved");
+    expect(stored.prefs.sidebarOpen).toBe(false);
 
     expect(await first.clock.run(first.state().sendChanges([id]))).toEqual([{ id, state: "sent" }]);
     expect(stateTag(first, id)).toBe("sent");
@@ -500,9 +490,7 @@ describe("a second tab", () => {
   it("does not overwrite what the other tab saved", async () => {
     const { first, second } = await twoTabs();
     const id = await openFor(first, "Maya Ortiz");
-    second
-      .state()
-      .dispatchUser(id, { type: "discard", at: first.state().changes[id]?.basis.readAt as never });
+    second.state().dispatchUser(id, { type: "discard", at: first.change(id).basis.readAt });
     expect(stateTag(second, id)).toBe("discarded");
     first.store.syncFromStorage();
     expect(stateTag(first, id)).toBe("discarded");
@@ -832,7 +820,7 @@ describe("dispatchUser", () => {
   it("is the only store route to approved, and needs a witness", async () => {
     const rig = await connected();
     const id = await openFor(rig, "Maya Ortiz");
-    const at = rig.state().changes[id]?.basis.readAt as never;
+    const at = rig.change(id).basis.readAt;
     expect(
       rig.state().dispatchUser(id, {
         type: "approve",
@@ -862,7 +850,7 @@ describe("dispatchUser", () => {
       type: "edit",
       by: "you",
       patch: { kind: "grade", comment: "Changed." },
-      at: rig.state().changes[id]?.basis.readAt as never,
+      at: rig.change(id).basis.readAt,
     });
     expect(rig.state().changes[id]?.state).toMatchObject({ tag: "draft", approvalReset: "edited" });
     expect(rig.state().threads[QUEUE]?.messages.length).toBe(before);
@@ -1382,7 +1370,7 @@ describe("the store's preview", () => {
       type: "edit",
       by: "you",
       patch: { kind: "grade", comment: "Changed after approving." },
-      at: new Date(rig.state().now()).toISOString() as IsoTime,
+      at: isoTime(rig.state().now()),
     });
     expect(result.ok).toBe(true);
     expect(stateTag(rig, id)).toBe("draft");
@@ -1476,9 +1464,7 @@ describe("syncing", () => {
     expect(rig.state().syncing[LCC]).toBe(true);
     await rig.clock.run(run);
     expect(rig.state().syncing[LCC]).toBe(false);
-    expect(
-      JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}").state.syncing,
-    ).toBeUndefined();
+    expect(rawSave(rig.storage).state.syncing).toBeUndefined();
   });
 
   it("a sync that answers after a disconnect does not bring the school back", async () => {
@@ -1639,7 +1625,7 @@ describe("the failure lab", () => {
     const make = () =>
       new FakeCanvasServer({ storage, now: () => 0, sleep: async () => {}, random: () => 0.5 });
     make().setNoise({ rate5xx: 0.25 });
-    const stored = JSON.parse(storage.getItem(LMS_STORAGE_KEY) ?? "{}") as Record<string, unknown>;
+    const stored = rawLms(storage);
     corrupt(stored);
     storage.setItem(LMS_STORAGE_KEY, JSON.stringify(stored));
     expect(make().noise().rate5xx).toBe(0);
@@ -1650,7 +1636,7 @@ describe("the failure lab", () => {
     const make = () =>
       new FakeCanvasServer({ storage, now: () => 0, sleep: async () => {}, random: () => 0.5 });
     make().setNoise({ rate5xx: 0.25 });
-    const stored = JSON.parse(storage.getItem(LMS_STORAGE_KEY) ?? "{}") as Record<string, unknown>;
+    const stored = rawLms(storage);
     delete stored["writeLog"];
     delete stored["term"];
     storage.setItem(LMS_STORAGE_KEY, JSON.stringify(stored));
@@ -1720,7 +1706,7 @@ describe("missing work", () => {
       type: "edit",
       by: "you",
       patch: patch(id),
-      at: new Date(rig.state().now()).toISOString() as IsoTime,
+      at: isoTime(rig.state().now()),
     });
     expect(edited.ok).toBe(true);
     approve(rig, id);
