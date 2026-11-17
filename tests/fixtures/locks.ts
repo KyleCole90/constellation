@@ -1,12 +1,10 @@
-let browsers = 0;
-
 /**
  * The real `navigator.locks`, under a name scope of its own. Tabs that share one act as one
  * browser. A rig that stands in for a reload gets a fresh one, because the old tab is gone and its
- * locks with it, and a test's leftover lock can't reach the next test.
+ * locks with it, and a leftover lock can't reach another test, even one in the same process.
  */
 export class BrowserLocks implements Pick<LockManager, "request"> {
-  readonly #scope = `browser-${++browsers}:`;
+  readonly #scope = `browser-${crypto.randomUUID()}:`;
 
   request<T>(name: string, callback: LockGrantedCallback<T>): Promise<Awaited<T>>;
   request<T>(
