@@ -389,6 +389,7 @@ describe("what a screen can know", () => {
     expect(aiSourceReaders(SOURCES)).toEqual([
       "renderer/components/screens/WelcomeScreen.tsx",
       "renderer/components/settings/AiSection.tsx",
+      "renderer/stores/persisted.ts",
       "renderer/stores/types.ts",
       "renderer/stores/workspace.ts",
     ]);

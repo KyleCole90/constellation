@@ -21,11 +21,25 @@ import {
 const count = v.number();
 const LatencySchema: v.GenericSchema<NoiseConfig["latencyMs"]> = v.tuple([count, count]);
 
-const NoiseSchema: v.GenericSchema<NoiseConfig> = v.object({
+export const NoiseSchema: v.GenericSchema<NoiseConfig> = v.object({
   rate429: count,
   rate5xx: count,
   rateLost: count,
   latencyMs: LatencySchema,
+});
+
+export const NoisePatchSchema: v.GenericSchema<Partial<NoiseConfig>> = v.object({
+  rate429: v.exactOptional(count),
+  rate5xx: v.exactOptional(count),
+  rateLost: v.exactOptional(count),
+  latencyMs: v.exactOptional(LatencySchema),
+});
+
+export const WriteRecordSchema: v.GenericSchema<WriteRecord> = v.object({
+  at: IsoTimeSchema,
+  school: SchoolIdSchema,
+  target: v.string(),
+  fields: FieldKeysSchema,
 });
 
 /**
@@ -45,14 +59,7 @@ export const LabSnapshotSchema: v.GenericSchema<LabSnapshot> = v.object({
   defaultNoise: NoiseSchema,
   demoScript: v.object({ enabled: v.boolean(), fired: v.array(v.picklist(DEMO_FAULTS)) }),
   armed: v.object({ failedFields: FieldKeysSchema, lostResponses: count, throttles: count }),
-  writes: v.array(
-    v.object({
-      at: IsoTimeSchema,
-      school: SchoolIdSchema,
-      target: v.string(),
-      fields: FieldKeysSchema,
-    }),
-  ),
+  writes: v.array(WriteRecordSchema),
 });
 
 export const labSnapshot = (lab: FaultLab): LabSnapshot => ({
@@ -70,12 +77,7 @@ export const labSnapshot = (lab: FaultLab): LabSnapshot => ({
 export const LabCommandSchema = v.variant("do", [
   v.object({
     do: v.literal("setNoise"),
-    patch: v.object({
-      rate429: v.exactOptional(count),
-      rate5xx: v.exactOptional(count),
-      rateLost: v.exactOptional(count),
-      latencyMs: v.exactOptional(LatencySchema),
-    }),
+    patch: NoisePatchSchema,
   }),
   v.object({ do: v.literal("resetNoise") }),
   v.object({ do: v.literal("expireToken"), school: SchoolIdSchema }),

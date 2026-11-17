@@ -11,13 +11,16 @@ import {
 import {
   isContentItemType,
   type ContentItemType,
+  type CopySource,
   type CourseContent,
   type CourseShell,
   type Migration,
   type PackageTerm,
   type PickedPackage,
   type SamplePackage,
+  type SetContent,
   type SourceCourse,
+  type TextFixContent,
 } from "../domain/content";
 import {
   parseIsoTime,
@@ -30,6 +33,7 @@ import {
   type Result,
   type SchoolHost,
   type SchoolId,
+  type ThreadId,
 } from "../domain/ids";
 import type {
   Announcement,
@@ -66,20 +70,23 @@ const nullable = <T>(schema: v.GenericSchema<T>) => v.nullable(schema);
 /** A whole list, as every provider read returns one. */
 export const listOf = <T>(item: v.GenericSchema<T>): v.GenericSchema<readonly T[]> => v.array(item);
 
-const brand = <T extends string>(check: (raw: string) => boolean = () => true) =>
+export const brand = <T extends string>(check: (raw: string) => boolean = () => true) =>
   v.custom<T>((input) => typeof input === "string" && check(input));
 
 export const SchoolIdSchema = brand<SchoolId>((raw) => parseSchoolId(raw) === raw);
-/** A ref of `kind`, and no other kind: `school:kind:…`. */
-export const lmsRef = <K extends string>(kind: K) =>
+/**
+ * A school's ref, `school:…`. The kind lives in the type and not in the words: a ref is the vendor's identity, and only
+ * the provider that minted it can say what kind it is, so each provider refuses a ref of the wrong kind itself.
+ */
+export const lmsRef = <K extends string>(_kind: K) =>
   brand<LmsRef<K>>((raw) => {
-    const [school = "", refKind, ...ids] = refParts(raw);
-    return parseSchoolId(school) === school && refKind === kind && ids.length > 0;
+    const [school = "", ...ids] = refParts(raw);
+    return parseSchoolId(school) === school && ids.length > 0 && ids.every((id) => id !== "");
   });
 /** Only the format `isoTime` writes, so IsoTimes compare as text and slice to their day. */
 export const IsoTimeSchema = brand<IsoTime>((raw) => parseIsoTime(raw) === raw);
-const IsoDateSchema = brand<IsoDate>((raw) => isoDate(raw) === raw);
-const WeekdaySchema = v.custom<Weekday>(
+export const IsoDateSchema = brand<IsoDate>((raw) => isoDate(raw) === raw);
+export const WeekdaySchema = v.custom<Weekday>(
   (input) => typeof input === "number" && Number.isInteger(input) && input >= 0 && input <= 6,
 );
 export const FieldKeySchema = v.custom<FieldKey>(
@@ -87,6 +94,7 @@ export const FieldKeySchema = v.custom<FieldKey>(
 );
 export const FieldKeysSchema = listOf(FieldKeySchema);
 export const ChangeIdSchema = brand<ChangeId>((raw) => raw !== "");
+export const ThreadIdSchema = brand<ThreadId>((raw) => raw !== "");
 
 export const SchoolSchema: v.GenericSchema<School> = v.object({
   id: SchoolIdSchema,
@@ -230,9 +238,12 @@ export const AnnouncementSchema: v.GenericSchema<Announcement> = v.object({
   postedAt: IsoTimeSchema,
 });
 
-const EntriesSchema: v.GenericSchema<readonly RemoteEntry[]> = v.array(
-  v.object({ id: text, mine: v.boolean(), text }),
-);
+export const RemoteEntrySchema: v.GenericSchema<RemoteEntry> = v.object({
+  id: text,
+  mine: v.boolean(),
+  text,
+});
+const EntriesSchema: v.GenericSchema<readonly RemoteEntry[]> = v.array(RemoteEntrySchema);
 
 export const RemoteStateSchema: v.GenericSchema<RemoteState> = v.variant("kind", [
   v.object({
@@ -240,7 +251,7 @@ export const RemoteStateSchema: v.GenericSchema<RemoteState> = v.variant("kind",
     targetVersion: text,
     grade: nullable(count),
     rubric: nullable(ScoresSchema),
-    excused: v.boolean(),
+    excused: v.exactOptional(v.boolean()),
     comments: EntriesSchema,
     attachments: EntriesSchema,
   }),
@@ -271,7 +282,7 @@ const TermDatesSchema: v.GenericSchema<TermDates> = v.object({
   days: v.array(WeekdaySchema),
 });
 
-const DraftDateSchema = v.union([IsoDateSchema, v.literal("")]);
+export const DraftDateSchema = v.union([IsoDateSchema, v.literal("")]);
 const PackageTermSchema: v.GenericSchema<PackageTerm> = v.object({
   name: TermNameSchema,
   start: DraftDateSchema,
@@ -388,7 +399,7 @@ export const SamplePackageSchema: v.GenericSchema<SamplePackage> = v.object({
 
 // ---- Writes ----
 
-const TermPlanSchema: v.GenericSchema<TermPlan> = v.object({
+export const TermPlanSchema: v.GenericSchema<TermPlan> = v.object({
   oldTerm: TermDatesSchema,
   newTerm: TermDatesSchema,
   breaks: v.array(v.object({ name: text, start: IsoDateSchema, end: IsoDateSchema })),
@@ -402,6 +413,36 @@ const SubstitutionsSchema = v.custom<Readonly<Partial<Record<Weekday, Weekday>>>
     !Array.isArray(input) &&
     Object.entries(input).every(([day, to]) => isWeekday(Number(day)) && isWeekday(to)),
 );
+
+export const CopySourceSchema = v.variant("kind", [
+  v.object({ kind: v.literal("course"), ref: lmsRef("course"), label: text, termName: text }),
+  v.object({
+    kind: v.literal("cartridge"),
+    name: text,
+    kb: count,
+    hint: nullable(PackageTermSchema),
+  }),
+]) satisfies v.GenericSchema<CopySource>;
+
+export const TextFixContentSchema = v.object({
+  kind: v.literal("text-fix"),
+  target: lmsRef("item"),
+  where: text,
+  splice: v.object({ prefix: text, before: text, after: text, suffix: text }),
+}) satisfies v.GenericSchema<TextFixContent>;
+
+export const SetContentSchema = v.object({
+  kind: v.literal("item-set"),
+  target: v.union([lmsRef("item"), lmsRef("course-state")]),
+  where: text,
+  intent: v.variant("set", [
+    v.object({ set: v.literal("due-at"), at: IsoTimeSchema }),
+    v.object({ set: v.literal("item-published") }),
+    v.object({ set: v.literal("item-deleted") }),
+    v.object({ set: v.literal("course-published") }),
+    v.object({ set: v.literal("course-template") }),
+  ]),
+}) satisfies v.GenericSchema<SetContent>;
 
 export const ChangeContentSchema: v.GenericSchema<ChangeContent> = v.variant("kind", [
   v.object({
@@ -419,11 +460,13 @@ export const ChangeContentSchema: v.GenericSchema<ChangeContent> = v.variant("ki
         }),
       ),
     ),
-    late: nullable(v.object({ days: count, pointsPerDay: count, waived: v.boolean() })),
+    late: nullable(
+      v.object({ days: count, pointsPerDay: count, waived: v.exactOptional(v.boolean()) }),
+    ),
     comment: nullable(text),
     attachment: nullable(v.object({ name: text, kb: count })),
-    override: nullable(count),
-    excused: v.boolean(),
+    override: v.exactOptional(nullable(count)),
+    excused: v.exactOptional(v.boolean()),
   }),
   v.object({ kind: v.literal("reply"), target: lmsRef("conversation"), body: text }),
   v.object({
@@ -442,15 +485,7 @@ export const ChangeContentSchema: v.GenericSchema<ChangeContent> = v.variant("ki
     kind: v.literal("course-copy"),
     target: lmsRef("migrations"),
     into: v.object({ code: text, title: text }),
-    source: v.variant("kind", [
-      v.object({ kind: v.literal("course"), ref: lmsRef("course"), label: text, termName: text }),
-      v.object({
-        kind: v.literal("cartridge"),
-        name: text,
-        kb: count,
-        hint: nullable(PackageTermSchema),
-      }),
-    ]),
+    source: CopySourceSchema,
     plan: TermPlanSchema,
     shift: v.object({
       oldStart: IsoDateSchema,
@@ -460,27 +495,11 @@ export const ChangeContentSchema: v.GenericSchema<ChangeContent> = v.variant("ki
       substitutions: SubstitutionsSchema,
     }),
   }),
-  v.object({
-    kind: v.literal("text-fix"),
-    target: lmsRef("item"),
-    where: text,
-    splice: v.object({ prefix: text, before: text, after: text, suffix: text }),
-  }),
-  v.object({
-    kind: v.literal("item-set"),
-    target: v.union([lmsRef("item"), lmsRef("course-state")]),
-    where: text,
-    intent: v.variant("set", [
-      v.object({ set: v.literal("due-at"), at: IsoTimeSchema }),
-      v.object({ set: v.literal("item-published") }),
-      v.object({ set: v.literal("item-deleted") }),
-      v.object({ set: v.literal("course-published") }),
-      v.object({ set: v.literal("course-template") }),
-    ]),
-  }),
+  TextFixContentSchema,
+  SetContentSchema,
 ]);
 
-const FieldOutcomeSchema: v.GenericSchema<FieldOutcome> = v.variant("status", [
+export const FieldOutcomeSchema: v.GenericSchema<FieldOutcome> = v.variant("status", [
   v.object({
     status: v.literal("landed"),
     at: IsoTimeSchema,
