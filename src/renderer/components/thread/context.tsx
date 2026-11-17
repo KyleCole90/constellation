@@ -3,7 +3,7 @@ import { createContext, useContext } from "react";
 import type { ChangeId, ThreadId } from "~/shared/domain/ids";
 import type { ThreadUi } from "~/renderer/stores/types";
 
-import type { WorkRow } from "./queue.logic";
+import type { WorkRow, WorkRowOf } from "./queue.logic";
 
 /** The pairing between rubric rows in the chat and passages in the panel, which live far apart in the tree. */
 export interface RationaleLink {
@@ -42,7 +42,7 @@ export interface ThreadActions {
   /** Opens `next`, and drafts it when its button says "Draft next". */
   openNext(): void;
   /** Drafts a message to a missing row's student, leaving the grade alone. */
-  messageRow(row: WorkRow): void;
+  messageRow(row: WorkRowOf<"submission">): void;
   focus(id: ChangeId): void;
   draftRows(rows: readonly WorkRow[]): Promise<void>;
   setUi(patch: Partial<ThreadUi>): void;

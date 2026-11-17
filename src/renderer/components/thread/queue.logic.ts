@@ -21,7 +21,7 @@ import type { QueueFilter, RowKey, Thread } from "~/renderer/stores/types";
 /** One row of work in the pinned queue. Submissions and conversations both fit, so batches stay generic. */
 export type WorkRow = WorkRowOf<"submission"> | WorkRowOf<"conversation">;
 
-interface WorkRowOf<K extends "submission" | "conversation"> {
+export interface WorkRowOf<K extends "submission" | "conversation"> {
   key: LmsRef<K>;
   kind: K;
   title: string;

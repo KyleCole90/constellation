@@ -7,9 +7,12 @@ import { cn, formatDayTime } from "~/renderer/lib/utils";
 import {
   selectAssignment,
   selectConversation,
+  selectConversationAt,
   selectCourseOverview,
   selectSubmission,
+  selectSubmissionAt,
 } from "~/renderer/stores/selectors";
+import type { ThreadKind } from "~/renderer/stores/types";
 import { useWorkspace } from "~/renderer/stores/workspace";
 
 import { SubmissionBadge } from "../ui/badge";
@@ -333,17 +336,27 @@ function CourseContextDoc({ course }: { course: LmsRef<"course"> }) {
 
 export function SourcePane({
   record,
+  kind,
   current,
 }: {
   record: ChangeRecord | null;
+  kind: ThreadKind;
   current: string | null;
 }) {
-  const target = record?.content.target ?? current;
+  const content = record?.content ?? null;
   const submission = useWorkspace((state) =>
-    selectSubmission(state, target as LmsRef<"submission"> | null),
+    content === null
+      ? selectSubmissionAt(state, kind, current)
+      : content.kind === "grade" || content.kind === "message"
+        ? selectSubmission(state, content.target)
+        : null,
   );
   const conversation = useWorkspace((state) =>
-    target ? selectConversation(state, target as LmsRef<"conversation">) : null,
+    content === null
+      ? selectConversationAt(state, kind, current)
+      : content.kind === "reply"
+        ? selectConversation(state, content.target)
+        : null,
   );
   if (submission) return <SubmissionDoc submission={submission} record={record} />;
   if (conversation) return <ConversationDoc conversation={conversation} />;
@@ -364,10 +377,11 @@ const SOURCE_TAB: Readonly<Record<ChangeRecord["content"]["kind"], string | null
 
 export const useSourceTabName = (
   record: ChangeRecord | null,
+  kind: ThreadKind,
   current: string | null,
 ): string | null => {
   const conversation = useWorkspace((state) =>
-    current && !record ? selectConversation(state, current as LmsRef<"conversation">) : null,
+    record ? null : selectConversationAt(state, kind, current),
   );
   return record
     ? SOURCE_TAB[record.content.kind]

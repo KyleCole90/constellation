@@ -190,7 +190,8 @@ function RegradeFault() {
         if (!cache) return [];
         return cache.submissions
           .filter((submission) => submission.workflow === "submitted")
-          .map((submission): PickerItem => ({
+          .map((submission): PickerItem & { ref: LmsRef<"submission"> } => ({
+            ref: submission.ref,
             value: submission.ref,
             label: `${submission.studentName}, ${cache.assignments.find((a) => a.ref === submission.assignment)?.shortTitle ?? "assignment"}`,
           }));
@@ -200,13 +201,12 @@ function RegradeFault() {
   const [picked, setPicked] = useState<string | null>(null);
   const [text, setText] = useState("65");
   const [done, setDone] = useState<string | null>(null);
-  const current =
-    picked && items.some((item) => item.value === picked) ? picked : (items[0]?.value ?? null);
+  const current = items.find((item) => item.value === picked) ?? items[0] ?? null;
   const grade = parseGrade(text);
   const change = () => {
     if (!current || grade === null) return;
-    theLab().changeGradeOutOfBand(current as LmsRef<"submission">, grade, REGRADE_BY);
-    setDone(`${items.find((item) => item.value === current)?.label} is now ${grade}`);
+    theLab().changeGradeOutOfBand(current.ref, grade, REGRADE_BY);
+    setDone(`${current.label} is now ${grade}`);
   };
   return (
     <OneShot
@@ -215,7 +215,12 @@ function RegradeFault() {
       words={`${REGRADE_BY} changes this grade on the LMS now. A draft for that student finds the conflict when you send it.`}
       state={done && <Badge tone="info">{done}</Badge>}
     >
-      <Picker label="Submission to change" items={items} value={current} onChange={setPicked} />
+      <Picker
+        label="Submission to change"
+        items={items}
+        value={current?.value ?? null}
+        onChange={setPicked}
+      />
       <input
         type="number"
         aria-label="New grade"

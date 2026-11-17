@@ -2,11 +2,11 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Layers, PanelRight, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
-import type { LmsRef, ThreadId } from "~/shared/domain/ids";
+import type { ThreadId } from "~/shared/domain/ids";
 import {
   NORTH_STAR_THREAD,
   isChatThread,
-  selectConversation,
+  selectConversationAt,
   selectCourse,
   selectInboxRows,
   selectQueueRows,
@@ -291,9 +291,7 @@ function ThreadView({ thread }: { thread: Thread }) {
   const noSchool = thread.kind === "queue" ? gap : null;
   // A draft card quotes the message it answers. With no draft, as after a Discard, the conversation shows on its own.
   const conversation = useWorkspace((state) =>
-    thread.kind === "messages" && thread.focus === null && currentKey
-      ? selectConversation(state, currentKey as LmsRef<"conversation">)
-      : null,
+    thread.focus === null ? selectConversationAt(state, thread.kind, currentKey) : null,
   );
 
   return (

@@ -35,7 +35,14 @@ import {
   type Submission,
 } from "~/shared/domain/lms";
 
-import type { SchoolCache, Thread, ThreadMessage, Undrafted, WorkspaceData } from "./types";
+import type {
+  SchoolCache,
+  Thread,
+  ThreadKind,
+  ThreadMessage,
+  Undrafted,
+  WorkspaceData,
+} from "./types";
 
 /**
  * Same state and args give the same object, so these are safe as zustand selectors and never loop useSyncExternalStore.
@@ -1265,5 +1272,46 @@ export const selectConversation = (
   }
   return null;
 };
+
+/** What a thread's row keys name. A key's text does not say, because another LMS's refs need not embed their kind. */
+const rowKindOf = (kind: ThreadKind): "submission" | "conversation" | null => {
+  switch (kind) {
+    case "grading":
+    case "queue":
+      return "submission";
+    case "messages":
+      return "conversation";
+    case "announcement":
+    case "setup":
+    case "north-star":
+    case "north-star-chat":
+    case "general":
+      return null;
+  }
+};
+
+/** The submission a row key in this kind of thread names, found among the cached ones. */
+export const selectSubmissionAt = (
+  state: WorkspaceData,
+  kind: ThreadKind,
+  key: string | null,
+): Submission | null =>
+  key !== null && rowKindOf(kind) === "submission"
+    ? (caches(state)
+        .flatMap((cache) => cache.submissions)
+        .find((submission) => submission.ref === key) ?? null)
+    : null;
+
+/** The conversation a row key in this kind of thread names, found among the cached ones. */
+export const selectConversationAt = (
+  state: WorkspaceData,
+  kind: ThreadKind,
+  key: string | null,
+): Conversation | null =>
+  key !== null && rowKindOf(kind) === "conversation"
+    ? (caches(state)
+        .flatMap((cache) => cache.conversations)
+        .find((conversation) => conversation.ref === key) ?? null)
+    : null;
 export const selectUnreadCount = (state: WorkspaceData): number =>
   caches(state).reduce((sum, cache) => sum + cache.conversations.filter((c) => c.unread).length, 0);

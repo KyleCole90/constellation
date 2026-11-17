@@ -2,9 +2,12 @@ import { useNavigate } from "@tanstack/react-router";
 import { ArrowUp, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
-import type { LmsRef } from "~/shared/domain/ids";
 import { OFFLINE_REASON, useAiReachable } from "~/renderer/desktop";
-import { selectConversation, selectSubmission, selectThreadUi } from "~/renderer/stores/selectors";
+import {
+  selectConversationAt,
+  selectSubmissionAt,
+  selectThreadUi,
+} from "~/renderer/stores/selectors";
 import type { Thread } from "~/renderer/stores/types";
 import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
@@ -33,14 +36,13 @@ export function Composer({
   const setupStep = useSetupStep(thread);
   const conversation = useWorkspace((state) => {
     const { current } = selectThreadUi(state, thread.id);
-    if (thread.kind !== "messages" || !current) return undefined;
-    const open = selectConversation(state, current as LmsRef<"conversation">);
+    const open = selectConversationAt(state, thread.kind, current);
     if (!open) return undefined;
     return open.messages.at(-1)?.mine ? "answered" : "unanswered";
   });
   const submission = useWorkspace((state) => {
     const { current } = selectThreadUi(state, thread.id);
-    return selectSubmission(state, current as LmsRef<"submission"> | null) !== null;
+    return selectSubmissionAt(state, thread.kind, current) !== null;
   });
   const navigate = useNavigate();
   const saved = () => selectThreadUi(workspaceStore().getState(), thread.id).composer ?? "";

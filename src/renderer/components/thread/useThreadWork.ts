@@ -15,6 +15,7 @@ import {
   nextOpen,
   runOf,
   type WorkRow,
+  type WorkRowOf,
 } from "./queue.logic";
 import { walkStep } from "./timeline.logic";
 import { useChange } from "./useChange";
@@ -111,10 +112,10 @@ export const useThreadWork = (
   const openRow = useCallback((row: WorkRow) => open(row, false), [open]);
 
   const messageRow = useCallback(
-    (row: WorkRow) => {
+    (row: WorkRowOf<"submission">) => {
       setUi({ queueOpen: false, current: row.key, panel: null });
       store().focusChange(id, null);
-      void store().openMessage(id, row.key as LmsRef<"submission">);
+      void store().openMessage(id, row.key);
     },
     [id, setUi],
   );
