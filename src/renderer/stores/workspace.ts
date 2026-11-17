@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
@@ -84,6 +85,7 @@ import type { AgentSource, Bridge, ClaudeCodeStatus } from "~/shared/ipc";
 import { workName } from "~/shared/domain/workName";
 import { FakeCanvasServer, type StorageLike } from "~/shared/providers/fake-canvas/server";
 import type { FaultLab, NoiseConfig } from "~/shared/providers/fake-canvas/faults";
+export { NoisePatchSchema } from "~/shared/providers/fake-canvas/lab";
 import {
   FAKE_CANVAS,
   FAKE_CANVAS_FACE,
@@ -126,6 +128,7 @@ import {
 } from "~/renderer/writeback/writeback";
 
 import { builtInThreads } from "./builtInThreads";
+import { ChangeRecordSchema, WorkspaceDataSchema } from "./persisted";
 import { seedThreads } from "./seedThreads";
 import {
   DEFAULT_THREAD_UI,
@@ -154,7 +157,6 @@ import type {
   PendingHandoff,
   SchoolCache,
   Thread,
-  ThreadKind,
   ThreadSubject,
   ThreadMessage,
   ThreadUi,
@@ -377,12 +379,6 @@ const migrateV2 = (state: Record<string, unknown>): Record<string, unknown> => {
   };
 };
 
-const AI_SOURCES: readonly unknown[] = [
-  "none",
-  "key",
-  "on-device",
-  "claude-code",
-] satisfies readonly AiSource[];
 /** The web demo's on-device model never reaches main, so main runs nothing for it. */
 const AGENT_SOURCE: Readonly<Record<AiSource, AgentSource>> = {
   none: "none",
@@ -390,7 +386,6 @@ const AGENT_SOURCE: Readonly<Record<AiSource, AgentSource>> = {
   "on-device": "none",
   "claude-code": "claude-code",
 };
-const STEPS: readonly unknown[] = ["welcome", "setup", "done"] satisfies readonly OnboardingStep[];
 const STEP_ORDER: readonly OnboardingStep[] = ["welcome", "setup", "done"];
 /** Moving past a step completes it, so `STEP_ORDER` up to `done`. */
 const COMPLETABLE = ["welcome", "setup"] as const;
@@ -404,86 +399,10 @@ const DRAFT_KIND: Readonly<Record<ChangeContent["kind"], DraftKind | null>> = {
   "text-fix": null,
   "item-set": null,
 };
-// Records, so the compiler fails here when a variant is added and a save holding it still loads.
-const CHANGE_KINDS: Readonly<Record<ChangeContent["kind"], true>> = {
-  grade: true,
-  reply: true,
-  message: true,
-  announcement: true,
-  "course-copy": true,
-  "text-fix": true,
-  "item-set": true,
-};
-const STATE_TAGS: Readonly<Record<ChangeRecord["state"]["tag"], true>> = {
-  draft: true,
-  approved: true,
-  sending: true,
-  held: true,
-  conflicted: true,
-  sent: true,
-  discarded: true,
-};
-const THREAD_KINDS: Readonly<Record<ThreadKind, true>> = {
-  "north-star": true,
-  "north-star-chat": true,
-  queue: true,
-  grading: true,
-  messages: true,
-  announcement: true,
-  setup: true,
-  general: true,
-};
-const CACHE_LISTS = [
-  "courses",
-  "assignments",
-  "students",
-  "submissions",
-  "conversations",
-  "announcements",
-] as const satisfies readonly (keyof SchoolCache)[];
-
-const isKnown = (known: Readonly<Record<string, true>>, value: unknown): boolean =>
-  typeof value === "string" && Object.hasOwn(known, value);
-const everyValue = (value: unknown, check: (entry: unknown) => boolean): boolean =>
-  isRecord(value) && Object.values(value).every(check);
-/** A key a workspace saved before it existed can lack, but can't hold the wrong shape. */
-const absentOrEveryValue = (value: unknown, check: (entry: unknown) => boolean): boolean =>
-  value === undefined || everyValue(value, check);
-
-const isSchool = (school: unknown): boolean =>
-  isRecord(school) &&
-  typeof school["id"] === "string" &&
-  typeof school["host"] === "string" &&
-  typeof school["provider"] === "string";
-const isCache = (cache: unknown): boolean =>
-  isRecord(cache) && CACHE_LISTS.every((list) => Array.isArray(cache[list]));
 export const isChange = (change: unknown): change is ChangeRecord =>
-  isRecord(change) &&
-  isRecord(change["state"]) &&
-  isKnown(STATE_TAGS, change["state"]["tag"]) &&
-  isRecord(change["content"]) &&
-  isKnown(CHANGE_KINDS, change["content"]["kind"]) &&
-  isRecord(change["basis"]) &&
-  Array.isArray(change["landed"]);
-/** A grading, announcement or setup thread names its school and course, and a grading thread its assignment. */
-const isThread = (thread: unknown): boolean => {
-  if (!isRecord(thread) || !Array.isArray(thread["messages"])) return false;
-  const named = (key: string) => typeof thread[key] === "string";
-  switch (thread["kind"]) {
-    case "grading":
-      return named("school") && named("course") && named("assignment");
-    case "announcement":
-    case "setup":
-      return named("school") && named("course");
-    default:
-      return isKnown(THREAD_KINDS, thread["kind"]);
-  }
-};
+  v.is(ChangeRecordSchema, change);
 
-/**
- * Checks the shape the app dereferences on load and render: every collection, and each record's discriminant.
- * A save that fails resets the workspace and keeps a copy, which beats a page that crashes on every load.
- */
+/** Loads only a whole, valid save. One that fails resets the workspace and keeps a copy, which beats a page that crashes on every load. */
 export const parsePersisted = (raw: string): StorageValue<WorkspaceData> | null => {
   try {
     const parsed: unknown = JSON.parse(raw);
@@ -494,26 +413,8 @@ export const parsePersisted = (raw: string): StorageValue<WorkspaceData> | null 
     )
       return null;
     const state = parsed["version"] === 2 ? migrateV2(parsed["state"]) : parsed["state"];
-    const prefs = state["prefs"];
-    const valid =
-      AI_SOURCES.includes(state["aiSource"]) &&
-      STEPS.includes(state["onboarding"]) &&
-      typeof state["resetAt"] === "number" &&
-      Array.isArray(state["schools"]) &&
-      state["schools"].every(isSchool) &&
-      everyValue(state["connections"], isRecord) &&
-      everyValue(state["cache"], isCache) &&
-      everyValue(state["changes"], isChange) &&
-      everyValue(state["threads"], isThread) &&
-      isRecord(prefs) &&
-      isRecord(prefs["threadUi"]) &&
-      absentOrEveryValue(state["setups"], isRecord) &&
-      absentOrEveryValue(state["newCourses"], Array.isArray) &&
-      absentOrEveryValue(state["handoffs"], isRecord);
-    // Checked above as far as the app reads it on load. Deeper fields are the app's own writes.
-    return valid
-      ? ({ state, version: STORE_VERSION } as unknown as StorageValue<WorkspaceData>)
-      : null;
+    const result = v.safeParse(WorkspaceDataSchema, state);
+    return result.success ? { state: result.output, version: STORE_VERSION } : null;
   } catch {
     return null;
   }
@@ -886,8 +787,8 @@ const moveHomeToChat = (
   return Object.fromEntries([...repointed, emptied, chat].map((thread) => [thread.id, thread]));
 };
 
-const keepLocalFocus = (persisted: unknown, current: WorkspaceState): WorkspaceState => {
-  const next = { ...current, ...(persisted as Partial<WorkspaceState>) };
+const keepLocalFocus = (persisted: WorkspaceData, current: WorkspaceState): WorkspaceState => {
+  const next = { ...current, ...persisted };
   const threads = Object.fromEntries(
     Object.values(next.threads).map((thread) => {
       const mine = current.threads[thread.id]?.focus;
@@ -2539,7 +2440,11 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
         name: WORKSPACE_STORAGE_KEY,
         version: STORE_VERSION,
         storage,
-        merge: keepLocalFocus,
+        // What getItem returned, which zustand hands back untyped.
+        merge: (persisted, current) => {
+          const parsed = v.safeParse(WorkspaceDataSchema, persisted);
+          return parsed.success ? keepLocalFocus(parsed.output, current) : current;
+        },
         partialize: ({
           schools,
           connections,

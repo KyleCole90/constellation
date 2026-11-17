@@ -40,12 +40,12 @@ describe("brand schemas accept what the mint makes and reject a near miss", () =
     expect(v.is(SchoolSchema, { ...school, host: "lakeshore" })).toBe(false);
   });
 
-  it("LmsRef of one kind", () => {
-    const course = refs.course("lcc", 48213);
-    expect(v.is(lmsRef("course"), course)).toBe(true);
-    expect(v.is(lmsRef("submission"), course)).toBe(false);
-    expect(v.is(lmsRef("course"), "lcc:course")).toBe(false);
+  it("LmsRef of a school, in any vendor's words", () => {
+    expect(v.is(lmsRef("course"), refs.course("lcc", 48213))).toBe(true);
+    expect(v.is(lmsRef("course"), "ksu:org:6606")).toBe(true);
+    expect(v.is(lmsRef("course"), "lcc")).toBe(false);
     expect(v.is(lmsRef("course"), ":course:48213")).toBe(false);
+    expect(v.is(lmsRef("course"), "lcc:course:")).toBe(false);
   });
 
   it("VaultKey", () => {

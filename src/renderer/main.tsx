@@ -1,13 +1,14 @@
 import { RouterProvider } from "@tanstack/react-router";
 import React from "react";
 import ReactDOM from "react-dom/client";
+import * as v from "valibot";
 
 import "./index.css";
 
 import { reportError } from "./desktop";
 import { keepFocusOnThePage } from "./lib/lostFocus";
 import { router } from "./router";
-import { faultLab, setAgentStandIn, workspaceStore } from "./stores/workspace";
+import { NoisePatchSchema, faultLab, setAgentStandIn, workspaceStore } from "./stores/workspace";
 
 const start = async () => {
   window.addEventListener("error", (event) => reportError(event.error));
@@ -20,8 +21,8 @@ const start = async () => {
     });
     const noise = sessionStorage.getItem("verify.noise");
     if (lab && noise) {
-      // oxlint-disable-next-line typescript/no-unsafe-argument -- TS review debt: parse verify.noise into a Noise patch
-      lab.setNoise(JSON.parse(noise));
+      const patch = v.safeParse(NoisePatchSchema, JSON.parse(noise));
+      if (patch.success) lab.setNoise(patch.output);
       lab.setDemoScript(false);
     }
   }

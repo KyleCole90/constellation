@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 import { hash53 } from "~/shared/domain/approval";
 import {
   copySignature,
@@ -14,6 +16,8 @@ import {
 } from "~/shared/domain/change";
 import {
   isComing,
+  isContentItemType,
+  type ContentItemType,
   type CourseShell,
   type Migration,
   type SamplePackage,
@@ -44,6 +48,19 @@ import { longDate } from "~/shared/domain/preview";
 import { applySplice } from "~/shared/domain/splice";
 import { dateOfTime, meetingDaysOf, type Weekday } from "~/shared/domain/term";
 import { revealSecret, type Credential, type FieldOutcomes } from "~/shared/providers/provider";
+import {
+  AnnouncementSchema,
+  AssignmentSchema,
+  ConversationSchema,
+  CourseSchema,
+  IsoDateSchema,
+  IsoTimeSchema,
+  RemoteEntrySchema,
+  SchoolIdSchema,
+  StudentSchema,
+  SubmissionSchema,
+  WeekdaySchema,
+} from "~/shared/providers/schemas";
 
 import {
   DEFAULT_NOISE,
@@ -67,6 +84,7 @@ import {
 } from "./migrations";
 import { refParts, refs } from "../canvas-refs";
 import { fixtureBytes, fixtureExport, fixtureFile } from "./files";
+import { NoiseSchema, WriteRecordSchema } from "./lab";
 import { assignmentCanvasId, SEED, type SeedAssignment, type SeedCourse } from "./seed";
 import {
   COURSE_COPY_ISSUES,
@@ -448,41 +466,127 @@ const freshTerm = (): TermState => {
   return { shells, sources, content, migrations: [], seq: 0 };
 };
 
-const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
+const text = v.string();
+const count = v.number();
+const weekdays = v.array(WeekdaySchema);
 
-const LMS_LISTS = [
-  "courses",
-  "assignments",
-  "students",
-  "submissions",
-  "conversations",
-  "announcements",
-] as const satisfies readonly (keyof LmsState)[];
+const RawBodySchema: v.GenericSchema<RawBody> = v.object({
+  items: v.array(
+    v.object({
+      id: count,
+      type: v.custom<ContentItemType>(isContentItemType),
+      slug: text,
+      title: text,
+      body: text,
+      published: v.boolean(),
+      dueAt: v.nullable(IsoTimeSchema),
+      points: v.nullable(count),
+      links: v.array(v.object({ text, url: text })),
+      copied: v.boolean(),
+      version: count,
+    }),
+  ),
+  modules: v.array(v.object({ id: count, title: text, published: v.boolean(), itemCount: count })),
+  tools: v.array(v.object({ id: count, name: text, configured: v.boolean() })),
+});
 
-/**
- * Checks what the server dereferences on load: the version, the counters, every collection and the demo script.
- * A store written before new-term setup or the write log existed has neither; it gets fresh ones and keeps the rest.
- */
+const MigrationRecordSchema: v.GenericSchema<MigrationRecord> = v.object({
+  id: count,
+  school: SchoolIdSchema,
+  course_id: count,
+  migration_type: v.picklist(["course_copy_importer", "common_cartridge_importer"]),
+  workflow_state: v.picklist(["pre_processing", "running", "completed", "failed"]),
+  started_at: IsoTimeSchema,
+  finished_at: v.nullable(IsoTimeSchema),
+  settings: v.object({
+    source_course_id: v.exactOptional(count),
+    file: v.exactOptional(text),
+  }),
+  date_shift_options: v.object({
+    shift_dates: v.literal(true),
+    old_start_date: text,
+    old_end_date: text,
+    new_start_date: text,
+    new_end_date: text,
+    day_substitutions: v.record(text, count),
+  }),
+  signature: text,
+  progress: v.object({
+    completion: count,
+    message: v.nullable(text),
+    workflow_state: v.picklist(["queued", "running", "completed", "failed"]),
+  }),
+  migration_issues: v.array(
+    v.object({
+      id: count,
+      issue_type: v.picklist(["todo", "warning", "error"]),
+      description: text,
+      workflow_state: v.picklist(["active", "resolved"]),
+      fix_issue_html_url: v.nullable(text),
+    }),
+  ),
+  applied: v.boolean(),
+  failAt: v.nullable(v.object({ completion: count, message: text })),
+});
+
+const TermStateSchema: v.GenericSchema<TermState> = v.object({
+  shells: v.array(
+    v.object({
+      school: SchoolIdSchema,
+      canvasId: count,
+      code: text,
+      title: text,
+      section: v.nullable(text),
+      modality: v.nullable(text),
+      termName: text,
+      startAt: IsoDateSchema,
+      endAt: IsoDateSchema,
+      days: weekdays,
+      workflow_state: v.picklist(["unpublished", "available"]),
+      template: v.boolean(),
+      students: v.array(text),
+    }),
+  ),
+  sources: v.array(
+    v.object({
+      school: SchoolIdSchema,
+      canvasId: count,
+      code: text,
+      title: text,
+      termName: text,
+      startAt: IsoDateSchema,
+      endAt: IsoDateSchema,
+      days: weekdays,
+      template: v.boolean(),
+    }),
+  ),
+  content: v.record(text, RawBodySchema),
+  migrations: v.array(MigrationRecordSchema),
+  seq: count,
+});
+
+/** A store written before new-term setup or the write log existed lacks them, so it gets fresh ones and keeps the rest. */
+const LmsStateSchema: v.GenericSchema<unknown, LmsState> = v.object({
+  version: v.literal(3),
+  seq: count,
+  writes: count,
+  tokens: v.record(text, v.object({ accepted: v.array(text), revoked: v.array(text) })),
+  courses: v.array(CourseSchema),
+  assignments: v.array(AssignmentSchema),
+  students: v.array(StudentSchema),
+  submissions: v.array(SubmissionSchema),
+  attachments: v.record(text, v.array(RemoteEntrySchema)),
+  conversations: v.array(ConversationSchema),
+  announcements: v.array(AnnouncementSchema),
+  script: v.object({ enabled: v.boolean(), fired: v.array(v.picklist(DEMO_FAULTS)) }),
+  writeLog: v.optional(v.array(WriteRecordSchema), () => []),
+  term: v.optional(TermStateSchema, freshTerm),
+  noise: v.exactOptional(NoiseSchema),
+});
+
 export const parseStoredLms = (stored: unknown): LmsState | null => {
-  if (!isObject(stored) || stored["version"] !== 3) return null;
-  const { script, writeLog, term, noise } = stored;
-  const valid =
-    typeof stored["seq"] === "number" &&
-    typeof stored["writes"] === "number" &&
-    isObject(stored["tokens"]) &&
-    isObject(stored["attachments"]) &&
-    LMS_LISTS.every((list) => Array.isArray(stored[list])) &&
-    isObject(script) &&
-    typeof script["enabled"] === "boolean" &&
-    Array.isArray(script["fired"]) &&
-    (writeLog === undefined || Array.isArray(writeLog)) &&
-    (term === undefined || isObject(term)) &&
-    (noise === undefined || isObject(noise));
-  if (!valid) return null;
-  const state = { ...stored, writeLog: writeLog ?? [], term: term ?? freshTerm() };
-  // Checked above as far as the server reads it on load; the elements are the server's own writes.
-  return state as unknown as LmsState;
+  const parsed = v.safeParse(LmsStateSchema, stored);
+  return parsed.success ? parsed.output : null;
 };
 
 const freshState = (demoScript: boolean): LmsState => {

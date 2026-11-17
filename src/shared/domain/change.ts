@@ -15,8 +15,8 @@ export interface RubricScore {
 export interface LatePenalty {
   days: number;
   pointsPerDay: number;
-  /** An extension or a documented absence. The penalty stays on the draft so the teacher sees what was waived. */
-  waived: boolean;
+  /** An extension or a documented absence. The penalty stays on the draft so the teacher sees what was waived. Absent from drafts saved before waivers existed. */
+  waived?: boolean;
 }
 export interface AttachmentDraft {
   name: string;
@@ -32,10 +32,13 @@ export interface GradeContent {
   late: LatePenalty | null;
   comment: string | null;
   attachment: AttachmentDraft | null;
-  /** The teacher's total, sent as the grade in place of the scores minus the late penalty. A score edit or an excuse clears it. */
-  override: number | null;
+  /**
+   * The teacher's total, sent as the grade in place of the scores minus the late penalty. A score edit or an excuse clears it.
+   * Optional, like `excused`, because a draft saved before it existed lacks it, and filling it in would change the fingerprint its approval holds.
+   */
+  override?: number | null;
   /** A documented absence. Holds no score: `applyPatch` clears the scores when it sets this, and a score or an override clears it. */
-  excused: boolean;
+  excused?: boolean;
 }
 interface ReplyContent {
   kind: "reply";
@@ -220,7 +223,8 @@ export type RemoteState =
       targetVersion: string;
       grade: number | null;
       rubric: Readonly<Record<string, number>> | null;
-      excused: boolean;
+      /** Absent from a basis saved before excuses existed. */
+      excused?: boolean;
       comments: readonly RemoteEntry[];
       attachments: readonly RemoteEntry[];
     }
@@ -765,7 +769,8 @@ export const applyPatch = (content: ChangeContent, patch: ChangePatch): ChangeCo
   if (content.kind === "grade" && patch.kind === "grade") {
     const scores = patch.rubricPoints;
     const rescored = scores !== undefined || patch.points !== undefined;
-    const excused = patch.excused ?? (rescored || patch.override != null ? false : content.excused);
+    const excused =
+      patch.excused ?? (rescored || patch.override != null ? false : (content.excused ?? false));
     const patched: GradeContent = {
       ...content,
       excused,
@@ -773,7 +778,7 @@ export const applyPatch = (content: ChangeContent, patch: ChangePatch): ChangeCo
         excused || rescored
           ? null
           : patch.override === undefined
-            ? content.override
+            ? (content.override ?? null)
             : patch.override,
       late:
         content.late && patch.lateWaived !== undefined

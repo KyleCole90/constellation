@@ -1,7 +1,8 @@
 import * as v from "valibot";
 
 import { LMS_STORAGE_KEY, parseStoredLms } from "~/shared/providers/fake-canvas/server";
-import { WORKSPACE_STORAGE_KEY, parsePersisted } from "~/renderer/stores/workspace";
+import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/storage-key";
+import { parsePersisted } from "~/renderer/stores/workspace";
 
 type Readable = Pick<Storage, "getItem">;
 
