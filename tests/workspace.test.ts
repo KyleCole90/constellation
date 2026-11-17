@@ -80,7 +80,7 @@ describe("persistence", () => {
   it("a change committed by the ledger is in storage by the time the action returns", async () => {
     const rig = await connected();
     const id = await openFor(rig, "Maya Ortiz");
-    expect(rawSave(rig.storage)["version"]).toBe(3);
+    expect(rawSave(rig.storage)["version"]).toBe(4);
     expect(savedWorkspace(rig.storage).changes[id]).toBeDefined();
   });
 
@@ -115,7 +115,7 @@ describe("persistence", () => {
     ["not JSON", "{{{"],
     ["JSON of the wrong shape", '{"version":1,"state":{"threads":"nope"}}'],
     ["an old version", '{"version":0,"state":{"changes":{}}}'],
-    ["a newer version", '{"version":4,"state":{}}'],
+    ["a newer version", '{"version":5,"state":{}}'],
     ["a version 2 blob of the wrong shape", '{"version":2,"state":{}}'],
     [
       "a change missing its state",
@@ -128,7 +128,7 @@ describe("persistence", () => {
     const rig = await makeStoreRig({ storage });
     expect(rig.state().notice).toContain("reset");
     expect(Object.keys(rig.state().threads).length).toBeGreaterThan(1);
-    expect(rawSave(rig.storage)["version"]).toBe(3);
+    expect(rawSave(rig.storage)["version"]).toBe(4);
     expect(rig.storage.getItem(`${WORKSPACE_STORAGE_KEY}.unreadable`)).toBe(blob);
     expect(error).not.toHaveBeenCalled();
     error.mockRestore();
@@ -225,7 +225,7 @@ describe("persistence", () => {
     expect(second.state().undrafted).toEqual({});
   });
 
-  it.each([1, 4])(
+  it.each([1, 5])(
     "a well-formed blob from version %i also resets, because its shape cannot be trusted",
     async (version) => {
       const error = vi.spyOn(console, "error").mockImplementation(() => undefined);

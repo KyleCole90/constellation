@@ -191,16 +191,27 @@ export interface TextFixContent {
   splice: Splice;
 }
 
-export type SetIntent =
+export type ItemSetIntent =
   | { set: "due-at"; at: IsoTime }
   | { set: "item-published" }
-  | { set: "item-deleted" }
-  | { set: "course-published" }
-  | { set: "course-template" };
+  | { set: "item-deleted" };
+type CourseSetIntent = { set: "course-published" } | { set: "course-template" };
+export type SetIntent = ItemSetIntent | CourseSetIntent;
 
-export interface SetContent {
+/** The intent decides the target: a course setting goes to the course's state, every other setting to an item. */
+export type SetContent = ItemSetContent | CourseSetContent;
+interface ItemSetContent {
   kind: "item-set";
-  target: LmsRef<"item"> | LmsRef<"course-state">;
+  target: LmsRef<"item">;
   where: string;
-  intent: SetIntent;
+  intent: ItemSetIntent;
 }
+export interface CourseSetContent {
+  kind: "item-set";
+  target: LmsRef<"course-state">;
+  where: string;
+  intent: CourseSetIntent;
+}
+
+export const isCourseSet = (content: SetContent): content is CourseSetContent =>
+  content.intent.set === "course-published" || content.intent.set === "course-template";

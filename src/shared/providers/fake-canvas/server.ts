@@ -18,6 +18,7 @@ import {
   isComing,
   isContentItemType,
   type ContentItemType,
+  isCourseSet,
   type CourseShell,
   type Migration,
   type SamplePackage,
@@ -1146,9 +1147,8 @@ export class FakeCanvasServer implements FaultLab {
 
   /** A deleted item still observes, as `deleted`, so a delete whose response was lost reads as done rather than gone. */
   #observeSet(content: SetContent): RemoteState | null {
-    const parts = refParts(content.target);
-    if (parts[1] === "course-state") {
-      const row = this.#courseRow(Number(parts[2]));
+    if (isCourseSet(content)) {
+      const row = this.#courseRow(Number(refParts(content.target)[2]));
       if (!row) return null;
       const value =
         content.intent.set === "course-template"
@@ -1160,7 +1160,7 @@ export class FakeCanvasServer implements FaultLab {
             : "unpublished";
       return { kind: "item-set", targetVersion: "present", value };
     }
-    const found = this.#item(content.target as LmsRef<"item">);
+    const found = this.#item(content.target);
     if (!found) return { kind: "item-set", targetVersion: "deleted", value: "deleted" };
     const { item } = found;
     const value =
@@ -1400,17 +1400,16 @@ export class FakeCanvasServer implements FaultLab {
   }
 
   #applySet(content: SetContent): void {
-    const parts = refParts(content.target);
-    const intent = content.intent;
-    if (parts[1] === "course-state") {
-      const row = this.#courseRow(Number(parts[2]));
+    if (isCourseSet(content)) {
+      const row = this.#courseRow(Number(refParts(content.target)[2]));
       if (!row) return;
-      if (intent.set === "course-published" && "workflow_state" in row)
+      if (content.intent.set === "course-published" && "workflow_state" in row)
         row.workflow_state = "available";
-      if (intent.set === "course-template") row.template = true;
+      if (content.intent.set === "course-template") row.template = true;
       return;
     }
-    const found = this.#item(content.target as LmsRef<"item">);
+    const { intent } = content;
+    const found = this.#item(content.target);
     if (!found) return;
     const { body, item, school, courseId } = found;
     const assignment = this.#state.assignments.find(
@@ -1427,9 +1426,6 @@ export class FakeCanvasServer implements FaultLab {
       case "item-deleted":
         body.items = body.items.filter((entry) => entry.id !== item.id);
         this.#state.assignments = this.#state.assignments.filter((row) => row !== assignment);
-        return;
-      case "course-published":
-      case "course-template":
         return;
     }
     item.version += 1;

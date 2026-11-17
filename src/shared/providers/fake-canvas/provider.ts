@@ -1,6 +1,7 @@
-import type { ChangeContent, FieldKey, LmsError } from "~/shared/domain/change";
+import type { ChangeContent, FieldKey, LmsError, SetContent } from "~/shared/domain/change";
 import {
   isContentItemType,
+  isCourseSet,
   type ContentItem,
   type CourseContent,
   type CourseModule,
@@ -104,13 +105,15 @@ const routeOf = (content: ChangeContent): string => {
       return `POST /api/v1/courses/${refParts(content.target)[2]}/content_migrations`;
     case "text-fix":
       return `PUT ${itemPath(content.target)}`;
-    case "item-set": {
-      const [, kind, course] = refParts(content.target);
-      if (kind === "course-state") return `PUT /api/v1/courses/${course}`;
-      return `${content.intent.set === "item-deleted" ? "DELETE" : "PUT"} ${itemPath(content.target as LmsRef<"item">)}`;
-    }
+    case "item-set":
+      if (isCourseSet(content)) return `PUT /api/v1/courses/${refParts(content.target)[2]}`;
+      return `${content.intent.set === "item-deleted" ? "DELETE" : "PUT"} ${itemPath(content.target)}`;
   }
 };
+
+/** Canvas finds a setting's target by the kind its intent writes to, so a ref of any other kind reaches nothing. */
+const reachesTarget = (content: SetContent): boolean =>
+  refParts(content.target)[1] === (isCourseSet(content) ? "course-state" : "item");
 
 const observeRoute = (content: ChangeContent): string =>
   content.kind === "course-copy"
@@ -320,6 +323,11 @@ const createFakeCanvasProvider = (
     apply: async (permit) => {
       if (!SendPermit.isGenuine(permit)) return {};
       const { content, fields } = permit;
+      if (content.kind === "item-set" && !reachesTarget(content))
+        return allFields(fields, {
+          status: "failed",
+          error: { kind: "rejected", reason: `${content.where} can't take that setting.` },
+        });
       const result = await read(route("write", routeOf(content)), () =>
         server.applyFields(content, fields),
       );

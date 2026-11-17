@@ -153,6 +153,7 @@ import type {
   AiSource,
   ConnectionRecord,
   FieldEdit,
+  HandedWork,
   OnboardingStep,
   PendingHandoff,
   SchoolCache,
@@ -164,7 +165,7 @@ import type {
   WorkspaceData,
 } from "./types";
 
-const STORE_VERSION = 3;
+const STORE_VERSION = 4;
 
 const DROPPED_KEPT = 20;
 const TRY_AGAIN = "Try again";
@@ -379,6 +380,29 @@ const migrateV2 = (state: Record<string, unknown>): Record<string, unknown> => {
   };
 };
 
+/** Version 3 kept what a handoff card names in two optional fields, `conversation` and `people`. */
+const migrateV3 = (state: Record<string, unknown>): Record<string, unknown> => {
+  const handed = (message: unknown): unknown => {
+    if (!isRecord(message) || message["type"] !== "handoff") return message;
+    const { conversation, people, ...rest } = message;
+    const work =
+      typeof conversation === "string"
+        ? { kind: "reply", conversation }
+        : Array.isArray(people)
+          ? { kind: "replies", people }
+          : { kind: "thread" };
+    return { ...rest, work };
+  };
+  const { threads } = state;
+  if (!isRecord(threads)) return state;
+  const migrated = Object.entries(threads).map(([id, thread]) =>
+    isRecord(thread) && Array.isArray(thread["messages"])
+      ? [id, { ...thread, messages: thread["messages"].map(handed) }]
+      : [id, thread],
+  );
+  return { ...state, threads: Object.fromEntries(migrated) };
+};
+
 /** The web demo's on-device model never reaches main, so main runs nothing for it. */
 const AGENT_SOURCE: Readonly<Record<AiSource, AgentSource>> = {
   none: "none",
@@ -408,11 +432,15 @@ export const parsePersisted = (raw: string): StorageValue<WorkspaceData> | null 
     const parsed: unknown = JSON.parse(raw);
     if (
       !isRecord(parsed) ||
-      (parsed["version"] !== STORE_VERSION && parsed["version"] !== 2) ||
+      (parsed["version"] !== STORE_VERSION && parsed["version"] !== 3 && parsed["version"] !== 2) ||
       !isRecord(parsed["state"])
     )
       return null;
-    const state = parsed["version"] === 2 ? migrateV2(parsed["state"]) : parsed["state"];
+    const version = parsed["version"];
+    const state =
+      version === STORE_VERSION
+        ? parsed["state"]
+        : migrateV3(version === 2 ? migrateV2(parsed["state"]) : parsed["state"]);
     const result = v.safeParse(WorkspaceDataSchema, state);
     return result.success ? { state: result.output, version: STORE_VERSION } : null;
   } catch {
@@ -1296,6 +1324,18 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             .filter((row) => row.course.ref === course && awaitsYou(row))
             .map((row) => row.conversation);
 
+        const handedWork = (course: LmsRef<"course">, work: HandoffWork): HandedWork => {
+          switch (work.kind) {
+            case "reply":
+              return { kind: "reply", conversation: work.conversation };
+            case "replies":
+              return { kind: "replies", people: awaitingReply(course).map((c) => c.from) };
+            case "announcement":
+            case "grading":
+              return { kind: "thread" };
+          }
+        };
+
         const startWork = async (
           thread: ThreadId,
           course: LmsRef<"course">,
@@ -1408,10 +1448,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             type: "handoff",
             to,
             course: effect.course,
-            ...(effect.work.kind === "reply" ? { conversation: effect.work.conversation } : {}),
-            ...(effect.work.kind === "replies"
-              ? { people: awaitingReply(effect.course).map((c) => c.from) }
-              : {}),
+            work: handedWork(effect.course, effect.work),
             brief: effect.brief,
             at: nowIso(),
           });

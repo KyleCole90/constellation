@@ -60,15 +60,21 @@ export type ThreadMessage = { change?: ChangeId; seeded?: true } & (
       type: "handoff";
       to: ThreadId;
       course: LmsRef<"course">;
-      /** Set when the handoff is one reply, so the card names that student, not the whole thread. */
-      conversation?: LmsRef<"conversation">;
-      /** Set when the handoff is every reply in a course: who it drafted for, so the card keeps naming them after a send. */
-      people?: readonly string[];
+      work: HandedWork;
       brief: string;
       at: IsoTime;
     }
   | { type: "handed-off"; from: ThreadId; request: string; left?: string; at: IsoTime }
 );
+
+/**
+ * What a handoff card names. One reply names its student, and every reply in a course names who it drafted for, so the
+ * card keeps naming them after a send. Other work goes by its thread's name.
+ */
+export type HandedWork =
+  | Extract<HandoffWork, { kind: "reply" }>
+  | { kind: "replies"; people: readonly string[] }
+  | { kind: "thread" };
 
 export type ThreadKind = ThreadSubject["kind"];
 

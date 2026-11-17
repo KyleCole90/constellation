@@ -732,9 +732,19 @@ export const selectHandoffName = (
   state: WorkspaceData,
   handoff: Extract<ThreadMessage, { type: "handoff" }>,
 ): string => {
-  const student = handoff.conversation && selectConversation(state, handoff.conversation)?.from;
-  if (student) return workName({ kind: "replies", people: [student] });
-  if (handoff.people?.length) return workName({ kind: "replies", people: handoff.people });
+  const { work } = handoff;
+  switch (work.kind) {
+    case "reply": {
+      const student = selectConversation(state, work.conversation)?.from;
+      if (student) return workName({ kind: "replies", people: [student] });
+      break;
+    }
+    case "replies":
+      if (work.people.length > 0) return workName({ kind: "replies", people: work.people });
+      break;
+    case "thread":
+      break;
+  }
   return selectThreadName(state, handoff.to);
 };
 

@@ -7,10 +7,12 @@ import {
   type TextFixContent,
 } from "~/shared/domain/change";
 import type { CourseShell, SourceCourse } from "~/shared/domain/content";
-import type { SchoolId } from "~/shared/domain/ids";
+import type { IsoTime, SchoolId } from "~/shared/domain/ids";
+import { mintSendPermit } from "~/shared/domain/permit";
 import { spliceAt } from "~/shared/domain/splice";
 import type { LmsProvider, TermSetup } from "~/shared/providers/provider";
 
+import { approved, newDraft, sending } from "./changes";
 import { permitFor, unwrap } from "./provider-contract";
 import { cartridgeContent, copyContent, termOf } from "./term";
 
@@ -34,6 +36,8 @@ const MIGRATION_KEYS = new Set(["ref", "signature", "state", "completion", "mess
 const ISSUE_KEYS = new Set(["severity", "text", "open", "fixUrl"]);
 const expectOnlyKeys = (value: object, allowed: ReadonlySet<string>) =>
   expect(Object.keys(value).filter((key) => !allowed.has(key))).toEqual([]);
+
+const setRemote = { kind: "item-set", targetVersion: "present", value: null } as const;
 
 const setupOf = (provider: LmsProvider): TermSetup => {
   if (!provider.termSetup) throw new Error("this provider offers no term setup");
@@ -282,6 +286,27 @@ export const runTermSetupContract = (
       expect(
         (await unwrap(setupOf(provider).newCourses())).map((course) => course.ref),
       ).not.toContain(shell.ref);
+    });
+
+    it("a setting aimed at a target its intent can't change never lands, and writes nothing (#168)", async () => {
+      const { provider, school, shell, writeCount } = await makeHarness();
+      // @ts-expect-error: the type pairs a due date with an item, so only a forged change aims one at the course.
+      const content: SetContent = {
+        kind: "item-set",
+        target: shell.stateTarget,
+        where: shell.code,
+        intent: { set: "due-at", at: "2027-02-04T00:00:00.000Z" as IsoTime },
+      };
+      // Real Canvas can't observe this pair, so the permit comes from a basis rather than a read.
+      const draft = { ...newDraft("ch-mismatch", content, setRemote), school };
+      const permit = mintSendPermit(sending(approved(draft)), ["value"]);
+      if (!permit) throw new Error("no permit");
+      const writes = writeCount();
+      const outcome = (await provider.apply(permit)).value;
+      // A provider refuses it. Over the bridge, main may refuse the input first, which the renderer reads as in doubt.
+      expect(["failed", "unknown"]).toContain(outcome?.status);
+      if (outcome?.status === "failed") expect(outcome.error.kind).toBe("rejected");
+      expect(writeCount()).toBe(writes);
     });
 
     it("a package nobody uploaded fails the copy and creates no job", async () => {
