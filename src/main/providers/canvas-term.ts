@@ -21,13 +21,7 @@ import {
   type Migration,
   type SourceCourse,
 } from "../../shared/domain/content";
-import {
-  isoTime,
-  parseIsoTime,
-  type IsoTime,
-  type LmsRef,
-  type Result,
-} from "../../shared/domain/ids";
+import { isoTime, type IsoTime, type LmsRef, type Result } from "../../shared/domain/ids";
 import type { School } from "../../shared/domain/lms";
 import { applySplice, spliceState } from "../../shared/domain/splice";
 import { dateOfTime, meetingDaysOf } from "../../shared/domain/term";
@@ -35,12 +29,13 @@ import { classifyLink } from "../../shared/providers/canvas-links";
 import { refParts, refs } from "../../shared/providers/canvas-refs";
 import {
   fewAtATime,
-  type FieldOutcomes,
+  type FieldOutcome,
   type Read,
   type TermSetup,
 } from "../../shared/providers/provider";
 
-type Outcome = NonNullable<FieldOutcomes[FieldKey]>;
+import { Id, OptionalTime } from "./canvas-wire";
+
 type SetupContent = CourseCopyContent | TextFixContent | SetContent;
 
 /** The request helpers `createCanvasProvider` builds, so term setup shares its paging, origin check and error mapping. */
@@ -49,9 +44,18 @@ export interface CanvasClient {
   now(): number;
   list<T extends v.GenericSchema>(path: string, row: T): Read<v.InferOutput<T>[]>;
   one<T extends v.GenericSchema>(path: string, schema: T): Read<v.InferOutput<T>>;
-  write(method: "PUT" | "POST" | "DELETE", path: string, form: URLSearchParams): Promise<Outcome>;
+  write(
+    method: "PUT" | "POST" | "DELETE",
+    path: string,
+    form: URLSearchParams,
+  ): Promise<FieldOutcome>;
   /** Creates a package migration at `path` and uploads `file` to where Canvas says, without the token. */
-  importPackage(path: string, form: URLSearchParams, file: Blob, name: string): Promise<Outcome>;
+  importPackage(
+    path: string,
+    form: URLSearchParams,
+    file: Blob,
+    name: string,
+  ): Promise<FieldOutcome>;
   /** The package main's picker chose under `name`, or null. */
   packageFile(name: string): Promise<Blob | null>;
   me(): Promise<Result<number, LmsError>>;
@@ -62,14 +66,6 @@ export interface CanvasClient {
 }
 
 // ---- What Canvas sends for term setup, per its public API docs. ----
-
-const Id = v.pipe(v.number(), v.integer());
-const Time = v.pipe(
-  v.string(),
-  v.check((raw) => parseIsoTime(raw) !== null),
-  v.transform((raw): IsoTime => isoTime(raw)),
-);
-const OptionalTime = v.nullish(Time, null);
 
 const SetupCourse = v.object({
   id: Id,
@@ -220,7 +216,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
   const { school, list, one, write, idsIn } = client;
   const origin = `https://${school.host}`;
   const NOT_FOUND = { ok: false, error: { kind: "not_found" } } as const;
-  const refused = (reason: string): Promise<Outcome> =>
+  const refused = (reason: string): Promise<FieldOutcome> =>
     Promise.resolve({ status: "failed", error: { kind: "rejected", reason } });
 
   const course = (id: number) =>
@@ -769,7 +765,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
     return target === undefined || source === undefined ? null : { target, source };
   };
 
-  const writeOf = async (content: SetupContent, field: FieldKey): Promise<Outcome> => {
+  const writeOf = async (content: SetupContent, field: FieldKey): Promise<FieldOutcome> => {
     switch (content.kind) {
       case "course-copy": {
         if (field !== "copy") break;
@@ -830,7 +826,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
    * Canvas can answer 200 to a setting it doesn't apply, as with a file its hidden folder keeps hidden. A setting lands
    * only once Canvas reads back the value it was sent.
    */
-  const confirmed = async (content: SetContent, sent: Outcome): Promise<Outcome> => {
+  const confirmed = async (content: SetContent, sent: FieldOutcome): Promise<FieldOutcome> => {
     const read = await observe(content);
     if (!read.ok) return { status: "unknown", since: isoTime(client.now()) };
     const now = read.value.kind === "item-set" ? read.value.value : null;
@@ -843,7 +839,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
     return same ? sent : refused(`Canvas answered, but didn't change ${content.where}.`);
   };
 
-  const setOf = async (content: SetContent): Promise<Outcome> => {
+  const setOf = async (content: SetContent): Promise<FieldOutcome> => {
     const { intent } = content;
     switch (intent.set) {
       case "course-published":

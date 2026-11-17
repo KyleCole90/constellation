@@ -24,7 +24,7 @@ export interface LatePenalty {
   /** An extension or a documented absence. The penalty stays on the draft so the teacher sees what was waived. */
   waived: boolean;
 }
-export interface AttachmentDraft {
+interface AttachmentDraft {
   name: string;
   kb: number;
 }
