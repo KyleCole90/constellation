@@ -5,7 +5,7 @@ import {
   type FieldKey,
   type GradeContent,
 } from "~/shared/domain/change";
-import type { ChangeId, IsoTime, SchoolId } from "~/shared/domain/ids";
+import { type ChangeId, type SchoolId, isoTime } from "~/shared/domain/ids";
 import type { Submission } from "~/shared/domain/lms";
 import type { SendPermit } from "~/shared/domain/permit";
 import { QUIET_NOISE } from "~/shared/providers/fake-canvas/faults";
@@ -136,7 +136,7 @@ export const makeRig = async () => {
   const draft = async (school: SchoolId, content: ChangeContent): Promise<ChangeRecord> => {
     const remote = await provider(school).observe(content);
     if (!remote.ok) throw new Error(`observe failed: ${remote.error.kind}`);
-    const at = new Date(clock.now()).toISOString() as IsoTime;
+    const at = isoTime(clock.now());
     const record = newChangeRecord({
       id: `ch-${++seq}` as ChangeId,
       school,
@@ -157,7 +157,7 @@ export const makeRig = async () => {
     const result = ledger.commit(id, {
       type: "approve",
       witness: clickWitness(record),
-      at: new Date(clock.now()).toISOString() as IsoTime,
+      at: isoTime(clock.now()),
     });
     if (!result.ok) throw new Error(`approve rejected: ${result.error}`);
   };

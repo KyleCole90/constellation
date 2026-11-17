@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { ApprovalWitness, fingerprintOf, type RiskKey } from "~/shared/domain/approval";
 import { fieldText, riskOf, summarize, transition } from "~/shared/domain/change";
-import type { IsoTime } from "~/shared/domain/ids";
+import { type IsoTime, isoTime } from "~/shared/domain/ids";
 import { copyMigration } from "~/shared/domain/setup";
 import { FALL_2026 } from "~/shared/providers/fake-canvas/seed-term";
 
@@ -10,8 +10,7 @@ import { clickWitness } from "./fixtures/changes";
 import { LCC, RSU } from "./fixtures/rig";
 import { copyContent, makeTermRig, planFor, termOf } from "./fixtures/term";
 
-const at = (rig: { clock: { now(): number } }): IsoTime =>
-  new Date(rig.clock.now()).toISOString() as IsoTime;
+const at = (rig: { clock: { now(): number } }): IsoTime => isoTime(rig.clock.now());
 
 /** A copy into the one seeded course that already has people and content in it. */
 const riskyCopy = async () => {

@@ -11,7 +11,7 @@ import {
   type ChangePatch,
   type ChangeRecord,
 } from "~/shared/domain/change";
-import type { ChangeId, IsoTime, LmsRef, ThreadId } from "~/shared/domain/ids";
+import { type ChangeId, type LmsRef, type ThreadId, isoTime } from "~/shared/domain/ids";
 import type { Assignment, Submission } from "~/shared/domain/lms";
 import { planWork } from "~/renderer/components/screens/due.logic";
 import { visibleMessages } from "~/renderer/components/thread/timeline.logic";
@@ -90,7 +90,7 @@ const draft = async (rig: StoreRig, submission: Submission): Promise<ChangeId> =
   if (!id) throw new Error("Nothing drafted.");
   return id;
 };
-const atNow = (rig: StoreRig) => new Date(rig.state().now()).toISOString() as IsoTime;
+const atNow = (rig: StoreRig) => isoTime(rig.state().now());
 const edit = (rig: StoreRig, id: ChangeId, patch: ChangePatch) =>
   rig.state().dispatchUser(id, { type: "edit", by: "you", patch, at: atNow(rig) });
 const editOk = (rig: StoreRig, id: ChangeId, patch: ChangePatch) => {
@@ -942,6 +942,6 @@ describe("a workspace saved before this", () => {
     expect(record.content.kind === "grade" && finalGrade(record.content)).toBe(16);
     expect(fingerprintOf(record)).toBe(FINGERPRINT_AT_549E11D);
     expect(summarize(record).missing).toEqual([]);
-    expect(transition(record, { type: "begin-send", seen: {}, at: at as IsoTime }).ok).toBe(true);
+    expect(transition(record, { type: "begin-send", seen: {}, at: isoTime(at) }).ok).toBe(true);
   });
 });

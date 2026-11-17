@@ -11,7 +11,13 @@ import { northStarStream } from "~/shared/agent/rules/northStar";
 import { planWork, sittingsOf } from "~/renderer/components/screens/due.logic";
 import { composerHints } from "~/renderer/components/thread/composer.logic";
 import { buildTimeline, liveReplies } from "~/renderer/components/thread/timeline.logic";
-import type { ChangeId, IsoTime, LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
+import {
+  type ChangeId,
+  type LmsRef,
+  type SchoolId,
+  type ThreadId,
+  isoTime,
+} from "~/shared/domain/ids";
 import type { Assignment } from "~/shared/domain/lms";
 import {
   NORTH_STAR_THREAD,
@@ -113,7 +119,7 @@ const scopeOf = (rig: StoreRig, over: Partial<AgentScope> = {}): AgentScope => (
   northStar: {
     announcements: allOf(rig, "announcements"),
     schools: rig.state().schools,
-    now: "2026-10-30T15:42:00.000Z" as IsoTime,
+    now: isoTime("2026-10-30T15:42:00.000Z"),
     next: [],
     grades: [],
     grading: { toGrade: [], asked: [] },
@@ -580,7 +586,7 @@ describe("a handoff from North Star", () => {
       if (!first) throw new Error("No draft.");
       rig.state().dispatchUser(first, {
         type: "discard",
-        at: new Date(rig.clock.now()).toISOString() as IsoTime,
+        at: isoTime(rig.clock.now()),
       });
       await ask(rig, "Draft this week's announcement for HUM 150");
       expect(lastAgent(rig)?.text).toContain(
@@ -1170,19 +1176,19 @@ describe("what North Star answers", () => {
     const passed = {
       ...base,
       shortTitle: "Due this morning",
-      dueAt: "2026-10-30T09:00:00" as IsoTime,
+      dueAt: isoTime("2026-10-30T09:00:00"),
     };
     const tonight = {
       ...base,
       ref: "lcc:assignment:tonight" as Assignment["ref"],
       shortTitle: "Due tonight",
-      dueAt: "2026-10-30T23:59:00" as IsoTime,
+      dueAt: isoTime("2026-10-30T23:59:00"),
     };
     const scope = scopeOf(rig, { assignments: [passed, tonight] });
     const said = [
       ...northStarStream(
         { request: "What's due?", thread: { history: [] }, scope },
-        { ...scope.northStar!, now: "2026-10-30T14:00:00" as IsoTime },
+        { ...scope.northStar!, now: isoTime("2026-10-30T14:00:00") },
       ),
     ].at(-1) as { text: string; lines: readonly { title: string }[] };
     expect(said.text).toBe("1 assignment is due in the next 7 days.");
@@ -1509,7 +1515,7 @@ describe("North Star home", () => {
     await reloaded.clock.run(reloaded.state().boot());
     return reloaded;
   };
-  const at = "2026-10-30T15:42:00.000Z" as IsoTime;
+  const at = isoTime("2026-10-30T15:42:00.000Z");
 
   it("drops the old greeting from a saved workspace, with no chat made for it", async () => {
     const rig = await rebootedWith([{ type: "agent", text: "Ask me what's due.", at }]);
@@ -1667,7 +1673,7 @@ describe("what a Next up row promises", () => {
     if (!id) throw new Error("Nothing drafted.");
     rig.state().dispatchUser(id, {
       type: "discard",
-      at: new Date(rig.state().now()).toISOString() as IsoTime,
+      at: isoTime(rig.state().now()),
     });
     expect(announcementOf(rig)).toMatchObject({ verb: "Write", detail: "Not started" });
   });
@@ -1683,7 +1689,7 @@ describe("what a Next up row promises", () => {
     const discard = () =>
       rig.state().dispatchUser(id, {
         type: "discard",
-        at: new Date(rig.state().now()).toISOString() as IsoTime,
+        at: isoTime(rig.state().now()),
       });
     discard();
     expect(rig.state().restoreChange(before)).toBe(true);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
+import { type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
 import {
   askedInLms,
   namingAssignment,
@@ -25,7 +25,7 @@ const submission = (student: LmsRef<"student">, assignment: string): Submission 
   workflow: "submitted",
   attempt: 1,
   lateDays: 0,
-  submittedAt: "2026-10-11T20:34:00Z" as IsoTime,
+  submittedAt: isoTime("2026-10-11T20:34:00Z"),
   grade: null,
   rubricScores: null,
   comments: [],
@@ -46,7 +46,7 @@ const sent = (
   from: "",
   students: [student],
   unread: false,
-  messages: [{ id: "1", mine: true, author: "Teacher", text, at: at as IsoTime }],
+  messages: [{ id: "1", mine: true, author: "Teacher", text, at: isoTime(at) }],
 });
 
 /** The messages found in the sandbox's sent folder, as their subjects and openings read. */
@@ -70,7 +70,9 @@ const SENT = [
 
 describe("whether the LMS shows the student was asked to resubmit (#102)", () => {
   it("matches each message to the work it names, by student and course", () => {
-    expect(askedInLms(SENT, submission(JOEY, "portfolio"), PORTFOLIO)).toBe("2026-11-14T20:57:00Z");
+    expect(askedInLms(SENT, submission(JOEY, "portfolio"), PORTFOLIO)).toBe(
+      "2026-11-14T20:57:00.000Z",
+    );
     expect(askedInLms(SENT, submission(JOEY, "composition"), COMPOSITION)).not.toBeNull();
     expect(askedInLms(SENT, submission(STEPHANIE, "portfolio"), PORTFOLIO)).not.toBeNull();
   });
@@ -92,7 +94,7 @@ describe("whether the LMS shows the student was asked to resubmit (#102)", () =>
           mine: false,
           author: "Joey",
           text: "ePortfolio",
-          at: "2026-11-14T20:57:00Z" as IsoTime,
+          at: isoTime("2026-11-14T20:57:00Z"),
         },
       ],
     };

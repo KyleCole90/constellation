@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { documentText } from "~/main/document-text";
 import type { SubmittedFile } from "~/shared/agent/agent";
-import type { IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
+import { type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
 import type {
   Assignment,
   Course,
@@ -27,7 +27,7 @@ export interface Fixture {
 
 const FILES = join(import.meta.dirname, "files");
 const SCHOOL = "bench-school" as SchoolId;
-const SUBMITTED = "2026-11-02T15:30:00Z" as IsoTime;
+const SUBMITTED = isoTime("2026-11-02T15:30:00Z");
 const COURSES: Record<string, string> = {
   eng10: "English 10",
   bio: "Biology",
@@ -89,7 +89,7 @@ const assignmentOf = (key: string): Assignment & { courseKey: string } => {
     course: ref("course", authored.course),
     title: authored.title,
     shortTitle: authored.shortTitle,
-    dueAt: "2026-11-02T23:59:00Z" as IsoTime,
+    dueAt: isoTime("2026-11-02T23:59:00Z"),
     pointsPossible: authored.pointsPossible,
     rubric: authored.rubric.map((criterion, index) => ({
       ref: ref("criterion", `${key}-${index + 1}`),

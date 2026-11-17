@@ -2,7 +2,14 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { ChangeRecord } from "~/shared/domain/change";
 import type { CopySource, CourseShell, Migration, SetContent } from "~/shared/domain/content";
-import type { ChangeId, IsoDate, IsoTime, LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
+import {
+  type ChangeId,
+  type IsoDate,
+  type LmsRef,
+  type SchoolId,
+  type ThreadId,
+  isoTime,
+} from "~/shared/domain/ids";
 import type { Finding, FindingKey, FindingType } from "~/shared/domain/scan";
 import {
   STEPS,
@@ -514,7 +521,7 @@ describe("reviewRows", () => {
   it("a fix sent after the scan read the course says checking, and keeps the course from passing", () => {
     const record = chain.sent("fix");
     if (record.state.tag !== "sent") throw new Error("Not sent.");
-    const before = new Date(Date.parse(record.state.at) - 1000).toISOString() as IsoTime;
+    const before = isoTime(Date.parse(record.state.at) - 1000);
     const rows = reviewRows(
       setup({ scan: { ...scanned([finding("a")])!, at: before }, fixes: { [k("a")]: record.id } }),
       mapOf(record),

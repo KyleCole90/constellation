@@ -6,7 +6,7 @@ import type {
   RemoteState,
 } from "~/shared/domain/change";
 import { finalGrade } from "~/shared/domain/change";
-import type { IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
+import { type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
 import type { Submission } from "~/shared/domain/lms";
 import { SendPermit } from "~/shared/domain/permit";
 import type {
@@ -85,7 +85,7 @@ export class SecondLmsStub {
   }
 
   provider(lease: CredentialLease, now: () => number): LmsProvider {
-    const at = () => new Date(now()).toISOString() as IsoTime;
+    const at = () => isoTime(now());
     const authed = async <T>(work: () => Read<T>): Read<T> =>
       lease.use((credential) => {
         const denied: LmsError | null =

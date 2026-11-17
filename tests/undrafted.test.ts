@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { DRAFT_GRADE_REQUEST, type Agent, type AgentInput } from "~/shared/agent/agent";
-import type { LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
+import { type LmsRef, type SchoolId, type ThreadId, isoTime } from "~/shared/domain/ids";
 import { invoker, type Bridge } from "~/shared/ipc";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 import {
@@ -123,7 +123,7 @@ describe("after Claude drafts no grade for a submission", () => {
     expect(agent.calls).toBe(2);
     rig.state().dispatchUser(drafted!, {
       type: "discard",
-      at: new Date(rig.clock.now()).toISOString() as never,
+      at: isoTime(rig.clock.now()),
     });
     expect(ask()).toBeNull();
   });

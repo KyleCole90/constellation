@@ -3,7 +3,13 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { DRAFT_GRADE_REQUEST } from "~/shared/agent/agent";
 import { ApprovalWitness } from "~/shared/domain/approval";
 import { summarize, zeroPatch, type ChangePatch } from "~/shared/domain/change";
-import type { ChangeId, IsoTime, LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
+import {
+  type ChangeId,
+  type LmsRef,
+  type SchoolId,
+  type ThreadId,
+  isoTime,
+} from "~/shared/domain/ids";
 import { previewOf } from "~/shared/domain/preview";
 import { DEMO_CONFLICT, DEMO_PARTIAL, QUIET_NOISE } from "~/shared/providers/fake-canvas/faults";
 import { FakeCanvasServer, LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
@@ -1383,7 +1389,7 @@ describe("the store's preview", () => {
       type: "edit",
       by: "you",
       patch: { kind: "grade", comment: "Changed after approving." },
-      at: new Date(rig.state().now()).toISOString() as IsoTime,
+      at: isoTime(rig.state().now()),
     });
     expect(result.ok).toBe(true);
     expect(stateTag(rig, id)).toBe("draft");
@@ -1721,7 +1727,7 @@ describe("missing work", () => {
       type: "edit",
       by: "you",
       patch: patch(id),
-      at: new Date(rig.state().now()).toISOString() as IsoTime,
+      at: isoTime(rig.state().now()),
     });
     expect(edited.ok).toBe(true);
     approve(rig, id);

@@ -8,9 +8,9 @@ import {
   type GradeContent,
   type RemoteState,
 } from "~/shared/domain/change";
-import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
+import { type ChangeId, type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
 
-export const AT = "2026-10-30T12:00:00.000Z" as IsoTime;
+export const AT = isoTime("2026-10-30T12:00:00.000Z");
 export const SCHOOL = "lcc" as SchoolId;
 export const COURSE = "lcc:course:1" as LmsRef<"course">;
 export const SUBMISSION = "lcc:submission:1:2:3" as LmsRef<"submission">;

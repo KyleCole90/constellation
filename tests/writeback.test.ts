@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { fieldsOf, summarize, type FieldKey, type LmsError } from "~/shared/domain/change";
-import type { ChangeId, IsoTime } from "~/shared/domain/ids";
+import { type ChangeId, isoTime } from "~/shared/domain/ids";
 import type { Submission } from "~/shared/domain/lms";
 import type { Result } from "~/shared/domain/ids";
 import { LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
@@ -28,7 +28,7 @@ const fieldWrites = (rig: Rig, id: ChangeId, field: FieldKey) =>
   rig.writes.filter((write) => write.change === id && write.fields.includes(field)).length;
 const lmsRequests = (rig: Rig, school = LCC) =>
   rig.server.log.filter((entry) => entry.school === school);
-const iso = (rig: Rig) => new Date(rig.clock.now()).toISOString() as IsoTime;
+const iso = (rig: Rig) => isoTime(rig.clock.now());
 
 describe("a clean send", () => {
   it("lands every field once and reads as sent", async () => {

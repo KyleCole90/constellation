@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { CourseShell } from "~/shared/domain/content";
-import type { IsoTime, LmsRef, SchoolHost, SchoolId, ThreadId } from "~/shared/domain/ids";
+import {
+  type LmsRef,
+  type SchoolHost,
+  type SchoolId,
+  type ThreadId,
+  isoTime,
+} from "~/shared/domain/ids";
 import type { Assignment, Course, School, Student, Submission } from "~/shared/domain/lms";
 import type { ConnectionRecord, Thread } from "~/renderer/stores/types";
 
@@ -48,7 +54,7 @@ const thread: Thread & { toApprove: boolean } = {
   title: "Essay 2",
   messages: [],
   focus: null,
-  updatedAt: "2026-10-30T00:00:00.000Z" as IsoTime,
+  updatedAt: isoTime("2026-10-30T00:00:00.000Z"),
   toApprove: false,
 };
 const submission = {

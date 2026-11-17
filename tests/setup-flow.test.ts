@@ -4,7 +4,7 @@ import { type Agent } from "~/shared/agent/agent";
 import { ApprovalWitness, fingerprintOf } from "~/shared/domain/approval";
 import { riskOf, summarize, type ChangeRecord } from "~/shared/domain/change";
 import type { CopySource, CourseShell } from "~/shared/domain/content";
-import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
+import { type ChangeId, type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
 import { reviewRows, stageOf, type CourseSetup, type SetupStage } from "~/shared/domain/setup";
 import { draftOf, type TermDates, type TermPlan } from "~/shared/domain/term";
 import {
@@ -74,7 +74,7 @@ const record = (rig: StoreRig, id: ChangeId): ChangeRecord => {
 };
 const rows = (rig: StoreRig, course: Course) =>
   reviewRows(setupOf(rig, course), rig.state().changes);
-const nowIso = (rig: StoreRig) => new Date(rig.state().now()).toISOString() as IsoTime;
+const nowIso = (rig: StoreRig) => isoTime(rig.state().now());
 
 const approve = (rig: StoreRig, id: ChangeId) => {
   const result = rig

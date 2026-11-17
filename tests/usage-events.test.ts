@@ -3,7 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import type { Agent } from "~/shared/agent/agent";
 import { createRuleAgent } from "~/shared/agent/rules";
 import type { AnalyticsEvent } from "~/shared/analytics";
-import type { IsoTime, ThreadId } from "~/shared/domain/ids";
+import { type ThreadId, isoTime } from "~/shared/domain/ids";
 import { Secret } from "~/shared/providers/provider";
 
 import { clickWitness } from "./fixtures/changes";
@@ -16,7 +16,7 @@ const tracked = async (options: StoreRigOptions = {}) => {
   const rig = await makeStoreRig({ ...options, track: (event) => events.push(event) });
   return { rig, events };
 };
-const atNow = (rig: StoreRig) => new Date(rig.state().now()).toISOString() as IsoTime;
+const atNow = (rig: StoreRig) => isoTime(rig.state().now());
 
 describe("the store tells main what the teacher did", () => {
   it("names each setup step as the teacher moves past it, and only going forward", async () => {

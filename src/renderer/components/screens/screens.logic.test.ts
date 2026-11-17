@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ChangeSummary } from "~/shared/domain/change";
-import type { IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
+import { type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
 import type { Assignment, School, Submission } from "~/shared/domain/lms";
 import type {
   DueExtras,
@@ -377,7 +377,7 @@ describe("the work plan", () => {
         ...morning,
         assignment: {
           ...morning.assignment,
-          dueAt: new Date(NOW - 3_600_000).toISOString() as IsoTime,
+          dueAt: isoTime(NOW - 3_600_000),
         },
       },
     ]);
@@ -551,7 +551,7 @@ describe("the inbox", () => {
   const rows = [
     row(lcc, { unread: true }),
     row(rsu, { summary: summary({ canApprove: true }) }),
-    row(lcc, { mine: true, summary: summary({ sentAt: "2026-10-30T10:00:00.000Z" as IsoTime }) }),
+    row(lcc, { mine: true, summary: summary({ sentAt: isoTime("2026-10-30T10:00:00.000Z") }) }),
   ];
 
   it("needs reply means the student spoke last and no reply is under way", () => {
@@ -561,7 +561,7 @@ describe("the inbox", () => {
   it("a student writing again after a sent reply needs a reply again", () => {
     expect(
       statusCount(
-        [row(lcc, { summary: summary({ sentAt: "2026-10-30T10:00:00.000Z" as IsoTime }) })],
+        [row(lcc, { summary: summary({ sentAt: isoTime("2026-10-30T10:00:00.000Z") }) })],
         "needs-reply",
       ),
     ).toBe(1);
@@ -619,7 +619,7 @@ describe("gradebook cells", () => {
   });
 
   it("work the student was asked to resubmit says so, not ungraded or resubmitted (#106)", () => {
-    const asked = "2026-11-14T15:00:00.000Z" as IsoTime;
+    const asked = isoTime("2026-11-14T15:00:00.000Z");
     expect(
       cellMarks(cell({ grade: null, asked, submission: submission({ workflow: "submitted" }) })),
     ).toEqual(["asked"]);
@@ -766,7 +766,7 @@ describe("who is behind", () => {
 });
 
 describe("sync age", () => {
-  const at = "2026-10-30T10:00:00.000Z" as IsoTime;
+  const at = isoTime("2026-10-30T10:00:00.000Z");
   const start = new Date(at).getTime();
 
   it("speaks in the largest unit that fits", () => {

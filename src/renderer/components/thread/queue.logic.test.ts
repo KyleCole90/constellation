@@ -2,7 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { summarize, type ChangeRecord, type ChangeSummary } from "~/shared/domain/change";
 import type { School } from "~/shared/domain/lms";
-import type { IsoTime, LmsRef } from "~/shared/domain/ids";
+import { type LmsRef, isoTime } from "~/shared/domain/ids";
 import type { RowKey } from "~/renderer/stores/types";
 
 import {
@@ -143,7 +143,7 @@ describe("queueChips", () => {
   });
 
   it("a row whose student was asked to resubmit says so, and isn't Not started (#98)", () => {
-    const asked = row("asked", { open: false, asked: "2026-11-14T15:00:00.000Z" as IsoTime });
+    const asked = row("asked", { open: false, asked: isoTime("2026-11-14T15:00:00.000Z") });
     expect(rowStatus(asked, false).label).toMatch(/^Asked to resubmit · Nov 1[45]$/);
     expect(keys(filterRows([row("none"), asked], "needs-draft"))).toEqual(["none"]);
   });
@@ -212,7 +212,7 @@ describe("rowLine", () => {
   const grading = { course: "c" as never, assignment: "a" as never };
 
   it("adds nothing in a thread that names the course and the assignment", () => {
-    expect(rowLine(row("a", { dueAt: "2026-10-26T12:00:00Z" as never }), grading)).toBe("");
+    expect(rowLine(row("a", { dueAt: isoTime("2026-10-26T12:00:00Z") }), grading)).toBe("");
   });
 
   it("keeps the subject in a replies thread, which only names the course", () => {
@@ -224,7 +224,7 @@ describe("rowLine", () => {
   });
 
   it("ends with the labelled due date, after the course and the assignment, in a list across courses", () => {
-    expect(rowLine(row("a", { dueAt: "2026-10-26T12:00:00Z" as never }), { course: null })).toBe(
+    expect(rowLine(row("a", { dueAt: isoTime("2026-10-26T12:00:00Z") }), { course: null })).toBe(
       "HUM 150 · Essay 2 · Due Oct 26",
     );
   });
@@ -233,7 +233,7 @@ describe("rowLine", () => {
 describe("queueProgress", () => {
   it("a grading list counts grades, requests to resubmit, and what's left, each by name (#122)", () => {
     const asked = (key: string) =>
-      row(key, { open: false, asked: "2026-11-14T12:00:00Z" as never });
+      row(key, { open: false, asked: isoTime("2026-11-14T12:00:00Z") });
     expect(queueProgress([asked("a"), asked("b"), row("c")]).label).toBe(
       "0 graded · 2 asked to resubmit · 1 to grade",
     );

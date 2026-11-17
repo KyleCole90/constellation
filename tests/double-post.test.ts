@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { LmsError } from "~/shared/domain/change";
-import type { ChangeId } from "~/shared/domain/ids";
+import { type ChangeId, isoTime } from "~/shared/domain/ids";
 import type { Submission } from "~/shared/domain/lms";
 import { DEFAULT_RETRY_POLICY, createWriteback } from "~/renderer/writeback/writeback";
 
@@ -10,7 +10,7 @@ import { LCC, makeRig, type Rig } from "./fixtures/rig";
 
 const myComments = (rig: Rig, submission: Submission) =>
   rig.lmsSubmission(submission).comments.filter((comment) => comment.mine);
-const iso = (rig: Rig) => new Date(rig.clock.now()).toISOString() as never;
+const iso = (rig: Rig) => isoTime(rig.clock.now());
 
 const reapprove = (rig: Rig, id: ChangeId) => {
   const record = rig.ledger.get(id);
