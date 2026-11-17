@@ -2,6 +2,7 @@ import { addAiKey } from "./ai-key.mjs";
 import { repliesAgree } from "./courses.mjs";
 import { expandCourse } from "./sidebar.mjs";
 import { onboard } from "./onboard.mjs";
+import { KEY } from "./storage.mjs";
 
 const LIST = '[data-testid="queue-list"]';
 const QUEUE = '[data-testid="pinned-queue"]';
@@ -23,7 +24,7 @@ const gradeInLms = (t, student, short) => lms(t, `${submissionIn(student, short)
 
 const tagOf = (t, subject) =>
   t.eval(
-    `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).find((c) => c.subject === ${JSON.stringify(subject)})?.state.tag ?? null`,
+    `Object.values(JSON.parse(localStorage.getItem(${KEY})).state.changes).find((c) => c.subject === ${JSON.stringify(subject)})?.state.tag ?? null`,
   );
 const lab = (t, call) => t.eval(`void window.__faultLab.${call}`);
 const refOf = (student, short) =>
@@ -33,7 +34,7 @@ const settled = (t, label) =>
   t.waitFor(`!document.querySelector('[data-testid="agent-working"]')`, label);
 
 const OPEN = '[data-testid="grade-open"]';
-const savedChanges = `Object.keys(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).length`;
+const savedChanges = `Object.keys(JSON.parse(localStorage.getItem(${KEY})).state.changes).length`;
 
 /** Opening spends nothing: the submission shows with the two choices, no agent runs, and no change is saved (#48). */
 const opensUndrafted = async (t, student, label) => {
@@ -85,7 +86,7 @@ const openStudent = async (t, student, short) => {
   );
 };
 
-const threadMessages = `JSON.parse(localStorage.getItem("lms-app.v1")).state.threads[decodeURIComponent(location.pathname.split("/threads/")[1])].messages`;
+const threadMessages = `JSON.parse(localStorage.getItem(${KEY})).state.threads[decodeURIComponent(location.pathname.split("/threads/")[1])].messages`;
 
 const ask = async (t, request) => {
   const before = await t.eval(`${threadMessages}.length`);
@@ -1344,7 +1345,7 @@ const resubmission = async (t) => {
   await sendAndWaitSent(t, "Luis Cardenas, Essay 2");
   await t.reload();
   await t.waitFor(
-    `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.cache).some((c) => c.submissions.some((s) => s.studentName === "Luis Cardenas" && c.assignments.find((a) => a.ref === s.assignment)?.shortTitle === "Essay 2" && s.attempt === 2 && s.workflow === "graded"))`,
+    `Object.values(JSON.parse(localStorage.getItem(${KEY})).state.cache).some((c) => c.submissions.some((s) => s.studentName === "Luis Cardenas" && c.assignments.find((a) => a.ref === s.assignment)?.shortTitle === "Essay 2" && s.attempt === 2 && s.workflow === "graded"))`,
     "a sync reads the grade on attempt 2 back from the LMS",
     15_000,
   );
@@ -1947,7 +1948,7 @@ const handApproveThenSend = async (t, student) => {
   );
   await t.sleep(500);
   const tag = await t.eval(
-    `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).find((c) => c.subject.startsWith(${JSON.stringify(student)}) && c.state.tag !== "discarded")?.state.tag ?? null`,
+    `Object.values(JSON.parse(localStorage.getItem(${KEY})).state.changes).find((c) => c.subject.startsWith(${JSON.stringify(student)}) && c.state.tag !== "discarded")?.state.tag ?? null`,
   );
   t.assert(
     tag === "approved" &&
@@ -2504,7 +2505,7 @@ const submissionTypes = async (t) => {
   );
   await settled(t, "PDF draft: agent finished");
   const points = await t.eval(
-    `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).find((c) => c.subject.includes("Maya Ortiz") && c.subject.includes("Reading Response 5"))?.content.points ?? null`,
+    `Object.values(JSON.parse(localStorage.getItem(${KEY})).state.changes).find((c) => c.subject.includes("Maya Ortiz") && c.subject.includes("Reading Response 5"))?.content.points ?? null`,
   );
   t.assert(
     points !== null && points > 0,
@@ -2568,7 +2569,7 @@ const searchStudent = async (t, student, asked, label) => {
     return;
   }
   const opened = await t.eval(
-    `(() => { const id = decodeURIComponent(location.pathname.split("/threads/")[1] ?? ""); return JSON.parse(localStorage.getItem("lms-app.v1")).state.prefs.threadUi[id]?.current ?? null; })()`,
+    `(() => { const id = decodeURIComponent(location.pathname.split("/threads/")[1] ?? ""); return JSON.parse(localStorage.getItem(${KEY})).state.prefs.threadUi[id]?.current ?? null; })()`,
   );
   t.assert(
     opened && opened !== asked,
@@ -2631,11 +2632,11 @@ const cantSee = async (t) => {
   const MESSAGE = `${CARD} textarea`;
   const toGradeIn = () =>
     t.eval(
-      `(() => { const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; const cache = Object.values(state.cache).find((c) => c.submissions.some((s) => s.ref === ${JSON.stringify(row)})); const course = cache.courses.find((c) => c.ref === cache.submissions.find((s) => s.ref === ${JSON.stringify(row)}).course); const link = document.querySelector('[data-testid="sidebar"] a[title^="' + course.code + ' "]'); return link ? Number(link.title.match(/(\\d+) to grade/)?.[1] ?? 0) : null; })()`,
+      `(() => { const state = JSON.parse(localStorage.getItem(${KEY})).state; const cache = Object.values(state.cache).find((c) => c.submissions.some((s) => s.ref === ${JSON.stringify(row)})); const course = cache.courses.find((c) => c.ref === cache.submissions.find((s) => s.ref === ${JSON.stringify(row)}).course); const link = document.querySelector('[data-testid="sidebar"] a[title^="' + course.code + ' "]'); return link ? Number(link.title.match(/(\\d+) to grade/)?.[1] ?? 0) : null; })()`,
     );
   const messages = (target) =>
     t.eval(
-      `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).filter((c) => c.content.kind === "message" && c.content.target === ${JSON.stringify(target)}).map((c) => c.state.tag)`,
+      `Object.values(JSON.parse(localStorage.getItem(${KEY})).state.changes).filter((c) => c.content.kind === "message" && c.content.target === ${JSON.stringify(target)}).map((c) => c.state.tag)`,
     );
   const drafts = async (label) => {
     const before = await t.eval(savedChanges);
@@ -2692,7 +2693,7 @@ const cantSee = async (t) => {
   await approve(t, "resubmit");
   await clickSend(t);
   await t.waitFor(
-    `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).some((c) => c.content.kind === "message" && c.content.target === ${JSON.stringify(row)} && c.state.tag === "sent")`,
+    `Object.values(JSON.parse(localStorage.getItem(${KEY})).state.changes).some((c) => c.content.kind === "message" && c.content.target === ${JSON.stringify(row)} && c.state.tag === "sent")`,
     "resubmit: the message sends through the usual path",
     10_000,
   );
@@ -2793,7 +2794,7 @@ const cantSee = async (t) => {
   );
 
   await t.eval(
-    `(() => { const saved = JSON.parse(localStorage.getItem("lms-app.v1")); saved.state.changes = {}; saved.state.undrafted = {}; localStorage.setItem("lms-app.v1", JSON.stringify(saved)); })()`,
+    `(() => { const saved = JSON.parse(localStorage.getItem(${KEY})); saved.state.changes = {}; saved.state.undrafted = {}; localStorage.setItem(${KEY}, JSON.stringify(saved)); })()`,
   );
   await t.reload();
   await openRow("fresh copy");
@@ -2897,7 +2898,7 @@ const preference = async (t) => {
   );
   t.assert(
     (await t.eval(
-      `JSON.parse(localStorage.getItem("lms-app.v1")).state.threads["t-queue"].guidance ?? null`,
+      `JSON.parse(localStorage.getItem(${KEY})).state.threads["t-queue"].guidance ?? null`,
     )) === null,
     "preference: cleared for good, so later drafts hear none",
   );

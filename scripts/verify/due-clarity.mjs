@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 
+import { WORKSPACE_STORAGE_KEY } from "../../src/renderer/stores/storage-key.ts";
 import { startDevServer } from "../dev-server.mjs";
 import { onboardPage } from "./onboard.mjs";
 
@@ -57,8 +58,8 @@ const onboard = {
 };
 
 const readTruth = (page) =>
-  page.evaluate(() => {
-    const state = JSON.parse(localStorage.getItem("lms-app.v1")).state;
+  page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key)).state;
     const caches = Object.entries(state.cache)
       .filter(([school]) => state.connections[school]?.status !== "disconnected")
       .map(([, cache]) => cache);
@@ -131,7 +132,7 @@ const readTruth = (page) =>
           })),
       },
     };
-  });
+  }, WORKSPACE_STORAGE_KEY);
 
 const capture = async (out) => {
   const vite = await startDevServer();

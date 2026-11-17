@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 
+import { WORKSPACE_STORAGE_KEY } from "../../src/renderer/stores/storage-key.ts";
 import { startDevServer } from "../dev-server.mjs";
 import { onboardPage } from "./onboard.mjs";
 
@@ -194,8 +195,8 @@ const JOURNEYS = {
 };
 
 const readTruth = (page) =>
-  page.evaluate(() => {
-    const state = JSON.parse(localStorage.getItem("lms-app.v1")).state;
+  page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key)).state;
     const id = decodeURIComponent(location.pathname.split("/threads/")[1] ?? "");
     const thread = state.threads[id] ?? null;
     const change = thread?.focus ? (state.changes[thread.focus] ?? null) : null;
@@ -258,7 +259,7 @@ const readTruth = (page) =>
       threadRows,
       schoolAbbrs: state.schools.map((s) => s.abbr),
     };
-  });
+  }, WORKSPACE_STORAGE_KEY);
 
 const installHelpers = (page) =>
   page.evaluate((sidebar) => {

@@ -1,5 +1,6 @@
 import { addAiKey } from "./ai-key.mjs";
 import { onboard } from "./onboard.mjs";
+import { KEY } from "./storage.mjs";
 
 const SIDEBAR = '[data-testid="sidebar"]';
 const NAV = '[data-testid="settings-nav"]';
@@ -423,7 +424,7 @@ const ROW_FIELD = (host) => `${ROW(host)} input[type="password"]`;
 const ADDRESS = '[data-testid="address-field"]';
 const rowStatus = (host) =>
   `document.querySelector(${JSON.stringify(ROW(host))})?.dataset.connection`;
-const storedHosts = `(JSON.parse(localStorage.getItem("lms-app.v1") ?? "{}").state?.schools ?? []).map((school) => school.host)`;
+const storedHosts = `JSON.parse(localStorage.getItem(${KEY})).state.schools.map((school) => school.host)`;
 
 const addAddress = async (t, host, { scope, typed = host } = {}) => {
   await t.click(ADDRESS, { within: scope });
@@ -1231,7 +1232,7 @@ const connections = async (t, shot) => {
   await t.eval(`window.__faultLab.setNoise({ latencyMs: [120, 240] })`);
 
   const before = await t.eval(
-    `Object.keys(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).length`,
+    `Object.keys(JSON.parse(localStorage.getItem(${KEY})).state.changes).length`,
   );
   await t.click("Disconnect", { within: CARD("rsu") });
   await t.waitFor(
@@ -1258,9 +1259,8 @@ const connections = async (t, shot) => {
   t.assert((await t.text(CARD("rsu"))).includes("Not connected"), "the card says Not connected");
   t.assert((await t.text(SIDEBAR)).includes("Reconnect"), "the sidebar offers Reconnect");
   t.assert(
-    (await t.eval(
-      `Object.keys(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).length`,
-    )) === before,
+    (await t.eval(`Object.keys(JSON.parse(localStorage.getItem(${KEY})).state.changes).length`)) ===
+      before,
     "disconnecting keeps every draft",
   );
   await t.click("Disconnect", { within: CARD("lcc") });
@@ -1319,7 +1319,7 @@ const connections = async (t, shot) => {
   );
   t.assert(
     (await t.eval(
-      `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).some((change) => change.school === "rsu")`,
+      `Object.values(JSON.parse(localStorage.getItem(${KEY})).state.changes).some((change) => change.school === "rsu")`,
     )) === false,
     "Riverbend has no drafts",
   );
@@ -1879,13 +1879,13 @@ const withSchools = async (t, saved, pick) => {
   await t.eval(`(() => {
     const stored = JSON.parse(${JSON.stringify(saved)});
     stored.state.schools = (${pick})(stored.state.schools, ${JSON.stringify(REAL_SCHOOL)});
-    localStorage.setItem("lms-app.v1", JSON.stringify(stored));
+    localStorage.setItem(${KEY}, JSON.stringify(stored));
   })()`);
   await t.reload();
 };
 
 const realSchoolSettings = async (t, shot) => {
-  const saved = await t.eval(`localStorage.getItem("lms-app.v1")`);
+  const saved = await t.eval(`localStorage.getItem(${KEY})`);
   const bodyHas = (text) =>
     t.eval(
       `document.querySelector(${JSON.stringify(BODY)})?.innerText.includes(${JSON.stringify(text)})`,
@@ -1936,7 +1936,7 @@ const realSchoolSettings = async (t, shot) => {
     const stored = JSON.parse(${JSON.stringify(saved)});
     stored.state.schools = [${JSON.stringify(REAL_SCHOOL)}];
     stored.state.cache = {};
-    localStorage.setItem("lms-app.v1", JSON.stringify(stored));
+    localStorage.setItem(${KEY}, JSON.stringify(stored));
   })()`);
   await t.reload();
   await t.waitFor(
@@ -1998,7 +1998,7 @@ const realSchoolSettings = async (t, shot) => {
   );
   await shot("mixed-schools-demo");
 
-  await t.eval(`localStorage.setItem("lms-app.v1", ${JSON.stringify(saved)})`);
+  await t.eval(`localStorage.setItem(${KEY}, ${JSON.stringify(saved)})`);
   await t.reload();
   await openSection(t, "Connections");
   await t.waitFor(
@@ -2012,7 +2012,7 @@ let seededComments = null;
 const assertWiped = async (t, tag) => {
   await t.waitFor(`location.pathname === "/welcome"`, `${tag}: lands on /welcome`);
   const stored = await t.eval(`(async () => {
-    const state = JSON.parse(localStorage.getItem("lms-app.v1") ?? "{}").state ?? {};
+    const { state } = JSON.parse(localStorage.getItem(${KEY}));
     const lms = JSON.parse((await window.__faultLab.stored()) ?? "{}");
     return {
       changes: Object.keys(state.changes ?? {}).length,
@@ -2303,7 +2303,7 @@ const palette = async (t) => {
 
 const FORM = "[data-change][data-focused]";
 const FOOTER_NOTE = '[data-testid="still-missing"]';
-const storedChanges = `Object.keys(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).length`;
+const storedChanges = `Object.keys(JSON.parse(localStorage.getItem(${KEY})).state.changes).length`;
 const RATINGS = /Exemplary|Proficient|Developing|Beginning/;
 
 const rowWith = (t, ...words) =>
@@ -2504,7 +2504,7 @@ const noKeyFlow = async (t, shot) => {
   );
   t.assert(
     await t.eval(
-      `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).every((c) => c.state.tag === "draft")`,
+      `Object.values(JSON.parse(localStorage.getItem(${KEY})).state.changes).every((c) => c.state.tag === "draft")`,
     ),
     "no key: ⌘↵ on a form with no comment approves nothing",
   );
@@ -2552,7 +2552,7 @@ const noKeyFlow = async (t, shot) => {
   t.assert(
     !(await t.has(`${FORM} [data-testid="receipt"]`)) &&
       (await t.eval(
-        `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).every((c) => c.state.tag === "draft")`,
+        `Object.values(JSON.parse(localStorage.getItem(${KEY})).state.changes).every((c) => c.state.tag === "draft")`,
       )),
     "no key: ⌘↵ on a capped score sends nothing, so the person sees the 25 first",
   );
@@ -2585,7 +2585,7 @@ const noKeyFlow = async (t, shot) => {
   );
   t.assert(
     await t.eval(
-      `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).some((c) => c.state.tag === "sent" && c.state.approval.via === "button")`,
+      `Object.values(JSON.parse(localStorage.getItem(${KEY})).state.changes).some((c) => c.state.tag === "sent" && c.state.approval.via === "button")`,
     ),
     "no key: the approval is on record as the button",
   );

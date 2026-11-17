@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { chromium } from "playwright";
 
+import { WORKSPACE_STORAGE_KEY } from "../../src/renderer/stores/storage-key.ts";
 import { startDevServer } from "../dev-server.mjs";
 import { onboardPage } from "./onboard.mjs";
 
@@ -158,15 +159,13 @@ const readPane = (page) =>
   );
 
 const threadKindAt = (page) =>
-  page.evaluate(() => {
+  page.evaluate((key) => {
     const id = decodeURIComponent(location.pathname.split("/threads/")[1] ?? "");
     return {
       id,
-      kind: id
-        ? (JSON.parse(localStorage.getItem("lms-app.v1")).state.threads[id]?.kind ?? null)
-        : null,
+      kind: id ? (JSON.parse(localStorage.getItem(key)).state.threads[id]?.kind ?? null) : null,
     };
-  });
+  }, WORKSPACE_STORAGE_KEY);
 
 const typesRightAway = async (page, base) => {
   await land(page, base);
@@ -292,8 +291,8 @@ const capture = async () => {
     await page.screenshot({ path: join(OUT, "screen.png") });
     const pane = await readPane(page);
     const screenText = await page.evaluate(() => document.querySelector("main")?.innerText ?? "");
-    const truth = await page.evaluate(() => {
-      const state = JSON.parse(localStorage.getItem("lms-app.v1")).state;
+    const truth = await page.evaluate((key) => {
+      const state = JSON.parse(localStorage.getItem(key)).state;
       const caches = Object.values(state.cache);
       return {
         work: [
@@ -313,7 +312,7 @@ const capture = async () => {
           ),
         ],
       };
-    });
+    }, WORKSPACE_STORAGE_KEY);
     const fit = await sidebarFit(page);
     const typed = await typesRightAway(page, base);
     const reached = await oneClickWork(page, base, saved);

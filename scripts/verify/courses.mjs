@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { addAiKey } from "./ai-key.mjs";
 import { onboard } from "./onboard.mjs";
+import { KEY } from "./storage.mjs";
 
 const SIDEBAR = '[data-testid="sidebar"]';
 const PANEL = '[data-testid="thread-panel"]';
@@ -66,7 +67,7 @@ const CALENDAR = '[data-testid="calendar-grid"]';
 const DAY_PANEL = '[data-testid="calendar-day-panel"]';
 const MARKER_POPUP = "[data-calendar-popup]";
 const QUIET = JSON.stringify({ rate429: 0, rate5xx: 0, rateLost: 0, latencyMs: [20, 60] });
-const threeHoursBack = `(() => { const key = "lms-app.v1"; const data = JSON.parse(localStorage.getItem(key)); const school = Object.values(data.state.cache).find((c) => c.courses.some((x) => x.code === "ENG 101")).courses[0].school; data.state.connections[school].lastSyncedAt = new Date(Date.parse(data.state.connections[school].lastSyncedAt) - 3 * 3600000).toISOString(); localStorage.setItem(key, JSON.stringify(data)); })()`;
+const threeHoursBack = `(() => { const key = ${KEY}; const data = JSON.parse(localStorage.getItem(key)); const school = Object.values(data.state.cache).find((c) => c.courses.some((x) => x.code === "ENG 101")).courses[0].school; data.state.connections[school].lastSyncedAt = new Date(Date.parse(data.state.connections[school].lastSyncedAt) - 3 * 3600000).toISOString(); localStorage.setItem(key, JSON.stringify(data)); })()`;
 
 let shotNumber = 49;
 const shot = (t, name) => t.shot(name, ++shotNumber);
@@ -84,7 +85,7 @@ const lms = (t, expression) =>
   );
 const stored = (t, expression) =>
   t.eval(
-    `(() => { const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; return ${expression}; })()`,
+    `(() => { const state = JSON.parse(localStorage.getItem(${KEY})).state; return ${expression}; })()`,
   );
 const count = (t, selector) =>
   t.eval(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
@@ -1022,9 +1023,9 @@ const calendar = async (t) => {
 
 /** A real school can't connect under verify, so one joins the saved workspace the way a reload would find it. */
 const realSchoolCalendar = async (t) => {
-  const saved = await t.eval(`localStorage.getItem("lms-app.v1")`);
+  const saved = await t.eval(`localStorage.getItem(${KEY})`);
   await t.eval(
-    `(() => { const stored = JSON.parse(localStorage.getItem("lms-app.v1")); stored.state.schools.push({ id: "verify-real", abbr: "VR", name: "Verify Real Canvas", host: "verify-real.instructure.com", provider: "canvas" }); localStorage.setItem("lms-app.v1", JSON.stringify(stored)); })()`,
+    `(() => { const stored = JSON.parse(localStorage.getItem(${KEY})); stored.state.schools.push({ id: "verify-real", abbr: "VR", name: "Verify Real Canvas", host: "verify-real.instructure.com", provider: "canvas" }); localStorage.setItem(${KEY}, JSON.stringify(stored)); })()`,
   );
   await t.reload();
   await t.click("Calendar", { within: SIDEBAR });
@@ -1037,7 +1038,7 @@ const realSchoolCalendar = async (t) => {
   );
   t.assert(today === wall, "with a real school, today is the real date", `${today} vs ${wall}`);
   await t.shot("calendar-real-school", null);
-  await t.eval(`localStorage.setItem("lms-app.v1", ${JSON.stringify(saved)})`);
+  await t.eval(`localStorage.setItem(${KEY}, ${JSON.stringify(saved)})`);
   await t.reload();
   await t.click("Calendar", { within: SIDEBAR });
   await t.waitFor(
@@ -2143,7 +2144,7 @@ const undatedWork = async (t) => {
   await goCourse(t, "ENG 101");
   await t.click("Sync now", { within: '[data-testid="sync-line"]' });
   await t.waitFor(
-    `(() => { const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; const own = Object.values(state.cache).flatMap((c) => c.assignments).filter((a) => a.course === ${JSON.stringify(course)}); return own.length > 0 && own.every((a) => a.dueAt === null); })()`,
+    `(() => { const state = JSON.parse(localStorage.getItem(${KEY})).state; const own = Object.values(state.cache).flatMap((c) => c.assignments).filter((a) => a.course === ${JSON.stringify(course)}); return own.length > 0 && own.every((a) => a.dueAt === null); })()`,
     "undated: the app reads ENG 101 with no due dates",
     15_000,
   );
@@ -2278,7 +2279,7 @@ const palette = async (t) => {
   await shot(t, "palette-assignment");
   await t.eval(`${found}.click()`);
   await t.waitFor(
-    `(() => { const id = decodeURIComponent(location.pathname.split("/threads/")[1] ?? ""); const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; return state.threads[id]?.assignment === ${JSON.stringify(assignment.ref)} && state.prefs.threadUi[id]?.queueOpen === true; })()`,
+    `(() => { const id = decodeURIComponent(location.pathname.split("/threads/")[1] ?? ""); const state = JSON.parse(localStorage.getItem(${KEY})).state; return state.threads[id]?.assignment === ${JSON.stringify(assignment.ref)} && state.prefs.threadUi[id]?.queueOpen === true; })()`,
     "and opens that assignment's grading list (#121)",
   );
   await t.waitFor(`document.querySelector('[data-testid="queue-list"]')`, "its list shows");
@@ -2295,7 +2296,7 @@ const palette = async (t) => {
   await goCourse(t, waiting.firstCode);
   await t.click("Sync now", { within: '[data-testid="sync-line"]' });
   await t.waitFor(
-    `(() => { const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; return Object.values(state.cache).flatMap((c) => c.assignments).filter((a) => a.title.includes(" journal #")).length === 6; })()`,
+    `(() => { const state = JSON.parse(localStorage.getItem(${KEY})).state; return Object.values(state.cache).flatMap((c) => c.assignments).filter((a) => a.title.includes(" journal #")).length === 6; })()`,
     "six more matching assignments with nothing to grade land in the first course",
     15_000,
   );

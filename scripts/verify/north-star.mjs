@@ -1,5 +1,6 @@
 import { addAiKey } from "./ai-key.mjs";
 import { expandCourse } from "./sidebar.mjs";
+import { KEY } from "./storage.mjs";
 
 const QUIET = JSON.stringify({ rate429: 0, rate5xx: 0, rateLost: 0, latencyMs: [20, 60] });
 const NORTH_STAR = "/threads/t-north-star";
@@ -26,7 +27,7 @@ const pathname = (t) => t.eval(`location.pathname`);
 const sidebarLink = (href) => `${SIDEBAR} a[href="${href}"]`;
 const chatRows = (t) =>
   t.eval(
-    `(() => { const { threads } = JSON.parse(localStorage.getItem("lms-app.v1")).state; return [...document.querySelectorAll(${JSON.stringify(`${SIDEBAR} a[href^="/threads/"]`)})].map((a) => a.getAttribute("href")).filter((href) => threads[decodeURIComponent(href.split("/threads/")[1])]?.kind === "north-star-chat"); })()`,
+    `(() => { const { threads } = JSON.parse(localStorage.getItem(${KEY})).state; return [...document.querySelectorAll(${JSON.stringify(`${SIDEBAR} a[href^="/threads/"]`)})].map((a) => a.getAttribute("href")).filter((href) => threads[decodeURIComponent(href.split("/threads/")[1])]?.kind === "north-star-chat"); })()`,
   );
 const onNorthStar = (t, what) =>
   t.waitFor(`location.pathname === ${JSON.stringify(NORTH_STAR)}`, what);
@@ -63,7 +64,7 @@ const nextUpRows = (t) =>
   );
 const openThread = (t) =>
   t.eval(
-    `JSON.parse(localStorage.getItem("lms-app.v1")).state.threads[decodeURIComponent(location.pathname.split("/threads/")[1] ?? "")] ?? null`,
+    `JSON.parse(localStorage.getItem(${KEY})).state.threads[decodeURIComponent(location.pathname.split("/threads/")[1] ?? "")] ?? null`,
   );
 const backHome = async (t) => {
   await t.click(`${SIDEBAR} a[href="${NORTH_STAR}"]`);
@@ -1205,7 +1206,7 @@ const singleHandoff = async (t) => {
   );
   t.assert((await lastGroup(t)).includes("Open"), "the card says it opens", await lastGroup(t));
   const reply = await t.eval(
-    `(() => { const thread = JSON.parse(localStorage.getItem("lms-app.v1")).state.threads[decodeURIComponent(location.pathname.split("/threads/")[1])]; return thread.messages.filter((m) => m.type === "agent").at(-1)?.text ?? ""; })()`,
+    `(() => { const thread = JSON.parse(localStorage.getItem(${KEY})).state.threads[decodeURIComponent(location.pathname.split("/threads/")[1])]; return thread.messages.filter((m) => m.type === "agent").at(-1)?.text ?? ""; })()`,
   );
   t.assert(
     !reply.includes("Opened the grading list") && reply.includes("choose Open"),
@@ -1271,7 +1272,7 @@ const timelineOrder = (t) =>
 
 const chatList = (t, chat) =>
   t.eval(
-    `(() => { const { threads } = JSON.parse(localStorage.getItem("lms-app.v1")).state; const list = document.querySelector('[data-testid="sidebar-chats"]'); const rows = [...list.querySelectorAll("li")].map((li) => { const marked = Boolean(li.querySelector('[data-testid="handed-off-mark"]')); if (!li.querySelector("a")) return "more"; if (li.querySelector("a").getAttribute("href") === ${JSON.stringify(chat)}) return marked ? "from" : "unmarked from"; return marked ? "marked" : "chat"; }); const chats = Object.values(threads).filter((thread) => thread.kind === "north-star-chat" && thread.settledAt === undefined).length; return { rows, more: list.textContent.match(/Show (\\d+) more/)?.[1], hidden: chats - rows.filter((row) => row !== "more").length }; })()`,
+    `(() => { const { threads } = JSON.parse(localStorage.getItem(${KEY})).state; const list = document.querySelector('[data-testid="sidebar-chats"]'); const rows = [...list.querySelectorAll("li")].map((li) => { const marked = Boolean(li.querySelector('[data-testid="handed-off-mark"]')); if (!li.querySelector("a")) return "more"; if (li.querySelector("a").getAttribute("href") === ${JSON.stringify(chat)}) return marked ? "from" : "unmarked from"; return marked ? "marked" : "chat"; }); const chats = Object.values(threads).filter((thread) => thread.kind === "north-star-chat" && thread.settledAt === undefined).length; return { rows, more: list.textContent.match(/Show (\\d+) more/)?.[1], hidden: chats - rows.filter((row) => row !== "more").length }; })()`,
   );
 
 const oneMoreAtTheEnd = ({ rows, more, hidden }) =>
@@ -1385,7 +1386,7 @@ const destination = async (t) => {
     "Forward returns to the chat",
   );
   await t.eval(
-    `(() => { const stored = JSON.parse(localStorage.getItem("lms-app.v1")); const from = stored.state.threads[${JSON.stringify(decodeURIComponent(chat.split("/threads/")[1]))}]; const at = "2000-01-01T00:00:00.000Z"; stored.state.threads["verify-older-chat"] = { ...from, id: "verify-older-chat", messages: [{ ...from.messages[0], at }], updatedAt: at }; localStorage.setItem("lms-app.v1", JSON.stringify(stored)); })()`,
+    `(() => { const stored = JSON.parse(localStorage.getItem(${KEY})); const from = stored.state.threads[${JSON.stringify(decodeURIComponent(chat.split("/threads/")[1]))}]; const at = "2000-01-01T00:00:00.000Z"; stored.state.threads["verify-older-chat"] = { ...from, id: "verify-older-chat", messages: [{ ...from.messages[0], at }], updatedAt: at }; localStorage.setItem(${KEY}, JSON.stringify(stored)); })()`,
   );
   await t.reload();
   await t.waitFor(
@@ -1427,7 +1428,7 @@ const destination = async (t) => {
     "Back from the mid-list case returns to the chat",
   );
   await t.eval(
-    `(() => { const stored = JSON.parse(localStorage.getItem("lms-app.v1")); delete stored.state.threads["verify-older-chat"]; localStorage.setItem("lms-app.v1", JSON.stringify(stored)); })()`,
+    `(() => { const stored = JSON.parse(localStorage.getItem(${KEY})); delete stored.state.threads["verify-older-chat"]; localStorage.setItem(${KEY}, JSON.stringify(stored)); })()`,
   );
   await t.reload();
   await t.waitFor(
@@ -2162,7 +2163,7 @@ const slowGlide = async (t) => {
 };
 
 const handedOffFrom = (thread) =>
-  `JSON.parse(localStorage.getItem("lms-app.v1")).state.threads[${JSON.stringify(thread)}]?.messages.filter((m) => m.type === "handed-off").map((m) => "/threads/" + encodeURIComponent(m.from)) ?? []`;
+  `JSON.parse(localStorage.getItem(${KEY})).state.threads[${JSON.stringify(thread)}]?.messages.filter((m) => m.type === "handed-off").map((m) => "/threads/" + encodeURIComponent(m.from)) ?? []`;
 const markedChats = `[...document.querySelectorAll('[data-testid="sidebar-chats"] li')].flatMap((li) => li.querySelector('[data-testid="handed-off-mark"]') ? [li.querySelector("a").getAttribute("href")] : [])`;
 const inSidebarView = (href) =>
   `(() => { const list = document.querySelector('[data-testid="sidebar-list"]').getBoundingClientRect(); const r = document.querySelector(${JSON.stringify(sidebarLink(href))})?.getBoundingClientRect(); return Boolean(r) && r.top >= list.top && r.bottom <= list.bottom; })()`;

@@ -26,7 +26,7 @@ import {
   selectWhatsDue,
   selectWorkStages,
 } from "~/renderer/stores/selectors";
-import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
+import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/storage-key";
 
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";

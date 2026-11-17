@@ -29,7 +29,7 @@ import {
 } from "~/renderer/stores/selectors";
 import { seedThreads } from "~/renderer/stores/seedThreads";
 import type { Thread, ThreadMessage } from "~/renderer/stores/types";
-import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
+import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/storage-key";
 
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";

@@ -1,5 +1,6 @@
 // A real account's first run: the fakes with no demo, so no seeded thread stands in for a built-in one (#114).
 // The teacher types a school's address and a token, the way a real Canvas teacher does, with AI on and with No AI.
+import { KEY } from "./storage.mjs";
 
 const HOST = "lakeshore.instructure.com";
 const ROW = `[data-host="${HOST}"]`;
@@ -45,9 +46,7 @@ const opensBuiltIns = async (t, ai) => {
     `location.pathname === ${JSON.stringify(home)} && !!document.querySelector(${JSON.stringify(SIDEBAR)})`,
     `${ai}: Finish lands on ${home}, inside the app`,
   );
-  const saved = await t.eval(
-    `Object.keys(JSON.parse(localStorage.getItem("lms-app.v1") ?? "{}").state?.threads ?? {})`,
-  );
+  const saved = await t.eval(`Object.keys(JSON.parse(localStorage.getItem(${KEY})).state.threads)`);
   t.assert(
     BUILT_IN.every((id) => saved.includes(id)),
     `${ai}: the saved workspace holds North Star, the grading list and Messages`,
