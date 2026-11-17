@@ -1,7 +1,7 @@
 import * as v from "valibot";
 
 import type { AnswerLine, HandoffWork, Source } from "~/shared/agent/agent";
-import type { Fingerprint } from "~/shared/domain/approval";
+import { fingerprintOf, type Fingerprint } from "~/shared/domain/approval";
 import type { ChangeRecord, Rationale, SendRun } from "~/shared/domain/change";
 import {
   isFindingType,
@@ -23,8 +23,11 @@ import {
   DraftDateSchema,
   FieldKeySchema,
   FieldOutcomeSchema,
+  GradeContentSchema,
   IsoTimeSchema,
+  LatePenaltySchema,
   LmsErrorSchema,
+  RemoteGradeSchema,
   RemoteStateSchema,
   SchoolIdSchema,
   SchoolSchema,
@@ -54,8 +57,8 @@ import type {
 } from "./types";
 
 /*
- * The workspace as saved under lms-app.v1. Each schema is annotated with its domain type, so a required field the schema
- * doesn't check fails to compile. A new optional field or union member compiles without one, and a save holding it resets.
+ * The workspace as saved under lms-app.v1. `covering` ties the schema to `WorkspaceData` both ways, so a field or union
+ * member the schema doesn't accept fails to compile. A new optional field still compiles, and loads without it.
  */
 
 const text = v.string();
@@ -83,7 +86,7 @@ const recordOf = <T>(
     ),
   );
 
-const ConnectionRecordSchema: v.GenericSchema<unknown, ConnectionRecord> = v.object({
+const ConnectionRecordSchema = v.object({
   school: SchoolIdSchema,
   status: v.picklist(["disconnected", "connected", "expired"]),
   connectedAt: v.nullable(at),
@@ -102,16 +105,16 @@ const ConnectionRecordSchema: v.GenericSchema<unknown, ConnectionRecord> = v.obj
       "unsupported",
     ]),
   ),
-});
+}) satisfies v.GenericSchema<unknown, ConnectionRecord>;
 
-const SchoolCacheSchema: v.GenericSchema<unknown, SchoolCache> = v.object({
+const SchoolCacheSchema = v.object({
   courses: v.array(CourseSchema),
   assignments: v.array(AssignmentSchema),
   students: v.array(StudentSchema),
   submissions: v.array(SubmissionSchema),
   conversations: v.array(ConversationSchema),
   announcements: v.array(AnnouncementSchema),
-});
+}) satisfies v.GenericSchema<unknown, SchoolCache>;
 
 // ---- Changes ----
 
@@ -122,7 +125,7 @@ const ApprovalSchema = v.object({
   via: v.picklist(["button", "batch-button", "guarded-button"]),
 });
 
-const SendRunSchema: v.GenericSchema<unknown, SendRun> = v.object({
+const SendRunSchema = v.object({
   attempt: count,
   startedAt: at,
   fields: recordOf(
@@ -130,7 +133,7 @@ const SendRunSchema: v.GenericSchema<unknown, SendRun> = v.object({
     FieldKeySchema,
   ),
   waitingUntil: v.nullable(count),
-});
+}) satisfies v.GenericSchema<unknown, SendRun>;
 
 const HoldCauseSchema = v.variant("tag", [
   v.object({ tag: v.literal("reconnect") }),
@@ -148,7 +151,7 @@ const FieldConflictSchema = v.object({
   mine: v.nullable(text),
 });
 
-const ChangeStateSchema: v.GenericSchema<unknown, ChangeRecord["state"]> = v.variant("tag", [
+const ChangeStateSchema = v.variant("tag", [
   v.object({
     tag: v.literal("draft"),
     approvalReset: v.nullable(v.picklist(["edited", "agent-edited", "rebased", "revoked"])),
@@ -168,21 +171,43 @@ const ChangeStateSchema: v.GenericSchema<unknown, ChangeRecord["state"]> = v.var
   }),
   v.object({ tag: v.literal("sent"), approval: ApprovalSchema, run: SendRunSchema, at }),
   v.object({ tag: v.literal("discarded"), at }),
-]);
+]) satisfies v.GenericSchema<unknown, ChangeRecord["state"]>;
 
-const RationaleSchema: v.GenericSchema<unknown, Rationale> = v.object({
+const RationaleSchema = v.object({
   field: text,
   why: text,
   anchors: v.array(v.object({ paragraph: count, start: count, end: count })),
+}) satisfies v.GenericSchema<unknown, Rationale>;
+
+/** A grade drafted before late waivers, overrides or excuses existed lacks them, and gets what a new draft starts with. */
+const SavedGradeSchema = v.object({
+  ...GradeContentSchema.entries,
+  late: v.nullable(
+    v.object({ ...LatePenaltySchema.entries, waived: v.optional(v.boolean(), false) }),
+  ),
+  override: v.optional(v.nullable(count), null),
+  excused: v.optional(v.boolean(), false),
 });
 
-export const ChangeRecordSchema: v.GenericSchema<unknown, ChangeRecord> = v.object({
+/** Filling an old draft's defaults can move its fingerprint, and a stale approval never sends, so it is a draft again. */
+const withLiveApproval = (record: ChangeRecord): ChangeRecord =>
+  record.state.tag === "approved" && record.state.approval.fingerprint !== fingerprintOf(record)
+    ? { ...record, state: { tag: "draft", approvalReset: null } }
+    : record;
+
+export const ChangeRecordSchema = v.object({
   id: ChangeIdSchema,
   school: SchoolIdSchema,
   course: lmsRef("course"),
   subject: text,
-  content: ChangeContentSchema,
-  basis: v.object({ readAt: at, remote: RemoteStateSchema }),
+  content: v.union([SavedGradeSchema, ChangeContentSchema]),
+  basis: v.object({
+    readAt: at,
+    remote: v.union([
+      v.object({ ...RemoteGradeSchema.entries, excused: v.optional(v.boolean(), false) }),
+      RemoteStateSchema,
+    ]),
+  }),
   landed: v.array(FieldKeySchema),
   seen: v.nullable(recordOf(v.array(text))),
   rationale: v.array(RationaleSchema),
@@ -194,7 +219,7 @@ export const ChangeRecordSchema: v.GenericSchema<unknown, ChangeRecord> = v.obje
 
 // ---- Threads ----
 
-const SourceSchema: v.GenericSchema<unknown, Source> = v.variant("kind", [
+const SourceSchema = v.variant("kind", [
   v.object({ kind: v.literal("course"), ref: lmsRef("course") }),
   v.object({ kind: v.literal("assignment"), ref: lmsRef("assignment") }),
   v.object({ kind: v.literal("announcement"), ref: lmsRef("announcement") }),
@@ -202,13 +227,13 @@ const SourceSchema: v.GenericSchema<unknown, Source> = v.variant("kind", [
   v.object({ kind: v.literal("submission"), ref: lmsRef("submission") }),
   v.object({ kind: v.literal("change"), ref: ChangeIdSchema }),
   v.object({ kind: v.literal("due") }),
-]);
+]) satisfies v.GenericSchema<unknown, Source>;
 
-const AnswerLineSchema: v.GenericSchema<unknown, AnswerLine> = v.object({
+const AnswerLineSchema = v.object({
   source: SourceSchema,
   title: text,
   detail: v.exactOptional(text),
-});
+}) satisfies v.GenericSchema<unknown, AnswerLine>;
 
 const MessageFields = {
   change: v.exactOptional(ChangeIdSchema),
@@ -216,7 +241,7 @@ const MessageFields = {
   at,
 };
 
-const ThreadMessageSchema: v.GenericSchema<unknown, ThreadMessage> = v.variant("type", [
+const ThreadMessageSchema = v.variant("type", [
   v.object({ ...MessageFields, type: v.picklist(["user", "refusal", "notice"]), text }),
   v.object({
     ...MessageFields,
@@ -249,7 +274,7 @@ const ThreadMessageSchema: v.GenericSchema<unknown, ThreadMessage> = v.variant("
     request: text,
     left: v.exactOptional(text),
   }),
-]);
+]) satisfies v.GenericSchema<unknown, ThreadMessage>;
 
 const ThreadFields = {
   id: ThreadIdSchema,
@@ -263,7 +288,7 @@ const ThreadFields = {
   dropped: v.exactOptional(v.array(v.object({ text, at }))),
 };
 
-const ThreadSchema: v.GenericSchema<unknown, Thread> = v.variant("kind", [
+const ThreadSchema = v.variant("kind", [
   v.object({
     ...ThreadFields,
     kind: v.literal("grading"),
@@ -283,13 +308,13 @@ const ThreadSchema: v.GenericSchema<unknown, Thread> = v.variant("kind", [
     school: v.nullable(SchoolIdSchema),
     course: v.nullable(lmsRef("course")),
   }),
-]);
+]) satisfies v.GenericSchema<unknown, Thread>;
 
 // ---- Setup ----
 
 const FindingKeySchema = brand<FindingKey>(nonEmpty);
 
-const FindingSchema: v.GenericSchema<unknown, Finding> = v.object({
+const FindingSchema = v.object({
   key: FindingKeySchema,
   type: v.custom<FindingType>(isFindingType),
   item: v.nullable(v.union([lmsRef("item"), lmsRef("module")])),
@@ -298,7 +323,7 @@ const FindingSchema: v.GenericSchema<unknown, Finding> = v.object({
   why: text,
   openUrl: v.nullable(text),
   fix: v.nullable(v.variant("kind", [TextFixContentSchema, SetContentSchema])),
-});
+}) satisfies v.GenericSchema<unknown, Finding>;
 
 const DraftTermSchema = v.object({
   name: text,
@@ -307,15 +332,15 @@ const DraftTermSchema = v.object({
   days: v.array(WeekdaySchema),
 });
 
-const PlanDraftSchema: v.GenericSchema<unknown, PlanDraft> = v.object({
+const PlanDraftSchema = v.object({
   oldTerm: DraftTermSchema,
   newTerm: DraftTermSchema,
   breaks: v.array(v.object({ name: text, start: DraftDateSchema, end: DraftDateSchema })),
-});
+}) satisfies v.GenericSchema<unknown, PlanDraft>;
 
 const checkedAt = { at, version: text };
 
-const CourseSetupSchema: v.GenericSchema<unknown, CourseSetup> = v.object({
+const CourseSetupSchema = v.object({
   course: lmsRef("course"),
   school: SchoolIdSchema,
   thread: ThreadIdSchema,
@@ -334,7 +359,7 @@ const CourseSetupSchema: v.GenericSchema<unknown, CourseSetup> = v.object({
     FindingKeySchema,
   ),
   fixes: recordOf(ChangeIdSchema, FindingKeySchema),
-});
+}) satisfies v.GenericSchema<unknown, CourseSetup>;
 
 // ---- Prefs ----
 
@@ -355,7 +380,7 @@ const QueueFilterSchema = v.custom<QueueFilter>(
 
 const RowKeySchema = brand<RowKey>(nonEmpty);
 
-const ThreadUiSchema: v.GenericSchema<unknown, ThreadUi> = v.object({
+const ThreadUiSchema = v.object({
   panel: v.nullable(v.picklist(["source", "writeback", "batch"])),
   queueOpen: v.boolean(),
   queueFilter: QueueFilterSchema,
@@ -363,9 +388,9 @@ const ThreadUiSchema: v.GenericSchema<unknown, ThreadUi> = v.object({
   selected: v.array(RowKeySchema),
   scrollTop: v.nullable(count),
   composer: v.exactOptional(text),
-});
+}) satisfies v.GenericSchema<unknown, ThreadUi>;
 
-const UiPrefsSchema: v.GenericSchema<unknown, UiPrefs> = v.object({
+const UiPrefsSchema = v.object({
   sidebarOpen: v.boolean(),
   collapsed: recordOf(v.literal(true)),
   courseOpen: v.exactOptional(recordOf(v.boolean())),
@@ -373,29 +398,29 @@ const UiPrefsSchema: v.GenericSchema<unknown, UiPrefs> = v.object({
   threadUi: recordOf(ThreadUiSchema, ThreadIdSchema),
   readThrough: v.exactOptional(recordOf(text)),
   offersDismissed: v.exactOptional(recordOf(v.literal(true))),
-});
+}) satisfies v.GenericSchema<unknown, UiPrefs>;
 
 // ---- Handoffs and undrafted work ----
 
-const HandoffWorkSchema: v.GenericSchema<unknown, HandoffWork> = v.variant("kind", [
+const HandoffWorkSchema = v.variant("kind", [
   v.object({ kind: v.literal("announcement"), topic: v.exactOptional(text) }),
   v.object({ kind: v.literal("replies") }),
   v.object({ kind: v.literal("reply"), conversation: lmsRef("conversation") }),
   v.object({ kind: v.literal("grading"), assignment: lmsRef("assignment") }),
-]);
+]) satisfies v.GenericSchema<unknown, HandoffWork>;
 
-const PendingHandoffSchema: v.GenericSchema<unknown, PendingHandoff> = v.object({
+const PendingHandoffSchema = v.object({
   thread: ThreadIdSchema,
   course: lmsRef("course"),
   work: HandoffWorkSchema,
-});
+}) satisfies v.GenericSchema<unknown, PendingHandoff>;
 
-const UndraftedSchema: v.GenericSchema<unknown, Undrafted> = v.object({
+const UndraftedSchema = v.object({
   submittedAt: v.nullable(at),
   said: text,
-});
+}) satisfies v.GenericSchema<unknown, Undrafted>;
 
-export const WorkspaceDataSchema: v.GenericSchema<unknown, WorkspaceData> = v.object({
+const WorkspaceDataFields = v.object({
   schools: v.array(SchoolSchema),
   connections: recordOf(ConnectionRecordSchema, SchoolIdSchema),
   onboarding: v.picklist(["welcome", "setup", "done"]),
@@ -411,3 +436,34 @@ export const WorkspaceDataSchema: v.GenericSchema<unknown, WorkspaceData> = v.ob
   undrafted: v.optional(recordOf(UndraftedSchema), {}),
   resetAt: count,
 });
+
+/** Readonly dropped, because valibot outputs mutable lists, and readonly is no part of what a save may hold. */
+type Writable<T> = T extends string | number | boolean | null | undefined
+  ? T
+  : T extends readonly (infer U)[]
+    ? Writable<U>[]
+    : T extends object
+      ? { -readonly [K in keyof T]: Writable<T[K]> }
+      : T;
+
+/**
+ * Ties the schema to `WorkspaceData` both ways. Its output must be a `WorkspaceData`, and every `WorkspaceData` must be
+ * one of its outputs, so a new union member (a thread kind, a change state, an AI source) fails to compile here until
+ * the schema accepts it, instead of resetting every save that holds it.
+ */
+const covering =
+  <T>() =>
+  <S extends v.GenericSchema<unknown, T>>(
+    schema: S & (Writable<T> extends v.InferOutput<S> ? unknown : never),
+  ): v.GenericSchema<unknown, T> =>
+    schema;
+
+export const WorkspaceDataSchema = v.pipe(
+  covering<WorkspaceData>()(WorkspaceDataFields),
+  v.transform((data): WorkspaceData => ({
+    ...data,
+    changes: Object.fromEntries(
+      Object.entries(data.changes).map(([id, change]) => [id, withLiveApproval(change)]),
+    ),
+  })),
+);
