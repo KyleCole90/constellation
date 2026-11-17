@@ -17,14 +17,22 @@ import { SOURCES, refusal, sortSources } from "./sources";
 const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" }).trim();
 const localDate = () => new Date().toLocaleDateString("sv-SE");
 
+/** Unset runs every fixture; a positive whole number runs that many and writes nothing. Anything else is a typo. */
+const fixtureLimit = (raw: string | undefined) => {
+  if (raw === undefined) return undefined;
+  if (!/^[1-9]\d*$/.test(raw))
+    throw new Error(`BENCH_FIXTURES must be a positive whole number, not ${JSON.stringify(raw)}.`);
+  return Number(raw);
+};
+
 it("measures plan usage per graded submission for each AI source", async () => {
   if (process.env["CI"]) throw new Error("The benchmark never runs in CI: it spends real quota.");
+  const limit = fixtureLimit(process.env["BENCH_FIXTURES"]);
   const { ready, unavailable } = await sortSources(SOURCES, process.env);
   if (ready.length === 0) throw new Error(refusal(unavailable));
   for (const { id, missing } of unavailable)
     console.log(`${id}: unavailable, missing ${missing.join("; ")}`);
 
-  const limit = Number(process.env["BENCH_FIXTURES"]) || undefined;
   const fixtures = (await loadClass()).slice(0, limit);
   const dirty = git("status", "--porcelain") !== "";
   const meta = {
