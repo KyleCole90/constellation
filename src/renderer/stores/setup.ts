@@ -49,6 +49,7 @@ import { planProblems, shiftOptionsOf, type PlanDraft, type TermPlan } from "~/s
 import type { LmsProvider, Read, TermSetup } from "~/shared/providers/provider";
 import type { ChangeLedger, Writeback } from "~/renderer/writeback/writeback";
 
+import { once, type InFlight } from "./in-flight";
 import type { Thread, ThreadMessage, WorkspaceData } from "./types";
 import type { WorkspaceState } from "./workspace";
 
@@ -126,7 +127,7 @@ export interface SetupHost {
   markExpired(school: SchoolId): void;
   sleep(ms: number): Promise<void>;
   locks: Pick<LockManager, "request"> | null;
-  inFlight: Map<string, Promise<unknown>>;
+  inFlight: InFlight;
   runAgent(thread: ThreadId, request: string, scan: ScanScope): Promise<void>;
 }
 
@@ -175,13 +176,12 @@ export const createSetupActions = (host: SetupHost) => {
     return errorWords(error);
   };
 
-  const once = <T>(key: string, run: () => Promise<T>): Promise<T> => {
-    const running = host.inFlight.get(key) as Promise<T> | undefined;
-    if (running) return running;
-    const started = run().finally(() => host.inFlight.delete(key));
-    host.inFlight.set(key, started);
-    return started;
-  };
+  const watching = host.inFlight.lane<void>();
+  const confirming = host.inFlight.lane<string | null>();
+  const retrying = host.inFlight.lane<string | null>();
+  const proposingPublish = host.inFlight.lane<Result<ChangeId, string>>();
+  const proposingTemplate =
+    host.inFlight.lane<Result<{ thread: ThreadId; change: ChangeId }, string>>();
 
   const postOnce = (thread: ThreadId, text: string) => {
     const said = get().threads[thread]?.messages.some(
@@ -491,7 +491,7 @@ export const createSetupActions = (host: SetupHost) => {
 
   /** Two tabs run one watcher. The other waits on the lock, so it takes over if this tab closes, and has nothing to do otherwise. */
   const watch = (course: CourseRef): Promise<void> =>
-    once(`setup-watch:${course}`, async () => {
+    once(watching, course, async () => {
       if (!host.locks) return driveWatch(course);
       await host.locks.request(`setup-watch:${course}`, async () => {
         latestChanges();
@@ -680,8 +680,8 @@ export const createSetupActions = (host: SetupHost) => {
 
     editDates: (course, plan) => patchSetup(course, { draft: plan }),
 
-    confirmDates: (course, plan) => once(`setup-dates:${course}`, () => confirmDates(course, plan)),
-    retryCopy: (course) => once(`setup-retry:${course}`, () => retryCopy(course)),
+    confirmDates: (course, plan) => once(confirming, course, () => confirmDates(course, plan)),
+    retryCopy: (course) => once(retrying, course, () => retryCopy(course)),
 
     scanNow: async (course) => {
       const setup = setupOf(course);
@@ -721,7 +721,7 @@ export const createSetupActions = (host: SetupHost) => {
     },
 
     proposePublish: (course) =>
-      once(`setup-publish:${course}`, async () => {
+      once(proposingPublish, course, async () => {
         const scanned = await rescan(course);
         if (!scanned.ok) return scanned;
         const setup = setupOf(course);
@@ -771,7 +771,7 @@ export const createSetupActions = (host: SetupHost) => {
       }),
 
     proposeTemplate: (course) =>
-      once(`setup-template:${course}`, async () => {
+      once(proposingTemplate, course, async () => {
         const known = templateChangeOf(get().changes, course);
         const threadFor = (code: string, school: SchoolId): ThreadId => {
           const existing =
