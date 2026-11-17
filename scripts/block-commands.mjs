@@ -12,6 +12,9 @@ const KILL_REASON =
 // Short commit options that take a value; in a cluster like -nm, chars after one of these are its value.
 const COMMIT_VALUE_FLAGS = "mFcCtSu";
 
+// Git's global options that take their value as the next word.
+const GIT_VALUE_OPTIONS = ["-C", "-c", "--config-env", "--git-dir", "--work-tree", "--namespace"];
+
 /** Splits a shell command into words per simple command, dropping quotes. Quoted words are never flags. */
 const simpleCommands = (command) => {
   const commands = [[]];
@@ -24,12 +27,16 @@ const simpleCommands = (command) => {
   return commands;
 };
 
+// Git takes any unambiguous prefix of a long option. Below 6 chars the prefix clashes with --no-verbose, so git refuses it.
+const isNoVerify = ({ text, quoted }) =>
+  !quoted && text.length >= 6 && "--no-verify".startsWith(text);
+
 const commitSkipsHooks = (args) => {
   for (let i = 0; i < args.length; i++) {
     const { text, quoted } = args[i];
     if (quoted) continue;
     if (text === "--") return false;
-    if (text === "--no-verify") return true;
+    if (isNoVerify(args[i])) return true;
     if (!/^-[^-]/.test(text)) continue;
     for (const flag of text.slice(1)) {
       if (flag === "n") return true;
@@ -46,14 +53,22 @@ const skipsHooks = (words) => {
   const git = words.findIndex((w) => !w.quoted && /(^|\/)git$/.test(w.text));
   if (git === -1) return false;
   let i = git + 1;
-  // Skip git's global options, such as -C <dir> or -c key=value.
-  while (i < words.length && words[i].text.startsWith("-"))
-    i += ["-C", "-c"].includes(words[i].text) ? 2 : 1;
+  for (; i < words.length && words[i].text.startsWith("-"); i++) {
+    const { text } = words[i];
+    const config = text.startsWith("--config-env=")
+      ? text.slice("--config-env=".length)
+      : ["-c", "--config-env"].includes(text) && words[i + 1]?.text;
+    if (config && /^core\.hookspath(=|$)/i.test(config)) return true;
+    if (GIT_VALUE_OPTIONS.includes(text)) i++;
+  }
   const args = words.slice(i + 1);
   if (words[i]?.text === "commit") return commitSkipsHooks(args);
-  if (words[i]?.text === "push") return args.some((w) => !w.quoted && w.text === "--no-verify");
+  if (words[i]?.text === "push") return args.some(isNoVerify);
   return false;
 };
+
+// GIT_CONFIG_COUNT/KEY/VALUE, GIT_CONFIG_PARAMETERS and GIT_CONFIG_GLOBAL can each set core.hooksPath unseen.
+const setsGitConfigEnv = (words) => words.some((w) => !w.quoted && /^GIT_CONFIG\w*=/.test(w.text));
 
 // Words that come before the command name: VAR=value, or a shell keyword such as `then` or `do`.
 const BEFORE_COMMAND = /^(\w+=.*|then|do|else|elif|if|while|until|!|[{(])$/;
@@ -104,6 +119,7 @@ const xargsKill = (words) =>
 
 const RULES = [
   { test: skipsHooks, reason: NO_VERIFY_REASON },
+  { test: setsGitConfigEnv, reason: NO_VERIFY_REASON },
   { test: (words) => runs(words, ["pkill", "killall"]), reason: KILL_REASON },
   { test: killsLiteralPid, reason: KILL_REASON },
   { test: killsSearchResult, reason: KILL_REASON },
