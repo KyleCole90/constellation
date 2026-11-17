@@ -930,7 +930,7 @@ function GradeCard({
           >
             {overridden ? (
               <Stepper
-                value={content.override ?? null}
+                value={content.override}
                 outOf={content.outOf}
                 disabled={!summary.canEdit}
                 label="total"

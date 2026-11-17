@@ -4,6 +4,8 @@ import {
   FIELD_LABEL,
   type ChangeContent,
   type FieldKey,
+  type GradeContent,
+  type LatePenalty,
   type LmsError,
   type RemoteEntry,
   type RemoteState,
@@ -245,16 +247,18 @@ export const RemoteEntrySchema: v.GenericSchema<RemoteEntry> = v.object({
 });
 const EntriesSchema: v.GenericSchema<readonly RemoteEntry[]> = v.array(RemoteEntrySchema);
 
+export const RemoteGradeSchema = v.object({
+  kind: v.literal("grade"),
+  targetVersion: text,
+  grade: nullable(count),
+  rubric: nullable(ScoresSchema),
+  excused: v.boolean(),
+  comments: EntriesSchema,
+  attachments: EntriesSchema,
+}) satisfies v.GenericSchema<Extract<RemoteState, { kind: "grade" }>>;
+
 export const RemoteStateSchema: v.GenericSchema<RemoteState> = v.variant("kind", [
-  v.object({
-    kind: v.literal("grade"),
-    targetVersion: text,
-    grade: nullable(count),
-    rubric: nullable(ScoresSchema),
-    excused: v.exactOptional(v.boolean()),
-    comments: EntriesSchema,
-    attachments: EntriesSchema,
-  }),
+  RemoteGradeSchema,
   v.object({
     kind: v.picklist(["reply", "message"]),
     targetVersion: text,
@@ -444,30 +448,36 @@ export const SetContentSchema = v.object({
   ]),
 }) satisfies v.GenericSchema<SetContent>;
 
+export const LatePenaltySchema = v.object({
+  days: count,
+  pointsPerDay: count,
+  waived: v.boolean(),
+}) satisfies v.GenericSchema<LatePenalty>;
+
+export const GradeContentSchema = v.object({
+  kind: v.literal("grade"),
+  target: lmsRef("submission"),
+  points: nullable(count),
+  outOf: count,
+  rubric: nullable(
+    v.array(
+      v.object({
+        criterion: lmsRef("criterion"),
+        name: text,
+        points: nullable(count),
+        outOf: count,
+      }),
+    ),
+  ),
+  late: nullable(LatePenaltySchema),
+  comment: nullable(text),
+  attachment: nullable(v.object({ name: text, kb: count })),
+  override: nullable(count),
+  excused: v.boolean(),
+}) satisfies v.GenericSchema<GradeContent>;
+
 export const ChangeContentSchema: v.GenericSchema<ChangeContent> = v.variant("kind", [
-  v.object({
-    kind: v.literal("grade"),
-    target: lmsRef("submission"),
-    points: nullable(count),
-    outOf: count,
-    rubric: nullable(
-      v.array(
-        v.object({
-          criterion: lmsRef("criterion"),
-          name: text,
-          points: nullable(count),
-          outOf: count,
-        }),
-      ),
-    ),
-    late: nullable(
-      v.object({ days: count, pointsPerDay: count, waived: v.exactOptional(v.boolean()) }),
-    ),
-    comment: nullable(text),
-    attachment: nullable(v.object({ name: text, kb: count })),
-    override: v.exactOptional(nullable(count)),
-    excused: v.exactOptional(v.boolean()),
-  }),
+  GradeContentSchema,
   v.object({ kind: v.literal("reply"), target: lmsRef("conversation"), body: text }),
   v.object({
     kind: v.literal("message"),

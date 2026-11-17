@@ -896,7 +896,7 @@ describe("a workspace saved before this", () => {
   };
   const FINGERPRINT_AT_549E11D = "1fd3d0b7e7605f";
 
-  it("rehydrates, and its approved fingerprint still matches", async () => {
+  it("rehydrates with what it lacks filled in, and its moved approval goes back to draft", async () => {
     const { rig } = await noKeyRig();
     const raw = rawSave(rig.storage);
     const at = "2026-10-30T12:00:00.000Z";
@@ -931,9 +931,16 @@ describe("a workspace saved before this", () => {
     const next = await reload(rig);
 
     const record = saved(next, "ch-old" as ChangeId);
+    expect(record.content).toMatchObject({
+      override: null,
+      excused: false,
+      late: { days: 1, pointsPerDay: 2, waived: false },
+    });
+    expect(record.basis.remote).toMatchObject({ kind: "grade", excused: false });
     expect(record.content.kind === "grade" && finalGrade(record.content)).toBe(16);
-    expect(fingerprintOf(record)).toBe(FINGERPRINT_AT_549E11D);
+    expect(fingerprintOf(record)).not.toBe(FINGERPRINT_AT_549E11D);
+    expect(record.state).toEqual({ tag: "draft", approvalReset: null });
     expect(summarize(record).missing).toEqual([]);
-    expect(transition(record, { type: "begin-send", seen: {}, at: isoTime(at) }).ok).toBe(true);
+    expect(transition(record, { type: "begin-send", seen: {}, at: isoTime(at) }).ok).toBe(false);
   });
 });
