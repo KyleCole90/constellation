@@ -58,18 +58,22 @@ const shellWords = (command) => {
 /**
  * The split this hook shipped with: a quote starts a word only at its start, so `it's` in a heredoc or a comment
  * can't open a quote. Shell syntax is too rich to read one way, so the hook reads the command both ways and denies
- * when a rule matches either, which also keeps every command this split denied denied. A quoted word here may be only
- * part of an argument (`"x""--"`), so it is `notFlag`, as it always was.
+ * when a rule matches either, which also keeps every command this split denied denied. A quoted piece glued to its
+ * neighbour (`"x""--"`) is only part of an argument, so it is `notFlag`.
  */
 const plainWords = (command) => {
   const commands = [[]];
-  for (const [, op, double, single, bare] of command.matchAll(
+  for (const match of command.matchAll(
     /(&&|\|\||[;|&\n])|"((?:\\.|[^"])*)"|'([^']*)'|(\S+?)(?=$|\s|&&|\|\||[;|&])/g,
   )) {
+    const [whole, op, double, single, bare] = match;
     if (op) commands.push([]);
     else {
       const quoted = bare === undefined;
-      commands.at(-1).push({ text: double ?? single ?? bare, quoted, notFlag: quoted });
+      const glued = [command[match.index - 1], command[match.index + whole.length]].some(
+        (c) => c !== undefined && !/[\s;|&]/.test(c),
+      );
+      commands.at(-1).push({ text: double ?? single ?? bare, quoted, notFlag: quoted && glued });
     }
   }
   return commands;
