@@ -457,7 +457,7 @@ const isSchool = (school: unknown): boolean =>
   typeof school["provider"] === "string";
 const isCache = (cache: unknown): boolean =>
   isRecord(cache) && CACHE_LISTS.every((list) => Array.isArray(cache[list]));
-const isChange = (change: unknown): boolean =>
+export const isChange = (change: unknown): change is ChangeRecord =>
   isRecord(change) &&
   isRecord(change["state"]) &&
   isKnown(STATE_TAGS, change["state"]["tag"]) &&
@@ -484,7 +484,7 @@ const isThread = (thread: unknown): boolean => {
  * Checks the shape the app dereferences on load and render: every collection, and each record's discriminant.
  * A save that fails resets the workspace and keeps a copy, which beats a page that crashes on every load.
  */
-const parsePersisted = (raw: string): StorageValue<WorkspaceData> | null => {
+export const parsePersisted = (raw: string): StorageValue<WorkspaceData> | null => {
   try {
     const parsed: unknown = JSON.parse(raw);
     if (

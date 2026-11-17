@@ -19,6 +19,7 @@ import {
 } from "~/renderer/stores/selectors";
 
 import { clickWitness } from "./fixtures/changes";
+import { savedLms } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 
 const QUEUE = "t-queue" as ThreadId;
@@ -94,15 +95,11 @@ const inboxRow = (rig: StoreRig, student: string) => {
 };
 
 const studentWritesAgain = (rig: StoreRig, ref: LmsRef<"conversation">): void => {
-  const saved = rig.storage.getItem(LMS_STORAGE_KEY);
-  if (!saved) throw new Error("The fake LMS has saved nothing.");
-  const lms = JSON.parse(saved) as {
-    conversations: { ref: string; unread: boolean; messages: { id: string; at: string }[] }[];
-  };
+  const lms = savedLms(rig.storage);
   const conversation = lms.conversations.find((candidate) => candidate.ref === ref);
   const last = conversation?.messages.at(-1);
   if (!conversation || !last) throw new Error("No conversation to add to.");
-  conversation.messages.push({ ...last, id: `${last.id}-again` });
+  conversation.messages = [...conversation.messages, { ...last, id: `${last.id}-again` }];
   rig.storage.setItem(LMS_STORAGE_KEY, JSON.stringify(lms));
 };
 

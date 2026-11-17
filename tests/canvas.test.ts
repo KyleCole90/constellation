@@ -368,7 +368,7 @@ describe("Canvas reads", () => {
   });
 
   it("keeps one submission per student and assignment when a student is in two sections", async () => {
-    const rows = JSON.parse(GROUPED_SUBMISSIONS) as unknown[];
+    const rows = v.parse(v.array(v.unknown()), JSON.parse(GROUPED_SUBMISSIONS));
     const canvas = canvasWith({
       ...SELF,
       "/api/v1/courses/2201/students/submissions?student_ids[]=all&grouped=true&include[]=submission_comments&include[]=rubric_assessment&include[]=user":

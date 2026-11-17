@@ -39,6 +39,7 @@ import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";
+import { jsonObject, rawSave } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 
 /** What the parser kept, and the parts it set aside. */
@@ -1497,12 +1498,11 @@ describe("North Star home", () => {
     destination?: readonly ThreadMessage[],
   ) => {
     const first = await connected();
-    const raw = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "") as {
-      state: { threads: Record<string, Thread> };
-    };
-    raw.state.threads[NORTH_STAR_THREAD] = { ...threadOf(first, NORTH_STAR_THREAD), messages };
+    const raw = rawSave(first.storage);
+    const threads = jsonObject(raw.state.threads);
+    threads[NORTH_STAR_THREAD] = { ...threadOf(first, NORTH_STAR_THREAD), messages };
     if (destination)
-      raw.state.threads["t-e101-ann"] = {
+      threads["t-e101-ann"] = {
         ...threadOf(first, "t-e101-ann" as ThreadId),
         messages: destination,
       };
@@ -1575,13 +1575,11 @@ describe("North Star home", () => {
 
   it("appears in a saved workspace from before it, and the list takes its new name", async () => {
     const first = await connected();
-    const raw = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "") as {
-      state: { threads: Record<string, Thread> };
-    };
-    const { [NORTH_STAR_THREAD]: _gone, ...old } = raw.state.threads;
+    const raw = rawSave(first.storage);
+    const { [NORTH_STAR_THREAD]: _gone, ...old } = jsonObject(raw.state.threads);
     raw.state.threads = {
       ...old,
-      "t-queue": { ...(old["t-queue"] as Thread), title: "Grading queue" },
+      "t-queue": { ...jsonObject(old["t-queue"]), title: "Grading queue" },
     };
     first.storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(raw));
     const reloaded = await makeStoreRig({

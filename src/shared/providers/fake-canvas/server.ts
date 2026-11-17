@@ -158,7 +158,7 @@ export interface RawCourseContent {
   policy: SchoolPolicy;
 }
 
-interface LmsState {
+export interface LmsState {
   version: 3;
   seq: number;
   writes: number;
@@ -464,7 +464,7 @@ const LMS_LISTS = [
  * Checks what the server dereferences on load: the version, the counters, every collection and the demo script.
  * A store written before new-term setup or the write log existed has neither; it gets fresh ones and keeps the rest.
  */
-const parseStoredLms = (stored: unknown): LmsState | null => {
+export const parseStoredLms = (stored: unknown): LmsState | null => {
   if (!isObject(stored) || stored["version"] !== 3) return null;
   const { script, writeLog, term, noise } = stored;
   const valid =

@@ -39,6 +39,7 @@ import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";
+import { jsonObject, rawLms, rawSave, savedWorkspace } from "./fixtures/saved";
 import { memoryStorage } from "./fixtures/storage";
 import { STORE_TOKEN, makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 
@@ -79,12 +80,8 @@ describe("persistence", () => {
   it("a change committed by the ledger is in storage by the time the action returns", async () => {
     const rig = await connected();
     const id = await openFor(rig, "Maya Ortiz");
-    const stored = JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      version: number;
-      state: { changes: Record<string, unknown> };
-    };
-    expect(stored.version).toBe(3);
-    expect(stored.state.changes[id]).toBeDefined();
+    expect(rawSave(rig.storage)["version"]).toBe(3);
+    expect(savedWorkspace(rig.storage).changes[id]).toBeDefined();
   });
 
   it("a reload restores threads and changes and stays connected", async () => {
@@ -131,17 +128,17 @@ describe("persistence", () => {
     const rig = await makeStoreRig({ storage });
     expect(rig.state().notice).toContain("reset");
     expect(Object.keys(rig.state().threads).length).toBeGreaterThan(1);
-    expect(JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}").version).toBe(3);
+    expect(rawSave(rig.storage)["version"]).toBe(3);
     expect(rig.storage.getItem(`${WORKSPACE_STORAGE_KEY}.unreadable`)).toBe(blob);
     expect(error).not.toHaveBeenCalled();
     error.mockRestore();
   });
 
-  type Saved = { state: Record<string, unknown> };
+  type Saved = ReturnType<typeof rawSave>;
   const firstOf = (record: unknown): Record<string, unknown> =>
-    Object.values(record as Record<string, Record<string, unknown>>)[0] ?? {};
+    jsonObject(Object.values(jsonObject(record))[0]);
   const threadOfKind = (saved: Saved, kind: string): Record<string, unknown> => {
-    const threads = Object.values(saved.state.threads as Record<string, Record<string, unknown>>);
+    const threads = Object.values(jsonObject(saved.state.threads)).map(jsonObject);
     const found = threads.find((thread) => thread["kind"] === kind);
     if (!found) throw new Error(`The seed has no ${kind} thread.`);
     return found;
@@ -173,7 +170,7 @@ describe("persistence", () => {
   ])("a saved workspace with %s resets and keeps a backup", async (_name, corrupt) => {
     const first = await connected();
     await openFor(first, "Maya Ortiz");
-    const saved = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as Saved;
+    const saved = rawSave(first.storage);
     corrupt(saved);
     const blob = JSON.stringify(saved);
     first.storage.setItem(WORKSPACE_STORAGE_KEY, blob);
@@ -189,7 +186,7 @@ describe("persistence", () => {
   it("a save from before setups, new courses and handoffs existed still loads", async () => {
     const first = await connected();
     const id = await openFor(first, "Maya Ortiz");
-    const saved = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as Saved;
+    const saved = rawSave(first.storage);
     delete saved.state.setups;
     delete saved.state.newCourses;
     delete saved.state.handoffs;
@@ -209,9 +206,7 @@ describe("persistence", () => {
       const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
       const first = await connected();
       const id = await openFor(first, "Maya Ortiz");
-      const stored = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-        version: number;
-      };
+      const stored = rawSave(first.storage);
       first.storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify({ ...stored, version }));
       const second = await makeStoreRig({
         storage: first.storage,
@@ -228,9 +223,7 @@ describe("persistence", () => {
   it("the transient working flag is not persisted", async () => {
     const rig = await connected();
     await openFor(rig, "Maya Ortiz");
-    expect(
-      JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}").state.working,
-    ).toBeUndefined();
+    expect(rawSave(rig.storage).state.working).toBeUndefined();
   });
 });
 
@@ -254,10 +247,7 @@ describe("resetDemoData", () => {
     expect(rig.state().onboarding).toBe("welcome");
     expect(rig.state().aiSource).toBe("none");
     expect(rig.state().notice).toContain("reset");
-    const persisted = JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      state: { changes: object };
-    };
-    expect(persisted.state.changes).toEqual({});
+    expect(savedWorkspace(rig.storage).changes).toEqual({});
   });
 
   it("after a reset the seeded LMS comes back, ungraded", async () => {
@@ -363,9 +353,7 @@ describe("the teacher's desktop app, which has no demo", () => {
   it("gives a profile the broken build saved with no threads its built-in threads at boot", async () => {
     const first = await makeStoreRig({ noDemo: true, realSchools: [LCC] });
     first.state().setOnboarding("done");
-    const saved = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      state: Record<string, unknown>;
-    };
+    const saved = rawSave(first.storage);
     first.storage.setItem(
       WORKSPACE_STORAGE_KEY,
       JSON.stringify({ ...saved, state: { ...saved.state, threads: {} } }),
@@ -487,14 +475,9 @@ describe("a second tab", () => {
     second.state().setThreadUi(QUEUE, { scrollTop: 10 });
     second.state().setPrefs({ sidebarOpen: false });
 
-    const stored = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      state: {
-        changes: Record<string, { state: { tag: string } }>;
-        prefs: { sidebarOpen: boolean };
-      };
-    };
-    expect(stored.state.changes[id]?.state.tag).toBe("approved");
-    expect(stored.state.prefs.sidebarOpen).toBe(false);
+    const stored = savedWorkspace(first.storage);
+    expect(stored.changes[id]?.state.tag).toBe("approved");
+    expect(stored.prefs.sidebarOpen).toBe(false);
 
     expect(await first.clock.run(first.state().sendChanges([id]))).toEqual([{ id, state: "sent" }]);
     expect(stateTag(first, id)).toBe("sent");
@@ -1481,9 +1464,7 @@ describe("syncing", () => {
     expect(rig.state().syncing[LCC]).toBe(true);
     await rig.clock.run(run);
     expect(rig.state().syncing[LCC]).toBe(false);
-    expect(
-      JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}").state.syncing,
-    ).toBeUndefined();
+    expect(rawSave(rig.storage).state.syncing).toBeUndefined();
   });
 
   it("a sync that answers after a disconnect does not bring the school back", async () => {
@@ -1644,7 +1625,7 @@ describe("the failure lab", () => {
     const make = () =>
       new FakeCanvasServer({ storage, now: () => 0, sleep: async () => {}, random: () => 0.5 });
     make().setNoise({ rate5xx: 0.25 });
-    const stored = JSON.parse(storage.getItem(LMS_STORAGE_KEY) ?? "{}") as Record<string, unknown>;
+    const stored = rawLms(storage);
     corrupt(stored);
     storage.setItem(LMS_STORAGE_KEY, JSON.stringify(stored));
     expect(make().noise().rate5xx).toBe(0);
@@ -1655,7 +1636,7 @@ describe("the failure lab", () => {
     const make = () =>
       new FakeCanvasServer({ storage, now: () => 0, sleep: async () => {}, random: () => 0.5 });
     make().setNoise({ rate5xx: 0.25 });
-    const stored = JSON.parse(storage.getItem(LMS_STORAGE_KEY) ?? "{}") as Record<string, unknown>;
+    const stored = rawLms(storage);
     delete stored["writeLog"];
     delete stored["term"];
     storage.setItem(LMS_STORAGE_KEY, JSON.stringify(stored));

@@ -4,11 +4,11 @@ import { fieldsOf, summarize, type FieldKey, type LmsError } from "~/shared/doma
 import { type ChangeId, isoTime } from "~/shared/domain/ids";
 import type { Submission } from "~/shared/domain/lms";
 import type { Result } from "~/shared/domain/ids";
-import { LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
 import { DEFAULT_RETRY_POLICY, createWriteback } from "~/renderer/writeback/writeback";
 
 import { SimulatedCrash } from "./fixtures/ledger";
 import { LCC, RSU, makeRig, type Rig } from "./fixtures/rig";
+import { savedLms } from "./fixtures/saved";
 
 const heldCause = (rig: Rig, id: ChangeId) => {
   const state = rig.stateOf(id);
@@ -436,8 +436,7 @@ describe("a 429", () => {
 
 describe("a reload during a send", () => {
   /** Field applications that actually reached the LMS, read from its own durable state. */
-  const landedWrites = (rig: Rig): number =>
-    (JSON.parse(rig.storage.getItem(LMS_STORAGE_KEY) ?? "{}") as { seq: number }).seq;
+  const landedWrites = (rig: Rig): number => savedLms(rig.storage).seq;
 
   const SCENARIOS: Readonly<Record<string, (rig: Rig) => void>> = {
     "a clean send": () => undefined,

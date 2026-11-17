@@ -1,4 +1,5 @@
 import type { BetaMessage, BetaUsage } from "@anthropic-ai/sdk/resources/beta/messages/messages";
+import * as v from "valibot";
 import { describe, expect, it } from "vite-plus/test";
 
 import { MODEL } from "~/main/agent";
@@ -6,8 +7,8 @@ import { anthropicAgent, spendOf } from "~/main/providers/anthropic";
 import type { Fetch } from "~/main/providers/canvas";
 import { DRAFT_GRADE_REQUEST } from "~/shared/agent/agent";
 import type { ChangeId, ThreadId } from "~/shared/domain/ids";
-import type { Assignment, Submission } from "~/shared/domain/lms";
 import { handle, invoker, type Bridge } from "~/shared/ipc";
+import { AssignmentSchema, SubmissionSchema } from "~/shared/providers/schemas";
 import { Secret, type CredentialLease } from "~/shared/providers/provider";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 
@@ -393,10 +394,10 @@ describe("main's Anthropic agent", () => {
 /** A model at Anthropic's transport that grades what it is given: every criterion at full marks, quoting the work. */
 const gradingModel = (body: Record<string, unknown>) => {
   const [turn] = body["messages"] as [{ content: string }];
-  const scope = JSON.parse(/<scope>\n(.*)\n<\/scope>/s.exec(turn.content)?.[1] ?? "{}") as {
-    submissions: Submission[];
-    assignments: Assignment[];
-  };
+  const scope = v.parse(
+    v.object({ submissions: v.array(SubmissionSchema), assignments: v.array(AssignmentSchema) }),
+    JSON.parse(/<scope>\n(.*)\n<\/scope>/s.exec(turn.content)?.[1] ?? "{}"),
+  );
   const [submission] = scope.submissions;
   const assignment = scope.assignments.find((a) => a.ref === submission?.assignment);
   if (!submission || !assignment?.rubric) throw new Error("the scope has no rubric submission");

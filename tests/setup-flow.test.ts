@@ -20,6 +20,7 @@ import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";
 import { LCC, RSU } from "./fixtures/rig";
+import { rawSave } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 import { planFor, termOf } from "./fixtures/term";
 
@@ -513,9 +514,7 @@ describe("a reload", () => {
 
   it("a workspace saved before setup existed still loads", async () => {
     const rig = await connected();
-    const saved = JSON.parse(rig.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as {
-      state: Record<string, unknown>;
-    };
+    const saved = rawSave(rig.storage);
     delete saved.state["setups"];
     delete saved.state["newCourses"];
     rig.storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(saved));
