@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { AgentInput, AgentScope } from "~/shared/agent/agent";
-import { createRuleAgent } from "~/shared/agent/rules";
+import type { AgentScope } from "~/shared/agent/agent";
 import type { ChangeId, ThreadId } from "~/shared/domain/ids";
 import { invoker, type Bridge } from "~/shared/ipc";
 import { createBridgeAgent } from "~/renderer/providers/agent";
@@ -13,6 +12,7 @@ import {
 } from "~/renderer/stores/selectors";
 
 import { clickWitness } from "./fixtures/changes";
+import { rulesMain, scopeOf } from "./fixtures/rules-main";
 import { makeStoreRig } from "./fixtures/store-rig";
 
 const QUEUE = "t-queue" as ThreadId;
@@ -20,25 +20,14 @@ const QUEUE = "t-queue" as ThreadId;
 /** What the renderer hands main for Claude, answered by the rules agent so drafts still land. */
 const wire = async () => {
   const sent: { request: string; scope: AgentScope }[] = [];
-  const rules = createRuleAgent();
+  const main = rulesMain({
+    before: (run) => (sent.push({ request: run.request, scope: scopeOf(run) }), null),
+  });
   const bridge: Bridge = {
     fakes: false,
     invoke: invoker(async (channel, raw) => {
       if (channel !== "agent.run") throw new Error(`unexpected ${channel}`);
-      const input = raw as {
-        request: string;
-        history: AgentInput["thread"]["history"];
-        scope: AgentScope;
-      };
-      sent.push({ request: input.request, scope: input.scope });
-      const effects: unknown[] = [];
-      const run = {
-        request: input.request,
-        thread: { history: input.history },
-        scope: input.scope,
-      };
-      for await (const effect of rules.run(run, new AbortController().signal)) effects.push(effect);
-      return { ok: true, effects, spend: { tokens: 0, usd: 0 } };
+      return main(raw);
     }),
   };
   const rig = await makeStoreRig({ agent: createBridgeAgent(bridge, () => true) });

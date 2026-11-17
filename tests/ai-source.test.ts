@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { AgentInput } from "~/shared/agent/agent";
 import { CLAUDE_CODE_MINIMUM, olderThan } from "~/shared/claude-code";
-import { createRuleAgent } from "~/shared/agent/rules";
 import type { ThreadId } from "~/shared/domain/ids";
-import { invoker, type AgentSource, type Bridge, type ClaudeCodeStatus } from "~/shared/ipc";
+import { invoker, serve, type AgentSource, type Bridge, type ClaudeCodeStatus } from "~/shared/ipc";
 import { Secret } from "~/shared/providers/provider";
 import { setupBlocker } from "~/renderer/components/screens/setup.logic";
 import {
@@ -17,6 +15,7 @@ import { spendWords } from "~/renderer/components/thread/spend.logic";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 import { selectQueueRows } from "~/renderer/stores/selectors";
 
+import { rulesMain } from "./fixtures/rules-main";
 import { STORE_TOKEN, makeStoreRig, type StoreRigOptions } from "./fixtures/store-rig";
 
 const QUEUE = "t-queue" as ThreadId;
@@ -37,10 +36,8 @@ const fakeMain = (answers: Answers) => {
   const bridge: Bridge = {
     fakes: false,
     invoke: invoker(async (channel, input) => {
-      if (channel === "agent.source") {
-        told.push((input as { source: AgentSource }).source);
-        return undefined;
-      }
+      if (channel === "agent.source")
+        return serve("agent.source", async ({ source }) => void told.push(source), input);
       const answer = answers[channel];
       if (!answer) throw new Error(`no answer for ${channel}`);
       return answer(input);
@@ -56,24 +53,11 @@ const fakeMain = (answers: Answers) => {
 /** Claude Code as main runs it: the rules agent drafts, at no dollar cost, until the plan limit after `allowed` runs. */
 const claudeCodeRuns = (allowed: number) => {
   let runs = 0;
-  const rules = createRuleAgent();
   const answers: Answers = {
-    "agent.run": async (raw) => {
-      runs += 1;
-      if (runs > allowed) return { ok: false, reason: LIMIT_REASON, limited: true };
-      const sent = raw as {
-        request: string;
-        history: AgentInput["thread"]["history"];
-        scope: AgentInput["scope"];
-      };
-      const effects: unknown[] = [];
-      for await (const effect of rules.run(
-        { request: sent.request, thread: { history: sent.history }, scope: sent.scope },
-        new AbortController().signal,
-      ))
-        effects.push(effect);
-      return { ok: true, effects, spend: { tokens: 1200, usd: 0 } };
-    },
+    "agent.run": rulesMain({
+      spend: { tokens: 1200, usd: 0 },
+      before: () => (++runs > allowed ? { ok: false, reason: LIMIT_REASON, limited: true } : null),
+    }),
   };
   return { runs: () => runs, answers };
 };
