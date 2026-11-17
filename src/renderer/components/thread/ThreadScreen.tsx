@@ -1,4 +1,4 @@
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { Layers, PanelRight, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
@@ -35,7 +35,6 @@ import { PinnedQueue } from "./PinnedQueue";
 import {
   filterRows,
   followWorkUrl,
-  readWorkUrl,
   fromInboxRows,
   fromQueueRows,
   liveFilter,
@@ -90,25 +89,31 @@ const useWorkUrl = (
 ) => {
   const url = useSearch({ from: "/threads/$threadId" });
   const navigate = useNavigate({ from: "/threads/$threadId" });
+  const settled = useRouterState({ select: (state) => state.status === "idle" });
   const seen = useRef<string | null>(null);
   // The URL this screen last wrote arriving is not a move, or a second click before it lands would be undone.
   const wrote = useRef<string | null>(null);
   useEffect(() => {
-    if (!view) return;
+    // While a navigation lands, as on /welcome after a reset, `url` is the search of the route being left; a write would undo it.
+    if (!view || !settled) return;
     const urlKey = workViewKey(url);
     const moved = urlKey !== seen.current && urlKey !== wrote.current;
     if (urlKey === wrote.current) wrote.current = null;
     seen.current = urlKey;
-    const named = readWorkUrl(url, (raw) =>
-      selectRowKeyAt(workspaceStore().getState(), thread.kind, raw),
-    );
-    const step = followWorkUrl(named, view, moved, reviewable);
+    const rowAt = (raw: string) => selectRowKeyAt(workspaceStore().getState(), thread.kind, raw);
+    const step = followWorkUrl(url, rowAt, view, moved, reviewable);
     if (!step) return;
     if ("show" in step) return showWorkView(thread, rows, ui, step.show);
     wrote.current = workViewKey(step.write);
     // The entry keeps what it carried, such as the chat a handoff came from.
-    void navigate({ search: step.write, replace: step.replace, state: true });
-  }, [url, view, reviewable, thread, rows, ui, navigate]);
+    void navigate({
+      to: "/threads/$threadId",
+      params: { threadId: thread.id },
+      search: step.write,
+      replace: step.replace,
+      state: true,
+    });
+  }, [url, view, reviewable, thread, rows, ui, navigate, settled]);
 };
 
 export function PanelToggle({

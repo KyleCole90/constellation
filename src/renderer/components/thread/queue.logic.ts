@@ -385,15 +385,19 @@ export const workViewKey = (search: ThreadSearch): string =>
  * What a work thread does when its URL or what it shows moves.
  * A URL that names nothing, as from a link or a row that isn't here, or a batch with nothing left to review, is given what is showing in place.
  * A URL that moved (Back, Forward, a reload) sets what shows; what shows moving on its own is a new entry.
+ * A URL that already names what shows is left alone, even a row the workspace no longer has, or rewriting it would never settle.
  */
 export const followWorkUrl = (
-  url: WorkView | null,
+  url: ThreadSearch,
+  rowAt: (raw: string) => RowKey | null,
   view: WorkView,
   urlMoved: boolean,
   reviewable: boolean,
 ): { write: WorkView; replace: boolean } | { show: WorkView } | null => {
-  const key = url === null ? "" : workViewKey(url);
-  if (key === workViewKey(view)) return null;
-  if (url === null || (key === "batch" && !reviewable)) return { write: view, replace: true };
-  return urlMoved ? { show: url } : { write: view, replace: false };
+  if (workViewKey(url) === workViewKey(view)) return null;
+  const named = readWorkUrl(url, rowAt);
+  if (named === null || ("view" in named && named.view === "batch" && !reviewable)) {
+    return { write: view, replace: true };
+  }
+  return urlMoved ? { show: named } : { write: view, replace: false };
 };
