@@ -83,6 +83,7 @@ import type { SetupLive } from "~/shared/domain/setup";
 import type { AnalyticsEvent, DraftKind } from "~/shared/analytics";
 import type { AgentSource, Bridge, ClaudeCodeStatus } from "~/shared/ipc";
 import { workName } from "~/shared/domain/workName";
+import { isRecord } from "~/shared/is-record";
 import { FakeCanvasServer, type StorageLike } from "~/shared/providers/fake-canvas/server";
 import type { FaultLab, NoiseConfig } from "~/shared/providers/fake-canvas/faults";
 export { NoisePatchSchema } from "~/shared/providers/fake-canvas/lab";
@@ -359,9 +360,6 @@ export interface WorkspaceDeps {
 }
 
 export type WorkspaceStore = StoreApi<WorkspaceState> & { syncFromStorage(): void };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
  * Version 2 seeded two fixed schools and stepped through them one by one. Every school, connection, change, and thread

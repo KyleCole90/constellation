@@ -12,10 +12,8 @@ import {
 } from "../../shared/domain/change";
 import {
   isoTime,
-  parseIsoTime,
   parseSchoolHost,
   schoolIdOf,
-  type IsoTime,
   type LmsRef,
   type Result,
 } from "../../shared/domain/ids";
@@ -38,12 +36,13 @@ import { refParts, refs } from "../../shared/providers/canvas-refs";
 import {
   revealSecret,
   type CredentialLease,
-  type FieldOutcomes,
+  type FieldOutcome,
   type LmsProvider,
   type Read,
 } from "../../shared/providers/provider";
 
 import { canvasTermSetup } from "./canvas-term";
+import { Id, OptionalTime, Time } from "./canvas-wire";
 
 /**
  * The school at `raw` as real Canvas: an `https:` host name with no port, path or credentials, and no IP literal,
@@ -120,14 +119,6 @@ const linkTo = (header: string | null, rel: "next" | "last"): string | null =>
   null;
 
 // ---- What Canvas sends, per its public API docs. Unknown keys are dropped; a missing required one fails the read. ----
-
-const Id = v.pipe(v.number(), v.integer());
-const Time = v.pipe(
-  v.string(),
-  v.check((raw) => parseIsoTime(raw) !== null),
-  v.transform((raw): IsoTime => isoTime(raw)),
-);
-const OptionalTime = v.nullish(Time, null);
 
 const Self = v.object({ id: Id, name: v.string() });
 const CourseRow = v.union([
@@ -259,7 +250,6 @@ const oneLine = (text: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
-type Outcome = NonNullable<FieldOutcomes[FieldKey]>;
 /**
  * The order a grade's fields go out in, one request each so each reports its own outcome. Canvas may score a submission
  * from its rubric assessment, so the grade follows the rubric and keeps the teacher's total.
@@ -613,8 +603,8 @@ export const createCanvasProvider = (deps: {
     method: "PUT" | "POST" | "DELETE",
     path: string,
     form: URLSearchParams,
-  ): Promise<Outcome> =>
-    lease.use(async (credential): Promise<Outcome> => {
+  ): Promise<FieldOutcome> =>
+    lease.use(async (credential): Promise<FieldOutcome> => {
       if (!credential) return { status: "failed", error: { kind: "auth_expired" } };
       const secret = credential.kind === "bearer" ? credential.token : credential.access;
       let response: Response;
@@ -637,7 +627,7 @@ export const createCanvasProvider = (deps: {
       if (!response.ok) return { status: "failed", error: await errorOf(response) };
       return { status: "landed", at: isoTime(deps.now()), via: "response" };
     });
-  const refused = (reason: string): Promise<Outcome> =>
+  const refused = (reason: string): Promise<FieldOutcome> =>
     Promise.resolve({ status: "failed", error: { kind: "rejected", reason } });
 
   /**
@@ -646,11 +636,11 @@ export const createCanvasProvider = (deps: {
    * often file storage on another host, so that request carries only Canvas's upload params and never the token.
    */
   const importPackage = (path: string, form: URLSearchParams, file: Blob, name: string) =>
-    lease.use(async (credential): Promise<Outcome> => {
+    lease.use(async (credential): Promise<FieldOutcome> => {
       if (!credential) return { status: "failed", error: { kind: "auth_expired" } };
       const secret = credential.kind === "bearer" ? credential.token : credential.access;
-      const lost: Outcome = { status: "unknown", since: isoTime(deps.now()) };
-      const rejected = (reason: string): Outcome => ({
+      const lost: FieldOutcome = { status: "unknown", since: isoTime(deps.now()) };
+      const rejected = (reason: string): FieldOutcome => ({
         status: "failed",
         error: { kind: "rejected", reason },
       });
@@ -708,7 +698,7 @@ export const createCanvasProvider = (deps: {
       } catch {
         return lost;
       }
-      const landed: Outcome = { status: "landed", at: isoTime(deps.now()), via: "response" };
+      const landed: FieldOutcome = { status: "landed", at: isoTime(deps.now()), via: "response" };
       if (uploaded.ok) return landed;
       if (uploaded.type === "opaqueredirect")
         return rejected("Canvas's file storage redirected the upload where the app can't follow.");
@@ -750,7 +740,7 @@ export const createCanvasProvider = (deps: {
   });
 
   /** The request that writes `field` of `content`, or a refusal when the content names nothing this school holds. */
-  const writeOf = (content: ChangeContent, field: FieldKey): Promise<Outcome> => {
+  const writeOf = (content: ChangeContent, field: FieldKey): Promise<FieldOutcome> => {
     const form = (entries: Record<string, string>) => new URLSearchParams(entries);
     switch (content.kind) {
       case "grade": {
@@ -1276,10 +1266,10 @@ export const createCanvasProvider = (deps: {
     apply: async (permit) => {
       if (!SendPermit.isGenuine(permit)) return {};
       const { content, fields } = permit;
-      const outcomes: Partial<Record<FieldKey, Outcome>> = {};
-      let unsent: Outcome | null = null;
+      const outcomes: Partial<Record<FieldKey, FieldOutcome>> = {};
+      let unsent: FieldOutcome | null = null;
       for (const field of WRITE_ORDER.filter((key) => fields.includes(key))) {
-        const outcome: Outcome = unsent ?? (await writeOf(content, field));
+        const outcome: FieldOutcome = unsent ?? (await writeOf(content, field));
         outcomes[field] = outcome;
         if (outcome.status === "failed") unsent = outcome;
         if (outcome.status === "unknown")

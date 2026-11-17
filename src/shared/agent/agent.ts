@@ -21,6 +21,7 @@ import {
 } from "~/shared/domain/lms";
 import { isFindingType, type Finding, type FindingType } from "~/shared/domain/scan";
 import type { TermDates, TermPlan } from "~/shared/domain/term";
+import { isRecord } from "~/shared/is-record";
 
 /** What a course thread is asked to start. Each member names only what that work needs. */
 export type HandoffWork =
@@ -207,8 +208,6 @@ export type AgentViolation =
 
 const MAX_TEXT = 20_000;
 const fail = (error: AgentViolation): Result<AgentEffect, AgentViolation> => ({ ok: false, error });
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 const isText = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0 && value.length <= MAX_TEXT;
 const isTextList = (value: unknown): value is readonly string[] =>

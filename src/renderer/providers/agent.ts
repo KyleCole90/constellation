@@ -3,12 +3,10 @@ import { repliedAt } from "~/shared/domain/change";
 import { awaitsReply, type Submission } from "~/shared/domain/lms";
 import { OFFLINE_REASON, isOnline } from "~/renderer/desktop";
 import type { Bridge } from "~/shared/ipc";
+import { isRecord } from "~/shared/is-record";
 
 const UNREACHABLE =
   "The app couldn't reach Claude, so nothing was drafted. Ask again. Nothing was queued.";
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
  * The model names the submission it just graded, because the change id is minted here when its propose lands. By the

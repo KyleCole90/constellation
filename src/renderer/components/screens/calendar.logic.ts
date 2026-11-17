@@ -1,5 +1,6 @@
 import { lastOf, type NonEmpty } from "~/renderer/lib/nonEmpty";
-import type { SchoolId } from "~/shared/domain/ids";
+import { isoTime, type IsoDate, type SchoolId } from "~/shared/domain/ids";
+import { dateOfTime, isoDate } from "~/shared/domain/term";
 import { formatDay } from "~/renderer/lib/utils";
 import { hasWorkToGrade, type DatedItem, type DueItem } from "~/renderer/stores/selectors";
 
@@ -99,21 +100,14 @@ export const nextDue = (
   return { label: `Next due ${shortDate(dateAt(today, daysFromToday))}`, daysFromToday };
 };
 
-/** A day in the URL, as local `YYYY-MM-DD`, so a saved link names the same day whenever it is opened. */
-type IsoDay = string;
+/** A day in the URL, as the local date, so a saved link names the same day whenever it is opened. */
+const isoDay = (date: Date): IsoDate =>
+  dateOfTime(isoTime(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate())));
 
-const isoDay = (date: Date): IsoDay =>
-  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
-    .map((part, index) => String(part).padStart(index === 0 ? 4 : 2, "0"))
-    .join("-");
+const parseIsoDay = (value: unknown): IsoDate | undefined =>
+  typeof value === "string" ? (isoDate(value) ?? undefined) : undefined;
 
-const parseIsoDay = (value: unknown): IsoDay | undefined => {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
-  const [year, month, day] = value.split("-").map(Number) as [number, number, number];
-  return isoDay(new Date(year, month - 1, day)) === value ? value : undefined;
-};
-
-const daysFrom = (today: number, iso: IsoDay): number => {
+const daysFrom = (today: number, iso: IsoDate): number => {
   const [year, month, day] = iso.split("-").map(Number) as [number, number, number];
   const start = new Date(today);
   return Math.round(
@@ -125,8 +119,8 @@ const daysFrom = (today: number, iso: IsoDay): number => {
 
 // An open day implies its week, so the URL names one or the other.
 type CalendarSearch = {
-  week?: IsoDay;
-  day?: IsoDay;
+  week?: IsoDate;
+  day?: IsoDate;
   school?: string;
 };
 
