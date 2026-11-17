@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type SchoolId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import type { ConnectionRecord } from "~/renderer/stores/types";
 
 import {
@@ -15,9 +15,10 @@ import {
   syncWords,
   waitingWords,
 } from "./connection.logic";
+import { schoolId } from "../../../../tests/fixtures/ids";
 
 const record = (patch: Partial<ConnectionRecord>): ConnectionRecord => ({
-  school: "lcc" as SchoolId,
+  school: schoolId("lcc"),
   status: "connected",
   connectedAt: null,
   accountName: null,

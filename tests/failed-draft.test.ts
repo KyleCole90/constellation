@@ -3,12 +3,13 @@ import { describe, expect, it } from "vite-plus/test";
 import type { Agent } from "~/shared/agent/agent";
 import { createRuleAgent } from "~/shared/agent/rules";
 import type { GradeContent } from "~/shared/domain/change";
-import { type ThreadId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 
 import { clickWitness } from "./fixtures/changes";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
+import { threadId } from "./fixtures/ids";
 
-const QUEUE = "t-queue" as ThreadId;
+const QUEUE = threadId("t-queue");
 const UNREACHABLE = "Claude couldn't be reached, so nothing was drafted.";
 
 /** Claude is down for the first run, then back: the walk's outage, then coming back online. */

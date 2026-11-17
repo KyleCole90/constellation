@@ -20,7 +20,6 @@ import {
   type GradeContent,
   type RemoteState,
 } from "~/shared/domain/change";
-import type { LmsRef } from "~/shared/domain/ids";
 import { SendPermit, mintSendPermit } from "~/shared/domain/permit";
 
 import {
@@ -39,6 +38,7 @@ import {
   sent,
   step,
 } from "./fixtures/changes";
+import { lmsRef } from "./fixtures/ids";
 
 const EDIT: ChangeEvent = {
   type: "edit",
@@ -117,6 +117,7 @@ describe("legal and illegal transitions", () => {
 
   it("no sequence of events reaches approved, sending, held, or sent without a genuine witness", () => {
     const seen = new Map<string, ChangeRecord>([["draft", newDraft()]]);
+    // forged: a witness no approval made, which the reducer must refuse
     const forged = { covers: () => true, via: "button" } as unknown as ApprovalWitness;
     const queue = [newDraft()];
     while (queue.length > 0) {
@@ -412,7 +413,7 @@ describe("partial runs and landed fields", () => {
 describe("classify", () => {
   const reply: Extract<ChangeContent, { kind: "reply" }> = {
     kind: "reply",
-    target: "lcc:conversation:1" as LmsRef<"conversation">,
+    target: lmsRef<"conversation">("lcc:conversation:1"),
     body: "Yes, Friday works.",
   };
   const thread = (
@@ -545,7 +546,7 @@ describe("fitContent", () => {
 });
 
 describe("missing work: excuse and zero", () => {
-  const EVIDENCE = "lcc:criterion:2:evidence" as LmsRef<"criterion">;
+  const EVIDENCE = lmsRef<"criterion">("lcc:criterion:2:evidence");
   const excused = gradeContent({ points: null, rubric: null, comment: null, excused: true });
   const excuse = (basis: RemoteState, remote: RemoteState) =>
     classify(excused, { readAt: AT, remote: basis }, remote, {}).excuse;

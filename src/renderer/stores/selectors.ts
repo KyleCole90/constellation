@@ -1,4 +1,7 @@
+import * as v from "valibot";
+
 import type { CourseGrades, Source, Standing } from "~/shared/agent/agent";
+import { ThreadIdSchema } from "~/shared/providers/schemas";
 import {
   finalGrade,
   summarize,
@@ -68,10 +71,10 @@ const memoByState = <S extends object, A extends readonly unknown[], R>(
 };
 
 /** The thread behind the unified inbox. It spans every course, so it never appears in a course's list. */
-export const INBOX_THREAD = "t-inbox" as ThreadId;
-export const NORTH_STAR_THREAD = "t-north-star" as ThreadId;
+export const INBOX_THREAD = v.parse(ThreadIdSchema, "t-inbox");
+export const NORTH_STAR_THREAD = v.parse(ThreadIdSchema, "t-north-star");
 /** Every submission to grade, across schools. What's due links to it. */
-export const GRADING_LIST_THREAD = "t-queue" as ThreadId;
+export const GRADING_LIST_THREAD = v.parse(ThreadIdSchema, "t-queue");
 
 const caches = (state: WorkspaceData): readonly SchoolCache[] => Object.values(state.cache);
 const schoolOf = (state: WorkspaceData, id: SchoolId): School | undefined =>

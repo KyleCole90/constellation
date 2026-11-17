@@ -8,7 +8,7 @@ export type IsoTime = Brand<string, "IsoTime">;
 
 /** The one way to make an IsoTime: a clock reading, a Date, or text `Date` can read. Throws on an invalid time, as `toISOString` does. */
 export const isoTime = (at: number | string | Date): IsoTime =>
-  // The single mint: toISOString always writes the brand's format.
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion, constellation/use-iso-time -- the mint: toISOString always writes the brand's format
   new Date(at).toISOString() as IsoTime;
 
 /** For a timestamp from outside the app: null when it isn't one. */
@@ -16,6 +16,7 @@ export const parseIsoTime = (text: string): IsoTime | null =>
   Number.isNaN(Date.parse(text)) ? null : isoTime(text);
 
 export const parseSchoolId = (raw: string): SchoolId | null =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: the test before it is the brand's check
   raw === "" || raw.includes(":") ? null : (raw as SchoolId);
 
 /** A calendar day, YYYY-MM-DD, with no time or zone. */
@@ -47,6 +48,7 @@ export const parseSchoolHost = (raw: string): Result<SchoolHost, string> => {
       ok: false,
       error: "That isn't a web address. Type the address you sign in at, with a dot in it.",
     };
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: the regex above is the brand's check
   return { ok: true, value: host as SchoolHost };
 };
 

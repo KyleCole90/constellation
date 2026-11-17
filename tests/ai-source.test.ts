@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { CLAUDE_CODE_MINIMUM, olderThan } from "~/shared/claude-code";
-import type { ThreadId } from "~/shared/domain/ids";
 import { invoker, serve, type AgentSource, type Bridge, type ClaudeCodeStatus } from "~/shared/ipc";
 import { Secret } from "~/shared/providers/provider";
 import { setupBlocker } from "~/renderer/components/screens/setup.logic";
@@ -17,8 +16,9 @@ import { selectQueueRows } from "~/renderer/stores/selectors";
 
 import { rulesMain } from "./fixtures/rules-main";
 import { STORE_TOKEN, makeStoreRig, type StoreRigOptions } from "./fixtures/store-rig";
+import { threadId } from "./fixtures/ids";
 
-const QUEUE = "t-queue" as ThreadId;
+const QUEUE = threadId("t-queue");
 const LIMIT_REASON = "Your Claude plan's limit is reached. It resets 9:00 AM. Nothing was queued.";
 const SIGNED_OUT: ClaudeCodeStatus = {
   installed: true,

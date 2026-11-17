@@ -1,23 +1,18 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { CourseShell } from "~/shared/domain/content";
-import {
-  type LmsRef,
-  type SchoolHost,
-  type SchoolId,
-  type ThreadId,
-  isoTime,
-} from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import type { Assignment, Course, School, Student, Submission } from "~/shared/domain/lms";
 import type { ConnectionRecord, Thread } from "~/renderer/stores/types";
 
 import { INBOX_THREAD } from "~/renderer/stores/selectors";
 
 import { buildEntries, filterEntries } from "./palette.logic";
+import { lmsRef, schoolHost, schoolId, threadId } from "../../../tests/fixtures/ids";
 
-const school = "lcc" as SchoolId;
+const school = schoolId("lcc");
 const course = {
-  ref: "lcc:course:1" as LmsRef<"course">,
+  ref: lmsRef<"course">("lcc:course:1"),
   school,
   code: "ENG 101",
   title: "Composition",
@@ -26,18 +21,18 @@ const course = {
   studentCount: 2,
 } satisfies Course;
 const students: readonly Student[] = [
-  { ref: "s1" as LmsRef<"student">, school, course: course.ref, name: "Maya Ortiz" },
-  { ref: "s2" as LmsRef<"student">, school, course: course.ref, name: "Luis Cardenas" },
+  { ref: lmsRef<"student">("s1"), school, course: course.ref, name: "Maya Ortiz" },
+  { ref: lmsRef<"student">("s2"), school, course: course.ref, name: "Luis Cardenas" },
 ];
 const schoolNamed = (id: string, name: string): School => ({
-  id: id as SchoolId,
+  id: schoolId(id),
   abbr: id.toUpperCase(),
   name,
-  host: `${id}.example.edu` as SchoolHost,
+  host: schoolHost(`${id}.example.edu`),
   provider: "fake-canvas",
 });
 const connection = (id: string, status: ConnectionRecord["status"]): ConnectionRecord => ({
-  school: id as SchoolId,
+  school: schoolId(id),
   status,
   connectedAt: null,
   accountName: null,
@@ -47,7 +42,7 @@ const connection = (id: string, status: ConnectionRecord["status"]): ConnectionR
 });
 const demoSchool = { schools: [schoolNamed("lcc", "Lansing CC")], connections: {} };
 const thread: Thread & { toApprove: boolean } = {
-  id: "t1" as ThreadId,
+  id: threadId("t1"),
   school,
   course: course.ref,
   kind: "general",
@@ -58,8 +53,8 @@ const thread: Thread & { toApprove: boolean } = {
   toApprove: false,
 };
 const submission = {
-  ref: "sub" as LmsRef<"submission">,
-  student: "s1" as LmsRef<"student">,
+  ref: lmsRef<"submission">("sub"),
+  student: lmsRef<"student">("s1"),
   course: course.ref,
   workflow: "submitted",
 } as Submission;
@@ -77,7 +72,7 @@ describe("filterEntries", () => {
   it("finds a North Star chat by its title and names it as a chat", () => {
     const chat = {
       ...thread,
-      id: "t-chat" as ThreadId,
+      id: threadId("t-chat"),
       school: null,
       course: null,
       kind: "north-star-chat" as const,
@@ -157,7 +152,7 @@ describe("filterEntries", () => {
 
   it("an assignment's name finds it, says how many are to grade, and opens its grading list, or its gradebook column with nothing to grade (#121, #135)", () => {
     const reflection = {
-      ref: "lcc:assignment:9" as LmsRef<"assignment">,
+      ref: lmsRef<"assignment">("lcc:assignment:9"),
       school,
       course: course.ref,
       title: "Reflection: one concept that finally clicked",
@@ -169,7 +164,7 @@ describe("filterEntries", () => {
     } satisfies Assignment;
     const quiz = {
       ...reflection,
-      ref: "lcc:assignment:10" as LmsRef<"assignment">,
+      ref: lmsRef<"assignment">("lcc:assignment:10"),
       title: "Quiz 1",
     };
     const withWork = buildEntries({
@@ -206,14 +201,14 @@ describe("filterEntries", () => {
     (query) => {
       const shell = {
         ...course,
-        ref: "lcc:course:2" as LmsRef<"course">,
+        ref: lmsRef<"course">("lcc:course:2"),
         termName: "Spring 2027",
         startAt: null,
         endAt: null,
         itemCount: 0,
         setUp: false,
-        copyTarget: "m" as LmsRef<"migrations">,
-        stateTarget: "s" as LmsRef<"course-state">,
+        copyTarget: lmsRef<"migrations">("m"),
+        stateTarget: lmsRef<"course-state">("s"),
       } satisfies CourseShell;
       const withShell = buildEntries({
         ...demoSchool,
@@ -238,7 +233,7 @@ describe("filterEntries", () => {
   it("caps each group, so a common word cannot bury the others", () => {
     const many = buildEntries({
       ...demoSchool,
-      threads: Array.from({ length: 20 }, (_, i) => ({ ...thread, id: `t${i}` as ThreadId })),
+      threads: Array.from({ length: 20 }, (_, i) => ({ ...thread, id: threadId(`t${i}`) })),
       courses: [course],
       shells: [],
       students: [],
@@ -249,9 +244,9 @@ describe("filterEntries", () => {
   });
 
   it("an assignment with work to grade ranks first and is never capped away by matches in an earlier course (#121)", () => {
-    const music = { ...course, ref: "lcc:course:2" as LmsRef<"course">, code: "MUS 110" };
+    const music = { ...course, ref: lmsRef<"course">("lcc:course:2"), code: "MUS 110" };
     const assignmentIn = (owner: Course, n: number, title: string): Assignment => ({
-      ref: `${owner.ref}:assignment:${n}` as LmsRef<"assignment">,
+      ref: lmsRef<"assignment">(`${owner.ref}:assignment:${n}`),
       school,
       course: owner.ref,
       title,
@@ -275,7 +270,7 @@ describe("filterEntries", () => {
         assignments: [...journals, waiting],
         toGrade: Array.from({ length: 4 }, (_, i) => ({
           ...submission,
-          ref: `w${i}` as LmsRef<"submission">,
+          ref: lmsRef<"submission">(`w${i}`),
           course: music.ref,
           assignment: waiting.ref,
         })),
@@ -315,9 +310,9 @@ describe("filterEntries", () => {
         schoolNamed("gvsu", "Grand Valley"),
       ],
       connections: {
-        ["lcc" as SchoolId]: connection("lcc", "connected"),
-        ["wmu" as SchoolId]: connection("wmu", "disconnected"),
-        ["gvsu" as SchoolId]: connection("gvsu", "expired"),
+        [schoolId("lcc")]: connection("lcc", "connected"),
+        [schoolId("wmu")]: connection("wmu", "disconnected"),
+        [schoolId("gvsu")]: connection("gvsu", "expired"),
       },
     });
     expect(filterEntries(withSchools, "sync")).toEqual([
@@ -332,7 +327,7 @@ describe("filterEntries", () => {
   it("a thread awaiting approval says so, and approve finds it", () => {
     const awaiting = buildEntries({
       ...demoSchool,
-      threads: [thread, { ...thread, id: "t2" as ThreadId, title: "Reminder", toApprove: true }],
+      threads: [thread, { ...thread, id: threadId("t2"), title: "Reminder", toApprove: true }],
       courses: [course],
       shells: [],
       students: [],
@@ -356,7 +351,7 @@ describe("filterEntries", () => {
       courses: [course],
       shells: [],
       students: [
-        { ref: "s3" as LmsRef<"student">, school, course: course.ref, name: "Bo Shortiz" },
+        { ref: lmsRef<"student">("s3"), school, course: course.ref, name: "Bo Shortiz" },
         ...students,
       ],
       assignments: [],
@@ -372,10 +367,10 @@ describe("filterEntries", () => {
 
 describe("buildEntries for a real school", () => {
   const real: School = { ...schoolNamed("uni", "State University"), provider: "canvas" };
-  const own = { ...thread, id: "t-own" as ThreadId, school: real.id, title: "Grade Lab 3" };
+  const own = { ...thread, id: threadId("t-own"), school: real.id, title: "Grade Lab 3" };
   const chat = {
     ...thread,
-    id: "t-chat" as ThreadId,
+    id: threadId("t-chat"),
     school: null,
     course: null,
     kind: "north-star-chat" as const,

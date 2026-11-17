@@ -2,8 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { ChangeRecord, ChangeSummary } from "~/shared/domain/change";
 import { courseName, titleBeyondCode, type SourceCourse } from "~/shared/domain/content";
-import type { ChangeId, IsoDate, LmsRef } from "~/shared/domain/ids";
-import type { Finding, FindingKey } from "~/shared/domain/scan";
+import type { Finding } from "~/shared/domain/scan";
 import type { CourseSetup, ReviewRow } from "~/shared/domain/setup";
 import { draftOf, draftTerm, termName, type PlanDraft, type TermPlan } from "~/shared/domain/term";
 
@@ -24,6 +23,7 @@ import {
   sourceChoices,
   toggleNewDay,
 } from "./setup.logic";
+import { changeId, findingKey, isoDate as date, lmsRef } from "../../../../tests/fixtures/ids";
 
 const summary = (patch: Partial<ChangeSummary>) =>
   ({
@@ -37,13 +37,13 @@ const summary = (patch: Partial<ChangeSummary>) =>
   }) as ChangeSummary;
 const change = (id: string) =>
   ({
-    id: id as ChangeId,
+    id: changeId(id),
     content: { kind: "text-fix" },
     basis: { remote: { kind: "text-fix" } },
   }) as ChangeRecord;
 const finding = (type: Finding["type"], where = "Syllabus") => ({ type, where }) as Finding;
 const row = (key: string, patch: Partial<ReviewRow> = {}): ReviewRow => ({
-  key: key as FindingKey,
+  key: findingKey(key),
   finding: finding("plain-date"),
   status: "fix",
   change: null,
@@ -53,7 +53,6 @@ const row = (key: string, patch: Partial<ReviewRow> = {}): ReviewRow => ({
 });
 const pending = (key: string, can: Partial<ChangeSummary>) =>
   row(key, { change: change(`c-${key}`), summary: summary(can) });
-const date = (text: string) => text as IsoDate;
 const term = (start: string, end: string) => ({
   name: "T",
   start: date(start),
@@ -79,16 +78,17 @@ const shell = {
   studentCount: 0,
   itemCount: 0,
 } as CourseSetup["shell"];
-const source = (ref: string, template: boolean, code = ref) =>
-  ({
-    ref: ref as LmsRef<"course">,
-    code,
-    termName: "Spring",
-    startAt: date("2026-01-12"),
-    endAt: date("2026-05-08"),
-    meetingDays: [2, 4],
-    template,
-  }) as unknown as SourceCourse;
+const source = (ref: string, template: boolean, code = ref): SourceCourse => ({
+  ref: lmsRef<"course">(ref),
+  code,
+  title: code,
+  termName: "Spring",
+  startAt: date("2026-01-12"),
+  endAt: date("2026-05-08"),
+  meetingDays: [2, 4],
+  template,
+  dated: [],
+});
 
 describe("meeting days", () => {
   it("clicking Monday then Wednesday turns Tue/Thu into Mon/Wed", () => {
@@ -340,7 +340,7 @@ describe("destination and source lists", () => {
         source("previous", false, "ENG 101"),
         source("template", true, "ENG 101"),
       ],
-      "self" as LmsRef<"course">,
+      lmsRef<"course">("self"),
       "ENG 101",
     ).map((entry) => entry.ref);
     expect(refs).toEqual(["template", "previous", "b", "a"]);

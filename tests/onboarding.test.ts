@@ -1,12 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  parseSchoolHost,
-  type ChangeId,
-  type SchoolHost,
-  type SchoolId,
-  type ThreadId,
-} from "~/shared/domain/ids";
+import { parseSchoolHost, type SchoolId } from "~/shared/domain/ids";
 import type { LmsError } from "~/shared/domain/change";
 import { Secret } from "~/shared/providers/provider";
 import { createMemoryVault } from "~/renderer/providers/vault";
@@ -14,14 +8,15 @@ import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/storage-key";
 
 import { rawSave } from "./fixtures/saved";
 import { STORE_TOKEN, makeStoreRig, type StoreRig } from "./fixtures/store-rig";
+import { schoolHost, schoolId, threadId } from "./fixtures/ids";
 
-const LCC = "lcc" as SchoolId;
-const RSU = "rsu" as SchoolId;
-const LCC_HOST = "lakeshore.instructure.com" as SchoolHost;
+const LCC = schoolId("lcc");
+const RSU = schoolId("rsu");
+const LCC_HOST = schoolHost("lakeshore.instructure.com");
 const SENTINEL = "SENTINEL-onboarding-token-4c1d9e";
 
 const add = (rig: StoreRig, host: string, token = STORE_TOKEN) =>
-  rig.clock.run(rig.state().addSchool(host as SchoolHost, new Secret(token)));
+  rig.clock.run(rig.state().addSchool(schoolHost(host), new Secret(token)));
 
 const expectNoTrace = async (rig: StoreRig, school: SchoolId) => {
   expect(rig.state().schools.map((entry) => entry.id)).not.toContain(school);
@@ -218,9 +213,10 @@ describe("removeSchool", () => {
     await rig.connectAll();
     const ref = rig.server.findSubmission("Maya Ortiz", "Essay 2");
     if (!ref) throw new Error("No submission.");
-    const id = (await rig.clock.run(
-      rig.state().openSubmission("t-queue" as ThreadId, ref, { fill: "draft" }),
-    )) as ChangeId;
+    const id = await rig.clock.run(
+      rig.state().openSubmission(threadId("t-queue"), ref, { fill: "draft" }),
+    );
+    if (!id) throw new Error("Nothing was drafted.");
     const school = rig.state().changes[id]?.school;
     if (!school) throw new Error("Opening the submission saved no change.");
     expect(await rig.clock.run(rig.state().removeSchool(school))).toBe(false);
@@ -284,9 +280,10 @@ describe("a workspace saved by version 2", () => {
     const ref = rig.server.findSubmission("Maya Ortiz", "Essay 2");
     if (!ref) throw new Error("No submission.");
     const id = await rig.clock.run(
-      rig.state().openSubmission("t-queue" as ThreadId, ref, { fill: "draft" }),
+      rig.state().openSubmission(threadId("t-queue"), ref, { fill: "draft" }),
     );
-    return { rig, id: id as ChangeId };
+    if (!id) throw new Error("Nothing was drafted.");
+    return { rig, id };
   };
 
   it("keeps every school, connection, change, and thread, and a finished run stays finished", async () => {

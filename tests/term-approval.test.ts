@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { ApprovalWitness, fingerprintOf, type RiskKey } from "~/shared/domain/approval";
+import { ApprovalWitness, fingerprintOf, riskKey } from "~/shared/domain/approval";
 import { fieldText, riskOf, summarize, transition } from "~/shared/domain/change";
 import { type IsoTime, isoTime } from "~/shared/domain/ids";
 import { copyMigration } from "~/shared/domain/setup";
@@ -60,7 +60,7 @@ describe("approving a risky copy", () => {
       {
         changeId: draft.id,
         fingerprint: fingerprintOf(draft),
-        risk: "students:1|items:0" as RiskKey,
+        risk: riskKey(1, 0),
       },
     ]);
     expect(witness).not.toBeNull();

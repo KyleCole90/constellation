@@ -3,6 +3,7 @@ import * as v from "valibot";
 import { AnalyticsEventSchema } from "./analytics";
 import { LabCommandSchema, LabSnapshotSchema } from "./providers/fake-canvas/lab";
 import type { VaultKey } from "./providers/provider";
+import { keysOf } from "./keys-of";
 import {
   AccountInfoSchema,
   AnnouncementSchema,
@@ -255,7 +256,7 @@ export const handle = (
   trusted: (sender: string) => boolean,
   handlers: Handlers,
 ) => {
-  for (const channel of Object.keys(ipc) as ChannelName[])
+  for (const channel of keysOf(ipc))
     register(channel, async (sender, input) => {
       if (sender === null || !trusted(sender)) throw new Error(`${channel}: untrusted sender`);
       return serve(channel, handlers[channel], input);

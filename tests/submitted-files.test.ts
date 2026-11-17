@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { Agent, AgentInput } from "~/shared/agent/agent";
-import type { ThreadId } from "~/shared/domain/ids";
 
 import { makeStoreRig } from "./fixtures/store-rig";
+import { threadId } from "./fixtures/ids";
 
-const QUEUE = "t-queue" as ThreadId;
+const QUEUE = threadId("t-queue");
 
 const spy = () => {
   const asked: AgentInput[] = [];

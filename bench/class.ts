@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { documentText } from "~/main/document-text";
 import type { SubmittedFile } from "~/shared/agent/agent";
-import { type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import type {
   Assignment,
   Course,
@@ -14,6 +14,7 @@ import type {
 
 import { ASSIGNMENTS, SUBMISSIONS, type AuthoredSubmission } from "./fixtures/authored";
 import type { FixtureKind } from "./metrics";
+import { lmsRef, schoolId } from "../tests/fixtures/ids";
 
 /** One submission as "Draft N" sends it: the narrowed scope's three records and the files main would read for it. */
 export interface Fixture {
@@ -26,7 +27,7 @@ export interface Fixture {
 }
 
 const FILES = join(import.meta.dirname, "files");
-const SCHOOL = "bench-school" as SchoolId;
+const SCHOOL = schoolId("bench-school");
 const SUBMITTED = isoTime("2026-11-02T15:30:00Z");
 const COURSES: Record<string, string> = {
   eng10: "English 10",
@@ -77,7 +78,7 @@ const bodyOf = async ({ work }: AuthoredSubmission): Promise<SubmissionBody> => 
     : { kind: "upload", title: "", files: [file] };
 };
 
-const ref = <K extends string>(kind: K, key: string) => `${kind}-${key}` as LmsRef<K>;
+const ref = <K extends string>(kind: K, key: string) => lmsRef<K>(`${kind}-${key}`);
 
 const assignmentOf = (key: string): Assignment & { courseKey: string } => {
   const authored = ASSIGNMENTS.find((a) => a.key === key);

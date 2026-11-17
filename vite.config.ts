@@ -110,6 +110,9 @@ export default defineConfig({
     rules: {
       "constellation/no-vp-server-spawn": "error",
       "constellation/process-boundary": "error",
+      "constellation/no-double-assertion": "error",
+      "constellation/no-brand-cast": "error",
+      "constellation/use-iso-time": "error",
       "eslint/no-restricted-imports": ["error", { patterns: [NO_POSTHOG_SDK] }],
       "typescript/no-explicit-any": "error",
       "typescript/switch-exhaustiveness-check": "error",
@@ -123,7 +126,7 @@ export default defineConfig({
       "typescript/require-array-sort-compare": "off",
       "typescript/restrict-template-expressions": "off",
       "typescript/no-unnecessary-template-expression": "off",
-      // 121 casts in shipped code today, mostly brand mints. Turn on once they go through mint helpers.
+      // On for shipped src below. Tests cast freely to build partial fixtures.
       "typescript/no-unsafe-type-assertion": "off",
       "oxc/no-accumulating-spread": "error",
       "eslint/no-control-regex": "off",
@@ -238,6 +241,8 @@ export default defineConfig({
           "typescript/no-unsafe-member-access": "error",
           "typescript/no-unsafe-return": "error",
           "constellation/no-json-parse-cast": "error",
+          // A cast that narrows claims what nothing checked. Brand mints and own-key reads say why in a disable comment.
+          "typescript/no-unsafe-type-assertion": "error",
         },
       },
       {

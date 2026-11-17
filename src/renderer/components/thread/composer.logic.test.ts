@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { GradeContent, RubricScore } from "~/shared/domain/change";
-import type { LmsRef } from "~/shared/domain/ids";
 
 import { composerHints } from "./composer.logic";
+import { lmsRef } from "../../../../tests/fixtures/ids";
 
 const score = { name: "Thesis and claim", points: 22, outOf: 25 } as RubricScore;
 const grade = (rubric: readonly RubricScore[] | null) =>
@@ -42,7 +42,7 @@ describe("composerHints", () => {
     expect(
       composerHints({
         kind: "messages",
-        content: { kind: "reply", target: "c" as LmsRef<"conversation">, body: "Thanks!" },
+        content: { kind: "reply", target: lmsRef<"conversation">("c"), body: "Thanks!" },
         canEdit: true,
         drafted: true,
       }).examples,

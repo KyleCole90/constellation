@@ -2,12 +2,12 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { ANNOUNCEMENT_DRAFTS } from "~/shared/agent/rules/drafts";
 import type { ChangeContent } from "~/shared/domain/change";
-import type { ThreadId } from "~/shared/domain/ids";
 import { workLine } from "~/shared/domain/workName";
 import { SEED } from "~/shared/providers/fake-canvas/seed";
 import { selectInboxRows, selectThreadName } from "~/renderer/stores/selectors";
 
 import { makeStoreRig } from "./fixtures/store-rig";
+import { threadId } from "./fixtures/ids";
 
 const connected = async () => {
   const rig = await makeStoreRig();
@@ -15,8 +15,8 @@ const connected = async () => {
   return rig;
 };
 
-const ANNOUNCEMENT = "t-h150-ann" as ThreadId;
-const REPLIES = "t-h150-mail" as ThreadId;
+const ANNOUNCEMENT = threadId("t-h150-ann");
+const REPLIES = threadId("t-h150-mail");
 
 describe("one name for one piece of work", () => {
   it("a seeded announcement thread is called what its draft will be called", () => {

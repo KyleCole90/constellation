@@ -6,7 +6,7 @@ import type {
   RemoteState,
 } from "~/shared/domain/change";
 import { finalGrade } from "~/shared/domain/change";
-import { type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import type { Submission } from "~/shared/domain/lms";
 import { SendPermit } from "~/shared/domain/permit";
 import type {
@@ -16,6 +16,7 @@ import type {
   LmsProvider,
   Read,
 } from "~/shared/providers/provider";
+import { lmsRef, schoolId } from "./ids";
 
 const CAPABILITIES: Capabilities = {
   messaging: false,
@@ -32,10 +33,10 @@ const FAIL = <T>(error: LmsError): Read<T> => Promise.resolve({ ok: false, error
  * requests with no transaction across them, feedback replaces the earlier text, and there is no messaging.
  */
 export class SecondLmsStub {
-  static readonly SCHOOL = "ksu" as SchoolId;
-  static readonly COURSE = "ksu:org:6606" as LmsRef<"course">;
-  static readonly ASSIGNMENT = "ksu:folder:88" as LmsRef<"assignment">;
-  static readonly TARGET = "ksu:dropbox:6606:88:310" as LmsRef<"submission">;
+  static readonly SCHOOL = schoolId("ksu");
+  static readonly COURSE = lmsRef<"course">("ksu:org:6606");
+  static readonly ASSIGNMENT = lmsRef<"assignment">("ksu:folder:88");
+  static readonly TARGET = lmsRef<"submission">("ksu:dropbox:6606:88:310");
 
   grade: number | null = null;
   feedback: { version: number; text: string } | null = { version: 1, text: "Earlier feedback." };
@@ -98,7 +99,7 @@ export class SecondLmsStub {
       school: SecondLmsStub.SCHOOL,
       course: SecondLmsStub.COURSE,
       assignment: SecondLmsStub.ASSIGNMENT,
-      student: "ksu:user:310" as LmsRef<"student">,
+      student: lmsRef<"student">("ksu:user:310"),
       studentName: "Ana Ruiz",
       workflow: this.grade === null ? "submitted" : "graded",
       attempt: 1,
@@ -153,7 +154,7 @@ export class SecondLmsStub {
         authed(() =>
           OK([
             {
-              ref: "ksu:user:310" as LmsRef<"student">,
+              ref: lmsRef<"student">("ksu:user:310"),
               school: SecondLmsStub.SCHOOL,
               course: SecondLmsStub.COURSE,
               name: "Ana Ruiz",

@@ -11,7 +11,7 @@ import {
   type RemoteState,
   type SetContent,
 } from "~/shared/domain/change";
-import { type IsoDate, type LmsRef, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import { mintSendPermit } from "~/shared/domain/permit";
 import { copyMigration } from "~/shared/domain/setup";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
@@ -41,13 +41,14 @@ import { DurableLedger } from "./fixtures/ledger";
 import { permitFor, unwrap } from "./fixtures/provider-contract";
 import { runTermSetupContract, type TermContractHarness } from "./fixtures/term-contract";
 import { cartridgeContent, copyContent, termOf } from "./fixtures/term";
+import { isoDate, lmsRef } from "./fixtures/ids";
 
 const SCHOOL = (() => {
   const school = canvasSchoolAt(TERM_HOST);
   if (!school) throw new Error(`${TERM_HOST} should be a Canvas school`);
   return school;
 })();
-const SHELL = `${TERM_HOST}:course:${SHELL_ID}` as LmsRef<"course">;
+const SHELL = lmsRef<"course">(`${TERM_HOST}:course:${SHELL_ID}`);
 
 const copyRemote: RemoteState = {
   kind: "course-copy",
@@ -199,10 +200,10 @@ describe("Canvas term setup reads", () => {
       createdMs: http.now(),
       startedMs: http.now(),
       shift: {
-        oldStart: "2026-08-24" as IsoDate,
-        oldEnd: "2026-12-11" as IsoDate,
-        newStart: "2027-01-19" as IsoDate,
-        newEnd: "2027-05-14" as IsoDate,
+        oldStart: isoDate("2026-08-24"),
+        oldEnd: isoDate("2026-12-11"),
+        newStart: isoDate("2027-01-19"),
+        newEnd: isoDate("2027-05-14"),
         substitutions: {},
       },
       failAt: null,
@@ -266,7 +267,7 @@ describe("Canvas term setup reads", () => {
       `${TERM_HOST}:course:3301/../../users`,
       `${TERM_HOST}:course:3301:9`,
     ])
-      expect(await setup.migrations(ref as LmsRef<"course">)).toEqual({
+      expect(await setup.migrations(lmsRef<"course">(ref))).toEqual({
         ok: false,
         error: { kind: "not_found" },
       });
@@ -293,13 +294,13 @@ describe("Canvas term setup writes", () => {
     const content = copyContent(shell, source);
     const writes = http.writeCount();
     const forgeries: CourseCopyContent[] = [
-      { ...content, target: "evil.example:migrations:3301" as LmsRef<"migrations"> },
-      { ...content, target: `${TERM_HOST}:migrations:3301/../1` as LmsRef<"migrations"> },
+      { ...content, target: lmsRef<"migrations">("evil.example:migrations:3301") },
+      { ...content, target: lmsRef<"migrations">(`${TERM_HOST}:migrations:3301/../1`) },
       {
         ...content,
         source: {
           kind: "course",
-          ref: "evil.example:course:2201" as LmsRef<"course">,
+          ref: lmsRef<"course">("evil.example:course:2201"),
           label: "ENG-101",
           termName: "Fall 2026",
         },
@@ -322,7 +323,7 @@ describe("Canvas term setup writes", () => {
     const provider = canvasOver(http);
     const content: SetContent = {
       kind: "item-set",
-      target: `${TERM_HOST}:item:${SHELL_ID}:file:9999` as LmsRef<"item">,
+      target: lmsRef<"item">(`${TERM_HOST}:item:${SHELL_ID}:file:9999`),
       where: "Handout",
       intent: { set: "item-published" },
     };

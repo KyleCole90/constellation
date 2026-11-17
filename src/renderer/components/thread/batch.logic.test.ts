@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ChangeContent, ChangeSummary, GradeContent } from "~/shared/domain/change";
-import { type ChangeId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 
 import {
   batchPhase,
@@ -11,6 +11,8 @@ import {
   outcomeSummary,
   retryTargets,
 } from "./batch.logic";
+import { gradeContent } from "../../../../tests/fixtures/changes";
+import { changeId, lmsRef } from "../../../../tests/fixtures/ids";
 
 const summary = (patch: Partial<ChangeSummary>): ChangeSummary => ({
   label: "Needs approval",
@@ -91,7 +93,7 @@ describe("retryTargets", () => {
   });
 
   const items = (list: readonly ChangeSummary[]) =>
-    list.map((s, i) => ({ id: `c${i}` as ChangeId, summary: s }));
+    list.map((s, i) => ({ id: changeId(`c${i}`), summary: s }));
 
   it("takes held changes and those left approved, and skips the sent", () => {
     expect(retryTargets(items([SENT, STUCK, READY]))).toEqual(["c1", "c2"]);
@@ -119,15 +121,15 @@ describe("laneMessage", () => {
 });
 
 const grade = (scores: readonly number[], comment: string | null): GradeContent =>
-  ({
-    kind: "grade",
-    points: null,
-    outOf: 100,
-    rubric: scores.map((points, i) => ({ criterion: `c${i}`, name: `C${i}`, points, outOf: 30 })),
-    late: null,
+  gradeContent({
+    rubric: scores.map((points, i) => ({
+      criterion: lmsRef<"criterion">(`c${i}`),
+      name: `C${i}`,
+      points,
+      outOf: 30,
+    })),
     comment,
-    attachment: null,
-  }) as unknown as GradeContent;
+  });
 const draft = (student: string, content: ChangeContent) => ({ student, content });
 const students = (groups: readonly (readonly { student: string }[])[]) =>
   groups.map((group) => group.map((d) => d.student));
@@ -222,7 +224,11 @@ describe("identicalDrafts", () => {
   });
 
   it("ignores changes that are not grades", () => {
-    const reply = { kind: "reply", target: "x", body: "Thanks!" } as unknown as ChangeContent;
+    const reply: ChangeContent = {
+      kind: "reply",
+      target: lmsRef<"conversation">("x"),
+      body: "Thanks!",
+    };
     expect(identicalDrafts([draft("A B", reply), draft("C D", reply)])).toEqual([]);
   });
 });

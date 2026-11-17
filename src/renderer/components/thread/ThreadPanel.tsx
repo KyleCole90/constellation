@@ -35,8 +35,8 @@ export function ThreadPanel({ thread, ui }: { thread: Thread; ui: ThreadUi }) {
     if (scroller && ui.panel) scroller.scrollTop = scrollTops.current[ui.panel] ?? 0;
   }, [ui.panel]);
   const remember = (event: UIEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement;
-    if (ui.panel && target.hasAttribute("data-panel-scroll"))
+    const target = event.target;
+    if (ui.panel && target instanceof HTMLElement && target.hasAttribute("data-panel-scroll"))
       scrollTops.current[ui.panel] = target.scrollTop;
   };
 

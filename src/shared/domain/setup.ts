@@ -15,7 +15,8 @@ import type {
   TextFixContent,
 } from "./content";
 import type { ChangeId, IsoTime, LmsRef, SchoolId, ThreadId } from "./ids";
-import type { Finding, FindingKey, FindingType } from "./scan";
+import { retiredKey, type Finding, type FindingKey, type FindingType } from "./scan";
+import { keysOf } from "../keys-of";
 import type { PlanDraft, TermPlan } from "./term";
 
 export type ChangeMap = Readonly<Record<ChangeId, ChangeRecord>>;
@@ -189,9 +190,6 @@ export const canCancelSetup = (setup: CourseSetup, changes: ChangeMap): boolean 
   return !copy || copy.state.tag === "discarded" || canDropFix(copy);
 };
 
-const keysOf = (fixes: CourseSetup["fixes"]): readonly FindingKey[] =>
-  Object.keys(fixes) as FindingKey[];
-
 /**
  * Idempotent. A live or sent change keeps its link, so a rerun creates nothing twice and never overwrites an edited fix.
  * A sent fix whose key is found again wrote one of two twins, and the other now has its key. The sent fix moves to a key
@@ -210,7 +208,7 @@ export const reconcile = (
     const record = id ? changes[id] : undefined;
     if (!record || record.state.tag === "discarded") continue;
     if (record.state.tag === "sent" && found.get(key)?.fix && !setup.resolved[key])
-      fixes[`${key}:${record.id}` as FindingKey] = record.id;
+      fixes[retiredKey(key, record.id)] = record.id;
     else if ((!found.has(key) || setup.resolved[key]) && canDropFix(record))
       discard.push(record.id);
     else fixes[key] = record.id;

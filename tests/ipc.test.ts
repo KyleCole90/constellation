@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
-
-import type { SchoolId } from "../src/shared/domain/ids";
 import { handle, invoker } from "../src/shared/ipc";
 
 import { fakeLmsHandlers } from "./fixtures/bridge";
+import { schoolId } from "./fixtures/ids";
 
 type Listener = (sender: string | null, input: unknown) => Promise<unknown>;
 
@@ -172,7 +171,7 @@ describe("the renderer's invoke", () => {
 
   it("rejects a stand-in that isn't text", async () => {
     const invoke = invoker(async () => 42);
-    await expect(invoke("vault.standIn", { key: "lcc" as SchoolId })).rejects.toThrow();
+    await expect(invoke("vault.standIn", { key: schoolId("lcc") })).rejects.toThrow();
   });
 
   it("rejects a channel that isn't in the map without sending it", async () => {

@@ -1,5 +1,5 @@
 import type { ChangeId, IsoTime, LmsRef, Result, SchoolId } from "./ids";
-import { ApprovalWitness, fingerprintOf, type Approval, type RiskKey } from "./approval";
+import { ApprovalWitness, fingerprintOf, riskKey, type Approval, type RiskKey } from "./approval";
 import {
   isCourseSet,
   type CourseCopyContent,
@@ -8,6 +8,7 @@ import {
   type TextFixContent,
 } from "./content";
 import { applySplice, spliceState } from "./splice";
+import { keysOf } from "../keys-of";
 import type { DateShiftOptions, TermPlan } from "./term";
 
 // ---- What a change proposes. Vendor neutral. Hashing this is what an approval covers. ----
@@ -255,7 +256,7 @@ export interface Basis {
 /** Read from the basis, which the fingerprint covers, so a later read that changes the counts also makes the approval stale. */
 export const riskOf = ({ basis: { remote } }: Pick<ChangeRecord, "basis">): RiskKey | null =>
   remote.kind === "course-copy" && (remote.students > 0 || remote.items > 0)
-    ? (`students:${remote.students}|items:${remote.items}` as RiskKey)
+    ? riskKey(remote.students, remote.items)
     : null;
 
 type ConflictReason =
@@ -827,7 +828,7 @@ export const applyPatch = (content: ChangeContent, patch: ChangePatch): ChangeCo
 };
 
 const landedFieldsOf = (run: SendRun): readonly FieldKey[] =>
-  (Object.keys(run.fields) as FieldKey[]).filter((field) => run.fields[field]?.status === "landed");
+  keysOf(run.fields).filter((field) => run.fields[field]?.status === "landed");
 
 /** Moves what a run landed into the baseline, so a later conflict check compares against the value now in the LMS. */
 const absorbRun = (record: ChangeRecord, run: SendRun, at: IsoTime): ChangeRecord => {
@@ -1208,7 +1209,7 @@ export function transition(
     case "field-outcomes": {
       if (state.tag !== "sending") return fail("not-sending");
       const fields = { ...state.run.fields, ...event.outcomes };
-      const text = (Object.keys(event.outcomes) as FieldKey[])
+      const text = keysOf(event.outcomes)
         .map((field) => {
           const run = event.outcomes[field];
           return run ? outcomeText(field, run) : null;

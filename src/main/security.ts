@@ -1,6 +1,6 @@
 import { isAbsolute, relative, resolve } from "node:path";
 
-import type { BrowserWindowConstructorOptions, WebContents } from "electron";
+import type { BrowserWindowConstructorOptions } from "electron";
 
 export const APP_SCHEME = "app";
 const APP_HOST = "constellation";
@@ -51,7 +51,16 @@ const openIfHttps = (url: string, openExternal: (url: string) => void) => {
 };
 
 /** The window never leaves the app. An `https:` link opens in the system browser; anything else goes nowhere. */
-export const lockNavigation = (contents: WebContents, openExternal: (url: string) => void) => {
+export const lockNavigation = (
+  contents: {
+    on(
+      event: "will-navigate",
+      listener: (event: { preventDefault(): void }, url: string) => void,
+    ): unknown;
+    setWindowOpenHandler(handler: (details: { url: string }) => { action: "deny" }): void;
+  },
+  openExternal: (url: string) => void,
+) => {
   contents.on("will-navigate", (event, url) => {
     event.preventDefault();
     openIfHttps(url, openExternal);

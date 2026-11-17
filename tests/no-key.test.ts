@@ -33,8 +33,9 @@ import { LCC, RSU } from "./fixtures/rig";
 import { jsonObject, rawSave, savedWorkspace } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 import { planFor, termOf } from "./fixtures/term";
+import { changeId, threadId } from "./fixtures/ids";
 
-const QUEUE = "t-queue" as ThreadId;
+const QUEUE = threadId("t-queue");
 const KEY = new Secret("sk-a-real-looking-ai-key");
 
 const spyAgent = () => {
@@ -930,7 +931,7 @@ describe("a workspace saved before this", () => {
 
     const next = await reload(rig);
 
-    const record = saved(next, "ch-old" as ChangeId);
+    const record = saved(next, changeId("ch-old"));
     expect(record.content).toMatchObject({
       override: null,
       excused: false,

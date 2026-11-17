@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createFileStorage } from "~/main/lms";
 import type { Fetch } from "~/main/providers/canvas";
-import type { LmsRef } from "~/shared/domain/ids";
 import { invoker } from "~/shared/ipc";
 import { FAKE_SCHOOLS } from "~/shared/providers/fake-canvas/provider";
 import { parseStoredLms } from "~/shared/providers/fake-canvas/server";
@@ -158,7 +157,8 @@ describe("the lms channels", () => {
   it("main's fake keeps the app's demo clock", async () => {
     const lms = bridgedLms();
     await lms.connect(LCC);
-    const submission = lms.server.findSubmission("Maya Ortiz", "Essay 2") as LmsRef<"submission">;
+    const submission = lms.server.findSubmission("Maya Ortiz", "Essay 2");
+    if (!submission) throw new Error("No submission.");
     lms.lab.changeGradeOutOfBand(submission, 65, "A TA");
     await lms.clock.flush();
     const stored = parseStoredLms(JSON.parse((await lms.server.stored()) ?? "null"));

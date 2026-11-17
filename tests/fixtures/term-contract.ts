@@ -7,7 +7,7 @@ import {
   type TextFixContent,
 } from "~/shared/domain/change";
 import type { CourseShell, SourceCourse } from "~/shared/domain/content";
-import type { IsoTime, SchoolId } from "~/shared/domain/ids";
+import { isoTime, type SchoolId } from "~/shared/domain/ids";
 import { mintSendPermit } from "~/shared/domain/permit";
 import { spliceAt } from "~/shared/domain/splice";
 import type { LmsProvider, TermSetup } from "~/shared/providers/provider";
@@ -295,7 +295,7 @@ export const runTermSetupContract = (
         kind: "item-set",
         target: shell.stateTarget,
         where: shell.code,
-        intent: { set: "due-at", at: "2027-02-04T00:00:00.000Z" as IsoTime },
+        intent: { set: "due-at", at: isoTime("2027-02-04T00:00:00.000Z") },
       };
       // Real Canvas can't observe this pair, so the permit comes from a basis rather than a read.
       const draft = { ...newDraft("ch-mismatch", content, setRemote), school };

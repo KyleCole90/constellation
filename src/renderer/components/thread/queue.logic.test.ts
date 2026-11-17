@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { summarize, type ChangeRecord } from "~/shared/domain/change";
-import { type LmsRef, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import type { RowKey } from "~/renderer/stores/types";
 
 import {
@@ -32,6 +32,7 @@ import {
 } from "./queue.logic";
 import { approved, changeSummary, held, newDraft, sent } from "../../../../tests/fixtures/changes";
 import { conversationRow, course, school, submissionRow } from "../../../../tests/fixtures/rows";
+import { lmsRef } from "../../../../tests/fixtures/ids";
 
 const row = submissionRow;
 /** A row holding this change, summarized as the queue would. */
@@ -123,12 +124,12 @@ describe("assignment choices", () => {
     row("a2"),
     row("m1", {
       detail: "Memo",
-      assignment: "a-memo" as LmsRef<"assignment">,
+      assignment: lmsRef<"assignment">("a-memo"),
       course: course({ code: "ENG 305" }),
     }),
     row("m2", {
       detail: "Memo",
-      assignment: "a-memo" as LmsRef<"assignment">,
+      assignment: lmsRef<"assignment">("a-memo"),
       course: course({ code: "ENG 305" }),
       open: false,
     }),
@@ -177,7 +178,7 @@ describe("liveFilter", () => {
 });
 
 describe("rowLine", () => {
-  const grading = { course: "c" as LmsRef<"course">, assignment: "a" as LmsRef<"assignment"> };
+  const grading = { course: lmsRef<"course">("c"), assignment: lmsRef<"assignment">("a") };
 
   it("adds nothing in a thread that names the course and the assignment", () => {
     expect(rowLine(row("a", { dueAt: isoTime("2026-10-26T12:00:00Z") }), grading)).toBe("");
@@ -186,7 +187,7 @@ describe("rowLine", () => {
   it("keeps the subject in a replies thread, which only names the course", () => {
     expect(
       rowLine(conversationRow("a", { detail: "Screening time" }), {
-        course: "c" as LmsRef<"course">,
+        course: lmsRef<"course">("c"),
       }),
     ).toBe("Screening time");
   });
@@ -291,7 +292,7 @@ describe("neighbor and nextOpen", () => {
 });
 
 describe("a course's To grade in the Grading list (#48)", () => {
-  const music = course({ ref: "c-music" as LmsRef<"course">, code: "MUS 101" });
+  const music = course({ ref: lmsRef<"course">("c-music"), code: "MUS 101" });
   const rows = [row("a", { course: music }), row("b", { course: music }), row("c")];
 
   it("narrows the list to that course, with a chip that names it and All to undo it", () => {

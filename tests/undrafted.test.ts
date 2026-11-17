@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { DRAFT_GRADE_REQUEST, type Agent, type AgentInput } from "~/shared/agent/agent";
-import { type LmsRef, type SchoolId, type ThreadId, isoTime } from "~/shared/domain/ids";
+import { type LmsRef, isoTime } from "~/shared/domain/ids";
 import { invoker, type Bridge } from "~/shared/ipc";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 import {
@@ -17,9 +17,10 @@ import {
 
 import { clickWitness } from "./fixtures/changes";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
+import { schoolId, threadId } from "./fixtures/ids";
 
-const QUEUE = "t-queue" as ThreadId;
-const LCC = "lcc" as SchoolId;
+const QUEUE = threadId("t-queue");
+const LCC = schoolId("lcc");
 const SAID = "I didn't draft a grade because I can't see Maya's work.";
 
 /** Claude reads the work, can't see it, and drafts no grade, the way it answers a dead link. Asked for a message, it drafts one. It keeps what each call heard. */

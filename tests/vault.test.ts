@@ -5,16 +5,17 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createBridgeVault } from "~/renderer/providers/vault";
-import { type SchoolId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import { handle, invoker } from "~/shared/ipc";
 import { Secret, revealSecret, type Credential } from "~/shared/providers/provider";
 
 import { createVault, type Cipher } from "../src/main/vault";
 import { fakeLmsHandlers } from "./fixtures/bridge";
 import { makeStoreRig } from "./fixtures/store-rig";
+import { schoolId } from "./fixtures/ids";
 
-const LCC = "lcc" as SchoolId;
-const RSU = "rsu" as SchoolId;
+const LCC = schoolId("lcc");
+const RSU = schoolId("rsu");
 const TOKEN = "SENTINEL-vault-token-4d1e9b7c";
 const APP = "app://constellation/";
 

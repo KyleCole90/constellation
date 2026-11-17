@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type LmsRef, type SchoolId, type ThreadId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import { withoutChatThreads } from "~/renderer/stores/selectors";
 import type { Thread } from "~/renderer/stores/types";
 
@@ -15,9 +15,10 @@ import {
   stepThread,
   visibleThreads,
 } from "./sidebar.logic";
+import { lmsRef, schoolId, threadId } from "../../../tests/fixtures/ids";
 
 const thread = (id: string): Thread & { kind: "general" } => ({
-  id: id as ThreadId,
+  id: threadId(id),
   school: null,
   course: null,
   kind: "general",
@@ -38,8 +39,8 @@ describe("visibleThreads", () => {
   });
 
   it("keeps a thread past the cutoff in its place, with one count of every hidden thread below it", () => {
-    expect(labels(visibleThreads(FIVE, "e" as ThreadId, false))).toEqual(["a", "b", "e", "+2"]);
-    expect(labels(visibleThreads(FIVE, "d" as ThreadId, false))).toEqual(["a", "b", "d", "+2"]);
+    expect(labels(visibleThreads(FIVE, threadId("e"), false))).toEqual(["a", "b", "e", "+2"]);
+    expect(labels(visibleThreads(FIVE, threadId("d"), false))).toEqual(["a", "b", "d", "+2"]);
   });
 
   it("shows everything once the course is expanded", () => {
@@ -99,7 +100,7 @@ describe("keptChat", () => {
     };
     const state = { threads: { ...threads, [twice.id]: twice } };
     expect(keptChat(state, twice.id, chat.id)).toBe(chat.id);
-    expect(keptChat(state, twice.id, "never-handed-off" as ThreadId)).toBe(later.id);
+    expect(keptChat(state, twice.id, threadId("never-handed-off"))).toBe(later.id);
   });
 
   it("keeps the active thread otherwise", () => {
@@ -152,7 +153,7 @@ describe("courseChoiceAfterToggle", () => {
 });
 
 describe("onCoursePages", () => {
-  const course = "lcc:course:5" as LmsRef<"course">;
+  const course = lmsRef<"course">("lcc:course:5");
 
   it("matches the course and its tabs but not a course whose ref starts the same", () => {
     expect(onCoursePages(course, `/courses/${encodeURIComponent(course)}`)).toBe(true);
@@ -162,11 +163,11 @@ describe("onCoursePages", () => {
 });
 
 describe("stepThread", () => {
-  const order = ["a", "b", "c"] as unknown as readonly ThreadId[];
+  const order = ["a", "b", "c"].map(threadId);
 
   it("wraps at both ends", () => {
-    expect(stepThread(order, "c" as ThreadId, 1)).toBe("a");
-    expect(stepThread(order, "a" as ThreadId, -1)).toBe("c");
+    expect(stepThread(order, threadId("c"), 1)).toBe("a");
+    expect(stepThread(order, threadId("a"), -1)).toBe("c");
   });
 
   it("starts at the top from a screen that is not a thread", () => {
@@ -179,9 +180,9 @@ describe("withoutChatThreads", () => {
   const grading: Thread = {
     ...thread("grading"),
     kind: "grading",
-    school: "lcc" as SchoolId,
-    course: "course" as LmsRef<"course">,
-    assignment: "assignment" as LmsRef<"assignment">,
+    school: schoolId("lcc"),
+    course: lmsRef<"course">("course"),
+    assignment: lmsRef<"assignment">("assignment"),
   };
 
   it("drops chat threads with AI off and keeps the work threads", () => {

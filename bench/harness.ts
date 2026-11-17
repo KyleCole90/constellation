@@ -5,13 +5,14 @@ import {
   type AgentScope,
 } from "~/shared/agent/agent";
 import { newChangeRecord, type ChangeRecord } from "~/shared/domain/change";
-import { type ChangeId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import { invoker, serve, type Handlers } from "~/shared/ipc";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 
 import type { Fixture } from "./class";
 import type { Call, Draft, Run } from "./metrics";
 import type { BenchSource, Env } from "./sources";
+import { changeId } from "../tests/fixtures/ids";
 
 const AT = isoTime("2026-11-03T16:00:00Z");
 
@@ -61,7 +62,7 @@ const draftOne = async (run: Handlers["agent.run"], fixture: Fixture) => {
         graded = true;
         changes.push(
           newChangeRecord({
-            id: `bench-${fixture.id}` as ChangeId,
+            id: changeId(`bench-${fixture.id}`),
             school: effect.school,
             course: effect.course,
             subject: effect.subject,

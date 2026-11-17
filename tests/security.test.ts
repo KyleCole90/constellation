@@ -2,7 +2,6 @@ import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-import type { WebContents } from "electron";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -76,7 +75,7 @@ describe("navigation lock", () => {
     lockNavigation(
       Object.assign(contents, {
         setWindowOpenHandler: (handler: typeof openWindow) => (openWindow = handler),
-      }) as unknown as WebContents,
+      }),
       (url) => opened.push(url),
     );
     const navigate = (url: string) => {

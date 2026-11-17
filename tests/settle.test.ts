@@ -6,12 +6,13 @@ import {
   settledNewestFirst,
   sidebarJumpOrder,
 } from "~/renderer/components/sidebar.logic";
-import type { LmsRef, SchoolId } from "~/shared/domain/ids";
+import type { LmsRef } from "~/shared/domain/ids";
 import { GRADING_LIST_THREAD, NORTH_STAR_THREAD, isSettled } from "~/renderer/stores/selectors";
 
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
+import { schoolId } from "./fixtures/ids";
 
-const LCC = "lcc" as SchoolId;
+const LCC = schoolId("lcc");
 
 const withCourseThread = async () => {
   const rig = await makeStoreRig();

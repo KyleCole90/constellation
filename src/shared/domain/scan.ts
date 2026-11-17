@@ -8,8 +8,9 @@ import type {
   ItemSetIntent,
   TextFixContent,
 } from "./content";
-import type { Brand, LmsRef } from "./ids";
+import type { Brand, ChangeId, LmsRef } from "./ids";
 import { paragraphBounds, spliceAt } from "./splice";
+import { keysOf } from "../keys-of";
 import {
   breakHolding,
   dateOfTime,
@@ -41,6 +42,10 @@ export type FindingType =
   | "empty-module"
   | "migration-issue";
 export type FindingKey = Brand<string, "FindingKey">;
+/** A key no finding can have, where a sent fix keeps the record of what it wrote once its twin takes the original key. */
+export const retiredKey = (key: FindingKey, change: ChangeId): FindingKey =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: no hash contains `:`, so no finding has this key
+  `${key}:${change}` as FindingKey;
 
 export interface Finding {
   /** Hash of type, item, and the passage's words and place among its twins. Stable across scans. */
@@ -69,6 +74,7 @@ export type ScanRule = (content: CourseContent, ctx: ScanContext) => readonly Fi
 const EMAIL = /[\w.+-]+@([\w-]+(?:\.[\w-]+)+)/g;
 
 const keyOf = (type: FindingType, item: string | null, ...parts: readonly string[]): FindingKey =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: a finding's key is this hash
   hash53(JSON.stringify([type, item, ...parts])) as FindingKey;
 
 const hasText = (item: ContentItem): boolean => item.type !== "file";
@@ -495,7 +501,7 @@ export const RULES: Readonly<Record<FindingType, ScanRule>> = {
   "migration-issue": migrationIssue,
 };
 
-export const FINDING_TYPES = Object.keys(RULES) as readonly FindingType[];
+export const FINDING_TYPES: readonly FindingType[] = keysOf(RULES);
 export const isFindingType = (value: unknown): value is FindingType =>
   typeof value === "string" && Object.hasOwn(RULES, value);
 

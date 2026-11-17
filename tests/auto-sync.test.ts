@@ -5,9 +5,10 @@ import type { SchoolId } from "~/shared/domain/ids";
 import { FRESHEN_EVERY_MS, nextSyncDelay, SYNC_EVERY_MS } from "~/renderer/stores/autoSync";
 
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
+import { schoolId } from "./fixtures/ids";
 
-const LCC = "lcc" as SchoolId;
-const RSU = "rsu" as SchoolId;
+const LCC = schoolId("lcc");
+const RSU = schoolId("rsu");
 const MINUTE = 60_000;
 
 /** A timer the test fires by hand, so the app's interval never races the assertions. */

@@ -13,13 +13,14 @@ import {
 } from "~/shared/agent/agent";
 import { createRuleAgent } from "~/shared/agent/rules";
 import type { GradeContent } from "~/shared/domain/change";
-import type { ChangeId, ThreadId } from "~/shared/domain/ids";
+import type { ChangeId } from "~/shared/domain/ids";
 
 import { AT, clickWitness } from "./fixtures/changes";
 import { LCC } from "./fixtures/rig";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
+import { threadId } from "./fixtures/ids";
 
-const QUEUE = "t-queue" as ThreadId;
+const QUEUE = threadId("t-queue");
 
 const emptyScope: AgentScope = {
   focus: null,
@@ -448,7 +449,7 @@ describe("drafting", () => {
   it("after a discard, asking a messages thread to draft drafts the conversation on screen", async () => {
     const rig = await makeStoreRig();
     await rig.connectAll();
-    const mail = "t-e101-mail" as ThreadId;
+    const mail = threadId("t-e101-mail");
     const course = rig.state().threads[mail]?.course;
     const conversation = rig.state().cache[LCC]?.conversations.find((c) => c.course === course);
     if (!conversation) throw new Error("no conversation");
