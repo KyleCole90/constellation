@@ -23,18 +23,11 @@ const GIT_VALUE_OPTIONS = [
   "--attr-source",
 ];
 
-// A heredoc body or a comment, where an apostrophe (`it's`) opens a quote that swallows the commands after it. The
-// hook also reads the command with the quotes in these removed. Text alone can't tell a real heredoc or comment from
-// one inside a string, or a body `bash` runs from one `cat` prints, so a rule that matches either reading denies.
-const HEREDOC = /(<<-?\s*(['"]?)(\w+)\2[^\n]*\n)([\s\S]*?\n\t*\3)(?=\n|$)/g;
-const COMMENT = /(?<=^|[\s;|&])#[^\n]*/g;
-const unquoted = (text) => text.replaceAll(/["'\\]/g, "");
-
 /**
  * Splits a shell command into words per simple command, removing quotes and backslashes the way the shell does, so
  * `--no-ver""ify` is one word. A word written wholly inside quotes is `quoted`: it never names a command to run.
  */
-const simpleCommands = (command) => {
+const shellWords = (command) => {
   const commands = [[]];
   for (const [, op, word] of command
     .replaceAll("\\\n", "")
@@ -58,6 +51,22 @@ const simpleCommands = (command) => {
         .join(""),
       quoted: parts.every(([, double, ansi, single]) => (double ?? ansi ?? single) !== undefined),
     });
+  }
+  return commands;
+};
+
+/**
+ * The split this hook shipped with: a quote starts a word only at its start, so `it's` in a heredoc or a comment
+ * can't open a quote. Shell syntax is too rich to read one way, so the hook reads the command both ways and denies
+ * when a rule matches either, which also keeps every command this split denied denied.
+ */
+const plainWords = (command) => {
+  const commands = [[]];
+  for (const [, op, double, single, bare] of command.matchAll(
+    /(&&|\|\||[;|&\n])|"((?:\\.|[^"])*)"|'([^']*)'|(\S+?)(?=$|\s|&&|\|\||[;|&])/g,
+  )) {
+    if (op) commands.push([]);
+    else commands.at(-1).push({ text: double ?? single ?? bare, quoted: bare === undefined });
   }
   return commands;
 };
@@ -115,13 +124,26 @@ const configWritesHooksPath = (args) => {
 // set core.hooksPath unseen. They take effect before the command name, or as arguments to `export` and its kin.
 const setsGitConfigEnv = (words) => {
   const first = words.findIndex((w) => w.quoted || !BEFORE_COMMAND.test(w.text));
-  const assignments =
-    first === -1 ||
-    runs(words, ["export", "env", "sudo", "declare", "typeset", "readonly", "local"])
-      ? words
-      : words.slice(0, first);
+  const assignments = first === -1 || runs(words, ASSIGNERS) ? words : words.slice(0, first);
   return assignments.some((w) => /^GIT_CONFIG_(COUNT|PARAMETERS|GLOBAL|SYSTEM)\+?=/.test(w.text));
 };
+
+// Commands whose arguments can set a variable for what they run.
+const ASSIGNERS = [
+  "export",
+  "env",
+  "sudo",
+  "doas",
+  "declare",
+  "typeset",
+  "readonly",
+  "local",
+  "eval",
+  "xargs",
+  "sh",
+  "bash",
+  "zsh",
+];
 
 // Words that come before the command name: VAR=value, or a shell keyword such as `then` or `do`.
 const BEFORE_COMMAND = /^(\w+\+?=.*|then|do|else|elif|if|while|until|!|[{(])$/;
@@ -181,10 +203,7 @@ const RULES = [
 
 const { tool_input } = JSON.parse(readFileSync(0, "utf8"));
 const command = tool_input?.command ?? "";
-const loose = command
-  .replace(HEREDOC, (_, head, _quote, _tag, body) => head + unquoted(body))
-  .replace(COMMENT, unquoted);
-const commands = [command, loose].flatMap(simpleCommands);
+const commands = [...shellWords(command), ...plainWords(command)];
 const denied = RULES.find((rule) => commands.some((words) => rule.test(words, command)));
 if (denied) {
   console.log(
