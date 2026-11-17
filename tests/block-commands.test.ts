@@ -33,6 +33,16 @@ describe("git hook skips", () => {
     "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x",
     "env GIT_CONFIG_GLOBAL=/tmp/gitconfig git commit -m x",
     `export GIT_CONFIG_PARAMETERS="'core.hooksPath'='/dev/null'"; git commit -m x`,
+    'export "GIT_CONFIG_COUNT=1" "GIT_CONFIG_KEY_0=core.hooksPath"; git commit -m x',
+    "git --attr-source HEAD commit --no-verify -m x",
+    'git -c "user.name"=x commit --no-verify -m x',
+    'git -c core."hooksPath"=/dev/null commit -m x',
+    "git -c core.hooks\\Path=/dev/null commit -m x",
+    'git commit --no-ver""ify -m x',
+    'git commit "--no-verify" -m x',
+    "git commit -m x \\\n  --no-verify",
+    "git config core.hooksPath /dev/null",
+    "git config --unset core.hooksPath",
   ])("denies %s", (command) => {
     const { decision, reason } = runHook(command);
     expect(decision).toBe("deny");
@@ -46,6 +56,9 @@ describe("git hook skips", () => {
     "git -c user.name=x commit -m y",
     "git -c core.editor=true rebase --continue",
     "grep -rn GIT_CONFIG_COUNT scripts",
+    "GIT_CONFIG_NOSYSTEM=1 git commit -m x",
+    "git config --get core.hooksPath",
+    'git commit -m fix -m "--no-verify is banned here"',
   ])("allows %s", (command) => {
     expect(runHook(command).decision).toBe("allow");
   });
