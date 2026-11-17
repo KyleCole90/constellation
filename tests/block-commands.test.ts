@@ -17,17 +17,37 @@ const runHook = (command: string) => {
 };
 
 describe("git hook skips", () => {
-  it.each(["git commit --no-verify", "git commit -nm x", "git push --no-verify"])(
-    "denies %s",
-    (command) => {
-      const { decision, reason } = runHook(command);
-      expect(decision).toBe("deny");
-      expect(reason).toMatch(/pre-commit hook/);
-    },
-  );
+  it.each([
+    "git commit --no-verify",
+    "git commit -nm x",
+    "git push --no-verify",
+    "git commit --no-verif",
+    "git commit --no-veri",
+    "git push --no-verif",
+    "git --git-dir .git commit --no-verify",
+    "git -c core.hooksPath=/dev/null commit",
+    "git -c core.hookspath=/dev/null push",
+    'git -c "core.hooksPath=/dev/null" commit -m x',
+    "git --config-env=core.hooksPath=HOOKS commit -m x",
+    "git --config-env core.hooksPath=HOOKS commit -m x",
+    "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x",
+    "env GIT_CONFIG_GLOBAL=/tmp/gitconfig git commit -m x",
+    `export GIT_CONFIG_PARAMETERS="'core.hooksPath'='/dev/null'"; git commit -m x`,
+  ])("denies %s", (command) => {
+    const { decision, reason } = runHook(command);
+    expect(decision).toBe("deny");
+    expect(reason).toMatch(/pre-commit hook/);
+  });
 
-  it("allows --no-verify inside a commit message", () => {
-    expect(runHook('git commit -m "--no-verify"').decision).toBe("allow");
+  it.each([
+    'git commit -m "--no-verify"',
+    'git commit -m "--no-verif"',
+    "git commit --no-verbose -m x",
+    "git -c user.name=x commit -m y",
+    "git -c core.editor=true rebase --continue",
+    "grep -rn GIT_CONFIG_COUNT scripts",
+  ])("allows %s", (command) => {
+    expect(runHook(command).decision).toBe("allow");
   });
 });
 
