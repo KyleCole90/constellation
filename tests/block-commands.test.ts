@@ -49,6 +49,9 @@ describe("git hook skips", () => {
     "cat <<EOF > notes.txt\nit's fine\nEOF\ngit push --no-verify\necho 'done'",
     "# don't touch\ngit commit -n -m x; echo 'x'",
     "bash <<EOF\ngit commit -n -m x\nEOF",
+    "git commit -m $'it\\'s' -n; echo 'x'",
+    "sudo GIT_CONFIG_GLOBAL=/tmp/gitconfig git commit -m x",
+    "echo `true #`; git commit -n -m x",
     'bash <<EOF\ngit commit -m "wip #2" -n\nEOF',
     'echo "use <<EOF for heredocs"\ngit commit -m "fix #12" -n\ncat <<EOF > x\nhi\nEOF',
   ])("denies %s", (command) => {
@@ -65,6 +68,8 @@ describe("git hook skips", () => {
     "git -c core.editor=true rebase --continue",
     "grep -rn GIT_CONFIG_COUNT scripts",
     "GIT_CONFIG_NOSYSTEM=1 git commit -m x",
+    "rg -n 'GIT_CONFIG_COUNT=' scripts tests",
+    "env | grep GIT_CONFIG_GLOBAL=",
     "git config --get core.hooksPath",
     'git commit -m fix -m "--no-verify is banned here"',
     'git commit -m "fix #12" -m "it\'s done"',
@@ -103,6 +108,11 @@ describe("killing a process this thread did not start", () => {
     "cat <<'EOF' > notes.txt\nDon't panic\nEOF\nkill 123\necho 'done'",
     "# don't touch\npkill -f vite; echo 'x'",
     "sh <<'EOF'\necho \"#\"; kill 123\nEOF",
+    "echo # \\\nkill 123",
+    "echo `echo a #`; kill 123",
+    "echo ${x:-a #}; kill 123",
+    "echo a #; kill 123",
+    "echo $'it\\'s'; kill 123; echo 'x'",
   ])("denies %s", (command) => {
     const { decision, reason } = runHook(command);
     expect(decision).toBe("deny");

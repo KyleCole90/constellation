@@ -23,33 +23,40 @@ const GIT_VALUE_OPTIONS = [
   "--attr-source",
 ];
 
-// A heredoc and its body. An apostrophe in a body (`it's`) opens a quote that would swallow the commands after it,
-// so the hook also reads the command with body quotes removed. Text alone can't tell a real heredoc from `<<` in a
-// string, or a body `bash` runs from one `cat` prints, so a rule that matches either reading denies.
+// A heredoc body or a comment, where an apostrophe (`it's`) opens a quote that swallows the commands after it. The
+// hook also reads the command with the quotes in these removed. Text alone can't tell a real heredoc or comment from
+// one inside a string, or a body `bash` runs from one `cat` prints, so a rule that matches either reading denies.
 const HEREDOC = /(<<-?\s*(['"]?)(\w+)\2[^\n]*\n)([\s\S]*?\n\t*\3)(?=\n|$)/g;
+const COMMENT = /(?<=^|[\s;|&])#[^\n]*/g;
+const unquoted = (text) => text.replaceAll(/["'\\]/g, "");
 
 /**
  * Splits a shell command into words per simple command, removing quotes and backslashes the way the shell does, so
- * `--no-ver""ify` is one word. Comments are dropped. A word written wholly inside quotes is
- * `quoted`: it never names a command to run.
+ * `--no-ver""ify` is one word. A word written wholly inside quotes is `quoted`: it never names a command to run.
  */
 const simpleCommands = (command) => {
   const commands = [[]];
   for (const [, op, word] of command
     .replaceAll("\\\n", "")
     .matchAll(
-      /(&&|\|\||[;|&\n])|(?<=^|[\s;|&])#[^\n]*|((?:\$?"(?:\\.|[^"])*"|\$?'[^']*'|\\.|[^\s"'\\;|&])+)/g,
+      /(&&|\|\||[;|&\n])|((?:\$?"(?:\\.|[^"])*"|\$'(?:\\.|[^'])*'|'[^']*'|\\.|[^\s"'\\;|&])+)/g,
     )) {
-    if (op) commands.push([]);
-    if (!word) continue;
+    if (op) {
+      commands.push([]);
+      continue;
+    }
     const parts = [
-      ...word.matchAll(/\$?"((?:\\.|[^"])*)"|\$?'([^']*)'|\\(.)|((?:[^"'\\$]|\$(?!["']))+)/g),
+      ...word.matchAll(
+        /\$?"((?:\\.|[^"])*)"|\$'((?:\\.|[^'])*)'|'([^']*)'|\\(.)|((?:[^"'\\$]|\$(?!["']))+)/g,
+      ),
     ];
     commands.at(-1).push({
       text: parts
-        .map(([, double, single, escaped, bare]) => double ?? single ?? escaped ?? bare)
+        .map(
+          ([, double, ansi, single, escaped, bare]) => double ?? ansi ?? single ?? escaped ?? bare,
+        )
         .join(""),
-      quoted: parts.every(([, double, single]) => double !== undefined || single !== undefined),
+      quoted: parts.every(([, double, ansi, single]) => (double ?? ansi ?? single) !== undefined),
     });
   }
   return commands;
@@ -105,9 +112,16 @@ const configWritesHooksPath = (args) => {
 };
 
 // GIT_CONFIG_COUNT (with its KEY_n and VALUE_n), GIT_CONFIG_PARAMETERS, GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM can each
-// set core.hooksPath unseen.
-const setsGitConfigEnv = (words) =>
-  words.some((w) => /^GIT_CONFIG_(COUNT|PARAMETERS|GLOBAL|SYSTEM)\+?=/.test(w.text));
+// set core.hooksPath unseen. They take effect before the command name, or as arguments to `export` and its kin.
+const setsGitConfigEnv = (words) => {
+  const first = words.findIndex((w) => w.quoted || !BEFORE_COMMAND.test(w.text));
+  const assignments =
+    first === -1 ||
+    runs(words, ["export", "env", "sudo", "declare", "typeset", "readonly", "local"])
+      ? words
+      : words.slice(0, first);
+  return assignments.some((w) => /^GIT_CONFIG_(COUNT|PARAMETERS|GLOBAL|SYSTEM)\+?=/.test(w.text));
+};
 
 // Words that come before the command name: VAR=value, or a shell keyword such as `then` or `do`.
 const BEFORE_COMMAND = /^(\w+\+?=.*|then|do|else|elif|if|while|until|!|[{(])$/;
@@ -167,11 +181,10 @@ const RULES = [
 
 const { tool_input } = JSON.parse(readFileSync(0, "utf8"));
 const command = tool_input?.command ?? "";
-const unquotedBodies = command.replace(
-  HEREDOC,
-  (_, head, _quote, _tag, body) => head + body.replaceAll(/["'\\]/g, ""),
-);
-const commands = [command, unquotedBodies].flatMap(simpleCommands);
+const loose = command
+  .replace(HEREDOC, (_, head, _quote, _tag, body) => head + unquoted(body))
+  .replace(COMMENT, unquoted);
+const commands = [command, loose].flatMap(simpleCommands);
 const denied = RULES.find((rule) => commands.some((words) => rule.test(words, command)));
 if (denied) {
   console.log(
