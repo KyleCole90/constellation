@@ -48,7 +48,12 @@ import {
 import { longDate } from "~/shared/domain/preview";
 import { applySplice } from "~/shared/domain/splice";
 import { dateOfTime, meetingDaysOf, type Weekday } from "~/shared/domain/term";
-import { revealSecret, type Credential, type FieldOutcomes } from "~/shared/providers/provider";
+import {
+  revealSecret,
+  type Credential,
+  type FieldOutcome,
+  type FieldOutcomes,
+} from "~/shared/providers/provider";
 import {
   AnnouncementSchema,
   AssignmentSchema,
@@ -60,6 +65,7 @@ import {
   SchoolIdSchema,
   StudentSchema,
   SubmissionSchema,
+  SubstitutionsSchema,
   WeekdaySchema,
 } from "~/shared/providers/schemas";
 
@@ -520,11 +526,11 @@ const MigrationRecordSchema: v.GenericSchema<MigrationRecord> = v.object({
   }),
   date_shift_options: v.object({
     shift_dates: v.literal(true),
-    old_start_date: text,
-    old_end_date: text,
-    new_start_date: text,
-    new_end_date: text,
-    day_substitutions: v.record(text, count),
+    old_start_date: IsoDateSchema,
+    old_end_date: IsoDateSchema,
+    new_start_date: IsoDateSchema,
+    new_end_date: IsoDateSchema,
+    day_substitutions: SubstitutionsSchema,
   }),
   signature: text,
   progress: v.object({
@@ -850,16 +856,11 @@ export class FakeCanvasServer implements FaultLab {
       targetCourseId: record.course_id,
       targetHost: HOSTS[record.school] ?? "",
       shift: {
-        oldStart: record.date_shift_options.old_start_date as IsoDate,
-        oldEnd: record.date_shift_options.old_end_date as IsoDate,
-        newStart: record.date_shift_options.new_start_date as IsoDate,
-        newEnd: record.date_shift_options.new_end_date as IsoDate,
-        substitutions: Object.fromEntries(
-          Object.entries(record.date_shift_options.day_substitutions).map(([day, to]) => [
-            day,
-            to as Weekday,
-          ]),
-        ),
+        oldStart: record.date_shift_options.old_start_date,
+        oldEnd: record.date_shift_options.old_end_date,
+        newStart: record.date_shift_options.new_start_date,
+        newEnd: record.date_shift_options.new_end_date,
+        substitutions: record.date_shift_options.day_substitutions,
       },
       nextId: () => 7_000_000 + ++term.seq,
     });
@@ -1213,7 +1214,7 @@ export class FakeCanvasServer implements FaultLab {
   /** Stops at the first failing field: a failed field did not land, and neither did anything queued behind it. */
   applyFields(content: ChangeContent, fields: readonly FieldKey[]): FieldOutcomes {
     const at = isoTime(this.#options.now());
-    const outcomes: Partial<Record<FieldKey, FieldOutcomes[FieldKey]>> = {};
+    const outcomes: Partial<Record<FieldKey, FieldOutcome>> = {};
     let failure: LmsError | null = null;
     for (const field of fields) {
       failure ??= this.#fieldFault(content, field);
@@ -1227,7 +1228,7 @@ export class FakeCanvasServer implements FaultLab {
     const landed = fields.filter((field) => outcomes[field]?.status === "landed");
     const where = this.#whereIs(content);
     if (where && landed.length > 0) this.#state.writeLog.push({ at, ...where, fields: landed });
-    return outcomes as FieldOutcomes;
+    return outcomes;
   }
 
   #whereIs(content: ChangeContent): Pick<WriteRecord, "school" | "target"> | null {

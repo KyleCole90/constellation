@@ -606,7 +606,7 @@ const courseOverview = memoByState(
       .filter((item) => item.course.ref === course);
     const messages = selectInboxRows(state).filter((row) => row.course.ref === course);
     const unanswered = messages.filter(awaitsYou);
-    const replying = new Set(unanswered.map((row) => row.conversation.ref as string));
+    const replying = new Set<string>(unanswered.map((row) => row.conversation.ref));
     const open = Object.values(state.changes).filter(
       (change) =>
         change.course === course && isOpenChange(change) && !replying.has(change.content.target),
@@ -801,13 +801,12 @@ export const selectThreadStatus = memoByState(
         ? { label: `${waiting} waiting`, tone: "unread" }
         : { label: "Done", tone: "done" };
     }
-    if (thread.kind === "setup")
-      return thread.course &&
-        state.setups[thread.course] &&
-        stageOf(state.setups[thread.course] as CourseSetup, state.changes, undefined).tag !==
-          "published"
+    if (thread.kind === "setup") {
+      const setup = thread.course && state.setups[thread.course];
+      return setup && stageOf(setup, state.changes, undefined).tag !== "published"
         ? { label: "In setup", tone: "todo" }
         : { label: "Done", tone: "done" };
+    }
     return changes.some((c) => c.state.tag === "sent")
       ? { label: "Posted", tone: "done" }
       : NOT_STARTED;

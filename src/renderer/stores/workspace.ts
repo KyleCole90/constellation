@@ -129,6 +129,7 @@ import {
 } from "~/renderer/writeback/writeback";
 
 import { builtInThreads } from "./builtInThreads";
+import { createInFlight } from "./in-flight";
 import { ChangeRecordSchema, WorkspaceDataSchema } from "./persisted";
 import { seedThreads } from "./seedThreads";
 import {
@@ -537,6 +538,9 @@ export const REJECTION_TEXT: Readonly<Record<Rejection, string>> = {
   "not-conflicted": "This change has no conflict to resolve.",
 };
 
+export const isRejection = (error: string): error is Rejection =>
+  Object.hasOwn(REJECTION_TEXT, error);
+
 const editsBetween = (before: ChangeContent, after: ChangeContent): readonly FieldEdit[] => {
   if (before.kind === "grade" && after.kind === "grade") {
     const scores = (after.rubric ?? []).flatMap((score): readonly FieldEdit[] => {
@@ -831,7 +835,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
   const clock = { now: (): number => deps.realNow() };
   const backend = deps.backend(() => clock.now());
   const providers = new Map<SchoolId, LmsProvider>();
-  const inFlight = new Map<string, Promise<unknown>>();
+  const inFlight = createInFlight();
+  const syncing = inFlight.lane<boolean>();
+  const opening = inFlight.lane<ChangeId | null>();
   let lastRaw: string | null = null;
   let writingChanges = false;
   /** What each thread was last asked to open, so a slow draft doesn't pull focus from a later click. */
@@ -1007,15 +1013,15 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
         });
 
         const syncSchool = (school: SchoolId): Promise<boolean> => {
-          const running = inFlight.get(`sync:${school}`) as Promise<boolean> | undefined;
+          const running = syncing.get(school);
           if (running) return running;
           set({ syncing: { ...get().syncing, [school]: true } });
           const run = runSync(school).finally(() => {
-            inFlight.delete(`sync:${school}`);
+            syncing.delete(school);
             const { [school]: _done, ...courseReads } = get().courseReads;
             set({ syncing: { ...get().syncing, [school]: false }, courseReads });
           });
-          inFlight.set(`sync:${school}`, run);
+          syncing.set(school, run);
           return run;
         };
         /**
@@ -1026,7 +1032,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           school: SchoolId,
           sent: readonly ChangeId[] = [],
         ): Promise<boolean> => {
-          await Promise.allSettled([inFlight.get(`sync:${school}`)]);
+          await Promise.allSettled([syncing.get(school)]);
           const lms = provider(school);
           const postedTo = new Set(
             sent.flatMap((id) => {
@@ -1763,7 +1769,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             if (focus) get().focusChange(thread, existing.id);
             return existing.id;
           }
-          const running = inFlight.get(`open:${slot}`) as Promise<ChangeId | null> | undefined;
+          const running = opening.get(slot);
           if (running) return running;
           if (get().aiOn() && fill === undefined) return null;
           if (!focus) background.add(slot);
@@ -1788,10 +1794,10 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           )
             .then(() => existingChange(content, submittedAt)?.id ?? blankOn(content)?.id ?? null)
             .finally(() => {
-              inFlight.delete(`open:${slot}`);
+              opening.delete(slot);
               background.delete(slot);
             });
-          inFlight.set(`open:${slot}`, run);
+          opening.set(slot, run);
           return run;
         };
 
@@ -2258,7 +2264,8 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             const conversation = allCaches()
               .flatMap((cache) => cache.conversations)
               .find((c) => c.ref === ref);
-            if (!conversation) return;
+            const cache = conversation && get().cache[conversation.school];
+            if (!conversation || !cache) return;
             const { [ref]: _dropped, ...rest } = get().prefs.readThrough ?? {};
             const last = conversation.messages.at(-1)?.id;
             set({
@@ -2269,10 +2276,10 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
               cache: {
                 ...get().cache,
                 [conversation.school]: {
-                  ...(get().cache[conversation.school] as SchoolCache),
-                  conversations: (
-                    get().cache[conversation.school] as SchoolCache
-                  ).conversations.map((c) => (c.ref === ref ? { ...c, unread: !read } : c)),
+                  ...cache,
+                  conversations: cache.conversations.map((c) =>
+                    c.ref === ref ? { ...c, unread: !read } : c,
+                  ),
                 },
               },
             });

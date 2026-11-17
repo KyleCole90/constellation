@@ -1,5 +1,5 @@
 import type { ChangeRecord, ChangeSummary } from "~/shared/domain/change";
-import type { ChangeId, IsoTime, LmsRef, SchoolId } from "~/shared/domain/ids";
+import type { ChangeId, IsoTime, LmsRef } from "~/shared/domain/ids";
 import {
   bySchoolName,
   resubmitted,
@@ -131,8 +131,7 @@ const SIMPLE_FILTERS: readonly {
 
 const holdsFilter = (row: WorkRow, filter: QueueFilter): boolean => {
   if (filter === "all") return true;
-  if (filter.startsWith("school:"))
-    return row.school.id === (filter.slice("school:".length) as SchoolId);
+  if (filter.startsWith("school:")) return row.school.id === filter.slice("school:".length);
   if (filter.startsWith("course:")) return row.course.ref === filter.slice("course:".length);
   if (filter.startsWith("assignment:"))
     return row.assignment === filter.slice("assignment:".length);

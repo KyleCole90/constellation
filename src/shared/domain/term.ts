@@ -70,19 +70,25 @@ export interface ShiftRow extends BreakMove {
 
 const DAY_MS = 86_400_000;
 const WEEKDAYS: readonly Weekday[] = [0, 1, 2, 3, 4, 5, 6];
-const dayNumber = (date: IsoDate): number => Date.parse(`${date}T00:00:00Z`) / DAY_MS;
+const dayNumber = (date: string): number => Date.parse(`${date}T00:00:00Z`) / DAY_MS;
 const dateAt = (day: number): IsoDate =>
   new Date(day * DAY_MS).toISOString().slice(0, 10) as IsoDate;
 const floorMod7 = (value: number): number => ((value % 7) + 7) % 7;
 const EPOCH_WEEKDAY = 4;
-const weekdayAt = (day: number): number => floorMod7(day + EPOCH_WEEKDAY);
+export const isWeekday = (value: number): value is Weekday =>
+  Number.isInteger(value) && value >= 0 && value <= 6;
+const weekdayAt = (day: number): Weekday => {
+  const weekday = floorMod7(day + EPOCH_WEEKDAY);
+  if (!isWeekday(weekday)) throw new RangeError(`No weekday for day ${day}`);
+  return weekday;
+};
 const roundHalfAway = (value: number): number => Math.sign(value) * Math.round(Math.abs(value));
 const byNumber = (a: number, b: number): number => a - b;
 
 /** The day that ends a span as long as `from` to `to`, starting at `start`. */
 export const sameSpanEnd = (start: IsoDate, from: IsoDate, to: IsoDate): IsoDate =>
   dateAt(dayNumber(start) + dayNumber(to) - dayNumber(from));
-export const weekdayOf = (date: IsoDate): Weekday => weekdayAt(dayNumber(date)) as Weekday;
+export const weekdayOf = (date: IsoDate): Weekday => weekdayAt(dayNumber(date));
 /** The weekdays the old due dates fall on, which is where a class's work is usually due. The person confirms or changes them. */
 export const meetingDaysOf = (dates: readonly IsoDate[]): readonly Weekday[] =>
   [...new Set(dates.map(weekdayOf))].sort(byNumber);
@@ -92,8 +98,10 @@ export const timeOnDate = (at: IsoTime, date: IsoDate): IsoTime =>
   `${date}${at.slice(10)}` as IsoTime;
 export const isoDate = (text: string): IsoDate | null => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
-  const day = dayNumber(text as IsoDate);
-  return Number.isNaN(day) || dateAt(day) !== text ? null : (text as IsoDate);
+  const day = dayNumber(text);
+  if (Number.isNaN(day)) return null;
+  const date = dateAt(day);
+  return date === text ? date : null;
 };
 const isInside = (date: IsoDate, range: { start: IsoDate; end: IsoDate }): boolean =>
   date >= range.start && date <= range.end;
@@ -144,8 +152,7 @@ export const breakHolding = (date: IsoDate, plan: TermPlan): TermBreak | null =>
 const firstMeeting = (from: number, to: number, step: 1 | -1, plan: TermPlan): IsoDate | null => {
   for (let day = from; (day - to) * step <= 0; day += step) {
     const date = dateAt(day);
-    if (plan.newTerm.days.includes(weekdayAt(day) as Weekday) && !breakHolding(date, plan))
-      return date;
+    if (plan.newTerm.days.includes(weekdayAt(day)) && !breakHolding(date, plan)) return date;
   }
   return null;
 };

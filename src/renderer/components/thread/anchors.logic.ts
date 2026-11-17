@@ -5,13 +5,22 @@ export interface Mark {
   start: number;
   end: number;
 }
-export interface Segment {
+interface PlainSegment {
   text: string;
   start: number;
-  /** Every criterion covering this run. Empty for plain text, more than one where anchors overlap. */
-  keys: readonly string[];
+  keys: readonly [];
+  opens: readonly [];
+}
+export interface PassageSegment {
+  text: string;
+  start: number;
+  /** Every criterion covering this run. More than one where anchors overlap. */
+  keys: readonly [string, ...string[]];
   opens: readonly string[];
 }
+export type Segment = PlainSegment | PassageSegment;
+
+export const isPassage = (segment: Segment): segment is PassageSegment => segment.keys.length > 0;
 
 /** Splits at every anchor boundary, so overlapping passages become separate spans instead of nested or lost ones. */
 export const segmentParagraph = (text: string, marks: readonly Mark[]): readonly Segment[] => {
@@ -25,17 +34,25 @@ export const segmentParagraph = (text: string, marks: readonly Mark[]): readonly
   const cuts = [
     ...new Set([0, text.length, ...usable.flatMap((mark) => [mark.start, mark.end])]),
   ].sort((a, b) => a - b);
+  const [head = 0, ...ends] = cuts;
   const segments: Segment[] = [];
-  for (let i = 0; i < cuts.length - 1; i++) {
-    const start = cuts[i] as number;
-    const end = cuts[i + 1] as number;
+  let start = head;
+  for (const end of ends) {
     const covering = usable.filter((mark) => mark.start <= start && mark.end >= end);
-    segments.push({
-      text: text.slice(start, end),
-      start,
-      keys: [...new Set(covering.map((mark) => mark.key))],
-      opens: [...new Set(covering.filter((mark) => mark.start === start).map((mark) => mark.key))],
-    });
+    const [first, ...rest] = new Set(covering.map((mark) => mark.key));
+    const piece = { text: text.slice(start, end), start };
+    segments.push(
+      first === undefined
+        ? { ...piece, keys: [], opens: [] }
+        : {
+            ...piece,
+            keys: [first, ...rest],
+            opens: [
+              ...new Set(covering.filter((mark) => mark.start === start).map((mark) => mark.key)),
+            ],
+          },
+    );
+    start = end;
   }
   return segments;
 };

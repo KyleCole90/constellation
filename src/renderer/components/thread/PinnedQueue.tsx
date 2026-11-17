@@ -9,7 +9,7 @@ import {
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 import { cn } from "~/renderer/lib/utils";
-import type { QueueFilter, RowKey, Thread, ThreadUi } from "~/renderer/stores/types";
+import type { RowKey, Thread, ThreadUi } from "~/renderer/stores/types";
 import { selectSubmissionAt } from "~/renderer/stores/selectors";
 import { useAiOn, useWorkspace } from "~/renderer/stores/workspace";
 
@@ -525,7 +525,7 @@ export function PinnedQueue({
               })),
             ]}
             value={ui.queueFilter.startsWith("assignment:") ? ui.queueFilter : "all"}
-            onChange={(value) => setUi({ queueFilter: value as QueueFilter })}
+            onChange={(value) => setUi({ queueFilter: value })}
             className={cn(
               "h-btn-sm max-w-[280px] rounded-full text-meta",
               ui.queueFilter.startsWith("assignment:") && toggleState(true),

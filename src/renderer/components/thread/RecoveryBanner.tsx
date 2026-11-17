@@ -6,7 +6,12 @@ import type { ChangeId } from "~/shared/domain/ids";
 import { OFFLINE_SEND_REASON } from "~/renderer/desktop";
 import { selectSubmission } from "~/renderer/stores/selectors";
 import { cn } from "~/renderer/lib/utils";
-import { REJECTION_TEXT, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
+import {
+  isRejection,
+  REJECTION_TEXT,
+  useWorkspace,
+  workspaceStore,
+} from "~/renderer/stores/workspace";
 
 import { TokenDialog } from "../TokenDialog";
 import { Button } from "../ui/button";
@@ -78,8 +83,8 @@ function ConflictBanner({ view }: { view: ChangeView }) {
     const result = await workspaceStore().getState().resolveConflict(record.id, choices);
     if (!result.ok)
       setError(
-        result.error in REJECTION_TEXT
-          ? ((REJECTION_TEXT as Record<string, string>)[result.error] ?? null)
+        isRejection(result.error)
+          ? REJECTION_TEXT[result.error]
           : "Couldn't read the LMS. Try again in a moment.",
       );
   };

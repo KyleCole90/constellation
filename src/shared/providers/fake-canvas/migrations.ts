@@ -1,5 +1,5 @@
 import type { Migration, MigrationIssue } from "~/shared/domain/content";
-import { isoTime, type IsoTime, type SchoolId } from "~/shared/domain/ids";
+import { isoTime, type IsoDate, type IsoTime, type SchoolId } from "~/shared/domain/ids";
 import { dateOfTime, shiftDate, timeOnDate, type DateShiftOptions } from "~/shared/domain/term";
 
 import { refs } from "../canvas-refs";
@@ -27,11 +27,11 @@ export interface MigrationRecord {
   settings: { source_course_id?: number; file?: string };
   date_shift_options: {
     shift_dates: true;
-    old_start_date: string;
-    old_end_date: string;
-    new_start_date: string;
-    new_end_date: string;
-    day_substitutions: Record<string, number>;
+    old_start_date: IsoDate;
+    old_end_date: IsoDate;
+    new_start_date: IsoDate;
+    new_end_date: IsoDate;
+    day_substitutions: DateShiftOptions["substitutions"];
   };
   /** Equals the change's copy field text. How a change finds its own job after a lost response. */
   signature: string;
@@ -74,9 +74,7 @@ export const newMigrationRecord = (args: NewMigrationArgs): MigrationRecord => (
     old_end_date: args.shift.oldEnd,
     new_start_date: args.shift.newStart,
     new_end_date: args.shift.newEnd,
-    day_substitutions: Object.fromEntries(
-      Object.entries(args.shift.substitutions).map(([day, to]) => [day, to as number]),
-    ),
+    day_substitutions: args.shift.substitutions,
   },
   signature: args.signature,
   progress: { completion: 0, message: null, workflow_state: "queued" },
