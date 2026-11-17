@@ -47,7 +47,9 @@ const RendererError = v.strictObject({
  * An error's type and its stack frames, without its message. V8 starts a stack with `name: message`, and a message can
  * span lines that read like frames, so that header goes before the stack leaves its process. Main scrubs what's left.
  */
-export const errorReport = (error: unknown): v.InferOutput<typeof RendererError> => {
+export type ErrorReport = v.InferOutput<typeof RendererError>;
+
+export const errorReport = (error: unknown): ErrorReport => {
   if (!(error instanceof Error)) return { type: "NonError", stack: "" };
   const stack = error.stack ?? "";
   const header = String(error);

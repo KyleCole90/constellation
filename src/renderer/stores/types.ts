@@ -151,15 +151,18 @@ export interface ThreadUi {
 
 export interface UiPrefs {
   sidebarOpen: boolean;
-  collapsed: Readonly<Record<string, true>>;
-  courseOpen?: Readonly<Record<string, boolean>>;
+  collapsed: Readonly<Record<SchoolId, true>>;
+  courseOpen?: Readonly<Record<LmsRef<"course">, boolean>>;
   expandedThreads: Readonly<Record<string, true>>;
   threadUi: Readonly<Record<ThreadId, ThreadUi>>;
   /** Conversations read here, by the last message seen. The provider has no read call, so its next sync would bring them back unread. */
-  readThrough?: Readonly<Record<string, string>>;
+  readThrough?: Readonly<Record<LmsRef<"conversation">, string>>;
   /** New courses dismissed on What's due, by course ref. The sidebar drops them too; ⌘K still offers them. */
-  offersDismissed?: Readonly<Record<string, true>>;
+  offersDismissed?: Readonly<Record<LmsRef<"course">, true>>;
 }
+
+/** One handoff per thread and piece of work, so handing the same work twice runs it once. */
+export type HandoffKey = `${ThreadId} ${string}`;
 
 export interface PendingHandoff {
   thread: ThreadId;
@@ -184,14 +187,14 @@ export interface WorkspaceData {
   changes: Readonly<Record<ChangeId, ChangeRecord>>;
   threads: Readonly<Record<ThreadId, Thread>>;
   /** By course ref. A workspace saved before setup existed has none and still loads. */
-  setups: Readonly<Record<string, CourseSetup>>;
+  setups: Readonly<Record<LmsRef<"course">, CourseSetup>>;
   /** Read last in each sync. */
   newCourses: Readonly<Record<SchoolId, readonly CourseShell[]>>;
   prefs: UiPrefs;
   /** Work North Star handed to a thread that hasn't finished, so a reload can start it again. A workspace saved before this has none and still loads. */
-  handoffs: Readonly<Record<string, PendingHandoff>>;
+  handoffs: Readonly<Record<HandoffKey, PendingHandoff>>;
   /** By submission ref: Claude read the work and drafted no grade. It holds until the student submits again. A workspace saved before this has none and still loads. */
-  undrafted: Readonly<Record<string, Undrafted>>;
+  undrafted: Readonly<Record<LmsRef<"submission">, Undrafted>>;
   /** Real epoch ms of the last reset. The demo clock, which runs while every school is a demo school, is the seed time plus real time since this. */
   resetAt: number;
 }

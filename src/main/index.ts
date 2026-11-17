@@ -135,8 +135,7 @@ const start = async () => {
   telemetry.track({ event: "app_opened" });
   app.on("before-quit", () => void telemetry.flush());
   const reportMain = (error: unknown) => {
-    const { type, stack } = errorReport(error);
-    void telemetry.report(type, stack, "main");
+    void telemetry.report(errorReport(error), "main");
   };
   // A monitor leaves an uncaught error's crash as it was. A rejection listener silences Electron's warning, so it warns.
   process.on("uncaughtExceptionMonitor", reportMain);
@@ -195,7 +194,7 @@ const start = async () => {
     trustedSender(DEV_ORIGIN),
     {
       "analytics.track": async (event) => telemetry.track(event),
-      "error.report": ({ type, stack }) => telemetry.report(type, stack, "renderer"),
+      "error.report": (report) => telemetry.report(report, "renderer"),
       "telemetry.status": async () => telemetry.status(),
       "telemetry.choose": async ({ enabled }) => telemetry.choose(enabled),
       "vault.enroll": ({ key, token }) => vault.enroll(key, token),

@@ -154,7 +154,7 @@ const toCourseContent = (raw: RawCourseContent): CourseContent => {
     files: new Set(raw.items.filter((item) => item.type === "file").map((item) => item.id)),
   };
   const items: ContentItem[] = raw.items.map((item) => ({
-    ref: refs.item(school, raw.courseId, item.type, item.id),
+    ref: refs.item({ school, course: raw.courseId, type: item.type, item: item.id }),
     type: item.type,
     title: item.title,
     body: item.body,
@@ -165,7 +165,7 @@ const toCourseContent = (raw: RawCourseContent): CourseContent => {
     copied: item.copied,
   }));
   const modules: CourseModule[] = raw.modules.map((module) => ({
-    ref: refs.module(school, raw.courseId, module.id),
+    ref: refs.module({ school, course: raw.courseId, module: module.id }),
     title: module.title,
     published: module.published,
     itemCount: module.itemCount,
@@ -177,7 +177,7 @@ const toCourseContent = (raw: RawCourseContent): CourseContent => {
     items,
     modules,
     tools: raw.tools.map((tool) => ({
-      ref: refs.tool(school, raw.courseId, tool.id),
+      ref: refs.tool({ school, course: raw.courseId, tool: tool.id }),
       name: tool.name,
       configured: tool.configured,
     })),

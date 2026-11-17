@@ -163,7 +163,14 @@ export const StudentSchema: v.GenericSchema<Student> = v.object({
   name: text,
 });
 
-const ScoresSchema = v.record(text, count);
+/** Keyed by criterion ref, checked as text: valibot types a record keyed by a brand as partial. */
+const ScoresSchema = v.record(
+  v.pipe(
+    text,
+    v.check((raw) => v.is(lmsRef("criterion"), raw)),
+  ),
+  count,
+);
 
 const FileSchema: v.GenericSchema<SubmissionFile> = v.object({
   id: text,

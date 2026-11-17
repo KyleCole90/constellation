@@ -136,7 +136,7 @@ describe("a crash report", () => {
       const { telemetry, sent } = rig();
       const { type, stack } = errorReport(studentError(name, name));
       expect(stack).toContain(" at ");
-      await telemetry.report(type, stack, "main");
+      await telemetry.report({ type, stack }, "main");
       expect(sent).toHaveLength(1);
       expectNoStudentData(sent[0]?.body ?? "");
     }
@@ -145,7 +145,7 @@ describe("a crash report", () => {
   it("carries no student data from a renderer's stack or type, whatever it sends", async () => {
     const { telemetry, sent } = rig();
     for (const type of ["TypeError", STUDENT.identifier, STUDENT.snake, STUDENT.long])
-      await telemetry.report(type, RENDERER_STACK, "renderer");
+      await telemetry.report({ type, stack: RENDERER_STACK }, "renderer");
     expect(sent).toHaveLength(4);
     for (const { body } of sent) expectNoStudentData(body);
   });
@@ -153,7 +153,7 @@ describe("a crash report", () => {
   it("names only JavaScript's own error types", async () => {
     const { telemetry, sent } = rig();
     for (const type of ["RangeError", "MayaLopez", "Error"])
-      await telemetry.report(type, "", "main");
+      await telemetry.report({ type, stack: "" }, "main");
     expect(sent.map((request) => bodyOf(request))).toMatchObject(
       ["RangeError", "Error", "Error"].map((type) => ({
         properties: { $exception_list: [{ type }] },
@@ -163,7 +163,7 @@ describe("a crash report", () => {
 
   it("keeps the type, the app's own files and positions oldest first, the version and the OS", async () => {
     const { telemetry, sent } = rig();
-    await telemetry.report("TypeError", RENDERER_STACK, "renderer");
+    await telemetry.report({ type: "TypeError", stack: RENDERER_STACK }, "renderer");
     const request = sent[0];
     expect(request?.url).toBe("https://eu.i.posthog.com/batch/");
     expect(JSON.parse(request?.body ?? "")).toMatchObject({ api_key: "phc_test" });
@@ -241,7 +241,7 @@ describe("crash reports are sent", () => {
     ] satisfies Partial<TelemetryOptions>[]) {
       const { telemetry, sent, saved } = rig(overrides);
       expect(telemetry.status().available).toBe(false);
-      await telemetry.report("TypeError", RENDERER_STACK, "renderer");
+      await telemetry.report({ type: "TypeError", stack: RENDERER_STACK }, "renderer");
       telemetry.track({ event: "app_opened" });
       await telemetry.flush();
       expect(sent).toEqual([]);
@@ -251,19 +251,22 @@ describe("crash reports are sent", () => {
     expect(telemetry.status()).toEqual({ enabled: true, available: true });
     telemetry.choose(false);
     expect(telemetry.status().enabled).toBe(false);
-    await telemetry.report("TypeError", RENDERER_STACK, "renderer");
+    await telemetry.report({ type: "TypeError", stack: RENDERER_STACK }, "renderer");
     expect(sent).toEqual([]);
     telemetry.choose(true);
-    await telemetry.report("TypeError", RENDERER_STACK, "renderer");
+    await telemetry.report({ type: "TypeError", stack: RENDERER_STACK }, "renderer");
     expect(sent).toHaveLength(1);
   });
 
   it("at most 25 times a launch, and a failed send never throws", async () => {
     const { telemetry, events } = rig();
-    for (let i = 0; i < 30; i += 1) await telemetry.report("TypeError", "", "main");
+    for (let i = 0; i < 30; i += 1)
+      await telemetry.report({ type: "TypeError", stack: "" }, "main");
     expect(events()).toHaveLength(25);
     const failing = rig({ send: async () => Promise.reject(new Error("offline")) });
-    await expect(failing.telemetry.report("TypeError", "", "main")).resolves.toBeUndefined();
+    await expect(
+      failing.telemetry.report({ type: "TypeError", stack: "" }, "main"),
+    ).resolves.toBeUndefined();
   });
 });
 
@@ -273,7 +276,7 @@ describe("usage events", () => {
   it("each carry their own uuid, this Mac's random id, the app version and no person or location", async () => {
     const { telemetry, sent, events, saved } = rig();
     telemetry.track({ event: "draft_requested", kind: "grade" });
-    await telemetry.report("TypeError", "", "main");
+    await telemetry.report({ type: "TypeError", stack: "" }, "main");
     const [draft, crash] = events();
     expect(sent).toHaveLength(1);
     expect(draft).toEqual({
@@ -362,7 +365,7 @@ describe("usage events", () => {
     answer(503);
     await out;
     telemetry.track(opened);
-    await telemetry.report("TypeError", "", "main");
+    await telemetry.report({ type: "TypeError", stack: "" }, "main");
     await telemetry.flush();
     expect(sent).toHaveLength(1);
     telemetry.choose(true);

@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { AnalyticsEventSchema, type AnalyticsEvent } from "../shared/analytics";
-import { MAX_FRAMES } from "../shared/ipc";
+import { MAX_FRAMES, type ErrorReport } from "../shared/ipc";
 
 /**
  * One stack frame, oldest first, as PostHog's raw stack trace takes it. A frame in a file of this app's own bundle keeps
@@ -241,7 +241,7 @@ export const createTelemetry = (options: TelemetryOptions) => {
       enqueue(name, properties);
     },
     /** Scrubs one error and sends it at once. Never throws: a report that can't be sent is dropped. */
-    report: async (type: string, stack: string, source: Source): Promise<void> => {
+    report: async ({ type, stack }: ErrorReport, source: Source): Promise<void> => {
       if (!sending() || reports >= PER_LAUNCH) return;
       reports += 1;
       const { type: kind, frames } = scrub(type, stack, source, options.appRoot);

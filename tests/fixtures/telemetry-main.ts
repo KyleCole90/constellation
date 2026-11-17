@@ -41,7 +41,7 @@ export const telemetryMain = (post: () => Promise<number> = async () => 200) => 
     (sender) => sender === APP,
     {
       "analytics.track": async (event) => telemetry.track(event),
-      "error.report": ({ type, stack }) => telemetry.report(type, stack, "renderer"),
+      "error.report": (report) => telemetry.report(report, "renderer"),
       "telemetry.status": async () => telemetry.status(),
       "telemetry.choose": async ({ enabled }) => telemetry.choose(enabled),
       "vault.enroll": async () => {},

@@ -104,7 +104,7 @@ export interface Submission {
   lateDays: number;
   submittedAt: IsoTime | null;
   grade: number | null;
-  rubricScores: Readonly<Record<string, number>> | null;
+  rubricScores: Readonly<Record<LmsRef<"criterion">, number>> | null;
   comments: readonly SubmissionComment[];
   body: SubmissionBody;
   /** The LMS's own `https:` page for this submission, which opens in the browser. */

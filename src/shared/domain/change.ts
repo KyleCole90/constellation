@@ -152,7 +152,7 @@ export const finalGrade = (content: GradeContent): number | null => {
 };
 export const scoredRubricPoints = (
   rubric: readonly RubricScore[],
-): Readonly<Record<string, number>> =>
+): Readonly<Record<LmsRef<"criterion">, number>> =>
   Object.fromEntries(rubric.flatMap((r) => (r.points === null ? [] : [[r.criterion, r.points]])));
 
 export const unfilled = (content: ChangeContent): readonly string[] => {
@@ -225,7 +225,7 @@ export type RemoteState =
       kind: "grade";
       targetVersion: string;
       grade: number | null;
-      rubric: Readonly<Record<string, number>> | null;
+      rubric: Readonly<Record<LmsRef<"criterion">, number>> | null;
       excused: boolean;
       comments: readonly RemoteEntry[];
       attachments: readonly RemoteEntry[];
