@@ -241,6 +241,22 @@ export default defineConfig({
         },
       },
       {
+        files: ["tests/**", "bench/**", "src/**/*.test.ts"],
+        rules: { "constellation/no-json-parse-cast": "error" },
+      },
+      {
+        files: ["tests/**", "src/**/*.test.ts"],
+        rules: { "constellation/no-as-never": "error" },
+      },
+      {
+        files: [
+          "src/shared/providers/schemas.ts",
+          "src/shared/ipc.ts",
+          "src/shared/providers/fake-canvas/lab.ts",
+        ],
+        rules: { "constellation/annotated-schemas": "error" },
+      },
+      {
         files: ["src/**"],
         rules: { "shadcn/no-unknown-classes": "error" },
       },

@@ -92,7 +92,13 @@ export interface SamplePackage {
   hint: PackageTerm | null;
 }
 
-const CONTENT_ITEM_TYPES = ["syllabus", "page", "announcement", "assignment", "file"] as const;
+export const CONTENT_ITEM_TYPES = [
+  "syllabus",
+  "page",
+  "announcement",
+  "assignment",
+  "file",
+] as const;
 export type ContentItemType = (typeof CONTENT_ITEM_TYPES)[number];
 export const isContentItemType = (value: unknown): value is ContentItemType =>
   CONTENT_ITEM_TYPES.some((type) => type === value);
