@@ -3,12 +3,12 @@ import { ChevronDown } from "lucide-react";
 
 import { cn } from "~/renderer/lib/utils";
 
-export interface PickerItem {
-  value: string;
+export interface PickerItem<V extends string = string> {
+  value: V;
   label: string;
 }
 
-export function Picker({
+export function Picker<V extends string>({
   label,
   items,
   value,
@@ -17,9 +17,9 @@ export function Picker({
   className,
 }: {
   label: string;
-  items: readonly PickerItem[];
-  value: string | null;
-  onChange: (value: string) => void;
+  items: readonly PickerItem<V>[];
+  value: V | null;
+  onChange: (value: V) => void;
   disabled?: boolean;
   className?: string;
 }) {
@@ -27,7 +27,10 @@ export function Picker({
   return (
     <Select.Root
       value={value}
-      onValueChange={(next) => next !== null && onChange(next)}
+      onValueChange={(next) => {
+        const picked = items.find((item) => item.value === next);
+        if (picked) onChange(picked.value);
+      }}
       disabled={Boolean(disabled) || items.length === 0}
     >
       <Select.Trigger

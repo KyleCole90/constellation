@@ -11,6 +11,7 @@ import {
   isSettled,
   ofAddedSchools,
   selectThreadName,
+  threadAt,
 } from "~/renderer/stores/selectors";
 import type { Thread } from "~/renderer/stores/types";
 import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
@@ -93,7 +94,8 @@ const startSweep = (verb: Verb, first: ThreadId) => {
     const row = document
       .elementFromPoint(event.clientX, event.clientY)
       ?.closest<HTMLElement>("[data-settle-row]");
-    const id = row?.dataset["settleRow"] as ThreadId | undefined;
+    const raw = row?.dataset["settleRow"];
+    const id = raw === undefined ? undefined : threadAt(workspaceStore().getState(), raw)?.id;
     const sweep = useSettleUi.getState().sweep;
     if (!id || !sweep || row?.dataset["settleVerb"] !== verb || sweep.ids.includes(id)) return;
     useSettleUi.setState({ sweep: { verb, ids: [...sweep.ids, id] } });

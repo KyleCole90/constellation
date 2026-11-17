@@ -21,9 +21,10 @@ import {
   criterionHue,
   criterionNumbers,
   marksByParagraph,
+  isPassage,
   nextCriterion,
   segmentParagraph,
-  type Segment,
+  type PassageSegment,
 } from "./anchors.logic";
 import { useRationale } from "./context";
 
@@ -37,12 +38,16 @@ const hueOf = (numbers: ReadonlyMap<string, number>, key: string): string | unde
   return number === undefined ? undefined : criterionHue(number);
 };
 
-function Passage({ segment, numbers }: { segment: Segment; numbers: ReadonlyMap<string, number> }) {
+function Passage({
+  segment,
+  numbers,
+}: {
+  segment: PassageSegment;
+  numbers: ReadonlyMap<string, number>;
+}) {
   const link = useRationale();
   const first =
-    link.selected && segment.keys.includes(link.selected)
-      ? link.selected
-      : (segment.keys[0] as string);
+    link.selected && segment.keys.includes(link.selected) ? link.selected : segment.keys[0];
   return (
     <mark
       className="passage"
@@ -98,7 +103,7 @@ function Paragraphs({
         // oxlint-disable-next-line react/no-array-index-key -- pieces split from one string have no id and can repeat
         <p key={index}>
           {segmentParagraph(text, marks.get(index) ?? []).map((segment) =>
-            segment.keys.length > 0 ? (
+            isPassage(segment) ? (
               <Passage key={segment.start} segment={segment} numbers={numbers} />
             ) : (
               <span key={segment.start}>{segment.text}</span>

@@ -171,7 +171,7 @@ function ExpireFault() {
         label="School to expire"
         items={schools.map((s) => ({ value: s.id, label: s.name }))}
         value={school}
-        onChange={(value) => setSchool(value as SchoolId)}
+        onChange={setSchool}
       />
       <Button disabled={status === "expired" || status === "disconnected"} onClick={expire}>
         Expire token
