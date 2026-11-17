@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { addAiKey } from "./ai-key.mjs";
 import { assertTemplateEdge, STANDARD_EDGE } from "./followups.mjs";
 import { onboard } from "./onboard.mjs";
+import { KEY } from "./storage.mjs";
 
 const FIXTURES = fileURLToPath(new URL("../../fixtures/", import.meta.url));
 const QUIET = JSON.stringify({ rate429: 0, rate5xx: 0, rateLost: 0, latencyMs: [20, 60] });
@@ -454,7 +455,7 @@ const publish = async (t, code) => {
 
 const stored = (t, expression) =>
   t.eval(
-    `(() => { const state = JSON.parse(localStorage.getItem("lms-app.v1")).state; return ${expression}; })()`,
+    `(() => { const state = JSON.parse(localStorage.getItem(${KEY})).state; return ${expression}; })()`,
   );
 
 const SIDEBAR_LIST = '[data-testid="sidebar-list"]';
@@ -527,7 +528,7 @@ const announceBeforePublish = async (t, code, course) => {
   );
   t.assert(fix !== null, `${code}: a setup fix was sent`);
   await t.eval(
-    `(() => { const key = "lms-app.v1"; const data = JSON.parse(localStorage.getItem(key)); const thread = data.state.threads[data.state.setups[${ref}].thread]; thread.messages.push({ type: "agent", text: "Sent the fixes.", at: new Date().toISOString(), lines: [{ source: { kind: "change", ref: ${JSON.stringify(fix)} }, title: "The fix that was sent" }] }); localStorage.setItem(key, JSON.stringify(data)); })()`,
+    `(() => { const key = ${KEY}; const data = JSON.parse(localStorage.getItem(key)); const thread = data.state.threads[data.state.setups[${ref}].thread]; thread.messages.push({ type: "agent", text: "Sent the fixes.", at: new Date().toISOString(), lines: [{ source: { kind: "change", ref: ${JSON.stringify(fix)} }, title: "The fix that was sent" }] }); localStorage.setItem(key, JSON.stringify(data)); })()`,
   );
   await t.reload();
   await t.click('[data-source="change"]');
@@ -734,7 +735,7 @@ const syncShells = async (t, test, label) => {
   await t.click("Settings");
   await t.click("Sync now", { within: '[data-school="lcc"]' });
   await t.waitFor(
-    `(() => { const shells = JSON.parse(localStorage.getItem("lms-app.v1")).state.newCourses.lcc ?? []; return shells.length === 2 && shells.${test}; })()`,
+    `(() => { const shells = JSON.parse(localStorage.getItem(${KEY})).state.newCourses.lcc ?? []; return shells.length === 2 && shells.${test}; })()`,
     `Lakeshore: ${label}`,
     WAIT,
   );
@@ -832,7 +833,7 @@ const hiddenTermDates = async (t) => {
   await t.eval("window.__faultLab.hideTermDates(false)");
   await syncShells(t, "every((shell) => shell.startAt !== null)", "a sync reads the dates again");
   const course = await t.eval(
-    `JSON.parse(localStorage.getItem("lms-app.v1")).state.newCourses.lcc.find((shell) => shell.code === ${JSON.stringify(code)})`,
+    `JSON.parse(localStorage.getItem(${KEY})).state.newCourses.lcc.find((shell) => shell.code === ${JSON.stringify(code)})`,
   );
   const guess = new Date(
     Date.parse("2026-01-20") + Date.parse(course.endAt) - Date.parse(course.startAt),
@@ -1802,7 +1803,7 @@ const afterPublish = async (t) => {
 };
 
 const offered = (code) =>
-  `(JSON.parse(localStorage.getItem("lms-app.v1")).state.newCourses.lcc ?? []).some((shell) => shell.code === ${JSON.stringify(code)})`;
+  `(JSON.parse(localStorage.getItem(${KEY})).state.newCourses.lcc ?? []).some((shell) => shell.code === ${JSON.stringify(code)})`;
 const sidebarOffers = (code) =>
   `[...document.querySelectorAll('[data-testid="setup-offer"][data-surface="sidebar"]')].some((el) => el.innerText.includes(${JSON.stringify(code)}))`;
 const syncSettled = (t) =>
@@ -1905,7 +1906,7 @@ const setUpOnAnotherInstall = async (t) => {
   const ref = JSON.stringify(course);
   const page = `/courses/${encodeURIComponent(course)}`;
   await t.eval(`(() => {
-    const key = "lms-app.v1";
+    const key = ${KEY};
     const data = JSON.parse(localStorage.getItem(key));
     const state = data.state;
     delete state.setups[${ref}];
@@ -1917,7 +1918,7 @@ const setUpOnAnotherInstall = async (t) => {
   })()`);
   await t.reload();
   await t.waitFor(
-    `JSON.parse(localStorage.getItem("lms-app.v1")).state.newCourses[${JSON.stringify(course.split(":")[0])}]?.some((shell) => shell.ref === ${ref})`,
+    `JSON.parse(localStorage.getItem(${KEY})).state.newCourses[${JSON.stringify(course.split(":")[0])}]?.some((shell) => shell.ref === ${ref})`,
     "the relaunch reads the new-term courses from Canvas again",
     WAIT,
   );

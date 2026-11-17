@@ -145,6 +145,7 @@ import {
   selectSetUpCourses,
 } from "./selectors";
 import { createSetupActions, type SetupActions, type SetupOptions } from "./setup";
+import { WORKSPACE_STORAGE_KEY } from "./storage-key";
 import type {
   AiSource,
   ConnectionRecord,
@@ -161,7 +162,6 @@ import type {
   WorkspaceData,
 } from "./types";
 
-export const WORKSPACE_STORAGE_KEY = "lms-app.v1";
 const STORE_VERSION = 3;
 
 const DROPPED_KEPT = 20;

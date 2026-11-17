@@ -1,5 +1,6 @@
 import { addAiKey } from "./ai-key.mjs";
 import { onboard } from "./onboard.mjs";
+import { KEY } from "./storage.mjs";
 
 // A long student name, clicks right after a selection change, and Save as template's distance from the window edge. Starts from a fresh visit, because it spends drafts the other modules count on.
 const QUIET = JSON.stringify({ rate429: 0, rate5xx: 0, rateLost: 0, latencyMs: [20, 60] });
@@ -32,7 +33,7 @@ export const STANDARD_EDGE = 16;
 
 const tagOf = (t, subject) =>
   t.eval(
-    `Object.values(JSON.parse(localStorage.getItem("lms-app.v1")).state.changes).find((c) => c.subject === ${JSON.stringify(subject)})?.state.tag ?? null`,
+    `Object.values(JSON.parse(localStorage.getItem(${KEY})).state.changes).find((c) => c.subject === ${JSON.stringify(subject)})?.state.tag ?? null`,
   );
 const writes = (t) =>
   t.eval(`(async () => JSON.parse(await window.__faultLab.stored()).writeLog.length)()`);

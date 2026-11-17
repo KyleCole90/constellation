@@ -17,17 +17,77 @@ const runHook = (command: string) => {
 };
 
 describe("git hook skips", () => {
-  it.each(["git commit --no-verify", "git commit -nm x", "git push --no-verify"])(
-    "denies %s",
-    (command) => {
-      const { decision, reason } = runHook(command);
-      expect(decision).toBe("deny");
-      expect(reason).toMatch(/pre-commit hook/);
-    },
-  );
+  it.each([
+    "git commit --no-verify",
+    "git commit -nm x",
+    "git push --no-verify",
+    "git commit --no-verif",
+    "git commit --no-veri",
+    "git push --no-verif",
+    "git --git-dir .git commit --no-verify",
+    "git -c core.hooksPath=/dev/null commit",
+    "git -c core.hookspath=/dev/null push",
+    'git -c "core.hooksPath=/dev/null" commit -m x',
+    "git --config-env=core.hooksPath=HOOKS commit -m x",
+    "git --config-env core.hooksPath=HOOKS commit -m x",
+    "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=/dev/null git commit -m x",
+    "env GIT_CONFIG_GLOBAL=/tmp/gitconfig git commit -m x",
+    `export GIT_CONFIG_PARAMETERS="'core.hooksPath'='/dev/null'"; git commit -m x`,
+    'export "GIT_CONFIG_COUNT=1" "GIT_CONFIG_KEY_0=core.hooksPath"; git commit -m x',
+    "git --attr-source HEAD commit --no-verify -m x",
+    'git -c "user.name"=x commit --no-verify -m x',
+    'git -c core."hooksPath"=/dev/null commit -m x',
+    "git -c core.hooks\\Path=/dev/null commit -m x",
+    'git commit --no-ver""ify -m x',
+    'git commit "--no-verify" -m x',
+    "git commit -m x \\\n  --no-verify",
+    "git config core.hooksPath /dev/null",
+    "git config --unset core.hooksPath",
+    "git -c include.path=/tmp/hooks.cfg commit -m x",
+    "git commit $'--no-verify' -m x",
+    `GIT_CONFIG_PARAMETERS+="'core.hooksPath'='/dev/null'" git commit -m x`,
+    "cat <<EOF > notes.txt\nit's fine\nEOF\ngit push --no-verify\necho 'done'",
+    "# don't touch\ngit commit -n -m x; echo 'x'",
+    "bash <<EOF\ngit commit -n -m x\nEOF",
+    "git commit -m $'it\\'s' -n; echo 'x'",
+    "sudo GIT_CONFIG_GLOBAL=/tmp/gitconfig git commit -m x",
+    "eval GIT_CONFIG_GLOBAL=/tmp/gitconfig git commit -m x",
+    "bash -c 'GIT_CONFIG_GLOBAL=/tmp/gitconfig git commit -m x'",
+    "echo $$'\\'; git commit -n -m x; echo 'x'",
+    "cat <<\\EOF\nit's\nEOF\ngit commit -n -m x\necho 'x'",
+    "(#it's\ngit commit -n -m x\n); echo 'x'",
+    `cat <<EOF\nit's\nEOF\ngit commit -m "x""--" -n\necho 'x'`,
+    `cat <<EOF\nit's\nEOF\ngit commit -a "z""-m" -n\necho 'x'`,
+    `cat <<EOF\nit's\nEOF\ngit commit "--no-verify" -m x\necho 'x'`,
+    `cat <<EOF\nit's\nEOF\ngit commit '-n' -m x\necho 'x'`,
+    `cat <<EOF\nit's\nEOF\ngit push "--no-verif"\necho 'x'`,
+    "echo `true #`; git commit -n -m x",
+    'bash <<EOF\ngit commit -m "wip #2" -n\nEOF',
+    'echo "use <<EOF for heredocs"\ngit commit -m "fix #12" -n\ncat <<EOF > x\nhi\nEOF',
+  ])("denies %s", (command) => {
+    const { decision, reason } = runHook(command);
+    expect(decision).toBe("deny");
+    expect(reason).toMatch(/pre-commit hook/);
+  });
 
-  it("allows --no-verify inside a commit message", () => {
-    expect(runHook('git commit -m "--no-verify"').decision).toBe("allow");
+  it.each([
+    'git commit -m "--no-verify"',
+    'git commit -m "--no-verif"',
+    "git commit --no-verbose -m x",
+    "git -c user.name=x commit -m y",
+    "git -c core.editor=true rebase --continue",
+    "grep -rn GIT_CONFIG_COUNT scripts",
+    "GIT_CONFIG_NOSYSTEM=1 git commit -m x",
+    "rg -n 'GIT_CONFIG_COUNT=' scripts tests",
+    "env | grep GIT_CONFIG_GLOBAL=",
+    'git commit -m "Block git commit -n abbreviations, closes #167"',
+    "cat <<'EOF' > notes.md\nWe don't skip hooks.\nEOF\ngit add notes.md",
+    "git config --get core.hooksPath",
+    'git commit -m fix -m "--no-verify is banned here"',
+    'git commit -m "fix #12" -m "it\'s done"',
+    `git commit -m "$(cat <<'EOF'\nfix: don't skip hooks\n\nNever "git push --no-verify".\nEOF\n)"`,
+  ])("allows %s", (command) => {
+    expect(runHook(command).decision).toBe("allow");
   });
 });
 
@@ -57,6 +117,14 @@ describe("killing a process this thread did not start", () => {
     "kill $(timeout 5 pgrep -f vite)",
     "kill $(sudo lsof -ti:4320)",
     "kill $(/usr/sbin/lsof -ti:4320)",
+    "cat <<'EOF' > notes.txt\nDon't panic\nEOF\nkill 123\necho 'done'",
+    "# don't touch\npkill -f vite; echo 'x'",
+    "sh <<'EOF'\necho \"#\"; kill 123\nEOF",
+    "echo # \\\nkill 123",
+    "echo `echo a #`; kill 123",
+    "echo ${x:-a #}; kill 123",
+    "echo a #; kill 123",
+    "echo $'it\\'s'; kill 123; echo 'x'",
   ])("denies %s", (command) => {
     const { decision, reason } = runHook(command);
     expect(decision).toBe("deny");

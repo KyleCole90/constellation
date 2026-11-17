@@ -10,7 +10,7 @@ import {
 import type { LmsError } from "~/shared/domain/change";
 import { Secret } from "~/shared/providers/provider";
 import { createMemoryVault } from "~/renderer/providers/vault";
-import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
+import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/storage-key";
 
 import { rawSave } from "./fixtures/saved";
 import { STORE_TOKEN, makeStoreRig, type StoreRig } from "./fixtures/store-rig";

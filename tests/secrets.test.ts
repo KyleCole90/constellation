@@ -4,7 +4,7 @@ import type { SchoolId, ThreadId } from "~/shared/domain/ids";
 import { LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
 import { Secret, revealSecret } from "~/shared/providers/provider";
 import { createMemoryVault } from "~/renderer/providers/vault";
-import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
+import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/storage-key";
 
 import { savedLms } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";

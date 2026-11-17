@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import * as v from "valibot";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import { MODEL } from "~/main/agent";
@@ -48,15 +49,19 @@ const rateLimit = (info: Record<string, unknown>) => ({
   rate_limit_info: info,
 });
 
-interface Run {
-  pid: number;
-  argv: string[];
-  env: Record<string, string>;
-  cwd: string;
-  cwdEntries: string[];
-  stdin: string;
-  started: number;
-}
+/** What the fake records: a line when a run starts, and one when it has written its output. */
+const Recorded = v.union([
+  v.object({
+    pid: v.number(),
+    argv: v.array(v.string()),
+    env: v.record(v.string(), v.string()),
+    cwd: v.string(),
+    cwdEntries: v.array(v.string()),
+    stdin: v.string(),
+    started: v.number(),
+  }),
+  v.object({ pid: v.number(), ended: v.number() }),
+]);
 
 let dir = "";
 let tmpRoot = "";
@@ -93,14 +98,10 @@ const claude = (scenario: Record<string, unknown>, options: Record<string, unkno
       ? readFileSync(record, "utf8")
           .trim()
           .split("\n")
-          .map((line): unknown => JSON.parse(line))
+          .map((line) => v.parse(Recorded, JSON.parse(line)))
       : [];
-  const runs = () => lines().filter((line): line is Run => Reflect.has(Object(line), "argv"));
-  const ended = () =>
-    lines().flatMap((line) => {
-      const at: unknown = Reflect.get(Object(line), "ended");
-      return typeof at === "number" ? [at] : [];
-    });
+  const runs = () => lines().flatMap((line) => ("argv" in line ? [line] : []));
+  const ended = () => lines().flatMap((line) => ("ended" in line ? [line.ended] : []));
   return { agent, runs, ended, usage };
 };
 

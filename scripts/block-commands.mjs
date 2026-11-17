@@ -12,24 +12,86 @@ const KILL_REASON =
 // Short commit options that take a value; in a cluster like -nm, chars after one of these are its value.
 const COMMIT_VALUE_FLAGS = "mFcCtSu";
 
-/** Splits a shell command into words per simple command, dropping quotes. Quoted words are never flags. */
-const simpleCommands = (command) => {
+// Git's global options that take their value as the next word.
+const GIT_VALUE_OPTIONS = [
+  "-C",
+  "-c",
+  "--config-env",
+  "--git-dir",
+  "--work-tree",
+  "--namespace",
+  "--attr-source",
+];
+
+/**
+ * Splits a shell command into words per simple command, removing quotes and backslashes the way the shell does, so
+ * `--no-ver""ify` is one word. A word written wholly inside quotes is `quoted`: it never names a command to run.
+ */
+const shellWords = (command) => {
   const commands = [[]];
-  for (const [, op, double, single, bare] of command.matchAll(
-    /(&&|\|\||[;|&\n])|"((?:\\.|[^"])*)"|'([^']*)'|(\S+?)(?=$|\s|&&|\|\||[;|&])/g,
-  )) {
-    if (op) commands.push([]);
-    else commands.at(-1).push({ text: double ?? single ?? bare, quoted: bare === undefined });
+  for (const [, op, word] of command
+    .replaceAll("\\\n", "")
+    .matchAll(
+      /(&&|\|\||[;|&\n])|((?:\$?"(?:\\.|[^"])*"|\$'(?:\\.|[^'])*'|'[^']*'|\\.|[^\s"'\\;|&])+)/g,
+    )) {
+    if (op) {
+      commands.push([]);
+      continue;
+    }
+    const parts = [
+      ...word.matchAll(
+        /\$?"((?:\\.|[^"])*)"|\$'((?:\\.|[^'])*)'|'([^']*)'|\\(.)|((?:[^"'\\$]|\$(?!["']))+)/g,
+      ),
+    ];
+    commands.at(-1).push({
+      text: parts
+        .map(
+          ([, double, ansi, single, escaped, bare]) => double ?? ansi ?? single ?? escaped ?? bare,
+        )
+        .join(""),
+      quoted: parts.every(([, double, ansi, single]) => (double ?? ansi ?? single) !== undefined),
+    });
   }
   return commands;
 };
 
+/**
+ * The split this hook shipped with: a quote starts a word only at its start, so `it's` in a heredoc or a comment
+ * can't open a quote. Shell syntax is too rich to read one way, so the hook reads the command both ways and denies
+ * when a rule matches either, which also keeps every command this split denied denied. A quoted piece glued to its
+ * neighbour (`"x""--"`) is only part of an argument, so it is `notFlag`.
+ */
+const plainWords = (command) => {
+  const commands = [[]];
+  for (const match of command.matchAll(
+    /(&&|\|\||[;|&\n])|"((?:\\.|[^"])*)"|'([^']*)'|(\S+?)(?=$|\s|&&|\|\||[;|&])/g,
+  )) {
+    const [whole, op, double, single, bare] = match;
+    if (op) commands.push([]);
+    else {
+      const quoted = bare === undefined;
+      const glued = [command[match.index - 1], command[match.index + whole.length]].some(
+        (c) => c !== undefined && !/[\s;|&]/.test(c),
+      );
+      commands.at(-1).push({ text: double ?? single ?? bare, quoted, notFlag: quoted && glued });
+    }
+  }
+  return commands;
+};
+
+// Config keys that set core.hooksPath, directly or through an included file.
+const HOOKS_PATH = /^(core\.hookspath|include\.path|includeif\..+\.path)(=|$)/i;
+
+// Git takes any unambiguous prefix of a long option. Below 6 chars the prefix clashes with --no-verbose, so git refuses it.
+const isNoVerify = ({ text, notFlag }) =>
+  !notFlag && text.length >= 6 && "--no-verify".startsWith(text);
+
 const commitSkipsHooks = (args) => {
   for (let i = 0; i < args.length; i++) {
-    const { text, quoted } = args[i];
-    if (quoted) continue;
+    const { text, notFlag } = args[i];
+    if (notFlag) continue;
     if (text === "--") return false;
-    if (text === "--no-verify") return true;
+    if (isNoVerify(args[i])) return true;
     if (!/^-[^-]/.test(text)) continue;
     for (const flag of text.slice(1)) {
       if (flag === "n") return true;
@@ -46,17 +108,54 @@ const skipsHooks = (words) => {
   const git = words.findIndex((w) => !w.quoted && /(^|\/)git$/.test(w.text));
   if (git === -1) return false;
   let i = git + 1;
-  // Skip git's global options, such as -C <dir> or -c key=value.
-  while (i < words.length && words[i].text.startsWith("-"))
-    i += ["-C", "-c"].includes(words[i].text) ? 2 : 1;
+  for (; i < words.length && words[i].text.startsWith("-"); i++) {
+    const { text } = words[i];
+    const config = text.startsWith("--config-env=")
+      ? text.slice("--config-env=".length)
+      : ["-c", "--config-env"].includes(text) && words[i + 1]?.text;
+    if (config && HOOKS_PATH.test(config)) return true;
+    if (GIT_VALUE_OPTIONS.includes(text)) i++;
+  }
   const args = words.slice(i + 1);
   if (words[i]?.text === "commit") return commitSkipsHooks(args);
-  if (words[i]?.text === "push") return args.some((w) => !w.quoted && w.text === "--no-verify");
+  if (words[i]?.text === "push") return args.some(isNoVerify);
+  if (words[i]?.text === "config") return configWritesHooksPath(args);
   return false;
 };
 
+/** `git config core.hooksPath` and `--get` only read it; a value or an unset after the key changes it. */
+const configWritesHooksPath = (args) => {
+  const key = args.findIndex((w) => HOOKS_PATH.test(w.text));
+  return key !== -1 && (key < args.length - 1 || args.some((w) => /^(--)?unset/.test(w.text)));
+};
+
+// GIT_CONFIG_COUNT (with its KEY_n and VALUE_n), GIT_CONFIG_PARAMETERS, GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM can each
+// set core.hooksPath unseen. They take effect before the command name, or as arguments to `export` and its kin.
+const setsGitConfigEnv = (words) => {
+  const first = words.findIndex((w) => w.quoted || !BEFORE_COMMAND.test(w.text));
+  const assignments = first === -1 || runs(words, ASSIGNERS) ? words : words.slice(0, first);
+  return assignments.some((w) => /^GIT_CONFIG_(COUNT|PARAMETERS|GLOBAL|SYSTEM)\+?=/.test(w.text));
+};
+
+// Commands whose arguments can set a variable for what they run.
+const ASSIGNERS = [
+  "export",
+  "env",
+  "sudo",
+  "doas",
+  "declare",
+  "typeset",
+  "readonly",
+  "local",
+  "eval",
+  "xargs",
+  "sh",
+  "bash",
+  "zsh",
+];
+
 // Words that come before the command name: VAR=value, or a shell keyword such as `then` or `do`.
-const BEFORE_COMMAND = /^(\w+=.*|then|do|else|elif|if|while|until|!|[{(])$/;
+const BEFORE_COMMAND = /^(\w+\+?=.*|then|do|else|elif|if|while|until|!|[{(])$/;
 const WRAPPER = /^(sudo|nohup|exec|time|env|timeout|nice|stdbuf|command)$/;
 
 const named = (word, names) => !word.quoted && names.includes(word.text.split("/").at(-1));
@@ -104,6 +203,7 @@ const xargsKill = (words) =>
 
 const RULES = [
   { test: skipsHooks, reason: NO_VERIFY_REASON },
+  { test: setsGitConfigEnv, reason: NO_VERIFY_REASON },
   { test: (words) => runs(words, ["pkill", "killall"]), reason: KILL_REASON },
   { test: killsLiteralPid, reason: KILL_REASON },
   { test: killsSearchResult, reason: KILL_REASON },
@@ -112,7 +212,7 @@ const RULES = [
 
 const { tool_input } = JSON.parse(readFileSync(0, "utf8"));
 const command = tool_input?.command ?? "";
-const commands = simpleCommands(command);
+const commands = [...shellWords(command), ...plainWords(command)];
 const denied = RULES.find((rule) => commands.some((words) => rule.test(words, command)));
 if (denied) {
   console.log(

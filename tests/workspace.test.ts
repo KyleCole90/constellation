@@ -35,7 +35,7 @@ import {
 import { connectionStatus } from "~/renderer/components/settings/connection.logic";
 import { OFFLINE_SEND_REASON } from "~/renderer/desktop";
 import type { ConnectionRecord } from "~/renderer/stores/types";
-import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/workspace";
+import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/storage-key";
 
 import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";
