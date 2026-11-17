@@ -81,11 +81,11 @@ export const LabCommandSchema = v.variant("do", [
   v.object({ do: v.literal("expireToken"), school: SchoolIdSchema }),
   v.object({
     do: v.literal("changeGradeOutOfBand"),
-    submission: lmsRef<"submission">(),
+    submission: lmsRef("submission"),
     newGrade: count,
     by: v.string(),
   }),
-  v.object({ do: v.literal("studentResubmits"), submission: lmsRef<"submission">() }),
+  v.object({ do: v.literal("studentResubmits"), submission: lmsRef("submission") }),
   v.object({ do: v.literal("failNextWrite"), field: FieldKeySchema, error: LmsErrorSchema }),
   v.object({ do: v.literal("loseNextResponse"), applied: v.boolean() }),
   v.object({ do: v.literal("lateLanding"), delayMs: count }),
@@ -101,11 +101,11 @@ export const LabCommandSchema = v.variant("do", [
     stage: v.picklist(["pre_processing", "running"]),
     message: v.string(),
   }),
-  v.object({ do: v.literal("enrollStudents"), course: lmsRef<"course">(), count }),
-  v.object({ do: v.literal("clearDueDates"), course: lmsRef<"course">() }),
+  v.object({ do: v.literal("enrollStudents"), course: lmsRef("course"), count }),
+  v.object({ do: v.literal("clearDueDates"), course: lmsRef("course") }),
   v.object({
     do: v.literal("addAssignments"),
-    course: lmsRef<"course">(),
+    course: lmsRef("course"),
     titles: v.array(v.string()),
   }),
   v.object({

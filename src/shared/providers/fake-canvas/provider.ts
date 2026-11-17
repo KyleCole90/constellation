@@ -6,7 +6,7 @@ import {
   type CourseModule,
   type Migration,
 } from "~/shared/domain/content";
-import { isoTime, type LmsRef, type SchoolHost, type SchoolId } from "~/shared/domain/ids";
+import { isoTime, type LmsRef } from "~/shared/domain/ids";
 import type { School } from "~/shared/domain/lms";
 import { SendPermit } from "~/shared/domain/permit";
 import type {
@@ -32,8 +32,6 @@ import {
 
 export const FAKE_SCHOOLS: readonly School[] = SCHOOLS_SEED.map((school) => ({
   ...school,
-  id: school.id as SchoolId,
-  host: school.host as SchoolHost,
   provider: "fake-canvas",
 }));
 

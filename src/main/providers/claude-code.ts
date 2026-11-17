@@ -7,6 +7,7 @@ import { createInterface } from "node:readline";
 import * as v from "valibot";
 
 import { CLAUDE_CODE_MINIMUM, olderThan } from "../../shared/claude-code";
+import { isoTime, type IsoTime } from "../../shared/domain/ids";
 import type { Handlers } from "../../shared/ipc";
 
 import {
@@ -65,9 +66,9 @@ const RESET_TIME = new Intl.DateTimeFormat(undefined, {
   hour: "numeric",
   minute: "2-digit",
 });
-const limitReached = (resetsAt: number | undefined): Answer => ({
+const limitReached = (resetsAt: IsoTime | undefined): Answer => ({
   ok: false,
-  reason: `Your Claude plan's limit is reached.${resetsAt === undefined ? "" : ` It resets ${RESET_TIME.format(resetsAt * 1000)}.`} Nothing was queued.`,
+  reason: `Your Claude plan's limit is reached.${resetsAt === undefined ? "" : ` It resets ${RESET_TIME.format(new Date(resetsAt))}.`} Nothing was queued.`,
   limited: true,
 });
 
@@ -115,13 +116,19 @@ const Init = v.looseObject({
   claude_code_version: v.string(),
 });
 const Retry = v.looseObject({ attempt: v.number(), error_status: v.nullish(v.number()) });
-/** `utilization` is a fraction and `resetsAt` epoch seconds. */
-const Window = v.looseObject({ utilization: v.number(), resetsAt: v.number() });
+/** Epoch seconds, as a time. A value no Date can hold fails the parse, so its event is dropped. */
+const ResetsAt = v.pipe(
+  v.number(),
+  v.check((seconds) => Number.isFinite(new Date(seconds * 1000).getTime())),
+  v.transform((seconds) => isoTime(seconds * 1000)),
+);
+/** `utilization` is a fraction. */
+const Window = v.looseObject({ utilization: v.number(), resetsAt: ResetsAt });
 const RateLimitInfo = v.looseObject({
   status: v.optional(v.string()),
   rateLimitType: v.optional(v.string()),
   utilization: v.optional(v.number()),
-  resetsAt: v.optional(v.number()),
+  resetsAt: v.optional(ResetsAt),
   unifiedWindows: v.optional(v.looseObject({ seven_day: v.optional(Window) })),
 });
 const RateLimit = v.looseObject({ rate_limit_info: RateLimitInfo });
@@ -166,13 +173,13 @@ const weeklyOf = (info: v.InferOutput<typeof RateLimitInfo>): Status["weekly"] =
   return window
     ? {
         usedPercent: Math.round(window.utilization * 100),
-        resetsAt: new Date(window.resetsAt * 1000).toISOString(),
+        resetsAt: window.resetsAt,
       }
     : null;
 };
 
-/** When the limit that stopped a run lifts, in epoch seconds. */
-const resetOf = (info: v.InferOutput<typeof RateLimitInfo>): number | undefined =>
+/** When the limit that stopped a run lifts. */
+const resetOf = (info: v.InferOutput<typeof RateLimitInfo>): IsoTime | undefined =>
   info.resetsAt ?? info.unifiedWindows?.seven_day?.resetsAt;
 
 const versionIn = (stdout: string): string | null =>

@@ -549,6 +549,24 @@ describe("Claude Code's status", () => {
     });
   });
 
+  it("drops a rate-limit event whose reset time is out of range, and finishes the run", async () => {
+    const { agent } = claude({
+      lines: [
+        init(),
+        rateLimit({
+          status: "allowed",
+          rateLimitType: "seven_day",
+          utilization: 0.5,
+          resetsAt: 1e300,
+          unifiedWindows: { seven_day: { utilization: 0.5, resetsAt: 1e300 } },
+        }),
+        result(),
+      ],
+    });
+    expect(await agent.run(INPUT)).toMatchObject({ ok: true });
+    expect((await agent.status()).weekly).toBeNull();
+  });
+
   it("reads a seven-day event's own utilization when it has no windows", async () => {
     const { agent } = claude({
       lines: [

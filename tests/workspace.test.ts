@@ -1669,7 +1669,7 @@ describe("missing work", () => {
       });
     const lms = at(0);
     const course = SEED.schools
-      .flatMap((school) => lms.courses(school.id as SchoolId))
+      .flatMap((school) => lms.courses(school.id))
       .find((c) => c.code === "ENG 101")!;
     const assignment = lms.assignments(course.ref).find((a) => a.title === "Reading Response 6")!;
     const workflows = (now: number) =>

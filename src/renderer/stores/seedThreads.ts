@@ -1,4 +1,4 @@
-import { isoTime, type SchoolId, type ThreadId } from "~/shared/domain/ids";
+import { isoTime, type ThreadId } from "~/shared/domain/ids";
 import { refs } from "~/shared/providers/canvas-refs";
 import { assignmentCanvasId, SEED, type SeedAssignment } from "~/shared/providers/fake-canvas/seed";
 
@@ -49,7 +49,7 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
   });
 
   SEED.courses.forEach((course, courseIndex) => {
-    const school = course.schoolId as SchoolId;
+    const school = course.schoolId;
     const courseRef = refs.course(school, course.canvasId);
     for (const thread of course.threads) {
       const updatedAt = at(ageMinutes(thread.time));
