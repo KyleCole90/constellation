@@ -63,7 +63,7 @@ export interface AccountInfo {
   scopes: readonly string[];
 }
 
-type FieldOutcome = Exclude<FieldRun, { status: "pending" }>;
+export type FieldOutcome = Exclude<FieldRun, { status: "pending" }>;
 export type FieldOutcomes = Readonly<Partial<Record<FieldKey, FieldOutcome>>>;
 
 /**
@@ -126,14 +126,19 @@ export interface TermSetup {
 // A WeakMap rather than a # field, because devtools prints # fields when an object is logged.
 const plaintext = new WeakMap<Secret, string>();
 export class Secret {
+  // Emits nothing, so devtools still shows nothing, but a lookalike object isn't a Secret.
+  declare private readonly nominal: never;
   constructor(raw: string) {
     plaintext.set(this, raw);
   }
   toString = () => "[secret]";
   toJSON = () => "[secret]";
 }
-export const revealSecret = <T>(secret: Secret, use: (raw: string) => T): T =>
-  use(plaintext.get(secret) as string);
+export const revealSecret = <T>(secret: Secret, use: (raw: string) => T): T => {
+  const raw = plaintext.get(secret);
+  if (raw === undefined) throw new Error("not a Secret");
+  return use(raw);
+};
 export const isBlankSecret = (secret: Secret): boolean =>
   revealSecret(secret, (raw) => raw.trim() === "");
 

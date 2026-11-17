@@ -163,3 +163,16 @@ describe("the memory vault", () => {
     expect(await vault.leaseFor(LCC).use(async (credential) => credential)).toBeNull();
   });
 });
+
+describe("a Secret", () => {
+  it("is only one the class made, so a lookalike doesn't type-check", () => {
+    // @ts-expect-error A lookalike has no private brand.
+    const lookalike: Secret = { toString: () => "", toJSON: () => "" };
+    expect(String(lookalike)).toBe("");
+  });
+
+  it("never reveals undefined for an object the class didn't make", () => {
+    const forged: Secret = Object.create(Secret.prototype);
+    expect(() => revealSecret(forged, (raw) => raw)).toThrow("not a Secret");
+  });
+});

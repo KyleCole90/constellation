@@ -18,6 +18,7 @@ import {
   MigrationSchema,
   PickedPackageSchema,
   RemoteStateSchema,
+  SchoolIdSchema,
   SamplePackageSchema,
   SchoolSchema,
   SourceCourseSchema,
@@ -61,13 +62,14 @@ export const errorReport = (error: unknown): v.InferOutput<typeof RendererError>
   };
 };
 
-/** A school's id or `ai-key`. Main can't check a school id against anything yet, so any non-empty string passes. */
-export const VaultKeySchema = v.custom<VaultKey>(
-  (input) => typeof input === "string" && input !== "",
-);
+/** A school's id or `ai-key`. Main can't check a school id against a known school yet, only its form. */
+export const VaultKeySchema: v.GenericSchema<VaultKey> = v.union([
+  v.literal("ai-key"),
+  SchoolIdSchema,
+]);
 const ByKey = v.strictObject({ key: VaultKeySchema });
 const BySchool = v.strictObject({ school: SchoolSchema });
-const ByCourse = v.strictObject({ school: SchoolSchema, course: lmsRef<"course">() });
+const ByCourse = v.strictObject({ school: SchoolSchema, course: lmsRef("course") });
 
 /**
  * One agent run, as main needs it: the ask, the thread so far, and the thread's scope. Main only writes the scope into
@@ -165,13 +167,13 @@ const ipc = {
   "lms.file": {
     input: v.strictObject({
       school: SchoolSchema,
-      submission: lmsRef<"submission">(),
+      submission: lmsRef("submission"),
       file: v.string(),
     }),
     output: readOf(FileContentSchema),
   },
   "lms.linkExport": {
-    input: v.strictObject({ school: SchoolSchema, submission: lmsRef<"submission">() }),
+    input: v.strictObject({ school: SchoolSchema, submission: lmsRef("submission") }),
     output: readOf(FileContentSchema),
   },
   "lms.conversations": { input: BySchool, output: readOf(listOf(ConversationSchema)) },
@@ -213,7 +215,7 @@ const ipc = {
   "lms.stored": { input: v.void(), output: v.nullable(v.string()) },
   "lms.findSubmission": {
     input: v.strictObject({ student: v.string(), assignment: v.string() }),
-    output: v.nullable(lmsRef<"submission">()),
+    output: v.nullable(lmsRef("submission")),
   },
 } satisfies Record<string, Channel>;
 

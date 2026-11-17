@@ -1,6 +1,25 @@
 // Hard-coded fake data. Every school detail below the two named instances, every student, and every submission is invented.
 // LMS facts only. What the agent would say about them lives in src/shared/agent/rules/drafts.ts.
 
+import {
+  parseSchoolHost,
+  parseSchoolId,
+  type SchoolHost,
+  type SchoolId,
+} from "~/shared/domain/ids";
+
+/** Seeds go through the app's own validators once, at load, so a typo fails at startup instead of minting a bad id. */
+export const seeded = <T>(value: T | null, raw: string): T => {
+  if (value === null) throw new Error(`Invalid seed value: ${raw}`);
+  return value;
+};
+const seedHost = (raw: string): SchoolHost => {
+  const parsed = parseSchoolHost(raw);
+  return seeded(parsed.ok && parsed.value === raw ? parsed.value : null, raw);
+};
+export const LCC = seeded(parseSchoolId("lcc"), "lcc");
+export const RSU = seeded(parseSchoolId("rsu"), "rsu");
+
 export interface SeedPiece {
   title: string;
   words: number;
@@ -64,7 +83,7 @@ interface SeedAnnouncement {
 }
 export interface SeedCourse {
   id: string;
-  schoolId: string;
+  schoolId: SchoolId;
   code: string;
   title: string;
   section: string;
@@ -80,7 +99,7 @@ export interface SeedCourse {
 export interface SeedData {
   now: string;
   instructor: string;
-  schools: readonly { id: string; abbr: string; name: string; host: string }[];
+  schools: readonly { id: SchoolId; abbr: string; name: string; host: SchoolHost }[];
   courses: readonly SeedCourse[];
 }
 
@@ -89,22 +108,22 @@ export const SEED: SeedData = {
   instructor: "Kyle",
   schools: [
     {
-      id: "lcc",
+      id: LCC,
       abbr: "LCC",
       name: "Lakeshore Community College",
-      host: "lakeshore.instructure.com",
+      host: seedHost("lakeshore.instructure.com"),
     },
     {
-      id: "rsu",
+      id: RSU,
       abbr: "RSU",
       name: "Riverbend State University",
-      host: "riverbend.instructure.com",
+      host: seedHost("riverbend.instructure.com"),
     },
   ],
   courses: [
     {
       id: "eng101",
-      schoolId: "lcc",
+      schoolId: LCC,
       code: "ENG 101",
       title: "Composition I",
       section: "sec 04",
@@ -352,7 +371,7 @@ export const SEED: SeedData = {
     },
     {
       id: "eng102",
-      schoolId: "lcc",
+      schoolId: LCC,
       code: "ENG 102",
       title: "Composition II",
       section: "sec 11",
@@ -488,7 +507,7 @@ export const SEED: SeedData = {
     },
     {
       id: "comm110",
-      schoolId: "lcc",
+      schoolId: LCC,
       code: "COMM 110",
       title: "Public Speaking",
       section: "sec 02, online",
@@ -677,7 +696,7 @@ export const SEED: SeedData = {
     },
     {
       id: "eng210",
-      schoolId: "rsu",
+      schoolId: RSU,
       code: "ENG 210",
       title: "Intro to Literature",
       section: "",
@@ -811,7 +830,7 @@ export const SEED: SeedData = {
     },
     {
       id: "eng305",
-      schoolId: "rsu",
+      schoolId: RSU,
       code: "ENG 305",
       title: "Technical Writing",
       section: "",
@@ -965,7 +984,7 @@ export const SEED: SeedData = {
     },
     {
       id: "hum150",
-      schoolId: "rsu",
+      schoolId: RSU,
       code: "HUM 150",
       title: "Film & Society",
       section: "hybrid",

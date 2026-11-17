@@ -1,5 +1,6 @@
 export type Brand<T, B extends string> = T & { readonly __brand: B };
 
+/** Leads every LmsRef, which splits on `:`, so a school id is non-empty and has no `:`. */
 export type SchoolId = Brand<string, "SchoolId">;
 export type ChangeId = Brand<string, "ChangeId">;
 export type ThreadId = Brand<string, "ThreadId">;
@@ -13,6 +14,10 @@ export const isoTime = (at: number | string | Date): IsoTime =>
 /** For a timestamp from outside the app: null when it isn't one. */
 export const parseIsoTime = (text: string): IsoTime | null =>
   Number.isNaN(Date.parse(text)) ? null : isoTime(text);
+
+export const parseSchoolId = (raw: string): SchoolId | null =>
+  raw === "" || raw.includes(":") ? null : (raw as SchoolId);
+
 /** A calendar day, YYYY-MM-DD, with no time or zone. */
 export type IsoDate = Brand<string, "IsoDate">;
 
@@ -44,3 +49,6 @@ export const parseSchoolHost = (raw: string): Result<SchoolHost, string> => {
     };
   return { ok: true, value: host as SchoolHost };
 };
+
+/** A Canvas school's id is its host, so the two can't name different schools. Null for a host with a port. */
+export const schoolIdOf = (host: SchoolHost): SchoolId | null => parseSchoolId(host);

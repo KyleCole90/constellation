@@ -22,6 +22,7 @@ import {
 } from "~/shared/domain/content";
 import {
   isoTime,
+  parseSchoolId,
   type IsoDate,
   type IsoTime,
   type LmsRef,
@@ -267,7 +268,7 @@ const WORKFLOW: Readonly<Record<string, Submission["workflow"]>> = {
 };
 
 const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): void => {
-  const school = course.schoolId as SchoolId;
+  const school = course.schoolId;
   const courseRef = refs.course(school, course.canvasId);
   const [section, modality] =
     course.section === "hybrid" ? [null, "hybrid"] : course.section.split(", ");
@@ -409,7 +410,7 @@ const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): 
 const freshTerm = (): TermState => {
   const content: Record<string, RawBody> = {};
   const shells = SHELLS.map((shell): ShellRow => {
-    const school = shell.school as SchoolId;
+    const school = shell.school;
     content[refs.course(school, shell.canvasId)] = structuredClone(shell.body);
     return {
       school,
@@ -428,7 +429,7 @@ const freshTerm = (): TermState => {
     };
   });
   const sources = SOURCES.map((source): SourceRow => {
-    const school = source.school as SchoolId;
+    const school = source.school;
     content[refs.course(school, source.canvasId)] = structuredClone(source.body);
     return {
       school,
@@ -822,13 +823,12 @@ export class FakeCanvasServer implements FaultLab {
   #item(
     ref: LmsRef<"item">,
   ): { body: RawBody; item: RawItem; school: SchoolId; courseId: number } | null {
-    const [school, , courseId, , id] = refParts(ref);
-    if (school === undefined || courseId === undefined) return null;
+    const [owner = "", , courseId, , id] = refParts(ref);
+    const school = parseSchoolId(owner);
+    if (school === null || courseId === undefined) return null;
     const body = this.#state.term.content[refs.course(school, Number(courseId))];
     const item = body?.items.find((entry) => entry.id === Number(id));
-    return body && item
-      ? { body, item, school: school as SchoolId, courseId: Number(courseId) }
-      : null;
+    return body && item ? { body, item, school, courseId: Number(courseId) } : null;
   }
 
   // ---- Reads. Clones, so nothing a caller holds can reach server state. ----
@@ -1134,13 +1134,12 @@ export class FakeCanvasServer implements FaultLab {
       }
       case "text-fix":
       case "item-set": {
-        const [school, kind, courseId] = refParts(content.target);
+        const [owner = "", kind, courseId] = refParts(content.target);
+        const school = parseSchoolId(owner);
         const code = this.#courseRow(Number(courseId))?.code ?? courseId ?? "";
         const where =
           kind === "course-state" ? `Course settings of ${code}` : `${content.where} in ${code}`;
-        return school === undefined
-          ? null
-          : { school: school as SchoolId, target: `${where}, ${whatChanged(content)}` };
+        return school === null ? null : { school, target: `${where}, ${whatChanged(content)}` };
       }
     }
   }

@@ -1,8 +1,14 @@
 import type { ContentItemType, SchoolPolicy } from "~/shared/domain/content";
-import { isoTime, type IsoDate, type IsoTime } from "~/shared/domain/ids";
-import { termName, type TermBreak, type TermDates, type Weekday } from "~/shared/domain/term";
+import { isoTime, type IsoDate, type IsoTime, type SchoolId } from "~/shared/domain/ids";
+import {
+  isoDate,
+  termName,
+  type TermBreak,
+  type TermDates,
+  type Weekday,
+} from "~/shared/domain/term";
 
-import { SEED } from "./seed";
+import { LCC, RSU, SEED, seeded } from "./seed";
 
 interface RawLink {
   text: string;
@@ -44,7 +50,7 @@ type SeedTerm = Omit<TermDates, "name"> & { name: string };
 const hintOf = (term: SeedTerm): TermDates => ({ ...term, name: termName(term.name) });
 
 export interface ShellSeed {
-  school: string;
+  school: SchoolId;
   canvasId: number;
   code: string;
   title: string;
@@ -55,7 +61,7 @@ export interface ShellSeed {
   body: RawBody;
 }
 export interface SourceSeed {
-  school: string;
+  school: SchoolId;
   canvasId: number;
   code: string;
   title: string;
@@ -82,7 +88,7 @@ export interface PackageSeed {
   damaged: boolean;
 }
 
-const date = (value: string): IsoDate => value as IsoDate;
+const date = (value: string): IsoDate => seeded(isoDate(value), value);
 const dueOn = (day: string): IsoTime => isoTime(`${day}T23:59:00.000Z`);
 const TUE_THU: readonly Weekday[] = [2, 4];
 const MON_WED: readonly Weekday[] = [1, 3];
@@ -358,7 +364,7 @@ const fallSources: readonly SourceSeed[] = SEED.courses.map((course) => {
 });
 
 const concluded = (
-  school: string,
+  school: SchoolId,
   canvasId: number,
   code: string,
   title: string,
@@ -386,8 +392,8 @@ const concluded = (
 
 export const SOURCES: readonly SourceSeed[] = [
   ...fallSources,
-  concluded("lcc", 45108, "ENG 101", "Composition I", TUE_THU, 41990),
-  concluded("rsu", 11562, "ENG 210", "Intro to Literature", MON_WED, 10877),
+  concluded(LCC, 45108, "ENG 101", "Composition I", TUE_THU, 41990),
+  concluded(RSU, 11562, "ENG 210", "Intro to Literature", MON_WED, 10877),
 ];
 
 const EMPTY: RawBody = { items: [], modules: [], tools: [] };
@@ -459,7 +465,7 @@ const hum150Body = (): RawBody => {
 
 export const SHELLS: readonly ShellSeed[] = [
   {
-    school: "lcc",
+    school: LCC,
     canvasId: 51302,
     code: "ENG 101",
     title: "Composition I",
@@ -470,7 +476,7 @@ export const SHELLS: readonly ShellSeed[] = [
     body: EMPTY,
   },
   {
-    school: "lcc",
+    school: LCC,
     canvasId: 51318,
     code: "COMM 110",
     title: "Public Speaking",
@@ -481,7 +487,7 @@ export const SHELLS: readonly ShellSeed[] = [
     body: EMPTY,
   },
   {
-    school: "rsu",
+    school: RSU,
     canvasId: 13410,
     code: "ENG 210",
     title: "Intro to Literature",
@@ -492,7 +498,7 @@ export const SHELLS: readonly ShellSeed[] = [
     body: EMPTY,
   },
   {
-    school: "rsu",
+    school: RSU,
     canvasId: 13427,
     code: "HUM 150",
     title: "Film & Society",

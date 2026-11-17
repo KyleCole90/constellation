@@ -19,14 +19,17 @@ import {
   type SamplePackage,
   type SourceCourse,
 } from "../domain/content";
-import type {
-  ChangeId,
-  IsoDate,
-  IsoTime,
-  LmsRef,
-  Result,
-  SchoolHost,
-  SchoolId,
+import {
+  parseIsoTime,
+  parseSchoolHost,
+  parseSchoolId,
+  type ChangeId,
+  type IsoDate,
+  type IsoTime,
+  type LmsRef,
+  type Result,
+  type SchoolHost,
+  type SchoolId,
 } from "../domain/ids";
 import type {
   Announcement,
@@ -48,7 +51,8 @@ import {
   type Weekday,
 } from "../domain/term";
 
-import type { AccountInfo, FieldOutcomes } from "./provider";
+import { refParts } from "./canvas-refs";
+import type { AccountInfo, FieldOutcome, FieldOutcomes } from "./provider";
 
 /*
  * What a provider's reads and writes carry across the bridge. Each schema is annotated with its domain type, so the
@@ -65,9 +69,15 @@ export const listOf = <T>(item: v.GenericSchema<T>): v.GenericSchema<readonly T[
 const brand = <T extends string>(check: (raw: string) => boolean = () => true) =>
   v.custom<T>((input) => typeof input === "string" && check(input));
 
-export const SchoolIdSchema = brand<SchoolId>((raw) => raw !== "");
-export const lmsRef = <K extends string>() => brand<LmsRef<K>>((raw) => raw !== "");
-export const IsoTimeSchema = brand<IsoTime>((raw) => !Number.isNaN(Date.parse(raw)));
+export const SchoolIdSchema = brand<SchoolId>((raw) => parseSchoolId(raw) === raw);
+/** A ref of `kind`, and no other kind: `school:kind:…`. */
+export const lmsRef = <K extends string>(kind: K) =>
+  brand<LmsRef<K>>((raw) => {
+    const [school = "", refKind, ...ids] = refParts(raw);
+    return parseSchoolId(school) === school && refKind === kind && ids.length > 0;
+  });
+/** Only the format `isoTime` writes, so IsoTimes compare as text and slice to their day. */
+export const IsoTimeSchema = brand<IsoTime>((raw) => parseIsoTime(raw) === raw);
 const IsoDateSchema = brand<IsoDate>((raw) => isoDate(raw) === raw);
 const WeekdaySchema = v.custom<Weekday>(
   (input) => typeof input === "number" && Number.isInteger(input) && input >= 0 && input <= 6,
@@ -82,7 +92,10 @@ export const SchoolSchema: v.GenericSchema<School> = v.object({
   id: SchoolIdSchema,
   abbr: text,
   name: text,
-  host: brand<SchoolHost>((raw) => raw !== ""),
+  host: brand<SchoolHost>((raw) => {
+    const parsed = parseSchoolHost(raw);
+    return parsed.ok && parsed.value === raw;
+  }),
   provider: v.picklist(["fake-canvas", "canvas"]),
 });
 
@@ -112,7 +125,7 @@ export const AccountInfoSchema: v.GenericSchema<AccountInfo> = v.object({
 });
 
 export const CourseSchema: v.GenericSchema<Course> = v.object({
-  ref: lmsRef<"course">(),
+  ref: lmsRef("course"),
   school: SchoolIdSchema,
   code: text,
   title: text,
@@ -122,21 +135,21 @@ export const CourseSchema: v.GenericSchema<Course> = v.object({
 });
 
 export const AssignmentSchema: v.GenericSchema<Assignment> = v.object({
-  ref: lmsRef<"assignment">(),
+  ref: lmsRef("assignment"),
   school: SchoolIdSchema,
-  course: lmsRef<"course">(),
+  course: lmsRef("course"),
   title: text,
   shortTitle: text,
   dueAt: nullable(IsoTimeSchema),
   pointsPossible: count,
-  rubric: nullable(v.array(v.object({ ref: lmsRef<"criterion">(), name: text, maxPoints: count }))),
+  rubric: nullable(v.array(v.object({ ref: lmsRef("criterion"), name: text, maxPoints: count }))),
   latePointsPerDay: nullable(count),
 });
 
 export const StudentSchema: v.GenericSchema<Student> = v.object({
-  ref: lmsRef<"student">(),
+  ref: lmsRef("student"),
   school: SchoolIdSchema,
-  course: lmsRef<"course">(),
+  course: lmsRef("course"),
   name: text,
 });
 
@@ -150,11 +163,11 @@ const FileSchema: v.GenericSchema<SubmissionFile> = v.object({
 });
 
 export const SubmissionSchema: v.GenericSchema<Submission> = v.object({
-  ref: lmsRef<"submission">(),
+  ref: lmsRef("submission"),
   school: SchoolIdSchema,
-  course: lmsRef<"course">(),
-  assignment: lmsRef<"assignment">(),
-  student: lmsRef<"student">(),
+  course: lmsRef("course"),
+  assignment: lmsRef("assignment"),
+  student: lmsRef("student"),
   studentName: text,
   workflow: v.picklist(["unsubmitted", "missing", "submitted", "graded", "excused"]),
   attempt: count,
@@ -196,12 +209,12 @@ export const FileContentSchema: v.GenericSchema<FileContent> = v.object({
 });
 
 export const ConversationSchema: v.GenericSchema<Conversation> = v.object({
-  ref: lmsRef<"conversation">(),
+  ref: lmsRef("conversation"),
   school: SchoolIdSchema,
-  course: lmsRef<"course">(),
+  course: lmsRef("course"),
   subject: text,
   from: text,
-  students: v.array(lmsRef<"student">()),
+  students: v.array(lmsRef("student")),
   unread: v.boolean(),
   messages: v.array(
     v.object({ id: text, mine: v.boolean(), author: text, text, at: IsoTimeSchema }),
@@ -209,9 +222,9 @@ export const ConversationSchema: v.GenericSchema<Conversation> = v.object({
 });
 
 export const AnnouncementSchema: v.GenericSchema<Announcement> = v.object({
-  ref: lmsRef<"announcement">(),
+  ref: lmsRef("announcement"),
   school: SchoolIdSchema,
-  course: lmsRef<"course">(),
+  course: lmsRef("course"),
   title: text,
   body: text,
   postedAt: IsoTimeSchema,
@@ -268,7 +281,7 @@ const PackageTermSchema: v.GenericSchema<PackageTerm> = v.object({
 });
 
 export const CourseShellSchema: v.GenericSchema<CourseShell> = v.object({
-  ref: lmsRef<"course">(),
+  ref: lmsRef("course"),
   school: SchoolIdSchema,
   code: text,
   title: text,
@@ -280,12 +293,12 @@ export const CourseShellSchema: v.GenericSchema<CourseShell> = v.object({
   endAt: nullable(IsoDateSchema),
   itemCount: count,
   setUp: v.boolean(),
-  copyTarget: lmsRef<"migrations">(),
-  stateTarget: lmsRef<"course-state">(),
+  copyTarget: lmsRef("migrations"),
+  stateTarget: lmsRef("course-state"),
 });
 
 export const SourceCourseSchema: v.GenericSchema<SourceCourse> = v.object({
-  ref: lmsRef<"course">(),
+  ref: lmsRef("course"),
   code: text,
   title: text,
   termName: text,
@@ -293,7 +306,7 @@ export const SourceCourseSchema: v.GenericSchema<SourceCourse> = v.object({
   endAt: nullable(IsoDateSchema),
   meetingDays: v.array(WeekdaySchema),
   template: v.boolean(),
-  dated: v.array(v.object({ ref: lmsRef<"item">(), title: text, dueAt: IsoTimeSchema })),
+  dated: v.array(v.object({ ref: lmsRef("item"), title: text, dueAt: IsoTimeSchema })),
 });
 
 const ContentLinkFields = { text, url: text };
@@ -303,7 +316,7 @@ export const CourseContentSchema: v.GenericSchema<CourseContent> = v.object({
   version: text,
   items: v.array(
     v.object({
-      ref: lmsRef<"item">(),
+      ref: lmsRef("item"),
       type: v.custom<ContentItemType>(isContentItemType),
       title: text,
       body: text,
@@ -321,7 +334,7 @@ export const CourseContentSchema: v.GenericSchema<CourseContent> = v.object({
             points: v.literal("other-course"),
             replacement: nullable(text),
           }),
-          v.object({ ...ContentLinkFields, points: v.literal("tool"), tool: lmsRef<"tool">() }),
+          v.object({ ...ContentLinkFields, points: v.literal("tool"), tool: lmsRef("tool") }),
         ]),
       ),
       copied: v.boolean(),
@@ -329,14 +342,14 @@ export const CourseContentSchema: v.GenericSchema<CourseContent> = v.object({
   ),
   modules: v.array(
     v.object({
-      ref: lmsRef<"module">(),
+      ref: lmsRef("module"),
       title: text,
       published: v.boolean(),
       itemCount: count,
       openUrl: text,
     }),
   ),
-  tools: v.array(v.object({ ref: lmsRef<"tool">(), name: text, configured: v.boolean() })),
+  tools: v.array(v.object({ ref: lmsRef("tool"), name: text, configured: v.boolean() })),
   policy: v.object({
     contactDomain: text,
     contactEmail: v.exactOptional(text),
@@ -345,7 +358,7 @@ export const CourseContentSchema: v.GenericSchema<CourseContent> = v.object({
 });
 
 export const MigrationSchema: v.GenericSchema<Migration> = v.object({
-  ref: lmsRef<"migration">(),
+  ref: lmsRef("migration"),
   signature: text,
   state: v.picklist(["queued", "preparing", "stalled", "running", "completed", "failed"]),
   completion: count,
@@ -393,13 +406,13 @@ const SubstitutionsSchema = v.custom<Readonly<Partial<Record<Weekday, Weekday>>>
 export const ChangeContentSchema: v.GenericSchema<ChangeContent> = v.variant("kind", [
   v.object({
     kind: v.literal("grade"),
-    target: lmsRef<"submission">(),
+    target: lmsRef("submission"),
     points: nullable(count),
     outOf: count,
     rubric: nullable(
       v.array(
         v.object({
-          criterion: lmsRef<"criterion">(),
+          criterion: lmsRef("criterion"),
           name: text,
           points: nullable(count),
           outOf: count,
@@ -412,25 +425,25 @@ export const ChangeContentSchema: v.GenericSchema<ChangeContent> = v.variant("ki
     override: nullable(count),
     excused: v.boolean(),
   }),
-  v.object({ kind: v.literal("reply"), target: lmsRef<"conversation">(), body: text }),
+  v.object({ kind: v.literal("reply"), target: lmsRef("conversation"), body: text }),
   v.object({
     kind: v.literal("message"),
-    target: lmsRef<"submission">(),
+    target: lmsRef("submission"),
     subject: text,
     body: text,
   }),
   v.object({
     kind: v.literal("announcement"),
-    target: lmsRef<"course">(),
+    target: lmsRef("course"),
     title: text,
     body: text,
   }),
   v.object({
     kind: v.literal("course-copy"),
-    target: lmsRef<"migrations">(),
+    target: lmsRef("migrations"),
     into: v.object({ code: text, title: text }),
     source: v.variant("kind", [
-      v.object({ kind: v.literal("course"), ref: lmsRef<"course">(), label: text, termName: text }),
+      v.object({ kind: v.literal("course"), ref: lmsRef("course"), label: text, termName: text }),
       v.object({
         kind: v.literal("cartridge"),
         name: text,
@@ -449,13 +462,13 @@ export const ChangeContentSchema: v.GenericSchema<ChangeContent> = v.variant("ki
   }),
   v.object({
     kind: v.literal("text-fix"),
-    target: lmsRef<"item">(),
+    target: lmsRef("item"),
     where: text,
     splice: v.object({ prefix: text, before: text, after: text, suffix: text }),
   }),
   v.object({
     kind: v.literal("item-set"),
-    target: v.union([lmsRef<"item">(), lmsRef<"course-state">()]),
+    target: v.union([lmsRef("item"), lmsRef("course-state")]),
     where: text,
     intent: v.variant("set", [
       v.object({ set: v.literal("due-at"), at: IsoTimeSchema }),
@@ -467,7 +480,7 @@ export const ChangeContentSchema: v.GenericSchema<ChangeContent> = v.variant("ki
   }),
 ]);
 
-const FieldOutcomeSchema = v.variant("status", [
+const FieldOutcomeSchema: v.GenericSchema<FieldOutcome> = v.variant("status", [
   v.object({
     status: v.literal("landed"),
     at: IsoTimeSchema,
@@ -477,12 +490,7 @@ const FieldOutcomeSchema = v.variant("status", [
   v.object({ status: v.literal("unknown"), since: IsoTimeSchema }),
 ]);
 
-export const FieldOutcomesSchema: v.GenericSchema<FieldOutcomes> = v.custom<FieldOutcomes>(
-  (input) =>
-    typeof input === "object" &&
-    input !== null &&
-    !Array.isArray(input) &&
-    Object.entries(input).every(
-      ([field, outcome]) => v.is(FieldKeySchema, field) && v.is(FieldOutcomeSchema, outcome),
-    ),
+export const FieldOutcomesSchema: v.GenericSchema<FieldOutcomes> = v.record(
+  FieldKeySchema,
+  FieldOutcomeSchema,
 );

@@ -14,10 +14,10 @@ import {
   isoTime,
   parseIsoTime,
   parseSchoolHost,
+  schoolIdOf,
   type IsoTime,
   type LmsRef,
   type Result,
-  type SchoolId,
 } from "../../shared/domain/ids";
 import {
   googleExportOf,
@@ -61,10 +61,10 @@ export const canvasSchoolAt = (raw: string): School | null => {
     return null;
   }
   // The URL parser reads `0x7f.1` as an IPv4 address, so anything it rewrites is refused along with plain IPs and ports.
-  if (normalized !== host || host.includes(":") || /^[\d.]+$/.test(host)) return null;
+  const id = schoolIdOf(host);
+  if (normalized !== host || id === null || /^[\d.]+$/.test(host)) return null;
   return {
-    // The id is the host by design, so the two can't name different schools.
-    id: host as string as SchoolId,
+    id,
     abbr: (host.split(".")[0] ?? host).slice(0, 4).toUpperCase(),
     name: host,
     host,
