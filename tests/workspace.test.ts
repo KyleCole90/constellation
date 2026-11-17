@@ -167,6 +167,29 @@ describe("persistence", () => {
       "an announcement thread with no course",
       (saved) => (threadOfKind(saved, "announcement").course = null),
     ],
+    [
+      "prefs missing everything but thread views",
+      (saved) => (saved.state.prefs = { threadUi: {} }),
+    ],
+    [
+      "a thread view with no selection",
+      (saved) =>
+        (saved.state.prefs = {
+          sidebarOpen: true,
+          collapsed: {},
+          expandedThreads: {},
+          threadUi: {
+            [NORTH_STAR_THREAD]: {
+              panel: null,
+              queueOpen: true,
+              queueFilter: "all",
+              current: null,
+              scrollTop: null,
+            },
+          },
+        }),
+    ],
+    ["a thread message that is null", (saved) => (firstOf(saved.state.threads).messages = [null])],
   ])("a saved workspace with %s resets and keeps a backup", async (_name, corrupt) => {
     const first = await connected();
     await openFor(first, "Maya Ortiz");
@@ -183,13 +206,14 @@ describe("persistence", () => {
     expect(second.storage.getItem(`${WORKSPACE_STORAGE_KEY}.unreadable`)).toBe(blob);
   });
 
-  it("a save from before setups, new courses and handoffs existed still loads", async () => {
+  it("a save from before setups, new courses, handoffs and undrafted work existed still loads", async () => {
     const first = await connected();
     const id = await openFor(first, "Maya Ortiz");
     const saved = rawSave(first.storage);
     delete saved.state.setups;
     delete saved.state.newCourses;
     delete saved.state.handoffs;
+    delete saved.state.undrafted;
     first.storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(saved));
     const second = await makeStoreRig({
       storage: first.storage,
@@ -198,6 +222,7 @@ describe("persistence", () => {
     });
     expect(second.state().notice ?? "").not.toContain("reset");
     expect(second.state().changes[id]).toBeDefined();
+    expect(second.state().undrafted).toEqual({});
   });
 
   it.each([1, 4])(
@@ -1620,6 +1645,10 @@ describe("the failure lab", () => {
     ["a collection that isn't a list", (stored) => (stored["courses"] = "nope")],
     ["no demo script", (stored) => delete stored["script"]],
     ["another version", (stored) => (stored["version"] = 1)],
+    [
+      "a new term with no copy jobs",
+      (stored) => (stored["term"] = { shells: [], sources: [], content: {} }),
+    ],
   ])("a stored LMS with %s starts fresh instead of loading it", (_name, corrupt) => {
     const storage = memoryStorage();
     const make = () =>
