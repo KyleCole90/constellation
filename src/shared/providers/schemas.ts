@@ -50,6 +50,7 @@ import type {
 } from "../domain/lms";
 import {
   isoDate,
+  isWeekday,
   termName,
   type TermDates,
   type TermName,
@@ -89,7 +90,7 @@ export const lmsRef = <K extends string>(_kind: K) =>
 export const IsoTimeSchema = brand<IsoTime>((raw) => parseIsoTime(raw) === raw);
 export const IsoDateSchema = brand<IsoDate>((raw) => isoDate(raw) === raw);
 export const WeekdaySchema = v.custom<Weekday>(
-  (input) => typeof input === "number" && Number.isInteger(input) && input >= 0 && input <= 6,
+  (input) => typeof input === "number" && isWeekday(input),
 );
 export const FieldKeySchema = v.custom<FieldKey>(
   (input) => typeof input === "string" && Object.hasOwn(FIELD_LABEL, input),
@@ -416,13 +417,12 @@ export const TermPlanSchema: v.GenericSchema<TermPlan> = v.object({
   breaks: v.array(v.object({ name: text, start: IsoDateSchema, end: IsoDateSchema })),
 });
 
-const isWeekday = (input: unknown) => v.is(WeekdaySchema, input);
-const SubstitutionsSchema = v.custom<Readonly<Partial<Record<Weekday, Weekday>>>>(
+export const SubstitutionsSchema = v.custom<Readonly<Partial<Record<Weekday, Weekday>>>>(
   (input) =>
     typeof input === "object" &&
     input !== null &&
     !Array.isArray(input) &&
-    Object.entries(input).every(([day, to]) => isWeekday(Number(day)) && isWeekday(to)),
+    Object.entries(input).every(([day, to]) => isWeekday(Number(day)) && v.is(WeekdaySchema, to)),
 );
 
 export const CopySourceSchema = v.variant("kind", [
