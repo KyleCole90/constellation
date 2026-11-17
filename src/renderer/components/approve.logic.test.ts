@@ -2,29 +2,24 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { CopySource } from "~/shared/domain/content";
 import { newChangeRecord, type ChangeRecord, type RemoteState } from "~/shared/domain/change";
-import {
-  type ChangeId,
-  type IsoDate,
-  type LmsRef,
-  type SchoolId,
-  isoTime,
-} from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import { termName } from "~/shared/domain/term";
 
 import { riskPrompt } from "./approve.logic";
+import { changeId, isoDate, lmsRef, schoolId } from "../../../tests/fixtures/ids";
 
 const AT = isoTime("2026-10-30T12:00:00.000Z");
 const PLAN = {
   oldTerm: {
     name: termName("Fall 2026"),
-    start: "2026-08-24" as IsoDate,
-    end: "2026-12-11" as IsoDate,
+    start: isoDate("2026-08-24"),
+    end: isoDate("2026-12-11"),
     days: [2, 4] as const,
   },
   newTerm: {
     name: termName("Spring 2027"),
-    start: "2027-01-19" as IsoDate,
-    end: "2027-05-07" as IsoDate,
+    start: isoDate("2027-01-19"),
+    end: isoDate("2027-05-07"),
     days: [2, 4] as const,
   },
   breaks: [],
@@ -32,7 +27,7 @@ const PLAN = {
 
 const FALL_COURSE: CopySource = {
   kind: "course",
-  ref: "rsu:course:12190" as LmsRef<"course">,
+  ref: lmsRef<"course">("rsu:course:12190"),
   label: "HUM 150 Film & Society",
   termName: "Fall 2026",
 };
@@ -50,13 +45,13 @@ const copyInto = (
     migrations: [],
   };
   return newChangeRecord({
-    id: "ch-1" as ChangeId,
-    school: "rsu" as SchoolId,
-    course: "rsu:course:12103" as LmsRef<"course">,
+    id: changeId("ch-1"),
+    school: schoolId("rsu"),
+    course: lmsRef<"course">("rsu:course:12103"),
     subject: "Copy into HUM 150",
     content: {
       kind: "course-copy",
-      target: "rsu:migrations:12103" as LmsRef<"migrations">,
+      target: lmsRef<"migrations">("rsu:migrations:12103"),
       into: { code: "HUM 150", title: "Introduction to Humanities" },
       source,
       plan: PLAN,

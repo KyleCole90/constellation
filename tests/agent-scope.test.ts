@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { AgentScope } from "~/shared/agent/agent";
-import type { ChangeId, ThreadId } from "~/shared/domain/ids";
+import type { ChangeId } from "~/shared/domain/ids";
 import { invoker, type Bridge } from "~/shared/ipc";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 import {
@@ -14,8 +14,9 @@ import {
 import { clickWitness } from "./fixtures/changes";
 import { rulesMain, scopeOf } from "./fixtures/rules-main";
 import { makeStoreRig } from "./fixtures/store-rig";
+import { threadId } from "./fixtures/ids";
 
-const QUEUE = "t-queue" as ThreadId;
+const QUEUE = threadId("t-queue");
 
 /** What the renderer hands main for Claude, answered by the rules agent so drafts still land. */
 const wire = async () => {
@@ -133,9 +134,7 @@ describe("what a turn sends Claude", () => {
     await rig.clock.run(started.done);
 
     const [chat] = sent;
-    const northStar = chat?.scope.northStar as unknown as {
-      grades: { course: string; counts: Record<string, number> }[];
-    };
+    const northStar = chat?.scope.northStar;
     if (!chat || !northStar) throw new Error("no North Star scope");
     const names = [
       ...allSubmissions(rig).map((s) => s.studentName),
@@ -161,7 +160,7 @@ describe("what a turn sends Claude", () => {
     });
 
     const eng101 = northStar.grades.find((course) => course.course === essay2.course.ref);
-    expect(eng101?.counts).toEqual({
+    expect(eng101).toHaveProperty("counts", {
       students: book?.rows.length,
       withMissingWork: book?.rows.filter((row) => row.missing > 0).length,
       atRisk: expect.any(Number),

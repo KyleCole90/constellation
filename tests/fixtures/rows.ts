@@ -1,15 +1,15 @@
-import { type LmsRef, type SchoolHost, type SchoolId } from "~/shared/domain/ids";
 import type { Assignment, Conversation, Course, School, Submission } from "~/shared/domain/lms";
 import type { WorkRow } from "~/renderer/components/thread/queue.logic";
 import type { DueItem, InboxRow } from "~/renderer/stores/selectors";
 
 import { AT, COURSE, SCHOOL, SUBMISSION } from "./changes";
+import { lmsRef, schoolHost, schoolId } from "./ids";
 
 export const school = (id = "lcc", patch: Partial<School> = {}): School => ({
-  id: id as SchoolId,
+  id: schoolId(id),
   abbr: id.toUpperCase(),
   name: id,
-  host: `${id}.test` as SchoolHost,
+  host: schoolHost(`${id}.test`),
   provider: "fake-canvas",
   ...patch,
 });
@@ -26,7 +26,7 @@ export const course = (patch: Partial<Course> = {}): Course => ({
 });
 
 export const assignment = (patch: Partial<Assignment> = {}): Assignment => ({
-  ref: "lcc:assignment:2" as LmsRef<"assignment">,
+  ref: lmsRef<"assignment">("lcc:assignment:2"),
   school: SCHOOL,
   course: COURSE,
   title: "Essay 2",
@@ -43,8 +43,8 @@ export const submission = (patch: Partial<Submission> = {}): Submission => ({
   ref: SUBMISSION,
   school: SCHOOL,
   course: COURSE,
-  assignment: "lcc:assignment:2" as LmsRef<"assignment">,
-  student: "lcc:student:3" as LmsRef<"student">,
+  assignment: lmsRef<"assignment">("lcc:assignment:2"),
+  student: lmsRef<"student">("lcc:student:3"),
   studentName: "Maya Ortiz",
   workflow: "submitted",
   attempt: 1,
@@ -59,7 +59,7 @@ export const submission = (patch: Partial<Submission> = {}): Submission => ({
 });
 
 export const conversation = (patch: Partial<Conversation> = {}): Conversation => ({
-  ref: "lcc:conversation:1" as LmsRef<"conversation">,
+  ref: lmsRef<"conversation">("lcc:conversation:1"),
   school: SCHOOL,
   course: COURSE,
   subject: "A question",
@@ -76,7 +76,7 @@ type ConversationRow = Extract<WorkRow, { kind: "conversation" }>;
 const rowDefaults = {
   title: "",
   detail: "Essay 2",
-  assignment: "a-essay" as LmsRef<"assignment">,
+  assignment: lmsRef<"assignment">("a-essay"),
   school: school(),
   course: course(),
   dueAt: null,
@@ -98,7 +98,7 @@ export const submissionRow = (
   ...rowDefaults,
   title: key,
   ...patch,
-  key: key as LmsRef<"submission">,
+  key: lmsRef<"submission">(key),
   kind: "submission",
 });
 
@@ -110,7 +110,7 @@ export const conversationRow = (
   ...rowDefaults,
   title: key,
   ...patch,
-  key: key as LmsRef<"conversation">,
+  key: lmsRef<"conversation">(key),
   kind: "conversation",
 });
 

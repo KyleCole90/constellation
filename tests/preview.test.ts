@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { newChangeRecord, type ChangeContent, type ChangeRecord } from "~/shared/domain/change";
-import type { ChangeId, IsoDate, LmsRef, SchoolId } from "~/shared/domain/ids";
 import { previewOf, type PreviewField } from "~/shared/domain/preview";
 import { termName, type TermName } from "~/shared/domain/term";
 
 import { AT, gradeContent, gradeRemote, held, newDraft, sending, step } from "./fixtures/changes";
+import { changeId, isoDate as day, lmsRef, schoolId } from "./fixtures/ids";
 
 const fieldOf = (fields: readonly PreviewField[], field: string): PreviewField => {
   const found = fields.find((candidate) => candidate.field === field);
@@ -216,16 +216,15 @@ describe("the send preview", () => {
 });
 
 describe("the course copy preview", () => {
-  const day = (text: string) => text as IsoDate;
   const copyOf = (oldName: TermName | null): ChangeRecord =>
     newChangeRecord({
-      id: "ch-copy" as ChangeId,
-      school: "lcc" as SchoolId,
-      course: "lcc:course:1" as LmsRef<"course">,
+      id: changeId("ch-copy"),
+      school: schoolId("lcc"),
+      course: lmsRef<"course">("lcc:course:1"),
       subject: "Copy into BIO",
       content: {
         kind: "course-copy",
-        target: "lcc:migrations:1" as LmsRef<"migrations">,
+        target: lmsRef<"migrations">("lcc:migrations:1"),
         into: { code: "BIO", title: "Biology" },
         source: { kind: "cartridge", name: "bio-export.imscc", kb: 12, hint: null },
         plan: {

@@ -9,9 +9,10 @@ import {
   type LmsError,
   type RemoteState,
 } from "~/shared/domain/change";
-import { type ChangeId, type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
+import { type SchoolId, isoTime } from "~/shared/domain/ids";
 import { mintSendPermit, type SendPermit } from "~/shared/domain/permit";
 import type { LmsProvider } from "~/shared/providers/provider";
+import { changeId, lmsRef } from "./ids";
 
 const AT = isoTime("2026-10-30T12:00:00.000Z");
 
@@ -86,9 +87,9 @@ export const permitFor = async (
 ): Promise<SendPermit> => {
   const remote = await unwrap(provider.observe(content));
   const draft = newChangeRecord({
-    id: "ch-contract" as ChangeId,
+    id: changeId("ch-contract"),
     school,
-    course: `${school}:course:1` as LmsRef<"course">,
+    course: lmsRef<"course">(`${school}:course:1`),
     subject: "contract",
     content,
     basis: { readAt: AT, remote },
@@ -150,6 +151,7 @@ export const runProviderContract = (
     it("apply refuses a plain object or a JSON copy of a permit and writes nothing", async () => {
       const { provider, content, school, writeCount } = await makeHarness();
       const genuine = await permitFor(provider, content, ["grade", "comment"], school);
+      // forged: permits mintSendPermit never made, which apply must refuse
       const forgeries = [
         { changeId: "ch-contract", content, fields: ["grade", "comment"] },
         JSON.parse(JSON.stringify(genuine)),

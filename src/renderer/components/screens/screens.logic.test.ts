@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ChangeSummary } from "~/shared/domain/change";
-import { type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import type { Assignment, School, Submission } from "~/shared/domain/lms";
 import type {
   DueExtras,
@@ -13,6 +13,7 @@ import type {
   InboxRow,
   RosterRow,
   Staged,
+  ThreadStatus,
   WorkStage,
 } from "~/renderer/stores/selectors";
 
@@ -45,7 +46,7 @@ import {
   type RowFilter,
 } from "./gradebook.logic";
 import { filterInbox, messagingNotes, preview, statusCount } from "./inbox.logic";
-import { changeSummary } from "../../../../tests/fixtures/changes";
+import { AT, COURSE, SCHOOL, changeSummary } from "../../../../tests/fixtures/changes";
 import {
   assignment as assignmentOf,
   conversation,
@@ -54,9 +55,10 @@ import {
   inboxRow,
   school,
 } from "../../../../tests/fixtures/rows";
+import { lmsRef, schoolId, threadId } from "../../../../tests/fixtures/ids";
 
 /** A course named by its ref, as the plan shows it. */
-const courseOf = (ref: string) => course({ ref: ref as LmsRef<"course">, code: ref.toUpperCase() });
+const courseOf = (ref: string) => course({ ref: lmsRef<"course">(ref), code: ref.toUpperCase() });
 
 const lcc = school("lcc", { name: "Lakeshore" });
 const rsu = school("rsu", { name: "Ridge State" });
@@ -67,10 +69,33 @@ const groups: readonly DueGroup[] = [
   { key: "past", label: "Past due", items: [due(lcc), due(rsu)] },
   { key: "later", label: "Later", items: [due(rsu, { toGrade: 0 })] },
 ];
-const extras = {
-  drafts: [{ school: lcc }, { school: rsu }],
-  replies: [{ school: lcc }, { school: lcc }, { school: rsu }],
-} as unknown as DueExtras;
+/** An announcement thread for a course, named by its ref, with a draft under way unless `drafted` is false. */
+const draft = (
+  ref: string,
+  tone: ThreadStatus["tone"] = "todo",
+  drafted = true,
+  at: School = rsu,
+): DueExtras["drafts"][number] => ({
+  thread: {
+    id: threadId(`t-${ref}`),
+    kind: "announcement",
+    school: at.id,
+    course: lmsRef<"course">(ref),
+    title: `${ref} news`,
+    messages: [],
+    focus: null,
+    updatedAt: AT,
+  },
+  name: `${ref} news`,
+  course: courseOf(ref),
+  school: at,
+  status: { label: drafted ? "In progress" : "Not started", tone },
+  drafted,
+});
+const extras: DueExtras = {
+  drafts: [draft("lcc", "todo", true, lcc), draft("rsu")],
+  replies: [inboxRow({ school: lcc }), inboxRow({ school: lcc }), inboxRow({ school: rsu })],
+};
 
 describe("the work plan", () => {
   const NOW = new Date("2026-10-30T14:00:00").getTime();
@@ -89,7 +114,7 @@ describe("the work plan", () => {
       total: 10,
       course: courseOf(ref),
       assignment: assignmentOf({
-        ref: `${ref}:${title}` as LmsRef<"assignment">,
+        ref: lmsRef<"assignment">(`${ref}:${title}`),
         course: courseOf(ref).ref,
         title,
         shortTitle: title,
@@ -98,15 +123,6 @@ describe("the work plan", () => {
     }),
     days,
   });
-  const draft = (course: string, tone = "todo", drafted = true) =>
-    ({
-      school: rsu,
-      course: { ref: course, code: course.toUpperCase() },
-      thread: { id: `t-${course}` },
-      name: `${course} news`,
-      drafted,
-      status: { label: drafted ? "In progress" : "Not started", tone },
-    }) as unknown as DueExtras["drafts"][number];
   const reply = (ref: string, from: string, status?: string): InboxRow => {
     const last = {
       id: "m1",
@@ -119,7 +135,7 @@ describe("the work plan", () => {
       school: rsu,
       course: courseOf(ref),
       conversation: conversation({
-        ref: `${ref}:${from}` as LmsRef<"conversation">,
+        ref: lmsRef<"conversation">(`${ref}:${from}`),
         course: courseOf(ref).ref,
         from,
         subject: `Question from ${from}`,
@@ -305,7 +321,10 @@ describe("the work plan", () => {
   });
 
   it("writes each step as a plain instruction at every stage", () => {
-    const instructions = (stages: ReadonlyMap<string, "stuck" | "review">, tone?: string) =>
+    const instructions = (
+      stages: ReadonlyMap<string, "stuck" | "review">,
+      tone?: ThreadStatus["tone"],
+    ) =>
       plan(
         [assignment("hot", "Analysis", -4, 4), assignment("hot", "Response", 0, 0)],
         { drafts: [draft("hot", tone)], replies: [reply("hot", "Ezra")] },
@@ -540,15 +559,15 @@ describe("what's due", () => {
   });
 
   it("a school filter drops empty groups and narrows the extras", () => {
-    expect(filterDue(groups, "lcc" as SchoolId).map((group) => group.key)).toEqual(["past"]);
-    expect(filterExtras(extras, "lcc" as SchoolId).replies).toHaveLength(2);
+    expect(filterDue(groups, schoolId("lcc")).map((group) => group.key)).toEqual(["past"]);
+    expect(filterExtras(extras, schoolId("lcc")).replies).toHaveLength(2);
     expect(filterDue(groups, "all")).toHaveLength(2);
   });
 
   it("an empty What's due never calls hidden work done", () => {
     expect(nothingDueWords("all", false)).toBe("Nothing is due, and nothing is waiting on you.");
     expect(nothingDueWords("all", true)).toBe("Nothing is due where you're connected.");
-    expect(nothingDueWords("lcc" as SchoolId, true)).toBe("Nothing is due at this school.");
+    expect(nothingDueWords(schoolId("lcc"), true)).toBe("Nothing is due at this school.");
   });
 
   it("work in progress shows a count and a bar, and future work shows neither", () => {
@@ -606,7 +625,7 @@ describe("the inbox", () => {
 
   it("each filter finds its own rows, and school narrows any of them", () => {
     expect(filterInbox(rows, "waiting", "all")).toEqual([rows[1]]);
-    expect(filterInbox(rows, "all", "rsu" as SchoolId)).toEqual([rows[1]]);
+    expect(filterInbox(rows, "all", schoolId("rsu"))).toEqual([rows[1]]);
   });
 
   it("a school whose provider can't message gets a plain note, whatever the provider is", () => {
@@ -629,7 +648,7 @@ describe("the inbox", () => {
 const submission = (over: Partial<Submission>) =>
   ({ workflow: "graded", lateDays: 0, grade: null, ...over }) as Submission;
 const cell = (over: Partial<GradebookCell>): GradebookCell => ({
-  assignment: "a" as LmsRef<"assignment">,
+  assignment: lmsRef<"assignment">("a"),
   submission: submission({}),
   grade: 80,
   pending: null,
@@ -638,6 +657,19 @@ const cell = (over: Partial<GradebookCell>): GradebookCell => ({
   sent: false,
   asked: null,
   ...over,
+});
+
+const gradebookRow = (
+  name: string,
+  cells: readonly GradebookCell[],
+  percent: number | null = null,
+): GradebookRow => ({
+  student: { ref: lmsRef<"student">(name), school: SCHOOL, course: COURSE, name },
+  cells,
+  earned: 0,
+  possible: 0,
+  percent,
+  missing: 0,
 });
 
 describe("gradebook cells", () => {
@@ -713,7 +745,7 @@ describe("gradebook cells", () => {
 describe("gradebook sorting", () => {
   const assignment = { ref: "a" } as Assignment;
   const person = (name: string, grade: number | null, percent: number | null) =>
-    ({ student: { name }, cells: [cell({ grade })], percent }) as unknown as GradebookRow;
+    gradebookRow(name, [cell({ grade })], percent);
   const rows = [person("Bea", 50, 50), person("Ana", null, null), person("Cal", 90, 90)];
   const names = (sorted: readonly GradebookRow[]) => sorted.map((r) => r.student.name);
 
@@ -755,10 +787,10 @@ describe("gradebook sorting", () => {
 
 describe("who is behind", () => {
   const student = (name: string, ...cells: Partial<Submission>[]) =>
-    ({
-      student: { name },
-      cells: cells.map((over) => cell({ grade: null, submission: submission(over) })),
-    }) as unknown as GradebookRow;
+    gradebookRow(
+      name,
+      cells.map((over) => cell({ grade: null, submission: submission(over) })),
+    );
   const rows = [
     student("Ana", { workflow: "graded" }),
     student("Bea", { workflow: "graded" }, { workflow: "missing" }),

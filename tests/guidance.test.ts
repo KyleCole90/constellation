@@ -6,11 +6,12 @@ import {
   type Agent,
   type AgentInput,
 } from "~/shared/agent/agent";
-import { type ThreadId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 
 import { makeStoreRig } from "./fixtures/store-rig";
+import { threadId } from "./fixtures/ids";
 
-const QUEUE = "t-queue" as ThreadId;
+const QUEUE = threadId("t-queue");
 const STRICTER = "Full marks need clear, specific evidence.";
 
 /** Claude records a typed preference as guidance, and drafts nothing. It keeps what each call heard. */

@@ -3,13 +3,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { DRAFT_GRADE_REQUEST } from "~/shared/agent/agent";
 import { ApprovalWitness } from "~/shared/domain/approval";
 import { summarize, zeroPatch, type ChangePatch } from "~/shared/domain/change";
-import {
-  type ChangeId,
-  type LmsRef,
-  type SchoolId,
-  type ThreadId,
-  isoTime,
-} from "~/shared/domain/ids";
+import { type ChangeId, type LmsRef, isoTime } from "~/shared/domain/ids";
 import { previewOf } from "~/shared/domain/preview";
 import { DEMO_CONFLICT, DEMO_PARTIAL, QUIET_NOISE } from "~/shared/providers/fake-canvas/faults";
 import { FakeCanvasServer, LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
@@ -42,10 +36,11 @@ import { VirtualClock } from "./fixtures/clock";
 import { jsonObject, rawLms, rawSave, savedWorkspace } from "./fixtures/saved";
 import { memoryStorage } from "./fixtures/storage";
 import { STORE_TOKEN, makeStoreRig, type StoreRig } from "./fixtures/store-rig";
+import { schoolId, threadId } from "./fixtures/ids";
 
-const LCC = "lcc" as SchoolId;
-const RSU = "rsu" as SchoolId;
-const QUEUE = "t-queue" as ThreadId;
+const LCC = schoolId("lcc");
+const RSU = schoolId("rsu");
+const QUEUE = threadId("t-queue");
 
 const stateTag = (rig: StoreRig, id: ChangeId) => rig.state().changes[id]?.state.tag;
 
@@ -68,6 +63,12 @@ const openFor = async (
   const id = await rig.clock.run(rig.state().openSubmission(QUEUE, ref, { fill: "draft" }));
   if (!id) throw new Error("Nothing was drafted.");
   return id;
+};
+
+const gradeTarget = (rig: StoreRig, id: ChangeId): LmsRef<"submission"> => {
+  const content = rig.state().changes[id]?.content;
+  if (content?.kind !== "grade") throw new Error(`${id} is not a grade.`);
+  return content.target;
 };
 
 const connected = async (options: Parameters<typeof makeStoreRig>[0] = {}) => {
@@ -857,6 +858,7 @@ describe("dispatchUser", () => {
     expect(
       rig.state().dispatchUser(id, {
         type: "approve",
+        // forged: a witness no approval made, which the store must refuse
         witness: { covers: () => true } as unknown as ApprovalWitness,
         at,
       }),
@@ -894,7 +896,7 @@ describe("resolveConflict", () => {
   it("reads the LMS now, rebases the draft, and asks for approval again", async () => {
     const rig = await connected();
     const id = await openFor(rig, "Maya Ortiz");
-    const target = rig.state().changes[id]?.content.target as LmsRef<"submission">;
+    const target = gradeTarget(rig, id);
     approve(rig, id);
     rig.server.changeGradeOutOfBand(target, 65, "Jordan Pike (TA)");
     await rig.clock.run(rig.state().sendChanges([id]));
@@ -910,7 +912,7 @@ describe("the sync after a send", () => {
   it("reads again when a sync was already out, so it sees what the send just found", async () => {
     const rig = await connected();
     const id = await openFor(rig, "Maya Ortiz");
-    const target = rig.state().changes[id]?.content.target as LmsRef<"submission">;
+    const target = gradeTarget(rig, id);
     approve(rig, id);
     const early = rig.state().syncSchool(LCC);
     rig.server.changeGradeOutOfBand(target, 65, "Jordan Pike (TA)");
@@ -1055,7 +1057,8 @@ describe("selectors", () => {
     const fiona = rig.server.findSubmission("Fiona Kerr", "Sequence Analysis");
     const all = selectQueueRows(rig.state());
     const assignment = all.find((row) => row.assignment.title === "Sequence Analysis")?.assignment
-      .ref as LmsRef<"assignment">;
+      .ref;
+    if (!assignment) throw new Error("No Sequence Analysis row.");
     const listed = selectQueueRows(rig.state(), assignment, true);
     expect(listed.at(-1)).toMatchObject({ missing: true, open: true });
     expect(listed.at(-1)?.submission.ref).toBe(fiona);
@@ -1065,7 +1068,8 @@ describe("selectors", () => {
 
   it("the queue narrows to one assignment", async () => {
     const rig = await connected();
-    const assignment = selectQueueRows(rig.state())[0]?.assignment.ref as LmsRef<"assignment">;
+    const assignment = selectQueueRows(rig.state())[0]?.assignment.ref;
+    if (!assignment) throw new Error("The queue is empty.");
     const rows = selectQueueRows(rig.state(), assignment);
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((row) => row.assignment.ref === assignment)).toBe(true);
@@ -1079,7 +1083,8 @@ describe("selectors", () => {
     expect(selectInboxRows(state)).toBe(selectInboxRows(state));
     expect(selectWhatsDue(state, now)).toBe(selectWhatsDue(state, now + 1));
     expect(selectCalendar(state, now)).toBe(selectCalendar(state, now + 1));
-    const course = state.cache[LCC]?.courses[0]?.ref as LmsRef<"course">;
+    const course = state.cache[LCC]?.courses[0]?.ref;
+    if (!course) throw new Error("No course.");
     expect(selectGradebook(state, course)).toBe(selectGradebook(state, course));
     expect(selectCourseOverview(state, course, now)).toBe(
       selectCourseOverview(state, course, now + 1),
@@ -1188,7 +1193,8 @@ describe("selectors", () => {
     const rig = await connected();
     const id = await openFor(rig, "Maya Ortiz");
     const change = rig.state().changes[id];
-    const book = selectGradebook(rig.state(), change?.course as LmsRef<"course">);
+    if (!change) throw new Error("No change.");
+    const book = selectGradebook(rig.state(), change.course);
     const cell = book?.rows
       .flatMap((row) => row.cells)
       .find((c) => c.submission?.ref === change?.content.target);
@@ -1273,7 +1279,8 @@ describe("selectors", () => {
       approval: before.approval,
       ready: 1,
     });
-    const school = rig.state().changes[id]?.school as SchoolId;
+    const school = rig.state().changes[id]?.school;
+    if (!school) throw new Error("No change.");
     const siblings = rig.state().cache[school]?.courses ?? [];
     expect(selectSchoolWaiting(rig.state(), school).ready).toBe(
       siblings.reduce(
@@ -1294,18 +1301,14 @@ describe("selectors", () => {
     expect(selectThreadStatus(rig.state(), grading.id)?.label).toBe("AI draft. Not sent");
     approve(rig, id);
     expect(selectThreadStatus(rig.state(), grading.id)?.label).toBe("Ready to send");
-    rig.server.changeGradeOutOfBand(
-      rig.state().changes[id]?.content.target as LmsRef<"submission">,
-      65,
-      "TA",
-    );
+    rig.server.changeGradeOutOfBand(gradeTarget(rig, id), 65, "TA");
     await rig.clock.run(rig.state().sendChanges([id]));
     expect(selectThreadStatus(rig.state(), grading.id)?.label).toBe("Needs attention");
   });
 
   it("a general thread has no status pill", async () => {
     const rig = await connected();
-    expect(selectThreadStatus(rig.state(), "t-general" as ThreadId)).toBeNull();
+    expect(selectThreadStatus(rig.state(), threadId("t-general"))).toBeNull();
   });
 
   it("an agent run marks its thread as working", async () => {
@@ -1326,7 +1329,7 @@ describe("seeded threads", () => {
     const rig = await makeStoreRig();
     const { threads } = rig.state();
     const expected = SEED.courses.flatMap((course) => course.threads.map((thread) => thread.id));
-    for (const id of expected) expect(threads[id as ThreadId], id).toBeDefined();
+    for (const id of expected) expect(threads[threadId(id)], id).toBeDefined();
     expect(Object.keys(threads)).toHaveLength(expected.length + 4);
     expect(threads[QUEUE]?.kind).toBe("queue");
     expect(Object.values(threads).filter((thread) => thread.kind === "general")).toHaveLength(1);
@@ -1348,7 +1351,8 @@ describe("seeded threads", () => {
 
   it("createThread adds one to a course", async () => {
     const rig = await connected();
-    const course = rig.state().cache[LCC]?.courses[0]?.ref as LmsRef<"course">;
+    const course = rig.state().cache[LCC]?.courses[0]?.ref;
+    if (!course) throw new Error("No course.");
     const id = rig
       .state()
       .createThread({ kind: "general", school: LCC, course, title: "Ask about office hours" });

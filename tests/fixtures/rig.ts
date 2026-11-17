@@ -24,9 +24,10 @@ import { VirtualClock } from "./clock";
 import { DurableLedger } from "./ledger";
 import { BrowserLocks } from "./locks";
 import { memoryStorage } from "./storage";
+import { changeId, schoolId } from "./ids";
 
-export const LCC = "lcc" as SchoolId;
-export const RSU = "rsu" as SchoolId;
+export const LCC = schoolId("lcc");
+export const RSU = schoolId("rsu");
 const TOKEN = "fake-token-with-enough-length";
 
 /** A grade a teacher might give: 80% on every criterion, with a comment and nothing attached. */
@@ -140,7 +141,7 @@ export const makeRig = async () => {
     if (!course) throw new Error(`No course at ${school}.`);
     const at = isoTime(clock.now());
     const record = newChangeRecord({
-      id: `ch-${++seq}` as ChangeId,
+      id: changeId(`ch-${++seq}`),
       school,
       course,
       subject: "test",

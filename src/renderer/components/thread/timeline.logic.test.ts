@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ChangeRecord, ChangeSummary } from "~/shared/domain/change";
-import { type ChangeId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import type { ThreadMessage } from "~/renderer/stores/types";
 
 import {
@@ -12,6 +12,8 @@ import {
   visibleMessages,
   walkStep,
 } from "./timeline.logic";
+import { gradeContent, newDraft } from "../../../../tests/fixtures/changes";
+import { changeId, lmsRef, threadId } from "../../../../tests/fixtures/ids";
 
 const at = (minute: number) => isoTime(`2026-10-30T10:0${minute}:00.000Z`);
 const work = (minute: number, line: string): ThreadMessage => ({
@@ -24,19 +26,28 @@ const say = (minute: number, text: string): ThreadMessage => ({
   text,
   at: at(minute),
 });
-const change = (minute: number, id: string, target = id, kind = "grade") =>
-  ({
-    id,
-    content: { kind, target },
-    activity: [{ at: at(minute), actor: "agent", text: "Drafted" }],
-  }) as unknown as ChangeRecord;
+const change = (
+  minute: number,
+  id: string,
+  target = id,
+  kind: "grade" | "announcement" = "grade",
+): ChangeRecord => ({
+  ...(kind === "grade"
+    ? newDraft(id, gradeContent({ target: lmsRef<"submission">(target) }))
+    : newDraft(
+        id,
+        { kind, target: lmsRef<"course">(target), title: "Moved", body: "Class moved." },
+        { kind, targetVersion: "v1", posts: [] },
+      )),
+  activity: [{ at: at(minute), actor: "agent", text: "Drafted" }],
+});
 const focusOn = (id: string | null, expanded = false) => ({
-  focus: id as ChangeId | null,
+  focus: id === null ? null : changeId(id),
   expanded,
 });
 const filed = (message: ThreadMessage, id: string): ThreadMessage => ({
   ...message,
-  change: id as ChangeId,
+  change: changeId(id),
 });
 
 describe("visibleMessages", () => {
@@ -68,14 +79,14 @@ describe("visibleMessages", () => {
 
 describe("buildTimeline", () => {
   it("groups handoffs in a row, and a message between them splits the group", () => {
-    const handoff = (minute: number, to: string) =>
-      ({
-        type: "handoff",
-        to,
-        course: "c",
-        brief: "b",
-        at: at(minute),
-      }) as unknown as ThreadMessage;
+    const handoff = (minute: number, to: string): ThreadMessage => ({
+      type: "handoff",
+      to: threadId(to),
+      course: lmsRef<"course">("c"),
+      work: { kind: "thread" },
+      brief: "b",
+      at: at(minute),
+    });
     const items = buildTimeline(
       [handoff(1, "a"), handoff(1, "b"), say(2, "done"), handoff(3, "c")],
       [],
@@ -103,13 +114,12 @@ describe("buildTimeline", () => {
 
   const types = (items: ReturnType<typeof buildTimeline>) =>
     items.map((item) => (item.type === "message" ? item.message.type : item.type));
-  const banner = (minute: number) =>
-    ({
-      type: "handed-off",
-      from: "chat",
-      request: "Draft it",
-      at: at(minute),
-    }) as unknown as ThreadMessage;
+  const banner = (minute: number): ThreadMessage => ({
+    type: "handed-off",
+    from: threadId("chat"),
+    request: "Draft it",
+    at: at(minute),
+  });
   const user = (minute: number): ThreadMessage => ({
     type: "user",
     text: "make it shorter",

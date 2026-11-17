@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vite-plus/test";
-
-import type { IsoDate } from "~/shared/domain/ids";
 import {
   findDateMentions,
   isoDate,
@@ -18,8 +16,8 @@ import {
   type TermPlan,
   type Weekday,
 } from "~/shared/domain/term";
+import { isoDate as d } from "./fixtures/ids";
 
-const d = (text: string): IsoDate => text as IsoDate;
 const SPRING_BREAK = { name: "Spring break", start: d("2027-03-08"), end: d("2027-03-12") };
 const PLAN: TermPlan = {
   oldTerm: {

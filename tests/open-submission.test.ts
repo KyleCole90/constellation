@@ -2,11 +2,12 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { FILL_GRADE_REQUEST, type Agent } from "~/shared/agent/agent";
 import { createRuleAgent } from "~/shared/agent/rules";
-import { type LmsRef, type ThreadId, isoTime } from "~/shared/domain/ids";
+import { type LmsRef, isoTime } from "~/shared/domain/ids";
 
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
+import { threadId } from "./fixtures/ids";
 
-const QUEUE = "t-queue" as ThreadId;
+const QUEUE = threadId("t-queue");
 
 const spyAgent = () => {
   const inner = createRuleAgent();

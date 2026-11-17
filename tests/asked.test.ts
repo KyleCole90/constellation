@@ -1,25 +1,26 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
+import { type LmsRef, isoTime } from "~/shared/domain/ids";
 import {
   askedInLms,
   namingAssignment,
   type Conversation,
   type Submission,
 } from "~/shared/domain/lms";
+import { lmsRef, schoolId } from "./fixtures/ids";
 
-const SCHOOL = "s" as SchoolId;
-const COURSE = "s:course:5660" as LmsRef<"course">;
-const JOEY = "s:student:1" as LmsRef<"student">;
-const STEPHANIE = "s:student:2" as LmsRef<"student">;
+const SCHOOL = schoolId("s");
+const COURSE = lmsRef<"course">("s:course:5660");
+const JOEY = lmsRef<"student">("s:student:1");
+const STEPHANIE = lmsRef<"student">("s:student:2");
 const PORTFOLIO = { title: "Create a Music Theory ePortfolio" };
 const COMPOSITION = { title: "Create Your Own Composition - First try!" };
 
 const submission = (student: LmsRef<"student">, assignment: string): Submission => ({
-  ref: `s:submission:5660:${assignment}:${student}` as LmsRef<"submission">,
+  ref: lmsRef<"submission">(`s:submission:5660:${assignment}:${student}`),
   school: SCHOOL,
   course: COURSE,
-  assignment: `s:assignment:5660:${assignment}` as LmsRef<"assignment">,
+  assignment: lmsRef<"assignment">(`s:assignment:5660:${assignment}`),
   student,
   studentName: "",
   workflow: "submitted",
@@ -39,7 +40,7 @@ const sent = (
   text: string,
   at = "2026-11-14T20:57:00Z",
 ): Conversation => ({
-  ref: `s:conversation:${subject.length}` as LmsRef<"conversation">,
+  ref: lmsRef<"conversation">(`s:conversation:${subject.length}`),
   school: SCHOOL,
   course: COURSE,
   subject,
@@ -80,7 +81,7 @@ describe("whether the LMS shows the student was asked to resubmit (#102)", () =>
   it("leaves the student's other work, and other students' work, to grade", () => {
     expect(askedInLms(SENT, submission(STEPHANIE, "composition"), COMPOSITION)).toBeNull();
     expect(
-      askedInLms(SENT, submission("s:student:3" as LmsRef<"student">, "portfolio"), PORTFOLIO),
+      askedInLms(SENT, submission(lmsRef<"student">("s:student:3"), "portfolio"), PORTFOLIO),
     ).toBeNull();
   });
 

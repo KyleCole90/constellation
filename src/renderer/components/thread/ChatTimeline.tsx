@@ -263,7 +263,8 @@ const useChatScroll = (thread: Thread, ui: ThreadUi, stickOn: string | undefined
 
   const place = (el: HTMLElement) => {
     if (anchor.current === "free") return;
-    const column = el.firstElementChild as HTMLElement;
+    const column = el.firstElementChild;
+    if (!(column instanceof HTMLElement)) return;
     column.style.paddingBottom = "";
     const card = focusedCard(el);
     if (anchor.current === "card" && card) {

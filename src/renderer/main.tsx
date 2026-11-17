@@ -32,7 +32,9 @@ const start = async () => {
   });
   keepFocusOnThePage(document);
 
-  ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+  const root = document.getElementById("root");
+  if (!root) throw new Error("index.html has no #root to render into.");
+  ReactDOM.createRoot(root).render(
     <React.StrictMode>
       <RouterProvider router={router} />
     </React.StrictMode>,

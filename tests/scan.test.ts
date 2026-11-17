@@ -9,7 +9,7 @@ import type {
   MigrationIssue,
   TextFixContent,
 } from "~/shared/domain/content";
-import { type IsoDate, type IsoTime, type LmsRef, isoTime } from "~/shared/domain/ids";
+import { type IsoTime, isoTime } from "~/shared/domain/ids";
 import {
   RULES,
   scanCourse,
@@ -19,8 +19,8 @@ import {
 } from "~/shared/domain/scan";
 import { spliceState } from "~/shared/domain/splice";
 import { termName, type TermPlan } from "~/shared/domain/term";
+import { isoDate as d, lmsRef } from "./fixtures/ids";
 
-const d = (text: string): IsoDate => text as IsoDate;
 const PLAN: TermPlan = {
   oldTerm: {
     name: termName("Fall 2026"),
@@ -47,10 +47,10 @@ const STATEMENT = {
   mustInclude: ["accommodations", "Access Office"],
   text: "Accommodations are arranged through the Access Office.",
 };
-const TOOL = "tool:1" as LmsRef<"tool">;
+const TOOL = lmsRef<"tool">("tool:1");
 
 const item = (patch: Partial<ContentItem> = {}): ContentItem => ({
-  ref: "item:1" as LmsRef<"item">,
+  ref: lmsRef<"item">("item:1"),
   type: "page",
   title: "Week one",
   body: "Plain words.",
@@ -62,7 +62,7 @@ const item = (patch: Partial<ContentItem> = {}): ContentItem => ({
   ...patch,
 });
 const module_ = (patch: Partial<CourseModule> = {}): CourseModule => ({
-  ref: "module:1" as LmsRef<"module">,
+  ref: lmsRef<"module">("module:1"),
   title: "Unit 1",
   published: true,
   itemCount: 3,
@@ -481,7 +481,7 @@ describe("keys", () => {
     const body = "Fall 2026, Oct 12";
     const first = scanCourse(course({ items: [item({ body })] }), CTX);
     const second = scanCourse(
-      course({ items: [item({ body, ref: "item:2" as LmsRef<"item"> })] }),
+      course({ items: [item({ body, ref: lmsRef<"item">("item:2") })] }),
       CTX,
     );
     expect(new Set([...first, ...second].map((finding) => finding.key)).size).toBe(4);
@@ -576,7 +576,7 @@ describe("scanCourse", () => {
           ],
         }),
         item({
-          ref: "item:2" as LmsRef<"item">,
+          ref: lmsRef<"item">("item:2"),
           type: "announcement",
           title: "Welcome",
           copied: true,

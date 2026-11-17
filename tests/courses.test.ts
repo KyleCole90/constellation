@@ -21,8 +21,9 @@ import {
 import { clickWitness } from "./fixtures/changes";
 import { savedLms } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
+import { threadId } from "./fixtures/ids";
 
-const QUEUE = "t-queue" as ThreadId;
+const QUEUE = threadId("t-queue");
 
 const connected = async (): Promise<StoreRig> => {
   const rig = await makeStoreRig();

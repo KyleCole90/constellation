@@ -1,5 +1,8 @@
+import * as v from "valibot";
+
 import { isoTime, type ThreadId } from "~/shared/domain/ids";
 import { refs } from "~/shared/providers/canvas-refs";
+import { ThreadIdSchema } from "~/shared/providers/schemas";
 import { assignmentCanvasId, SEED, type SeedAssignment } from "~/shared/providers/fake-canvas/seed";
 
 import { builtInThreads } from "./builtInThreads";
@@ -128,7 +131,7 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
       const subject = subjectOf();
       threads.push({
         ...subject,
-        id: thread.id as ThreadId,
+        id: v.parse(ThreadIdSchema, thread.id),
         title: thread.title,
         messages,
         focus: null,
@@ -138,7 +141,7 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
   });
 
   threads.push({
-    id: "t-general" as ThreadId,
+    id: v.parse(ThreadIdSchema, "t-general"),
     school: null,
     course: null,
     kind: "general",

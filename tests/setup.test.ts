@@ -2,15 +2,8 @@ import { describe, expect, it } from "vite-plus/test";
 
 import type { ChangeRecord } from "~/shared/domain/change";
 import type { CopySource, CourseShell, Migration, SetContent } from "~/shared/domain/content";
-import {
-  type ChangeId,
-  type IsoDate,
-  type LmsRef,
-  type SchoolId,
-  type ThreadId,
-  isoTime,
-} from "~/shared/domain/ids";
-import type { Finding, FindingKey, FindingType } from "~/shared/domain/scan";
+import { isoTime } from "~/shared/domain/ids";
+import type { Finding, FindingType } from "~/shared/domain/scan";
 import {
   STEPS,
   canDropFix,
@@ -39,10 +32,15 @@ import {
   sent,
   step,
 } from "./fixtures/changes";
+import {
+  changeId as id,
+  findingKey as k,
+  isoDate as d,
+  lmsRef,
+  schoolId,
+  threadId,
+} from "./fixtures/ids";
 
-const d = (text: string): IsoDate => text as IsoDate;
-const id = (text: string): ChangeId => text as ChangeId;
-const k = (text: string): FindingKey => text as FindingKey;
 const PLAN: TermPlan = {
   oldTerm: {
     name: termName("Fall 2026"),
@@ -60,21 +58,21 @@ const PLAN: TermPlan = {
 };
 const SOURCE: CopySource = {
   kind: "course",
-  ref: "course:9" as LmsRef<"course">,
+  ref: lmsRef<"course">("course:9"),
   label: "ENG 101",
   termName: "Fall 2026",
 };
 const FIX: SetContent = {
   kind: "item-set",
-  target: "item:1" as LmsRef<"item">,
+  target: lmsRef<"item">("item:1"),
   where: "Week one",
   intent: { set: "item-published" },
 };
 
 const setup = (patch: Partial<CourseSetup> = {}): CourseSetup => ({
-  course: "course:1" as LmsRef<"course">,
-  school: "lcc" as SchoolId,
-  thread: "thread:1" as ThreadId,
+  course: lmsRef<"course">("course:1"),
+  school: schoolId("lcc"),
+  thread: threadId("thread:1"),
   shell: {} as CourseShell,
   source: SOURCE,
   plan: PLAN,
@@ -108,7 +106,7 @@ const scanned = (findings: readonly Finding[]): CourseSetup["scan"] => ({
 });
 const CHECK = { at: AT, version: "v1" };
 const migration = (state: Migration["state"], patch: Partial<Migration> = {}): Migration => ({
-  ref: "job:1" as LmsRef<"migration">,
+  ref: lmsRef<"migration">("job:1"),
   signature: "sig",
   state,
   completion: 40,
@@ -311,7 +309,7 @@ describe("stepOf", () => {
 
 describe("copyMigration", () => {
   const job = (ref: string, signature = "sig") =>
-    migration("running", { ref: ref as LmsRef<"migration">, signature });
+    migration("running", { ref: lmsRef<"migration">(ref), signature });
 
   it("finds no job before the first send, even one with the same words", () => {
     expect(copyMigration({ seen: null }, "sig", [job("a")])).toBeNull();

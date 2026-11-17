@@ -11,6 +11,7 @@ export interface DateShiftOptions {
 /** A term's name, never blank. Only `termName` makes one, so a scan can't search text for an empty name. */
 export type TermName = Brand<string, "TermName">;
 export const termName = (text: string): TermName | null =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: the blank test is the brand's check
   text.trim() === "" ? null : (text as TermName);
 export interface TermDates<D extends DraftDate = IsoDate> {
   /** Null when the term has none: a Canvas export carries no term name, and a course can have no term. */
@@ -72,6 +73,7 @@ const DAY_MS = 86_400_000;
 export const WEEKDAYS: readonly Weekday[] = [0, 1, 2, 3, 4, 5, 6];
 const dayNumber = (date: string): number => Date.parse(`${date}T00:00:00Z`) / DAY_MS;
 const dateAt = (day: number): IsoDate =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: the day part of toISOString is YYYY-MM-DD
   new Date(day * DAY_MS).toISOString().slice(0, 10) as IsoDate;
 const floorMod7 = (value: number): number => ((value % 7) + 7) % 7;
 const EPOCH_WEEKDAY = 4;
@@ -92,9 +94,12 @@ export const weekdayOf = (date: IsoDate): Weekday => weekdayAt(dayNumber(date));
 /** The weekdays the old due dates fall on, which is where a class's work is usually due. The person confirms or changes them. */
 export const meetingDaysOf = (dates: readonly IsoDate[]): readonly Weekday[] =>
   [...new Set(dates.map(weekdayOf))].sort(byNumber);
-export const dateOfTime = (at: IsoTime): IsoDate => at.slice(0, 10) as IsoDate;
+export const dateOfTime = (at: IsoTime): IsoDate =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: an IsoTime starts with its YYYY-MM-DD day
+  at.slice(0, 10) as IsoDate;
 /** Keeps the time exactly as the LMS wrote it, so a moved due date changes only its day. */
 export const timeOnDate = (at: IsoTime, date: IsoDate): IsoTime =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: swaps one YYYY-MM-DD day for another and keeps the time
   `${date}${at.slice(10)}` as IsoTime;
 export const isoDate = (text: string): IsoDate | null => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
@@ -117,7 +122,15 @@ export const planDays = (
     const position = from.indexOf(day);
     return position === -1 ? day : (to[position] ?? to.at(-1) ?? day);
   };
-  return Object.fromEntries(WEEKDAYS.map((day) => [day, pairOf(day)])) as Record<Weekday, Weekday>;
+  return {
+    0: pairOf(0),
+    1: pairOf(1),
+    2: pairOf(2),
+    3: pairOf(3),
+    4: pairOf(4),
+    5: pairOf(5),
+    6: pairOf(6),
+  };
 };
 
 export const shiftOptionsOf = ({ oldTerm, newTerm }: TermPlan): DateShiftOptions => ({

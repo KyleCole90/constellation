@@ -940,7 +940,8 @@ describe("a failed copy", () => {
     expect(summarize(record(rig, copy)).sentAt).not.toBeNull();
 
     expect(await rig.clock.run(rig.state().retryCopy(course))).toBeNull();
-    const retry = setupOf(rig, course).copy as ChangeId;
+    const retry = setupOf(rig, course).copy;
+    if (!retry) throw new Error("No retried copy.");
     expect(retry).not.toBe(copy);
     expect(stage(rig, course)).toEqual({ tag: "approve-copy", copy: retry, stale: false });
     expect((await send(rig, [retry]))[0]).toMatchObject({ refused: "not-sendable" });

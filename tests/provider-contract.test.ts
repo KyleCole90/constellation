@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { TextFixContent } from "~/shared/domain/change";
-import type { LmsRef } from "~/shared/domain/ids";
 import { Secret, type LmsProvider } from "~/shared/providers/provider";
 import { createMemoryVault } from "~/renderer/providers/vault";
 import { DEFAULT_RETRY_POLICY, createWriteback } from "~/renderer/writeback/writeback";
@@ -15,6 +14,7 @@ import { LCC, gradeContentFor, makeRig } from "./fixtures/rig";
 import { runProviderContract, type ContractHarness } from "./fixtures/provider-contract";
 import { makeTermRig } from "./fixtures/term";
 import { runTermSetupContract, type TermContractHarness } from "./fixtures/term-contract";
+import { lmsRef } from "./fixtures/ids";
 
 runProviderContract("fake Canvas", async (): Promise<ContractHarness> => {
   const rig = await makeRig();
@@ -138,7 +138,7 @@ describe("a vendor without term setup", () => {
     expect(provider.termSetup).toBeUndefined();
     const content: TextFixContent = {
       kind: "text-fix",
-      target: "ksu:item:1:page:1" as LmsRef<"item">,
+      target: lmsRef<"item">("ksu:item:1:page:1"),
       where: "Syllabus",
       splice: { prefix: "a", before: "b", after: "c", suffix: "d" },
     };

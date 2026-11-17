@@ -1,6 +1,7 @@
 import type { Fetch } from "~/main/providers/canvas";
 import type { IsoDate } from "~/shared/domain/ids";
 import { shiftDate, type Weekday } from "~/shared/domain/term";
+import { isoDate } from "./ids";
 
 /**
  * A small Canvas over HTTP for term setup, in the shapes the Canvas docs give, all synthetic: a course taught last term,
@@ -334,7 +335,7 @@ export class CanvasTermHttp {
         due_at:
           assignment.due_at === null
             ? null
-            : `${shiftDate(assignment.due_at.slice(0, 10) as IsoDate, job.shift)}${assignment.due_at.slice(10)}`,
+            : `${shiftDate(isoDate(assignment.due_at.slice(0, 10)), job.shift)}${assignment.due_at.slice(10)}`,
         created_at: created,
         ...(assignment.quiz ? { arrivesMs: job.startedMs + JOB_MS + this.quizMs } : {}),
       })),
@@ -586,7 +587,7 @@ export class CanvasTermHttp {
       const day = /^date_shift_options\[day_substitutions\]\[(\d)\]$/.exec(key)?.[1];
       if (day !== undefined) substitutions[Number(day) as Weekday] = Number(value) as Weekday;
     }
-    const date = (key: string) => (form.get(`date_shift_options[${key}]`) ?? "") as IsoDate;
+    const date = (key: string) => isoDate(form.get(`date_shift_options[${key}]`) ?? "");
     const job: Job = {
       id: (this.#seq += 10),
       course,

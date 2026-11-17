@@ -200,6 +200,136 @@ const processBoundary = {
   },
 };
 
+const unparen = (node) =>
+  node.type === "ParenthesizedExpression" ? unparen(node.expression) : node;
+
+const TEST_FILE = /(?:^|\/)tests\/|\.test\.ts$/;
+
+/** A second cast claims a type the compiler said the value can't have. Only a test forging what the type exists to stop may. */
+const noDoubleAssertion = {
+  meta: {
+    type: "problem",
+    messages: {
+      double:
+        "Don't cast twice (`as unknown as T`, `as X as T`): it forces a type the compiler can't relate to the value (#165, #166). " +
+        "Build a real `T` (a fixture builder, the type's own constructor) or parse it into `T`.",
+      test:
+        "Don't cast twice (`as unknown as T`, `as X as T`): build a real `T` (a fixture builder, a full literal). " +
+        "A test that forges what the type exists to stop (an ApprovalWitness, a SendPermit) says so in a `// forged: <why>` comment on the line above.",
+    },
+  },
+  create(context) {
+    const inTest = TEST_FILE.test(context.filename);
+    const forgedLines = new Set(
+      inTest
+        ? context.sourceCode
+            .getAllComments()
+            .filter((comment) => /^\s*forged:/.test(comment.value))
+            .map((comment) => comment.loc.end.line)
+        : [],
+    );
+    const check = (node) => {
+      if (!isCast(unparen(node.expression))) return;
+      const line = node.loc.start.line;
+      if (forgedLines.has(line - 1) || forgedLines.has(line)) return;
+      context.report({ node, messageId: inTest ? "test" : "double" });
+    };
+    return { TSAsExpression: check, TSTypeAssertion: check };
+  },
+};
+
+/** Every `Brand<…>` alias. `tests/assertion-rules.test.ts` fails when src declares one this list misses. */
+const BRANDS = new Set([
+  "ChangeId",
+  "FindingKey",
+  "Fingerprint",
+  "IsoDate",
+  "IsoTime",
+  "LmsRef",
+  "RiskKey",
+  "SchoolHost",
+  "SchoolId",
+  "TermName",
+  "ThreadId",
+]);
+
+/** The brand a cast claims, through arrays, unions and `readonly`. */
+const brandIn = (type) => {
+  switch (type.type) {
+    case "TSTypeReference":
+      return type.typeName.type === "Identifier" && BRANDS.has(type.typeName.name)
+        ? type.typeName.name
+        : null;
+    case "TSArrayType":
+      return brandIn(type.elementType);
+    case "TSTypeOperator":
+      return type.typeAnnotation ? brandIn(type.typeAnnotation) : null;
+    case "TSUnionType":
+      for (const member of type.types) {
+        const brand = brandIn(member);
+        if (brand) return brand;
+      }
+      return null;
+    default:
+      return null;
+  }
+};
+
+const isToIsoString = (node) =>
+  node.type === "CallExpression" &&
+  node.callee.type === "MemberExpression" &&
+  node.callee.property.type === "Identifier" &&
+  node.callee.property.name === "toISOString";
+const isStringLiteral = (node) =>
+  (node.type === "Literal" && typeof node.value === "string") ||
+  (node.type === "TemplateLiteral" && node.expressions.length === 0);
+/** `isoTime()` is the one way to make an IsoTime, so these two casts always have a better form. */
+const castsToIsoTime = (node) =>
+  brandIn(node.typeAnnotation) === "IsoTime" &&
+  (isToIsoString(unparen(node.expression)) || isStringLiteral(unparen(node.expression)));
+
+/** The files that mint brands. Everywhere else asks them. */
+const MINT_FILE =
+  /(?:^|\/)(?:src\/shared\/domain\/(?:ids|term|approval|scan)|src\/shared\/providers\/canvas-refs|tests\/fixtures\/ids)\.ts$/;
+
+/** A brand stands for a check. A cast skips it, so only the files that mint a brand may cast to one. */
+const noBrandCast = {
+  meta: {
+    type: "problem",
+    messages: {
+      brand:
+        "Don't cast to `{{brand}}`: a brand stands for a check, and a cast skips it. " +
+        "Use its mint or parser (`parseSchoolId`, `isoTime`, `riskKey`, `v.parse(ThreadIdSchema, …)`). " +
+        "Tests use the mints in tests/fixtures/ids.ts.",
+    },
+  },
+  create(context) {
+    if (MINT_FILE.test(context.filename)) return {};
+    const check = (node) => {
+      if (castsToIsoTime(node)) return;
+      const brand = brandIn(node.typeAnnotation);
+      if (brand) context.report({ node, messageId: "brand", data: { brand } });
+    };
+    return { TSAsExpression: check, TSTypeAssertion: check };
+  },
+};
+
+const useIsoTime = {
+  meta: {
+    type: "problem",
+    messages: {
+      isoTime:
+        "Use `isoTime()` from src/shared/domain/ids.ts instead of casting to IsoTime: it writes the one format the brand promises (`.sssZ`), and throws on an invalid time (#175).",
+    },
+  },
+  create(context) {
+    const check = (node) => {
+      if (castsToIsoTime(node)) context.report({ node, messageId: "isoTime" });
+    };
+    return { TSAsExpression: check, TSTypeAssertion: check };
+  },
+};
+
 export default {
   meta: { name: "constellation" },
   rules: {
@@ -208,5 +338,8 @@ export default {
     "process-boundary": processBoundary,
     "annotated-schemas": annotatedSchemas,
     "no-as-never": noAsNever,
+    "no-double-assertion": noDoubleAssertion,
+    "no-brand-cast": noBrandCast,
+    "use-iso-time": useIsoTime,
   },
 };

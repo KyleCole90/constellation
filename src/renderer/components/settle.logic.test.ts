@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ThreadId } from "~/shared/domain/ids";
-
 import { pendingAfterResume, pendingAfterSettle, toastBottomOver } from "./settle.logic";
+import { threadId } from "../../../tests/fixtures/ids";
 
-const a = "a" as ThreadId;
-const b = "b" as ThreadId;
-const c = "c" as ThreadId;
+const a = threadId("a");
+const b = threadId("b");
+const c = threadId("c");
 
 describe("the settle Undo", () => {
   it("covers every settle made while the toast is up", () => {

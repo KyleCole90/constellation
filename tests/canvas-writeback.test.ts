@@ -3,7 +3,6 @@ import { describe, expect, it } from "vite-plus/test";
 import { SEND_PRESS_MS } from "~/main/lms";
 import { canvasSchoolAt, createCanvasProvider } from "~/main/providers/canvas";
 import { fieldsOf, type ChangeContent, type GradeContent } from "~/shared/domain/change";
-import type { LmsRef } from "~/shared/domain/ids";
 import { mintSendPermit } from "~/shared/domain/permit";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
 import { Secret, type LmsProvider } from "~/shared/providers/provider";
@@ -25,15 +24,16 @@ import { approved, clickWitness, gradeRemote, newDraft, sending } from "./fixtur
 import { VirtualClock } from "./fixtures/clock";
 import { DurableLedger } from "./fixtures/ledger";
 import { permitFor, runProviderContract, unwrap } from "./fixtures/provider-contract";
+import { lmsRef } from "./fixtures/ids";
 
 const SCHOOL = (() => {
   const school = canvasSchoolAt(HOST);
   if (!school) throw new Error(`${HOST} should be a Canvas school`);
   return school;
 })();
-const COURSE = `${HOST}:course:${COURSE_ID}` as LmsRef<"course">;
-const SUBMISSION = `${HOST}:submission:${COURSE_ID}:5301:${MAYA}` as LmsRef<"submission">;
-const criterion = (id: string) => `${HOST}:criterion:5301:${id}` as LmsRef<"criterion">;
+const COURSE = lmsRef<"course">(`${HOST}:course:${COURSE_ID}`);
+const SUBMISSION = lmsRef<"submission">(`${HOST}:submission:${COURSE_ID}:5301:${MAYA}`);
+const criterion = (id: string) => lmsRef<"criterion">(`${HOST}:criterion:5301:${id}`);
 
 const grade = (patch: Partial<GradeContent> = {}): GradeContent => ({
   kind: "grade",
@@ -251,7 +251,7 @@ describe("Canvas writes, kind by kind", () => {
     const http = new CanvasHttp();
     const content: ChangeContent = {
       kind: "reply",
-      target: `${HOST}:conversation:${CONVERSATION_ID}` as LmsRef<"conversation">,
+      target: lmsRef<"conversation">(`${HOST}:conversation:${CONVERSATION_ID}`),
       body: "Yes, two more days is fine.",
     };
     expect(await unwrap(canvasOver(http).observe(content))).toMatchObject({
@@ -307,7 +307,7 @@ describe("Canvas writes, kind by kind", () => {
   it("refuses a target at another school, and asks Canvas nothing", async () => {
     const http = new CanvasHttp();
     const content = grade({
-      target: "other.example.edu:submission:2201:5301:6401" as LmsRef<"submission">,
+      target: lmsRef<"submission">("other.example.edu:submission:2201:5301:6401"),
     });
     expect(await canvasOver(http).observe(content)).toEqual({
       ok: false,

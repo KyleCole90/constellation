@@ -94,6 +94,7 @@ import {
   createFakeCanvasDescriptor,
 } from "~/shared/providers/fake-canvas/provider";
 import { SEED } from "~/shared/providers/fake-canvas/seed";
+import { ChangeIdSchema, ThreadIdSchema } from "~/shared/providers/schemas";
 import {
   fewAtATime,
   revealSecret,
@@ -985,9 +986,15 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
         writeback = makeWriteback();
 
         const newChangeId = () =>
-          `ch-${clock.now().toString(36)}-${deps.random().toString(36).slice(2, 10)}` as ChangeId;
+          v.parse(
+            ChangeIdSchema,
+            `ch-${clock.now().toString(36)}-${deps.random().toString(36).slice(2, 10)}`,
+          );
         const newThreadId = () =>
-          `t-${clock.now().toString(36)}-${deps.random().toString(36).slice(2, 8)}` as ThreadId;
+          v.parse(
+            ThreadIdSchema,
+            `t-${clock.now().toString(36)}-${deps.random().toString(36).slice(2, 8)}`,
+          );
 
         const setup = createSetupActions({
           get,
@@ -1312,7 +1319,9 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           );
           const gone = new Set<ChangeId | null>(dropped.map((blank) => blank.id));
           const blanks = Object.fromEntries(
-            Object.entries(get().blanks).filter(([id]) => !gone.has(id as ChangeId)),
+            Object.values(get().blanks)
+              .filter((blank) => !gone.has(blank.id))
+              .map((blank) => [blank.id, blank]),
           );
           set({ blanks, ...withoutFocus(get(), (focus) => gone.has(focus)) });
         };

@@ -25,12 +25,13 @@ export const hash53 = (text: string): string => {
 };
 
 /** Integrity of what was reviewed, not a security boundary. Sync, so a render can carry it. */
-export type Fingerprint = string & { readonly __brand: "Fingerprint" };
+export type Fingerprint = Brand<string, "Fingerprint">;
 export const fingerprintOf = (change: {
   content: ChangeContent;
   basis: Basis;
   landed: readonly FieldKey[];
 }): Fingerprint =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: a hash of the reviewed change is what the brand means
   hash53(
     canonicalJson({
       content: change.content,
@@ -41,6 +42,9 @@ export const fingerprintOf = (change: {
 
 /** What a person must face before a risky change is approved, as in `students:14|items:3`. Read from the basis, so the fingerprint already covers it. */
 export type RiskKey = Brand<string, "RiskKey">;
+export const riskKey = (students: number, items: number): RiskKey =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: the brand is this format
+  `students:${students}|items:${items}` as RiskKey;
 
 export interface Approval {
   changeId: ChangeId;

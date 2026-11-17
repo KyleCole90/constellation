@@ -6,7 +6,7 @@ import { MODEL } from "~/main/agent";
 import { anthropicAgent, spendOf } from "~/main/providers/anthropic";
 import type { Fetch } from "~/main/providers/canvas";
 import { DRAFT_GRADE_REQUEST } from "~/shared/agent/agent";
-import type { ChangeId, ThreadId } from "~/shared/domain/ids";
+import type { ChangeId } from "~/shared/domain/ids";
 import { handle, invoker, type Bridge } from "~/shared/ipc";
 import { AssignmentSchema, SubmissionSchema } from "~/shared/providers/schemas";
 import { Secret, type CredentialLease } from "~/shared/providers/provider";
@@ -15,9 +15,10 @@ import { createBridgeAgent } from "~/renderer/providers/agent";
 import { fakeLmsHandlers } from "./fixtures/bridge";
 import { clickWitness } from "./fixtures/changes";
 import { makeStoreRig } from "./fixtures/store-rig";
+import { threadId } from "./fixtures/ids";
 
 const KEY = "sk-ant-test-key-that-never-leaves-main";
-const QUEUE = "t-queue" as ThreadId;
+const QUEUE = threadId("t-queue");
 const APP = "app://constellation/";
 
 const leaseOf = (key: string | null): CredentialLease => ({

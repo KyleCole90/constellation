@@ -12,13 +12,7 @@ import { northStarStream } from "~/shared/agent/rules/northStar";
 import { planWork, sittingsOf } from "~/renderer/components/screens/due.logic";
 import { composerHints } from "~/renderer/components/thread/composer.logic";
 import { buildTimeline, liveReplies } from "~/renderer/components/thread/timeline.logic";
-import {
-  type ChangeId,
-  type LmsRef,
-  type SchoolId,
-  type ThreadId,
-  isoTime,
-} from "~/shared/domain/ids";
+import { type LmsRef, type ThreadId, isoTime } from "~/shared/domain/ids";
 import type { Assignment } from "~/shared/domain/lms";
 import {
   NORTH_STAR_THREAD,
@@ -42,6 +36,7 @@ import { clickWitness } from "./fixtures/changes";
 import { VirtualClock } from "./fixtures/clock";
 import { jsonObject, rawSave } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
+import { lmsRef, schoolId, threadId } from "./fixtures/ids";
 
 /** What the parser kept, and the parts it set aside. */
 const parsed = (raw: unknown, scope: AgentScope) => {
@@ -50,8 +45,8 @@ const parsed = (raw: unknown, scope: AgentScope) => {
   return { result, dropped };
 };
 
-const LCC = "lcc" as SchoolId;
-const RSU = "rsu" as SchoolId;
+const LCC = schoolId("lcc");
+const RSU = schoolId("rsu");
 
 const connected = async (options: Parameters<typeof makeStoreRig>[0] = {}) => {
   const rig = await makeStoreRig(options);
@@ -302,7 +297,7 @@ describe("a handoff from North Star", () => {
     const essay = allOf(rig, "assignments").find((a) => a.shortTitle === "Essay 2") as Assignment;
     const twin: Assignment = {
       ...essay,
-      ref: `${essay.ref}-twin` as LmsRef<"assignment">,
+      ref: lmsRef<"assignment">(`${essay.ref}-twin`),
       course: courseByCode(rig, "ENG 102").ref,
     };
     const effects: unknown[] = [];
@@ -478,7 +473,7 @@ describe("a handoff from North Star", () => {
     const other = courseByCode(rig, "ENG 102");
     const twin: Assignment = {
       ...essay,
-      ref: `${essay.ref}-twin` as LmsRef<"assignment">,
+      ref: lmsRef<"assignment">(`${essay.ref}-twin`),
       course: other.ref,
     };
     const effects: unknown[] = [];
@@ -622,7 +617,7 @@ describe("a handoff from North Star", () => {
     it("starts a new draft once the last one has been discarded", async () => {
       const rig = await connected();
       await ask(rig, "Draft this week's announcement for HUM 150");
-      const [first] = Object.keys(rig.state().changes) as ChangeId[];
+      const [first] = Object.values(rig.state().changes).map((change) => change.id);
       if (!first) throw new Error("No draft.");
       rig.state().dispatchUser(first, {
         type: "discard",
@@ -878,7 +873,7 @@ describe("the handoff parser", () => {
       },
     };
     const rig = await connected({ agent });
-    const thread = "t-e101-ann" as ThreadId;
+    const thread = threadId("t-e101-ann");
     const count = Object.keys(rig.state().threads).length;
     await ask(rig, "hand this off", thread);
     expect(messagesOf(rig, thread, "refusal")).toEqual([]);
@@ -1104,7 +1099,7 @@ describe("a follow-up to the chat's last handoff", () => {
     const rig = await connected();
     await ask(rig, "Reply to Imani Okafor");
     const before = structuredClone(rig.state().changes);
-    const [draft] = Object.keys(before) as ChangeId[];
+    const [draft] = Object.values(before).map((change) => change.id);
     await ask(rig, "make it friendlier");
     const answer = lastAgent(rig);
     expect(answer?.text).toBe(
@@ -1427,7 +1422,7 @@ describe("what North Star answers", () => {
   it("links a refusal to the drafts it can't approve, and to What's due", async () => {
     const rig = await connected();
     await ask(rig, "Draft this week's announcement for HUM 150");
-    const [draft] = Object.keys(rig.state().changes) as ChangeId[];
+    const [draft] = Object.values(rig.state().changes).map((change) => change.id);
     await ask(rig, "approve them all");
     const lines = messagesOf(rig, chatOf(rig), "declined").at(-1)?.lines;
     expect(lines?.map((line) => line.source)).toEqual([
@@ -1526,7 +1521,7 @@ describe("North Star home", () => {
     expect(rig.state().startChat("What's due this week?")).toBeNull();
     expect(chats(rig)).toEqual([]);
     const home = threadOf(rig, NORTH_STAR_THREAD);
-    const chat = { ...home, id: "t-chat" as ThreadId, kind: "north-star-chat" } as const;
+    const chat = { ...home, id: threadId("t-chat"), kind: "north-star-chat" } as const;
     expect(withoutChatThreads([home, chat], false)).toEqual([]);
     expect(withoutChatThreads([home, chat], true)).toEqual([home, chat]);
     expect(isChatThread(home)).toBe(true);
@@ -1542,7 +1537,7 @@ describe("North Star home", () => {
     threads[NORTH_STAR_THREAD] = { ...threadOf(first, NORTH_STAR_THREAD), messages };
     if (destination)
       threads["t-e101-ann"] = {
-        ...threadOf(first, "t-e101-ann" as ThreadId),
+        ...threadOf(first, threadId("t-e101-ann")),
         messages: destination,
       };
     first.storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(raw));
@@ -1581,7 +1576,7 @@ describe("North Star home", () => {
       messages: conversation,
     });
     expect(
-      messagesOf(rig, "t-e101-ann" as ThreadId, "handed-off").map((message) => message.from),
+      messagesOf(rig, threadId("t-e101-ann"), "handed-off").map((message) => message.from),
     ).toEqual([chat?.id]);
   });
 
@@ -1594,7 +1589,7 @@ describe("North Star home", () => {
         typed,
       ],
     );
-    expect(threadOf(rig, "t-e101-ann" as ThreadId).messages).toEqual([typed]);
+    expect(threadOf(rig, threadId("t-e101-ann")).messages).toEqual([typed]);
   });
 
   it("moves it once, however many times the workspace boots", async () => {
@@ -1629,7 +1624,7 @@ describe("North Star home", () => {
     expect(reloaded.state().threads[NORTH_STAR_THREAD]).toBeUndefined();
     await reloaded.clock.run(reloaded.state().boot());
     expect(threadOf(reloaded, NORTH_STAR_THREAD).kind).toBe("north-star");
-    expect(threadOf(reloaded, "t-queue" as ThreadId).title).toBe("Grading list");
+    expect(threadOf(reloaded, threadId("t-queue")).title).toBe("Grading list");
   });
 });
 
@@ -1658,7 +1653,7 @@ describe("answer lines", () => {
     const source = { kind: "assignment", ref: assignment.ref } as const;
     expect(selectSource(rig.state(), source)?.course).toBe(assignment.course);
     expect(
-      selectSource(rig.state(), { kind: "assignment", ref: "gone" as LmsRef<"assignment"> }),
+      selectSource(rig.state(), { kind: "assignment", ref: lmsRef<"assignment">("gone") }),
     ).toBeNull();
     expect(selectSource(rig.state(), { kind: "due" })).toEqual({ course: null });
   });
@@ -1705,7 +1700,7 @@ describe("what a Next up row promises", () => {
 
   it("a discarded draft goes back to needing a draft", async () => {
     const rig = await connected();
-    const thread = "t-h150-ann" as ThreadId;
+    const thread = threadId("t-h150-ann");
     const course = rig.state().threads[thread]?.course;
     if (!course) throw new Error("No course.");
     const id = await rig.clock.run(rig.state().openAnnouncement(thread, course));
@@ -1719,7 +1714,7 @@ describe("what a Next up row promises", () => {
 
   it("undoing a discard brings the draft back as it was, until another draft takes its place", async () => {
     const rig = await connected();
-    const thread = "t-h150-ann" as ThreadId;
+    const thread = threadId("t-h150-ann");
     const course = rig.state().threads[thread]?.course;
     if (!course) throw new Error("No course.");
     const id = await rig.clock.run(rig.state().openAnnouncement(thread, course));
@@ -1751,7 +1746,7 @@ describe("what a Next up row promises", () => {
     expect(replies).toMatchObject({ verb: "Reply to", detail: "Not started" });
     const [ezra, amara] = replies.work.rows;
     await rig.clock.run(
-      rig.state().openConversation("t-h150-mail" as ThreadId, ezra.conversation.ref, {
+      rig.state().openConversation(threadId("t-h150-mail"), ezra.conversation.ref, {
         fill: "draft",
       }),
     );
@@ -1766,7 +1761,7 @@ describe("what a Next up row promises", () => {
 
   it("a grading thread's opening counts work to grade, and says where the missing students are", async () => {
     const rig = await connected();
-    const thread = rig.state().threads["t-h150-seq" as ThreadId];
+    const thread = rig.state().threads[threadId("t-h150-seq")];
     const assignment = thread?.assignment;
     if (!assignment) throw new Error("No assignment.");
     const cache = Object.values(rig.state().cache).find((candidate) =>
@@ -1795,7 +1790,7 @@ describe("what a Next up row promises", () => {
 describe("a grading thread's opening counts the roster", () => {
   it("leaves out a concluded student and the Test Student, as the list does (#151)", async () => {
     const rig = await connected();
-    const thread = rig.state().threads["t-e101-essay2" as ThreadId];
+    const thread = rig.state().threads[threadId("t-e101-essay2")];
     const assignment = thread?.assignment;
     if (!assignment) throw new Error("No assignment.");
     const open = selectQueueRows(rig.state(), assignment).filter((row) => row.open).length;

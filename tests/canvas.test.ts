@@ -4,7 +4,6 @@ import { describe, expect, it } from "vite-plus/test";
 import * as v from "valibot";
 
 import { canvasSchoolAt, createCanvasProvider, type Fetch } from "~/main/providers/canvas";
-import type { LmsRef, SchoolHost, SchoolId } from "~/shared/domain/ids";
 import type { School } from "~/shared/domain/lms";
 import { Secret, type CredentialLease } from "~/shared/providers/provider";
 
@@ -14,6 +13,7 @@ import { CANVAS, CANVAS_FACE, CANVAS_SCOPES } from "~/shared/providers/canvas";
 import type { LabCommand } from "~/shared/providers/fake-canvas/lab";
 
 import { bridgedLms, fakeLmsHandlers } from "./fixtures/bridge";
+import { lmsRef, schoolHost, schoolId } from "./fixtures/ids";
 
 const HOST = "canvas.example.edu";
 const ORIGIN = `https://${HOST}`;
@@ -23,7 +23,7 @@ const SCHOOL = (() => {
   if (!school) throw new Error(`${HOST} should be a Canvas school`);
   return school;
 })();
-const COURSE = `${HOST}:course:2201` as LmsRef<"course">;
+const COURSE = lmsRef<"course">(`${HOST}:course:2201`);
 
 const fixture = (name: string) =>
   readFileSync(new URL(`./fixtures/canvas/${name}`, import.meta.url), "utf8");
@@ -358,7 +358,7 @@ describe("Canvas reads", () => {
     });
     const reads = await Promise.all(
       [2201, 2202, 2203].map((id) =>
-        provider.submissions(`${HOST}:course:${id}` as LmsRef<"course">),
+        provider.submissions(lmsRef<"course">(`${HOST}:course:${id}`)),
       ),
     );
     expect(reads.map((read) => read.ok && read.value.length)).toEqual([PAGES, PAGES, PAGES]);
@@ -597,7 +597,7 @@ describe("what the renderer can make Canvas fetch", () => {
     ["extra parts", `${HOST}:course:2201:9`],
   ])("refuses %s, and asks Canvas nothing", async (_, ref) => {
     const canvas = canvasWith({});
-    const course = ref as LmsRef<"course">;
+    const course = lmsRef<"course">(ref);
     for (const read of [
       canvas.provider.assignments(course),
       canvas.provider.students(course),
@@ -635,7 +635,7 @@ describe("main's lms channels and real Canvas", () => {
 
   it("mint a Canvas school for a real host, and read it with the token saved under it", async () => {
     const vault = createMemoryVault();
-    await vault.enroll(HOST as SchoolId, { kind: "bearer", token: new Secret(TOKEN) });
+    await vault.enroll(schoolId(HOST), { kind: "bearer", token: new Secret(TOKEN) });
     const network = recorded(SELF);
     const lms = fakeLmsHandlers({ vault, fetch: network.fetch });
     const school = await lms["lms.schoolAt"]({ host: HOST });
@@ -647,10 +647,10 @@ describe("main's lms channels and real Canvas", () => {
 
   it("refuse a Canvas school whose id names another school's token", async () => {
     const vault = createMemoryVault();
-    await vault.enroll(HOST as SchoolId, { kind: "bearer", token: new Secret(TOKEN) });
+    await vault.enroll(schoolId(HOST), { kind: "bearer", token: new Secret(TOKEN) });
     const network = recorded({});
     const lms = fakeLmsHandlers({ vault, fetch: network.fetch });
-    const forged: School = { ...SCHOOL, host: "elsewhere.example.com" as SchoolHost };
+    const forged: School = { ...SCHOOL, host: schoolHost("elsewhere.example.com") };
     await expect(async () => lms["lms.verify"]({ school: forged })).rejects.toThrow(
       "isn't a Canvas school",
     );
@@ -811,7 +811,7 @@ describe("what a Canvas student turned in", () => {
   });
 
   const AT = "/api/v1/courses/2201/assignments/5301/submissions/6401";
-  const REF = `${HOST}:submission:2201:5301:6401` as LmsRef<"submission">;
+  const REF = lmsRef<"submission">(`${HOST}:submission:2201:5301:6401`);
   const STORAGE = "https://files.canvas-user-content.example";
 
   it("downloads a listed file from the address Canvas signs, without the token", async () => {
@@ -866,7 +866,7 @@ describe("what a Canvas student turned in", () => {
 
 describe("a link submission's public export (#71)", () => {
   const AT = "/api/v1/courses/2201/assignments/5301/submissions/6401";
-  const REF = `${HOST}:submission:2201:5301:6401` as LmsRef<"submission">;
+  const REF = lmsRef<"submission">(`${HOST}:submission:2201:5301:6401`);
   const DOC = "https://docs.google.com/document/d/1AbC/edit?usp=sharing";
   const EXPORT = "https://docs.google.com/document/d/1AbC/export?format=pdf";
 

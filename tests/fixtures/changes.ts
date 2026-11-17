@@ -10,13 +10,14 @@ import {
   type GradeContent,
   type RemoteState,
 } from "~/shared/domain/change";
-import { type ChangeId, type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
+import { changeId, lmsRef, schoolId } from "./ids";
 
 export const AT = isoTime("2026-10-30T12:00:00.000Z");
-export const SCHOOL = "lcc" as SchoolId;
-export const COURSE = "lcc:course:1" as LmsRef<"course">;
-export const SUBMISSION = "lcc:submission:1:2:3" as LmsRef<"submission">;
-export const CRITERION = "lcc:criterion:2:thesis" as LmsRef<"criterion">;
+export const SCHOOL = schoolId("lcc");
+export const COURSE = lmsRef<"course">("lcc:course:1");
+export const SUBMISSION = lmsRef<"submission">("lcc:submission:1:2:3");
+export const CRITERION = lmsRef<"criterion">("lcc:criterion:2:thesis");
 
 export const gradeContent = (patch: Partial<GradeContent> = {}): GradeContent => ({
   kind: "grade",
@@ -51,7 +52,7 @@ export const newDraft = (
   remote: RemoteState = gradeRemote(),
 ): ChangeRecord =>
   newChangeRecord({
-    id: id as ChangeId,
+    id: changeId(id),
     school: SCHOOL,
     course: COURSE,
     subject: "Maya, Essay 2",

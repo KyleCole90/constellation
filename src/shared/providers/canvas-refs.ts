@@ -3,6 +3,7 @@ import type { LmsRef, SchoolId } from "~/shared/domain/ids";
 
 /** Canvas-shaped numeric ids live inside the ref, so `describe` can print a real path without a lookup. */
 const ref = <K extends string>(school: SchoolId, kind: K, ...ids: readonly (string | number)[]) =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: the provider that parses refs writes them here
   [school, kind, ...ids].join(":") as LmsRef<K>;
 
 /** Named, so each call says which Canvas id is which instead of trusting the order of three numbers. */

@@ -1,15 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
-
-import type { SchoolHost, SchoolId } from "~/shared/domain/ids";
 import type { School } from "~/shared/domain/lms";
 
 import { parseSettingsSection, settingsSections } from "./sections.logic";
+import { schoolHost, schoolId } from "../../../../tests/fixtures/ids";
 
 const school = (provider: School["provider"]): School => ({
-  id: `${provider}-school` as SchoolId,
+  id: schoolId(`${provider}-school`),
   abbr: "S",
   name: provider,
-  host: `${provider}.example.edu` as SchoolHost,
+  host: schoolHost(`${provider}.example.edu`),
   provider,
 });
 

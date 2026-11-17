@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-
-import type { SchoolId, ThreadId } from "~/shared/domain/ids";
 import { LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
 import { Secret, revealSecret } from "~/shared/providers/provider";
 import { createMemoryVault } from "~/renderer/providers/vault";
@@ -8,8 +6,9 @@ import { WORKSPACE_STORAGE_KEY } from "~/renderer/stores/storage-key";
 
 import { savedLms } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
+import { schoolId, threadId } from "./fixtures/ids";
 
-const LCC = "lcc" as SchoolId;
+const LCC = schoolId("lcc");
 const SENTINEL = "SENTINEL-do-not-leak-7f3a9c1e5b";
 const SHORT_SENTINEL = "SENTINEL-short";
 
@@ -94,7 +93,7 @@ describe("a token passing through connect", () => {
     await rig.connect(LCC, SENTINEL);
     const ref = rig.state().cache[LCC]?.submissions.find((s) => s.workflow === "submitted")?.ref;
     if (!ref) throw new Error("Nothing to grade.");
-    await rig.clock.run(rig.state().openSubmission("t-queue" as ThreadId, ref, { fill: "draft" }));
+    await rig.clock.run(rig.state().openSubmission(threadId("t-queue"), ref, { fill: "draft" }));
     expectNoLeak(rig, SENTINEL);
   });
 });

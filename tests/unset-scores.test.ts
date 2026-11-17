@@ -17,13 +17,13 @@ import {
   type GradeContent,
   type RemoteState,
 } from "~/shared/domain/change";
-import type { LmsRef } from "~/shared/domain/ids";
 import { previewOf } from "~/shared/domain/preview";
 
 import { AT, COURSE, CRITERION, clickWitness, gradeContent, newDraft } from "./fixtures/changes";
 import { assignment, conversation, course, submission } from "./fixtures/rows";
+import { lmsRef } from "./fixtures/ids";
 
-const EVIDENCE = "lcc:criterion:2:evidence" as LmsRef<"criterion">;
+const EVIDENCE = lmsRef<"criterion">("lcc:criterion:2:evidence");
 const rubric = (thesis: number | null, evidence: number | null): GradeContent["rubric"] => [
   { criterion: CRITERION, name: "Thesis", points: thesis, outOf: 25 },
   { criterion: EVIDENCE, name: "Evidence", points: evidence, outOf: 25 },
@@ -31,6 +31,7 @@ const rubric = (thesis: number | null, evidence: number | null): GradeContent["r
 const partial = () => gradeContent({ rubric: rubric(18, null) });
 const overall = (points: number | null) => gradeContent({ rubric: null, points });
 
+// forged: the shape stored at 549e11d, which today's types no longer admit
 const CONTENT_AT_549E11D = {
   kind: "grade",
   target: "lcc:submission:1:2:3",
@@ -44,6 +45,7 @@ const CONTENT_AT_549E11D = {
   comment: "Strong opening. Keep going.",
   attachment: null,
 } as unknown as ChangeContent;
+// forged: the shape stored at 549e11d, which today's types no longer admit
 const REMOTE_AT_549E11D = {
   kind: "grade",
   targetVersion: "attempt:1",
@@ -142,10 +144,10 @@ describe("what still needs a value", () => {
   });
 
   it("names a blank reply, and whitespace counts as blank", () => {
-    expect(
-      unfilled({ kind: "reply", target: "c" as LmsRef<"conversation">, body: "  \n" }),
-    ).toEqual(["Reply"]);
-    expect(unfilled({ kind: "reply", target: "c" as LmsRef<"conversation">, body: "Hi" })).toEqual(
+    expect(unfilled({ kind: "reply", target: lmsRef<"conversation">("c"), body: "  \n" })).toEqual([
+      "Reply",
+    ]);
+    expect(unfilled({ kind: "reply", target: lmsRef<"conversation">("c"), body: "Hi" })).toEqual(
       [],
     );
   });
@@ -153,7 +155,7 @@ describe("what still needs a value", () => {
   it("names blank fix text, so a cleared fix can't be approved", () => {
     const fix = (after: string): ChangeContent => ({
       kind: "text-fix",
-      target: "p" as LmsRef<"item">,
+      target: lmsRef<"item">("p"),
       where: "Syllabus",
       splice: { prefix: "due ", before: "Oct 12", after, suffix: "." },
     });
@@ -210,7 +212,7 @@ describe("approving and sending a form with blanks", () => {
   it("a reply emptied by an edit is refused the same way", () => {
     const record = newDraft("ch-1", {
       kind: "reply",
-      target: "c" as LmsRef<"conversation">,
+      target: lmsRef<"conversation">("c"),
       body: "  ",
     });
     expect(transition(record, { type: "approve", witness: clickWitness(record), at: AT })).toEqual({

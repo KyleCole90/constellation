@@ -1,6 +1,8 @@
+import * as v from "valibot";
+
 import { desktopBridge } from "~/renderer/desktop";
 import { parseIsoTime } from "~/shared/domain/ids";
-import type { Bridge } from "~/shared/ipc";
+import { VaultKeySchema, type Bridge } from "~/shared/ipc";
 import {
   Secret,
   revealSecret,
@@ -179,9 +181,9 @@ const createBrowserVault = (): Vault => {
       (await request((await db()).transaction(SECRETS).objectStore(SECRETS).getKey(key))) !==
       undefined,
     keys: async () =>
-      (await request(
-        (await db()).transaction(SECRETS).objectStore(SECRETS).getAllKeys(),
-      )) as VaultKey[],
+      (await request((await db()).transaction(SECRETS).objectStore(SECRETS).getAllKeys())).filter(
+        (key) => v.is(VaultKeySchema, key),
+      ),
     forget: async (key) =>
       void (await request(
         (await db()).transaction(SECRETS, "readwrite").objectStore(SECRETS).delete(key),

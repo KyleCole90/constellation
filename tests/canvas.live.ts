@@ -14,7 +14,7 @@ import {
 } from "~/shared/domain/change";
 import type { Migration } from "~/shared/domain/content";
 import { ApprovalWitness, fingerprintOf } from "~/shared/domain/approval";
-import { type ChangeId, type LmsRef, type Result, isoTime } from "~/shared/domain/ids";
+import { type LmsRef, type Result, isoTime } from "~/shared/domain/ids";
 import {
   AccountInfoSchema,
   AnnouncementSchema,
@@ -31,6 +31,7 @@ import { DEFAULT_RETRY_POLICY, createWriteback } from "~/renderer/writeback/writ
 
 import { DurableLedger } from "./fixtures/ledger";
 import { cartridgeContent, copyContent } from "./fixtures/term";
+import { changeId, lmsRef } from "./fixtures/ids";
 
 /*
  * `npm run contract:live`: every Canvas read against a live school, each answer parsed as the bridge would parse it,
@@ -111,7 +112,7 @@ describe("Canvas reads against a live school", () => {
     const remote = unwrap("observe", await provider.observe(content));
     const ledger = new DurableLedger();
     const draft = newChangeRecord({
-      id: `ch-live-${content.kind}` as ChangeId,
+      id: changeId(`ch-live-${content.kind}`),
       school: school.id,
       course,
       subject: "contract:live",
@@ -179,7 +180,7 @@ describe("Canvas reads against a live school", () => {
       const at = isoTime(Date.now());
       const content: GradeContent = {
         kind: "grade",
-        target: `${school.id}:submission:${course}:${assignment}:${user}` as LmsRef<"submission">,
+        target: lmsRef<"submission">(`${school.id}:submission:${course}:${assignment}:${user}`),
         points: 1,
         outOf: 1,
         rubric: null,
@@ -189,7 +190,7 @@ describe("Canvas reads against a live school", () => {
         override: null,
         excused: false,
       };
-      const send = await runnerFor(content, `${school.id}:course:${course}` as LmsRef<"course">);
+      const send = await runnerFor(content, lmsRef<"course">(`${school.id}:course:${course}`));
       loseComment = true;
       expect(await send()).toBe("sent");
       const after = unwrap("observe after", await provider.observe(content));

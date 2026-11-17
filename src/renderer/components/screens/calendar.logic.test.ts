@@ -1,6 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-
-import type { SchoolId } from "~/shared/domain/ids";
 import type { DatedItem } from "~/renderer/stores/selectors";
 
 import {
@@ -19,6 +17,7 @@ import {
   weeksThatFit,
   wideLaneFits,
 } from "./calendar.logic";
+import { schoolId } from "../../../../tests/fixtures/ids";
 
 const SIDEBAR = 288;
 const RAIL = 48;
@@ -249,7 +248,7 @@ describe("rangeLabel", () => {
 describe("the calendar URL", () => {
   const SATURDAY_AFTER = new Date(2026, 10, 7).getTime();
   const roundTrip = (today: number, search: Record<string, unknown>) =>
-    calendarView(today, parseCalendarSearch(search), [{ id: "rsu" as SchoolId }]);
+    calendarView(today, parseCalendarSearch(search), [{ id: schoolId("rsu") }]);
 
   it("names the open day by its date, not by weeks from today", () => {
     const view = { week: 1, picked: 8, school: "all" } as const;
@@ -265,7 +264,7 @@ describe("the calendar URL", () => {
   });
 
   it("keeps the school filter", () => {
-    const view = { week: 0, picked: undefined, school: "rsu" as SchoolId };
+    const view = { week: 0, picked: undefined, school: schoolId("rsu") };
     expect(roundTrip(FRIDAY, calendarSearch(FRIDAY, view))).toEqual(view);
   });
 

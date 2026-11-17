@@ -3,13 +3,14 @@ import { describe, expect, it } from "vite-plus/test";
 import type { Agent } from "~/shared/agent/agent";
 import { createRuleAgent } from "~/shared/agent/rules";
 import type { AnalyticsEvent } from "~/shared/analytics";
-import { type ThreadId, isoTime } from "~/shared/domain/ids";
+import { isoTime } from "~/shared/domain/ids";
 import { Secret } from "~/shared/providers/provider";
 
 import { clickWitness } from "./fixtures/changes";
 import { makeStoreRig, type StoreRig, type StoreRigOptions } from "./fixtures/store-rig";
+import { threadId } from "./fixtures/ids";
 
-const QUEUE = "t-queue" as ThreadId;
+const QUEUE = threadId("t-queue");
 
 const tracked = async (options: StoreRigOptions = {}) => {
   const events: AnalyticsEvent[] = [];
