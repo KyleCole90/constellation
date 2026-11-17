@@ -56,6 +56,8 @@ describe("git hook skips", () => {
     "echo $$'\\'; git commit -n -m x; echo 'x'",
     "cat <<\\EOF\nit's\nEOF\ngit commit -n -m x\necho 'x'",
     "(#it's\ngit commit -n -m x\n); echo 'x'",
+    `cat <<EOF\nit's\nEOF\ngit commit -m "x""--" -n\necho 'x'`,
+    `cat <<EOF\nit's\nEOF\ngit commit -a "z""-m" -n\necho 'x'`,
     "echo `true #`; git commit -n -m x",
     'bash <<EOF\ngit commit -m "wip #2" -n\nEOF',
     'echo "use <<EOF for heredocs"\ngit commit -m "fix #12" -n\ncat <<EOF > x\nhi\nEOF',

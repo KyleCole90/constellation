@@ -58,7 +58,8 @@ const shellWords = (command) => {
 /**
  * The split this hook shipped with: a quote starts a word only at its start, so `it's` in a heredoc or a comment
  * can't open a quote. Shell syntax is too rich to read one way, so the hook reads the command both ways and denies
- * when a rule matches either, which also keeps every command this split denied denied.
+ * when a rule matches either, which also keeps every command this split denied denied. A quoted word here may be only
+ * part of an argument (`"x""--"`), so it is `notFlag`, as it always was.
  */
 const plainWords = (command) => {
   const commands = [[]];
@@ -66,7 +67,10 @@ const plainWords = (command) => {
     /(&&|\|\||[;|&\n])|"((?:\\.|[^"])*)"|'([^']*)'|(\S+?)(?=$|\s|&&|\|\||[;|&])/g,
   )) {
     if (op) commands.push([]);
-    else commands.at(-1).push({ text: double ?? single ?? bare, quoted: bare === undefined });
+    else {
+      const quoted = bare === undefined;
+      commands.at(-1).push({ text: double ?? single ?? bare, quoted, notFlag: quoted });
+    }
   }
   return commands;
 };
@@ -75,12 +79,13 @@ const plainWords = (command) => {
 const HOOKS_PATH = /^(core\.hookspath|include\.path|includeif\..+\.path)(=|$)/i;
 
 // Git takes any unambiguous prefix of a long option. Below 6 chars the prefix clashes with --no-verbose, so git refuses it.
-// Git sees the word without its quotes, so quoting doesn't matter here.
-const isNoVerify = ({ text }) => text.length >= 6 && "--no-verify".startsWith(text);
+const isNoVerify = ({ text, notFlag }) =>
+  !notFlag && text.length >= 6 && "--no-verify".startsWith(text);
 
 const commitSkipsHooks = (args) => {
   for (let i = 0; i < args.length; i++) {
-    const { text } = args[i];
+    const { text, notFlag } = args[i];
+    if (notFlag) continue;
     if (text === "--") return false;
     if (isNoVerify(args[i])) return true;
     if (!/^-[^-]/.test(text)) continue;
