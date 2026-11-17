@@ -13,6 +13,7 @@ import {
   moreWords,
   moveCursor,
   parseThreadSearch,
+  readWorkUrl,
   nameFillsStrip,
   neighbor,
   nextLabel,
@@ -443,7 +444,7 @@ describe("followWorkUrl", () => {
   });
 
   it("gives a URL that names nothing what is showing, in place", () => {
-    expect(followWorkUrl({}, hannah, true, true)).toEqual({ write: hannah, replace: true });
+    expect(followWorkUrl(null, hannah, true, true)).toEqual({ write: hannah, replace: true });
   });
 
   it("replaces a batch with nothing left to review instead of reopening it", () => {
@@ -452,6 +453,14 @@ describe("followWorkUrl", () => {
 
   it("does nothing once the URL and the screen agree", () => {
     expect(followWorkUrl(hannah, { ...hannah }, true, true)).toBeNull();
+  });
+
+  it("reads a row the thread can't show as naming nothing", () => {
+    const rowAt = (raw: string) => (raw === hannah.row ? hannah.row : null);
+    expect(readWorkUrl({ row: "sub-hannah" }, rowAt)).toEqual(hannah);
+    expect(readWorkUrl({ row: "not-a-row" }, rowAt)).toBeNull();
+    expect(readWorkUrl({ view: "batch" }, rowAt)).toEqual(batch);
+    expect(readWorkUrl({}, rowAt)).toBeNull();
   });
 
   it("reads a row before a view and drops anything else", () => {

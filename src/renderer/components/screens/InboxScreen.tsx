@@ -257,8 +257,10 @@ function InboxView({ thread }: { thread: Thread }) {
     const arrived = lastUrl.current === inUrl;
     lastUrl.current = inUrl;
     const { current } = selectThreadUi(store(), thread.id);
-    const open = selectInboxRows(store()).find((row) => row.conversation.ref === current);
-    const step = followInboxUrl(arrived, inUrl, open?.conversation.ref ?? null);
+    const inboxRows = selectInboxRows(store());
+    const open = inboxRows.find((row) => row.conversation.ref === current);
+    const named = inboxRows.find((row) => row.conversation.ref === inUrl);
+    const step = followInboxUrl(arrived, named?.conversation.ref, open?.conversation.ref ?? null);
     if (!step) return;
     if ("write" in step) void navigate({ search: { conversation: step.write }, replace: true });
     else if (step.open) showInInbox(step.open);

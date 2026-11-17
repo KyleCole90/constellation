@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import type { LmsRef } from "~/shared/domain/ids";
 import type { Course } from "~/shared/domain/lms";
 import { cn } from "~/renderer/lib/utils";
-import { selectCourse } from "~/renderer/stores/selectors";
+import { courseAt, selectCourse } from "~/renderer/stores/selectors";
 import { useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
 import { EmptyState } from "../EmptyState";
@@ -62,6 +62,20 @@ function SyncLine({ course }: { course: Course }) {
   );
 }
 
+const COURSE_GONE = "This course isn't here any more.";
+
+/** A course route, given the course its URL names. A URL that names none reads as a course that left. */
+export function CourseRoute({
+  courseId,
+  children,
+}: {
+  courseId: string;
+  children: (course: LmsRef<"course">) => ReactNode;
+}) {
+  const course = useWorkspace((state) => courseAt(state, courseId)?.ref ?? null);
+  return course ? children(course) : <EmptyState title={COURSE_GONE} />;
+}
+
 export function CoursePage({
   courseId,
   actions,
@@ -75,7 +89,7 @@ export function CoursePage({
   const school = useWorkspace((state) =>
     state.schools.find((candidate) => candidate.id === course?.school),
   );
-  if (!course) return <EmptyState title="This course isn't here any more." />;
+  if (!course) return <EmptyState title={COURSE_GONE} />;
   const details = [course.section, course.modality, school?.host].filter(Boolean).join(" · ");
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">

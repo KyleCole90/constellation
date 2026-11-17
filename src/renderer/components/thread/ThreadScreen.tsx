@@ -2,7 +2,6 @@ import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { Layers, PanelRight, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
-import type { ThreadId } from "~/shared/domain/ids";
 import {
   NORTH_STAR_THREAD,
   isChatThread,
@@ -10,9 +9,11 @@ import {
   selectCourse,
   selectInboxRows,
   selectQueueRows,
+  selectRowKeyAt,
   selectSchoolGap,
   selectThreadName,
   selectThreadUi,
+  threadAt,
 } from "~/renderer/stores/selectors";
 import type { Thread, ThreadUi } from "~/renderer/stores/types";
 import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
@@ -34,6 +35,7 @@ import { PinnedQueue } from "./PinnedQueue";
 import {
   filterRows,
   followWorkUrl,
+  readWorkUrl,
   fromInboxRows,
   fromQueueRows,
   liveFilter,
@@ -97,7 +99,10 @@ const useWorkUrl = (
     const moved = urlKey !== seen.current && urlKey !== wrote.current;
     if (urlKey === wrote.current) wrote.current = null;
     seen.current = urlKey;
-    const step = followWorkUrl(url, view, moved, reviewable);
+    const named = readWorkUrl(url, (raw) =>
+      selectRowKeyAt(workspaceStore().getState(), thread.kind, raw),
+    );
+    const step = followWorkUrl(named, view, moved, reviewable);
     if (!step) return;
     if ("show" in step) return showWorkView(thread, rows, ui, step.show);
     wrote.current = workViewKey(step.write);
@@ -347,8 +352,8 @@ function ThreadView({ thread }: { thread: Thread }) {
   );
 }
 
-export function ThreadScreen({ threadId }: { threadId: ThreadId }) {
-  const thread = useWorkspace((state) => state.threads[threadId]);
+export function ThreadScreen({ threadId }: { threadId: string }) {
+  const thread = useWorkspace((state) => threadAt(state, threadId));
   const ai = useAiOn();
   if (!thread) return <EmptyState title="This thread doesn't exist any more." />;
   if (!ai && isChatThread(thread)) return <EmptyState title="Chats need an AI key." />;

@@ -358,12 +358,24 @@ export const splitSelection = (
 
 /** What a work thread shows, named in its URL so each is a history entry: the list, the batch under review, or one row. */
 export type WorkView = { view: "list" | "batch" } | { row: RowKey };
-export type ThreadSearch = WorkView | Record<string, never>;
+/** A row stays text until the thread decides whether it is there. */
+export type ThreadSearch = { view: "list" | "batch" } | { row: string } | Record<string, never>;
 
 export const parseThreadSearch = (search: Record<string, unknown>): ThreadSearch => {
-  // A URL names a row; the thread's rows decide whether it is there.
-  if (typeof search.row === "string" && search.row) return { row: search.row as RowKey };
+  if (typeof search.row === "string" && search.row) return { row: search.row };
   return search.view === "list" || search.view === "batch" ? { view: search.view } : {};
+};
+
+/** What a thread's URL names, or null when it names nothing the thread can show. */
+export const readWorkUrl = (
+  search: ThreadSearch,
+  rowAt: (raw: string) => RowKey | null,
+): WorkView | null => {
+  if ("row" in search) {
+    const row = rowAt(search.row);
+    return row === null ? null : { row };
+  }
+  return "view" in search ? { view: search.view } : null;
 };
 
 export const workViewKey = (search: ThreadSearch): string =>
@@ -371,17 +383,17 @@ export const workViewKey = (search: ThreadSearch): string =>
 
 /**
  * What a work thread does when its URL or what it shows moves.
- * A URL that names nothing, as from a link, or a batch with nothing left to review, is given what is showing in place.
+ * A URL that names nothing, as from a link or a row that isn't here, or a batch with nothing left to review, is given what is showing in place.
  * A URL that moved (Back, Forward, a reload) sets what shows; what shows moving on its own is a new entry.
  */
 export const followWorkUrl = (
-  url: ThreadSearch,
+  url: WorkView | null,
   view: WorkView,
   urlMoved: boolean,
   reviewable: boolean,
 ): { write: WorkView; replace: boolean } | { show: WorkView } | null => {
-  const key = workViewKey(url);
+  const key = url === null ? "" : workViewKey(url);
   if (key === workViewKey(view)) return null;
-  if (key === "" || (key === "batch" && !reviewable)) return { write: view, replace: true };
-  return urlMoved ? { show: url as WorkView } : { write: view, replace: false };
+  if (url === null || (key === "batch" && !reviewable)) return { write: view, replace: true };
+  return urlMoved ? { show: url } : { write: view, replace: false };
 };

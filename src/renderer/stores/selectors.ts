@@ -5,7 +5,7 @@ import {
   type ChangeRecord,
   type ChangeSummary,
 } from "~/shared/domain/change";
-import type { ConnectionRecord, QueueFilter, ThreadUi } from "./types";
+import type { ConnectionRecord, QueueFilter, RowKey, ThreadUi } from "./types";
 import type { CourseShell } from "~/shared/domain/content";
 import type { ChangeId, IsoTime, LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
 import {
@@ -1024,20 +1024,27 @@ export const selectAssignment = (
   }
   return null;
 };
-export const selectCourse = (state: WorkspaceData, ref: LmsRef<"course"> | null): Course | null => {
-  if (!ref) return null;
+export const selectCourse = (state: WorkspaceData, ref: LmsRef<"course"> | null): Course | null =>
+  ref ? courseAt(state, ref) : null;
+
+/** The course a URL names, or null when no school here has it. */
+export const courseAt = (state: WorkspaceData, raw: string): Course | null => {
   for (const cache of caches(state)) {
-    const found = cache.courses.find((c) => c.ref === ref);
+    const found = cache.courses.find((c) => c.ref === raw);
     if (found) return found;
   }
   return (
     Object.values(state.newCourses)
       .flat()
-      .find((shell) => shell.ref === ref) ??
-    state.setups[ref]?.shell ??
+      .find((shell) => shell.ref === raw) ??
+    Object.values(state.setups).find((setup) => setup.course === raw)?.shell ??
     null
   );
 };
+
+/** The thread a URL names, or undefined when there is none. */
+export const threadAt = (state: WorkspaceData, raw: string): Thread | undefined =>
+  Object.values(state.threads).find((thread) => thread.id === raw);
 
 export interface Waiting {
   attention: number;
@@ -1313,5 +1320,13 @@ export const selectConversationAt = (
         .flatMap((cache) => cache.conversations)
         .find((conversation) => conversation.ref === key) ?? null)
     : null;
+
+/** The row a URL names in this kind of thread, or null when the thread can't show it. */
+export const selectRowKeyAt = (
+  state: WorkspaceData,
+  kind: ThreadKind,
+  raw: string,
+): RowKey | null =>
+  selectSubmissionAt(state, kind, raw)?.ref ?? selectConversationAt(state, kind, raw)?.ref ?? null;
 export const selectUnreadCount = (state: WorkspaceData): number =>
   caches(state).reduce((sum, cache) => sum + cache.conversations.filter((c) => c.unread).length, 0);
