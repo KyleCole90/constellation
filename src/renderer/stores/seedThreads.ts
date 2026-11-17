@@ -50,7 +50,7 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
 
   SEED.courses.forEach((course, courseIndex) => {
     const school = course.schoolId;
-    const courseRef = refs.course(school, course.canvasId);
+    const courseRef = refs.course({ school, course: course.canvasId });
     for (const thread of course.threads) {
       const updatedAt = at(ageMinutes(thread.time));
       const assignmentIndex = course.assignments.findIndex((a) => a.id === thread.assignmentId);
@@ -118,11 +118,11 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
           kind: "grading",
           school,
           course: courseRef,
-          assignment: refs.assignment(
+          assignment: refs.assignment({
             school,
-            course.canvasId,
-            assignmentCanvasId(found, courseIndex, assignmentIndex),
-          ),
+            course: course.canvasId,
+            assignment: assignmentCanvasId(found, courseIndex, assignmentIndex),
+          }),
         };
       };
       const subject = subjectOf();

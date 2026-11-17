@@ -1,7 +1,7 @@
 import * as v from "valibot";
 import { describe, expect, it } from "vite-plus/test";
 
-import { isoTime, parseSchoolHost } from "~/shared/domain/ids";
+import { isoTime, parseSchoolHost, parseSchoolId } from "~/shared/domain/ids";
 import { VaultKeySchema } from "~/shared/ipc";
 import { refs } from "~/shared/providers/canvas-refs";
 import { FAKE_SCHOOLS } from "~/shared/providers/fake-canvas/provider";
@@ -41,7 +41,9 @@ describe("brand schemas accept what the mint makes and reject a near miss", () =
   });
 
   it("LmsRef of a school, in any vendor's words", () => {
-    expect(v.is(lmsRef("course"), refs.course("lcc", 48213))).toBe(true);
+    const lcc = parseSchoolId("lcc");
+    if (!lcc) throw new Error("lcc is a school id");
+    expect(v.is(lmsRef("course"), refs.course({ school: lcc, course: 48213 }))).toBe(true);
     expect(v.is(lmsRef("course"), "ksu:org:6606")).toBe(true);
     expect(v.is(lmsRef("course"), "lcc")).toBe(false);
     expect(v.is(lmsRef("course"), ":course:48213")).toBe(false);

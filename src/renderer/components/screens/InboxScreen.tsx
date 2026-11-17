@@ -3,12 +3,11 @@ import { ChevronLeft, Mail, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import type { LmsRef } from "~/shared/domain/ids";
 import type { Conversation } from "~/shared/domain/lms";
 import { cn } from "~/renderer/lib/utils";
 import {
   INBOX_THREAD,
-  selectConversation,
+  selectConversationAt,
   selectInboxRows,
   selectThreadUi,
   type InboxRow,
@@ -233,9 +232,7 @@ function InboxView({ thread }: { thread: Thread }) {
     shown,
     onOpen,
   );
-  const open = useWorkspace((state) =>
-    currentKey ? selectConversation(state, currentKey as LmsRef<"conversation">) : null,
-  );
+  const open = useWorkspace((state) => selectConversationAt(state, thread.kind, currentKey));
   const notes = useWorkspace(
     useShallow((state) => messagingNotes(state.schools, (id) => state.capabilitiesFor(id))),
   );
@@ -260,8 +257,10 @@ function InboxView({ thread }: { thread: Thread }) {
     const arrived = lastUrl.current === inUrl;
     lastUrl.current = inUrl;
     const { current } = selectThreadUi(store(), thread.id);
-    const open = selectInboxRows(store()).find((row) => row.conversation.ref === current);
-    const step = followInboxUrl(arrived, inUrl, open?.conversation.ref ?? null);
+    const inboxRows = selectInboxRows(store());
+    const open = inboxRows.find((row) => row.conversation.ref === current);
+    const named = inboxRows.find((row) => row.conversation.ref === inUrl);
+    const step = followInboxUrl(arrived, named?.conversation.ref, open?.conversation.ref ?? null);
     if (!step) return;
     if ("write" in step) void navigate({ search: { conversation: step.write }, replace: true });
     else if (step.open) showInInbox(step.open);

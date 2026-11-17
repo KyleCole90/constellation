@@ -1,4 +1,4 @@
-import type { LmsRef, SchoolId } from "~/shared/domain/ids";
+import type { SchoolId } from "~/shared/domain/ids";
 import type { School } from "~/shared/domain/lms";
 import type { Capabilities } from "~/shared/providers/provider";
 import { needsReply, type InboxRow } from "~/renderer/stores/selectors";
@@ -53,14 +53,14 @@ export const preview = (row: InboxRow): string => {
   return row.last?.mine ? `You: ${text}` : text;
 };
 
+/** The conversation stays text until the inbox's rows decide whether it is there. */
 export interface InboxSearch {
-  conversation?: LmsRef<"conversation">;
+  conversation?: string;
 }
 
 export const parseInboxSearch = (search: Record<string, unknown>): InboxSearch =>
   typeof search.conversation === "string" && search.conversation
-    ? // The inbox's rows decide whether the conversation is there.
-      { conversation: search.conversation as LmsRef<"conversation"> }
+    ? { conversation: search.conversation }
     : {};
 
 /**

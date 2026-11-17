@@ -2,13 +2,15 @@ import { Outlet, useNavigate, useParams, useRouterState } from "@tanstack/react-
 import { X } from "lucide-react";
 import { useEffect, useEffectEvent, useState } from "react";
 
-import type { LmsRef, ThreadId } from "~/shared/domain/ids";
+import type { ThreadId } from "~/shared/domain/ids";
 import {
+  courseAt,
   INBOX_THREAD,
   NORTH_STAR_THREAD,
   selectChangesShown,
   selectCourse,
   summarizeFor,
+  threadAt,
 } from "~/renderer/stores/selectors";
 import { expiredNoticeText, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
@@ -109,12 +111,17 @@ function AppFrame({ pathname }: { pathname: string }) {
   const newThread = useNewThread();
   const sidebarOpen = useWorkspace((state) => state.prefs.sidebarOpen);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const activeThread = (params.threadId ?? null) as ThreadId | null;
+  const thread = useWorkspace((state) =>
+    params.threadId === undefined ? undefined : threadAt(state, params.threadId),
+  );
+  const activeThread = thread?.id ?? null;
   const order = useJumpOrder(activeThread);
   const courseRef = useWorkspace((state) =>
-    activeThread
-      ? (state.threads[activeThread]?.course ?? null)
-      : ((params.courseId ?? null) as LmsRef<"course"> | null),
+    thread
+      ? thread.course
+      : params.courseId === undefined
+        ? null
+        : (courseAt(state, params.courseId)?.ref ?? null),
   );
   useHeldModifier();
 

@@ -173,7 +173,7 @@ const stateOf = (record: MigrationRecord): Migration["state"] => {
 };
 
 export const toMigration = (record: MigrationRecord): Migration => ({
-  ref: refs.migration(record.school, record.course_id, record.id),
+  ref: refs.migration({ school: record.school, course: record.course_id, migration: record.id }),
   signature: record.signature,
   state: stateOf(record),
   completion: record.progress.completion,

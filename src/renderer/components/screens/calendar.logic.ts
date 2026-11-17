@@ -127,7 +127,7 @@ const daysFrom = (today: number, iso: IsoDay): number => {
 type CalendarSearch = {
   week?: IsoDay;
   day?: IsoDay;
-  school?: SchoolId;
+  school?: string;
 };
 
 export const parseCalendarSearch = (search: Record<string, unknown>): CalendarSearch => {
@@ -136,16 +136,22 @@ export const parseCalendarSearch = (search: Record<string, unknown>): CalendarSe
   const school = typeof search.school === "string" && search.school ? search.school : undefined;
   return {
     ...(day ? { day } : week ? { week } : {}),
-    ...(school ? { school: school as SchoolId } : {}),
+    ...(school ? { school } : {}),
   };
 };
 
 export type CalendarView = { week: number; picked?: number | undefined; school: SchoolFilter };
 
-export const calendarView = (today: number, search: CalendarSearch): CalendarView => {
+/** A school the URL names that isn't here reads as every school. */
+export const calendarView = (
+  today: number,
+  search: CalendarSearch,
+  schools: readonly { id: SchoolId }[],
+): CalendarView => {
   const picked = search.day === undefined ? undefined : daysFrom(today, search.day);
   const anchor = picked ?? (search.week === undefined ? 0 : daysFrom(today, search.week));
-  return { week: weekOf(today, anchor), picked, school: search.school ?? "all" };
+  const school = schools.find(({ id }) => id === search.school)?.id ?? "all";
+  return { week: weekOf(today, anchor), picked, school };
 };
 
 export const calendarSearch = (today: number, view: CalendarView): CalendarSearch => ({

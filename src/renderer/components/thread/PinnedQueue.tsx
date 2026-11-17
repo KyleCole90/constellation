@@ -10,8 +10,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "re
 
 import { cn } from "~/renderer/lib/utils";
 import type { QueueFilter, RowKey, Thread, ThreadUi } from "~/renderer/stores/types";
-import type { LmsRef } from "~/shared/domain/ids";
-import { selectSubmission } from "~/renderer/stores/selectors";
+import { selectSubmissionAt } from "~/renderer/stores/selectors";
 import { useAiOn, useWorkspace } from "~/renderer/stores/workspace";
 
 import { SchoolBadge } from "../SchoolBadge";
@@ -165,7 +164,7 @@ function QueueRowView({
           )}
         </span>
       </button>
-      {row.missing && (
+      {row.kind === "submission" && row.missing && (
         <Button
           variant="ghost-muted"
           size="meta"
@@ -346,9 +345,7 @@ export function PinnedQueue({
   const current = rows.find((row) => row.key === currentKey) ?? null;
   // A graded submission with no change isn't a row, but it is still the one open.
   const unlisted = useWorkspace((state) =>
-    current
-      ? null
-      : (selectSubmission(state, currentKey as LmsRef<"submission">)?.studentName ?? null),
+    current ? null : (selectSubmissionAt(state, thread.kind, currentKey)?.studentName ?? null),
   );
   const nameFills = current !== null && nameFillsStrip(current.title);
   const where = current && !nameFills && rowLine(current, thread);

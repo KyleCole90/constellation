@@ -398,12 +398,12 @@ const ThreadUiSchema = v.object({
 
 const UiPrefsSchema = v.object({
   sidebarOpen: v.boolean(),
-  collapsed: recordOf(v.literal(true)),
-  courseOpen: v.exactOptional(recordOf(v.boolean())),
+  collapsed: recordOf(v.literal(true), SchoolIdSchema),
+  courseOpen: v.exactOptional(recordOf(v.boolean(), lmsRef("course"))),
   expandedThreads: recordOf(v.literal(true)),
   threadUi: recordOf(ThreadUiSchema, ThreadIdSchema),
-  readThrough: v.exactOptional(recordOf(text)),
-  offersDismissed: v.exactOptional(recordOf(v.literal(true))),
+  readThrough: v.exactOptional(recordOf(text, lmsRef("conversation"))),
+  offersDismissed: v.exactOptional(recordOf(v.literal(true), lmsRef("course"))),
 }) satisfies v.GenericSchema<unknown, UiPrefs>;
 
 // ---- Handoffs and undrafted work ----
@@ -421,6 +421,12 @@ const PendingHandoffSchema = v.object({
   work: HandoffWorkSchema,
 }) satisfies v.GenericSchema<unknown, PendingHandoff>;
 
+/** A thread id, a space, then the work: what `HandoffKey` spells. */
+const HandoffKeySchema = v.pipe(
+  text,
+  v.check((raw) => raw.indexOf(" ") > 0),
+);
+
 const UndraftedSchema = v.object({
   submittedAt: v.nullable(at),
   said: text,
@@ -435,11 +441,11 @@ const WorkspaceDataFields = v.object({
   changes: recordOf(ChangeRecordSchema, ChangeIdSchema),
   threads: recordOf(ThreadSchema, ThreadIdSchema),
   // A workspace saved before these existed lacks them. Anything else malformed fails the whole save.
-  setups: v.optional(recordOf(CourseSetupSchema), {}),
+  setups: v.optional(recordOf(CourseSetupSchema, lmsRef("course")), {}),
   newCourses: v.optional(recordOf(v.array(CourseShellSchema), SchoolIdSchema), {}),
   prefs: UiPrefsSchema,
-  handoffs: v.optional(recordOf(PendingHandoffSchema), {}),
-  undrafted: v.optional(recordOf(UndraftedSchema), {}),
+  handoffs: v.optional(recordOf(PendingHandoffSchema, HandoffKeySchema), {}),
+  undrafted: v.optional(recordOf(UndraftedSchema, lmsRef("submission")), {}),
   resetAt: count,
 });
 

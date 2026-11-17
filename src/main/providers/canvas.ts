@@ -876,7 +876,16 @@ export const createCanvasProvider = (deps: {
                   Object.entries(row.rubric_assessment).flatMap(([criterion, { points }]) =>
                     points === null
                       ? []
-                      : [[refs.criterion(school.id, at.assignment, criterion), points]],
+                      : [
+                          [
+                            refs.criterion({
+                              school: school.id,
+                              assignment: at.assignment,
+                              criterion,
+                            }),
+                            points,
+                          ],
+                        ],
                   ),
                 )
               : null,
@@ -1044,14 +1053,14 @@ export const createCanvasProvider = (deps: {
     return {
       ok: true,
       value: {
-        ref: refs.conversation(school.id, row.id),
+        ref: refs.conversation({ school: school.id, conversation: row.id }),
         school: school.id,
-        course: refs.course(school.id, Number(courseCode)),
+        course: refs.course({ school: school.id, course: Number(courseCode) }),
         subject: row.subject,
         from: row.participants.find((person) => person.id !== mine)?.name ?? "",
         students: row.participants
           .filter((person) => person.id !== mine)
-          .map((person) => refs.student(school.id, person.id)),
+          .map((person) => refs.student({ school: school.id, user: person.id })),
         unread: row.workflow_state === "unread",
         messages: row.messages.toReversed().map((message) => ({
           id: String(message.id),
@@ -1088,7 +1097,7 @@ export const createCanvasProvider = (deps: {
             ? []
             : [
                 {
-                  ref: refs.course(school.id, row.id),
+                  ref: refs.course({ school: school.id, course: row.id }),
                   school: school.id,
                   code: row.course_code,
                   title: row.name,
@@ -1107,7 +1116,7 @@ export const createCanvasProvider = (deps: {
         return {
           ok: true,
           value: rows.value.map((row): Assignment => ({
-            ref: refs.assignment(school.id, id, row.id),
+            ref: refs.assignment({ school: school.id, course: id, assignment: row.id }),
             school: school.id,
             course,
             title: row.name,
@@ -1116,7 +1125,11 @@ export const createCanvasProvider = (deps: {
             pointsPossible: row.points_possible,
             rubric:
               row.rubric?.map((criterion) => ({
-                ref: refs.criterion(school.id, row.id, criterion.id),
+                ref: refs.criterion({
+                  school: school.id,
+                  assignment: row.id,
+                  criterion: criterion.id,
+                }),
                 name: criterion.description,
                 maxPoints: criterion.points,
               })) ?? null,
@@ -1131,7 +1144,7 @@ export const createCanvasProvider = (deps: {
         return {
           ok: true,
           value: rows.value.map((row): Student => ({
-            ref: refs.student(school.id, row.id),
+            ref: refs.student({ school: school.id, user: row.id }),
             school: school.id,
             course,
             name: row.name,
@@ -1159,11 +1172,20 @@ export const createCanvasProvider = (deps: {
               return !seen.has(key) && Boolean(seen.add(key));
             })
             .map((row): Submission => ({
-              ref: refs.submission(school.id, id, row.assignment_id, row.user_id),
+              ref: refs.submission({
+                school: school.id,
+                course: id,
+                assignment: row.assignment_id,
+                user: row.user_id,
+              }),
               school: school.id,
               course,
-              assignment: refs.assignment(school.id, id, row.assignment_id),
-              student: refs.student(school.id, row.user_id),
+              assignment: refs.assignment({
+                school: school.id,
+                course: id,
+                assignment: row.assignment_id,
+              }),
+              student: refs.student({ school: school.id, user: row.user_id }),
               studentName: row.user?.name ?? "",
               workflow: workflowOf(row),
               attempt: row.attempt,
@@ -1175,7 +1197,16 @@ export const createCanvasProvider = (deps: {
                     Object.entries(row.rubric_assessment).flatMap(([criterion, { points }]) =>
                       points === null
                         ? []
-                        : [[refs.criterion(school.id, row.assignment_id, criterion), points]],
+                        : [
+                            [
+                              refs.criterion({
+                                school: school.id,
+                                assignment: row.assignment_id,
+                                criterion,
+                              }),
+                              points,
+                            ],
+                          ],
                     ),
                   )
                 : null,
@@ -1226,7 +1257,7 @@ export const createCanvasProvider = (deps: {
               ? []
               : [
                   {
-                    ref: refs.announcement(school.id, row.id),
+                    ref: refs.announcement({ school: school.id, announcement: row.id }),
                     school: school.id,
                     course,
                     title: row.title,

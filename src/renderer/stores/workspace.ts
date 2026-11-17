@@ -155,6 +155,7 @@ import type {
   FieldEdit,
   HandedWork,
   OnboardingStep,
+  HandoffKey,
   PendingHandoff,
   SchoolCache,
   Thread,
@@ -1406,7 +1407,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
 
         /** Safe to run again after a reload: work that already exists is only focused. */
         const runHandoff = async (pending: PendingHandoff): Promise<void> => {
-          const key = `${pending.thread} ${JSON.stringify(pending.work)}`;
+          const key: HandoffKey = `${pending.thread} ${JSON.stringify(pending.work)}`;
           set({ handoffs: { ...get().handoffs, [key]: pending } });
           try {
             await startWork(pending.thread, pending.course, pending.work);

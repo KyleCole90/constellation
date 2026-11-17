@@ -13,6 +13,7 @@ import {
   moreWords,
   moveCursor,
   parseThreadSearch,
+  readWorkUrl,
   nameFillsStrip,
   neighbor,
   nextLabel,
@@ -22,6 +23,8 @@ import {
   queueProgress,
   rowLine,
   rowStatus,
+  type ThreadSearch,
+  type WorkView,
   rowsOutOfView,
   selectable,
   splitSelection,
@@ -431,27 +434,48 @@ describe("followWorkUrl", () => {
   const list = { view: "list" } as const;
   const batch = { view: "batch" } as const;
   const hannah = { row: "sub-hannah" as RowKey };
+  const rowAt = (raw: string) => (raw === hannah.row ? hannah.row : null);
+  const follow = (url: ThreadSearch, view: WorkView, moved: boolean, reviewable: boolean) =>
+    followWorkUrl(url, rowAt, view, moved, reviewable);
 
   it("makes opening the batch or a row a new entry, so Back returns to what was before", () => {
-    expect(followWorkUrl(list, batch, false, true)).toEqual({ write: batch, replace: false });
-    expect(followWorkUrl(batch, hannah, false, true)).toEqual({ write: hannah, replace: false });
+    expect(follow(list, batch, false, true)).toEqual({ write: batch, replace: false });
+    expect(follow(batch, hannah, false, true)).toEqual({ write: hannah, replace: false });
   });
 
   it("shows what Back or Forward lands on", () => {
-    expect(followWorkUrl(batch, hannah, true, true)).toEqual({ show: batch });
-    expect(followWorkUrl(list, batch, true, true)).toEqual({ show: list });
+    expect(follow(batch, hannah, true, true)).toEqual({ show: batch });
+    expect(follow(list, batch, true, true)).toEqual({ show: list });
+    expect(follow(hannah, list, true, true)).toEqual({ show: hannah });
   });
 
   it("gives a URL that names nothing what is showing, in place", () => {
-    expect(followWorkUrl({}, hannah, true, true)).toEqual({ write: hannah, replace: true });
+    expect(follow({}, hannah, true, true)).toEqual({ write: hannah, replace: true });
+    expect(follow({ row: "not-a-row" }, hannah, true, true)).toEqual({
+      write: hannah,
+      replace: true,
+    });
   });
 
   it("replaces a batch with nothing left to review instead of reopening it", () => {
-    expect(followWorkUrl(batch, list, true, false)).toEqual({ write: list, replace: true });
+    expect(follow(batch, list, true, false)).toEqual({ write: list, replace: true });
   });
 
   it("does nothing once the URL and the screen agree", () => {
-    expect(followWorkUrl(hannah, { ...hannah }, true, true)).toBeNull();
+    expect(follow(hannah, { ...hannah }, true, true)).toBeNull();
+  });
+
+  it("does nothing when the screen still names a row the workspace lost, as after a reset", () => {
+    const gone = { row: "sub-gone" as RowKey };
+    expect(follow({ row: "sub-gone" }, gone, false, true)).toBeNull();
+    expect(follow({ row: "sub-gone" }, gone, true, true)).toBeNull();
+  });
+
+  it("reads a row the thread can't show as naming nothing", () => {
+    expect(readWorkUrl({ row: "sub-hannah" }, rowAt)).toEqual(hannah);
+    expect(readWorkUrl({ row: "not-a-row" }, rowAt)).toBeNull();
+    expect(readWorkUrl({ view: "batch" }, rowAt)).toEqual(batch);
+    expect(readWorkUrl({}, rowAt)).toBeNull();
   });
 
   it("reads a row before a view and drops anything else", () => {

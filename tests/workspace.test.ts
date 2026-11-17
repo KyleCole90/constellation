@@ -147,6 +147,14 @@ describe("persistence", () => {
     ["setups that isn't a record", (saved) => (saved.state.setups = "nope")],
     ["handoffs that isn't a record", (saved) => (saved.state.handoffs = [])],
     [
+      "undrafted work keyed by something other than a submission",
+      (saved) => (saved.state.undrafted = { "Maya Ortiz": { submittedAt: null, said: "" } }),
+    ],
+    [
+      "a dismissed offer keyed by something other than a course",
+      (saved) => (jsonObject(saved.state.prefs).offersDismissed = { "Biology 101": true }),
+    ],
+    [
       "a change of an unknown kind",
       (saved) => (firstOf(saved.state.changes).content = { kind: "poem" }),
     ],

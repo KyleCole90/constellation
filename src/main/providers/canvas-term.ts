@@ -242,7 +242,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
   ): CourseShell => {
     const { start, end } = datesOf(row);
     return {
-      ref: refs.course(school.id, row.id),
+      ref: refs.course({ school: school.id, course: row.id }),
       school: school.id,
       code: row.course_code,
       title: row.name,
@@ -255,8 +255,8 @@ export const canvasTermSetup = (client: CanvasClient) => {
       itemCount,
       // A school's own template copy has no user, or an admin's, so only a copy the teacher started counts.
       setUp: jobs.some((job) => job.user_id === mine && job.workflow_state === "completed"),
-      copyTarget: refs.migrations(school.id, row.id),
-      stateTarget: refs.courseState(school.id, row.id),
+      copyTarget: refs.migrations({ school: school.id, course: row.id }),
+      stateTarget: refs.courseState({ school: school.id, course: row.id }),
     };
   };
 
@@ -324,14 +324,19 @@ export const canvasTermSetup = (client: CanvasClient) => {
           ? []
           : [
               {
-                ref: refs.item(school.id, row.id, "assignment", item.id),
+                ref: refs.item({
+                  school: school.id,
+                  course: row.id,
+                  type: "assignment",
+                  item: item.id,
+                }),
                 title: item.name,
                 dueAt: item.due_at,
               },
             ],
       );
       out.push({
-        ref: refs.course(school.id, row.id),
+        ref: refs.course({ school: school.id, course: row.id }),
         code: row.course_code,
         title: row.name,
         termName: termNameOf(row),
@@ -356,7 +361,12 @@ export const canvasTermSetup = (client: CanvasClient) => {
     const file = row.attachment?.display_name ?? null;
     if (row.migration_type === "course_copy_importer" && source !== null)
       return copySignature({
-        source: { kind: "course", ref: refs.course(school.id, source), label: "", termName: "" },
+        source: {
+          kind: "course",
+          ref: refs.course({ school: school.id, course: source }),
+          label: "",
+          termName: "",
+        },
       });
     if (row.migration_type === "common_cartridge_importer" && file !== null)
       return copySignature({ source: { kind: "cartridge", name: file, kb: 0, hint: null } });
@@ -402,7 +412,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
           }));
         }
         out.push({
-          ref: refs.migration(school.id, id, row.id),
+          ref: refs.migration({ school: school.id, course: id, migration: row.id }),
           signature: signatureOf(row),
           state,
           completion: state === "completed" ? 100 : (progress?.value.completion ?? 0),
@@ -515,7 +525,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
           copied: boolean;
         },
       ): ContentItem => ({
-        ref: refs.item(school.id, id, type, itemId),
+        ref: refs.item({ school: school.id, course: id, type, item: itemId }),
         type,
         title: fields.title,
         body: fields.body,
@@ -594,7 +604,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
         version: hashOf([row.value, items, modules.value, tools.value]),
         items,
         modules: modules.value.map((module) => ({
-          ref: refs.module(school.id, id, module.id),
+          ref: refs.module({ school: school.id, course: id, module: module.id }),
           title: module.name,
           published: module.published,
           itemCount: module.items_count,
@@ -602,7 +612,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
         })),
         // A tool Canvas lists for the course, its own or its account's, is set up for it.
         tools: tools.value.map((tool) => ({
-          ref: refs.tool(school.id, id, tool.id),
+          ref: refs.tool({ school: school.id, course: id, tool: tool.id }),
           name: tool.name,
           configured: true,
         })),
@@ -905,7 +915,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
             students,
             items: items.value,
             migrations: jobs.value.map((job) => ({
-              id: refs.migration(school.id, id, job.id),
+              id: refs.migration({ school: school.id, course: id, migration: job.id }),
               mine: job.user_id === mine.value,
               text: signatureOf(job),
             })),

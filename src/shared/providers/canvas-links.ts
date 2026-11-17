@@ -42,6 +42,10 @@ export const classifyLink = (
   if (kind === "files")
     return { ...link, points: ctx.files.has(Number(slug)) ? "this-course" : "missing-file" };
   if (kind === "external_tools")
-    return { ...link, points: "tool", tool: refs.tool(ctx.school, ctx.courseId, Number(slug)) };
+    return {
+      ...link,
+      points: "tool",
+      tool: refs.tool({ school: ctx.school, course: ctx.courseId, tool: Number(slug) }),
+    };
   return { ...link, points: "this-course" };
 };

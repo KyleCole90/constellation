@@ -288,7 +288,7 @@ const WORKFLOW: Readonly<Record<string, Submission["workflow"]>> = {
 
 const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): void => {
   const school = course.schoolId;
-  const courseRef = refs.course(school, course.canvasId);
+  const courseRef = refs.course({ school, course: course.canvasId });
   const [section, modality] =
     course.section === "hybrid" ? [null, "hybrid"] : course.section.split(", ");
   state.courses.push({
@@ -302,13 +302,23 @@ const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): 
   });
   const userId = (i: number) => 70000 + (course.canvasId % 1000) + i;
   course.students.forEach((name, i) =>
-    state.students.push({ ref: refs.student(school, userId(i)), school, course: courseRef, name }),
+    state.students.push({
+      ref: refs.student({ school, user: userId(i) }),
+      school,
+      course: courseRef,
+      name,
+    }),
   );
 
   course.assignments.forEach((assignment, assignmentIndex) => {
     const assignmentId = assignmentCanvasId(assignment, courseIndex, assignmentIndex);
-    const assignmentRef = refs.assignment(school, course.canvasId, assignmentId);
-    const criterion = (id: string) => refs.criterion(school, assignmentId, id);
+    const assignmentRef = refs.assignment({
+      school,
+      course: course.canvasId,
+      assignment: assignmentId,
+    });
+    const criterion = (id: string) =>
+      refs.criterion({ school, assignment: assignmentId, criterion: id });
     state.assignments.push({
       ref: assignmentRef,
       school,
@@ -337,11 +347,16 @@ const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): 
         assignment.fixedGrades?.[i] ?? Math.round(assignment.pts * (0.72 + ((i * 37) % 26) / 100));
       const scores = prior?.scores;
       state.submissions.push({
-        ref: refs.submission(school, course.canvasId, assignmentId, userId(i)),
+        ref: refs.submission({
+          school,
+          course: course.canvasId,
+          assignment: assignmentId,
+          user: userId(i),
+        }),
         school,
         course: courseRef,
         assignment: assignmentRef,
-        student: refs.student(school, userId(i)),
+        student: refs.student({ school, user: userId(i) }),
         studentName: [...course.students, ...(course.offRoster ?? [])][i] ?? "",
         workflow: WORKFLOW[status] ?? "unsubmitted",
         attempt: !hasWork ? 0 : prior ? 2 : 1,
@@ -376,7 +391,7 @@ const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): 
 
   for (const message of course.messages) {
     state.conversations.push({
-      ref: refs.conversation(school, message.canvasId),
+      ref: refs.conversation({ school, conversation: message.canvasId }),
       school,
       course: courseRef,
       subject: message.subject,
@@ -416,7 +431,7 @@ const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): 
   }
   for (const announcement of course.announcements) {
     state.announcements.push({
-      ref: refs.announcement(school, announcement.id),
+      ref: refs.announcement({ school, announcement: announcement.id }),
       school,
       course: courseRef,
       title: announcement.title,
@@ -430,7 +445,7 @@ const freshTerm = (): TermState => {
   const content: Record<string, RawBody> = {};
   const shells = SHELLS.map((shell): ShellRow => {
     const school = shell.school;
-    content[refs.course(school, shell.canvasId)] = structuredClone(shell.body);
+    content[refs.course({ school, course: shell.canvasId })] = structuredClone(shell.body);
     return {
       school,
       canvasId: shell.canvasId,
@@ -449,7 +464,7 @@ const freshTerm = (): TermState => {
   });
   const sources = SOURCES.map((source): SourceRow => {
     const school = source.school;
-    content[refs.course(school, source.canvasId)] = structuredClone(source.body);
+    content[refs.course({ school, course: source.canvasId })] = structuredClone(source.body);
     return {
       school,
       canvasId: source.canvasId,
@@ -612,7 +627,7 @@ const freshState = (demoScript: boolean): LmsState => {
 };
 
 const courseOfShell = (shell: ShellRow): Course => ({
-  ref: refs.course(shell.school, shell.canvasId),
+  ref: refs.course({ school: shell.school, course: shell.canvasId }),
   school: shell.school,
   code: shell.code,
   title: `${shell.title}, ${shell.termName}`,
@@ -821,11 +836,11 @@ export class FakeCanvasServer implements FaultLab {
   /** Lands a completed job's content once. Items arrive copied, tools unconfigured, and assignments become real rows. */
   #land(record: MigrationRecord): MigrationRecord {
     const { term } = this.#state;
-    const targetRef = refs.course(record.school, record.course_id);
+    const targetRef = refs.course({ school: record.school, course: record.course_id });
     const sourceKey =
       record.settings.file !== undefined
         ? `${PACKAGE_KEY}${record.settings.file}`
-        : refs.course(record.school, record.settings.source_course_id ?? 0);
+        : refs.course({ school: record.school, course: record.settings.source_course_id ?? 0 });
     const source = term.content[sourceKey];
     const pkg = PACKAGES.find((entry) => entry.name === record.settings.file);
     if (!source) return { ...record, applied: true };
@@ -858,7 +873,11 @@ export class FakeCanvasServer implements FaultLab {
     for (const item of copied.items) {
       if (item.type !== "assignment") continue;
       this.#state.assignments.push({
-        ref: refs.assignment(record.school, record.course_id, item.id),
+        ref: refs.assignment({
+          school: record.school,
+          course: record.course_id,
+          assignment: item.id,
+        }),
         school: record.school,
         course: targetRef,
         title: item.title,
@@ -880,7 +899,9 @@ export class FakeCanvasServer implements FaultLab {
   #announceable(ref: LmsRef<"course">): { school: SchoolId; code: string } | undefined {
     return (
       this.#state.courses.find((c) => c.ref === ref) ??
-      this.#state.term.shells.find((shell) => refs.course(shell.school, shell.canvasId) === ref)
+      this.#state.term.shells.find(
+        (shell) => refs.course({ school: shell.school, course: shell.canvasId }) === ref,
+      )
     );
   }
 
@@ -920,8 +941,8 @@ export class FakeCanvasServer implements FaultLab {
       setUp: this.#state.term.migrations.some(
         (record) => record.course_id === courseId && record.workflow_state === "completed",
       ),
-      copyTarget: refs.migrations(row.school, courseId),
-      stateTarget: refs.courseState(row.school, courseId),
+      copyTarget: refs.migrations({ school: row.school, course: courseId }),
+      stateTarget: refs.courseState({ school: row.school, course: courseId }),
     };
   }
 
@@ -931,7 +952,7 @@ export class FakeCanvasServer implements FaultLab {
     const [owner = "", , courseId, , id] = refParts(ref);
     const school = parseSchoolId(owner);
     if (school === null || courseId === undefined) return null;
-    const body = this.#state.term.content[refs.course(school, Number(courseId))];
+    const body = this.#state.term.content[refs.course({ school, course: Number(courseId) })];
     const item = body?.items.find((entry) => entry.id === Number(id));
     return body && item ? { body, item, school, courseId: Number(courseId) } : null;
   }
@@ -955,20 +976,25 @@ export class FakeCanvasServer implements FaultLab {
           shell.workflow_state === "unpublished" &&
           isComing({ concluded: false, startAt: this.#dates(shell).startAt }, today),
       )
-      .flatMap((shell) => this.#shellOf(refs.course(school, shell.canvasId)) ?? []);
+      .flatMap((shell) => this.#shellOf(refs.course({ school, course: shell.canvasId })) ?? []);
   };
   /** A new-term course joins the list once it is saved as a template. */
   copySources = (school: SchoolId): readonly SourceCourse[] =>
     [...this.#state.term.sources, ...this.#state.term.shells.filter((shell) => shell.template)]
       .filter((source) => source.school === school)
       .map((source): SourceCourse => {
-        const ref = refs.course(school, source.canvasId);
+        const ref = refs.course({ school, course: source.canvasId });
         const dated = (this.#state.term.content[ref]?.items ?? []).flatMap((item) =>
           item.dueAt === null
             ? []
             : [
                 {
-                  ref: refs.item(school, source.canvasId, item.type, item.id),
+                  ref: refs.item({
+                    school,
+                    course: source.canvasId,
+                    type: item.type,
+                    item: item.id,
+                  }),
                   title: item.title,
                   dueAt: item.dueAt,
                 },
@@ -1118,11 +1144,12 @@ export class FakeCanvasServer implements FaultLab {
         const shell = this.#shell(courseId);
         if (!shell) return null;
         const items =
-          this.#state.term.content[refs.course(shell.school, courseId)]?.items.length ?? 0;
+          this.#state.term.content[refs.course({ school: shell.school, course: courseId })]?.items
+            .length ?? 0;
         const migrations = this.#state.term.migrations
           .filter((record) => record.course_id === courseId)
           .map((record) => ({
-            id: refs.migration(record.school, courseId, record.id),
+            id: refs.migration({ school: record.school, course: courseId, migration: record.id }),
             mine: true,
             text: record.signature,
           }));
@@ -1304,7 +1331,7 @@ export class FakeCanvasServer implements FaultLab {
         const canvasId =
           Math.max(0, ...this.#state.conversations.map((c) => Number(refParts(c.ref)[2]))) + 1;
         this.#state.conversations.push({
-          ref: refs.conversation(student.school, canvasId),
+          ref: refs.conversation({ school: student.school, conversation: canvasId }),
           school: student.school,
           course: student.course,
           subject: content.subject,
@@ -1319,7 +1346,7 @@ export class FakeCanvasServer implements FaultLab {
         const course = this.#announceable(content.target);
         if (!course) return;
         this.#state.announcements.push({
-          ref: refs.announcement(course.school, id),
+          ref: refs.announcement({ school: course.school, announcement: id }),
           school: course.school,
           course: content.target,
           title: content.title,
@@ -1413,7 +1440,7 @@ export class FakeCanvasServer implements FaultLab {
     if (!found) return;
     const { body, item, school, courseId } = found;
     const assignment = this.#state.assignments.find(
-      (row) => row.ref === refs.assignment(school, courseId, item.id),
+      (row) => row.ref === refs.assignment({ school, course: courseId, assignment: item.id }),
     );
     switch (intent.set) {
       case "due-at":
@@ -1550,7 +1577,7 @@ export class FakeCanvasServer implements FaultLab {
       template: false,
       students: [],
     });
-    content[refs.course(school, canvasId)] = { items: [], modules: [], tools: [] };
+    content[refs.course({ school, course: canvasId })] = { items: [], modules: [], tools: [] };
     this.#push();
     this.#changed();
   };
@@ -1578,7 +1605,11 @@ export class FakeCanvasServer implements FaultLab {
     if (!school) return;
     const courseId = Number(refParts(course)[2]);
     const added = titles.map((title, i): Assignment => ({
-      ref: refs.assignment(school, courseId, 990_000 + this.#state.assignments.length + i),
+      ref: refs.assignment({
+        school,
+        course: courseId,
+        assignment: 990_000 + this.#state.assignments.length + i,
+      }),
       school,
       course,
       title,

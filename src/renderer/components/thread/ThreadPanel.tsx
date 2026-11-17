@@ -18,7 +18,7 @@ export function ThreadPanel({ thread, ui }: { thread: Thread; ui: ThreadUi }) {
   const { setUi, rows } = useThreadActions();
   const view = useChange(thread.focus);
   const record = view?.record ?? null;
-  const sourceName = useSourceTabName(record, ui.current);
+  const sourceName = useSourceTabName(record, thread.kind, ui.current);
   const row = rows.find((candidate) => candidate.key === (record?.content.target ?? ui.current));
   const panel = sourceName === null && ui.panel === "source" ? "writeback" : ui.panel;
   const tabs = [
@@ -153,7 +153,12 @@ export function ThreadPanel({ thread, ui }: { thread: Thread; ui: ThreadUi }) {
                   data-panel-scroll
                   className="min-h-0 flex-1 overflow-y-auto"
                 >
-                  <SourcePane key={record?.id ?? ui.current} record={record} current={ui.current} />
+                  <SourcePane
+                    key={record?.id ?? ui.current}
+                    record={record}
+                    kind={thread.kind}
+                    current={ui.current}
+                  />
                 </div>
               )}
             </div>

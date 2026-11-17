@@ -1,18 +1,19 @@
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { Layers, PanelRight, Plus } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 
-import type { LmsRef, ThreadId } from "~/shared/domain/ids";
 import {
   NORTH_STAR_THREAD,
   isChatThread,
-  selectConversation,
+  selectConversationAt,
   selectCourse,
   selectInboxRows,
   selectQueueRows,
+  selectRowKeyAt,
   selectSchoolGap,
   selectThreadName,
   selectThreadUi,
+  threadAt,
 } from "~/renderer/stores/selectors";
 import type { Thread, ThreadUi } from "~/renderer/stores/types";
 import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
@@ -88,22 +89,31 @@ const useWorkUrl = (
 ) => {
   const url = useSearch({ from: "/threads/$threadId" });
   const navigate = useNavigate({ from: "/threads/$threadId" });
+  const settled = useRouterState({ select: (state) => state.status === "idle" });
   const seen = useRef<string | null>(null);
   // The URL this screen last wrote arriving is not a move, or a second click before it lands would be undone.
   const wrote = useRef<string | null>(null);
   useEffect(() => {
-    if (!view) return;
+    // While a navigation lands, as on /welcome after a reset, `url` is the search of the route being left; a write would undo it.
+    if (!view || !settled) return;
     const urlKey = workViewKey(url);
     const moved = urlKey !== seen.current && urlKey !== wrote.current;
     if (urlKey === wrote.current) wrote.current = null;
     seen.current = urlKey;
-    const step = followWorkUrl(url, view, moved, reviewable);
+    const rowAt = (raw: string) => selectRowKeyAt(workspaceStore().getState(), thread.kind, raw);
+    const step = followWorkUrl(url, rowAt, view, moved, reviewable);
     if (!step) return;
     if ("show" in step) return showWorkView(thread, rows, ui, step.show);
     wrote.current = workViewKey(step.write);
     // The entry keeps what it carried, such as the chat a handoff came from.
-    void navigate({ search: step.write, replace: step.replace, state: true });
-  }, [url, view, reviewable, thread, rows, ui, navigate]);
+    void navigate({
+      to: "/threads/$threadId",
+      params: { threadId: thread.id },
+      search: step.write,
+      replace: step.replace,
+      state: true,
+    });
+  }, [url, view, reviewable, thread, rows, ui, navigate, settled]);
 };
 
 export function PanelToggle({
@@ -291,9 +301,7 @@ function ThreadView({ thread }: { thread: Thread }) {
   const noSchool = thread.kind === "queue" ? gap : null;
   // A draft card quotes the message it answers. With no draft, as after a Discard, the conversation shows on its own.
   const conversation = useWorkspace((state) =>
-    thread.kind === "messages" && thread.focus === null && currentKey
-      ? selectConversation(state, currentKey as LmsRef<"conversation">)
-      : null,
+    thread.focus === null ? selectConversationAt(state, thread.kind, currentKey) : null,
   );
 
   return (
@@ -349,8 +357,8 @@ function ThreadView({ thread }: { thread: Thread }) {
   );
 }
 
-export function ThreadScreen({ threadId }: { threadId: ThreadId }) {
-  const thread = useWorkspace((state) => state.threads[threadId]);
+export function ThreadScreen({ threadId }: { threadId: string }) {
+  const thread = useWorkspace((state) => threadAt(state, threadId));
   const ai = useAiOn();
   if (!thread) return <EmptyState title="This thread doesn't exist any more." />;
   if (!ai && isChatThread(thread)) return <EmptyState title="Chats need an AI key." />;

@@ -148,8 +148,8 @@ export const createSetupActions = (host: SetupHost) => {
   /** One scan at a time per course, each reading fresh, so two quick sends can't commit an older read over a newer one. */
   const scanTails = new Map<string, Promise<unknown>>();
 
-  const setupOf = (course: string): CourseSetup | undefined => get().setups[course];
-  const patchSetup = (course: string, patch: Partial<CourseSetup>) => {
+  const setupOf = (course: CourseRef): CourseSetup | undefined => get().setups[course];
+  const patchSetup = (course: CourseRef, patch: Partial<CourseSetup>) => {
     const current = setupOf(course);
     if (current) set({ setups: { ...get().setups, [course]: { ...current, ...patch } } });
   };
@@ -329,7 +329,7 @@ export const createSetupActions = (host: SetupHost) => {
   };
 
   const commitScan = (
-    course: string,
+    course: CourseRef,
     copy: ChangeRecord,
     content: CourseContent,
     issues: Migration["issues"],
@@ -395,7 +395,7 @@ export const createSetupActions = (host: SetupHost) => {
   };
 
   /** Rules only. Runs after a send, and for every check, reading fresh each time. */
-  const rescan = (course: string): Promise<Result<CourseSetup, string>> => {
+  const rescan = (course: CourseRef): Promise<Result<CourseSetup, string>> => {
     const run = async (): Promise<Result<CourseSetup, string>> => {
       const setup = setupOf(course);
       const copy = setup && copyOf(setup);
@@ -414,7 +414,7 @@ export const createSetupActions = (host: SetupHost) => {
     return started;
   };
 
-  const firstScan = async (course: string, job: Migration) => {
+  const firstScan = async (course: CourseRef, job: Migration) => {
     const before = setupOf(course);
     const copy = before && copyOf(before);
     if (!before || !copy) return;
@@ -449,7 +449,7 @@ export const createSetupActions = (host: SetupHost) => {
       );
   };
 
-  const driveWatch = async (course: string) => {
+  const driveWatch = async (course: CourseRef) => {
     let misses = 0;
     const missed = async (message: string): Promise<boolean> => {
       misses += 1;
@@ -490,7 +490,7 @@ export const createSetupActions = (host: SetupHost) => {
   };
 
   /** Two tabs run one watcher. The other waits on the lock, so it takes over if this tab closes, and has nothing to do otherwise. */
-  const watch = (course: string): Promise<void> =>
+  const watch = (course: CourseRef): Promise<void> =>
     once(`setup-watch:${course}`, async () => {
       if (!host.locks) return driveWatch(course);
       await host.locks.request(`setup-watch:${course}`, async () => {
@@ -864,7 +864,7 @@ export const createSetupActions = (host: SetupHost) => {
 
     /** A copy that landed starts its watcher. Anything else that touched a set-up course rescans it, on rules alone. */
     afterSend: async (ids: readonly ChangeId[]) => {
-      const rescans = new Set<string>();
+      const rescans = new Set<CourseRef>();
       for (const id of ids) {
         const record = get().changes[id];
         const setup = record && setupOf(record.course);

@@ -10,12 +10,12 @@ import {
   type RefObject,
 } from "react";
 
-import type { LmsRef, ThreadId } from "~/shared/domain/ids";
+import type { ThreadId } from "~/shared/domain/ids";
 import { undraftableReason, type Submission } from "~/shared/domain/lms";
 import { firstName } from "~/shared/domain/workName";
 import {
   selectAssignment,
-  selectSubmission,
+  selectSubmissionAt,
   selectAskedAt,
   selectMessageSince,
   selectUndrafted,
@@ -567,7 +567,7 @@ export function ChatTimeline({
   const toAnnounce = thread.kind === "announcement" && thread.focus === null ? thread.course : null;
   /** The submission on screen with no draft open: just opened, or after a draft that failed or a Discard. */
   const toGrade = useWorkspace((state) =>
-    selectSubmission(state, thread.focus === null ? (ui.current as LmsRef<"submission">) : null),
+    thread.focus === null ? selectSubmissionAt(state, thread.kind, ui.current) : null,
   );
 
   return (

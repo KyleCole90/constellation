@@ -1,10 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { CourseRoute } from "~/renderer/components/screens/CourseHeader";
 import { CourseOverviewScreen } from "~/renderer/components/screens/CourseOverviewScreen";
-import type { LmsRef } from "~/shared/domain/ids";
 
 const Screen = () => (
-  <CourseOverviewScreen courseId={Route.useParams().courseId as LmsRef<"course">} />
+  <CourseRoute courseId={Route.useParams().courseId}>
+    {(courseId) => <CourseOverviewScreen courseId={courseId} />}
+  </CourseRoute>
 );
 
 export const Route = createFileRoute("/courses/$courseId/")({ component: Screen });

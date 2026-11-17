@@ -249,7 +249,7 @@ describe("rangeLabel", () => {
 describe("the calendar URL", () => {
   const SATURDAY_AFTER = new Date(2026, 10, 7).getTime();
   const roundTrip = (today: number, search: Record<string, unknown>) =>
-    calendarView(today, parseCalendarSearch(search));
+    calendarView(today, parseCalendarSearch(search), [{ id: "rsu" as SchoolId }]);
 
   it("names the open day by its date, not by weeks from today", () => {
     const view = { week: 1, picked: 8, school: "all" } as const;
@@ -267,6 +267,10 @@ describe("the calendar URL", () => {
   it("keeps the school filter", () => {
     const view = { week: 0, picked: undefined, school: "rsu" as SchoolId };
     expect(roundTrip(FRIDAY, calendarSearch(FRIDAY, view))).toEqual(view);
+  });
+
+  it("shows every school when the URL names one that isn't here", () => {
+    expect(roundTrip(FRIDAY, { school: "gone" })).toMatchObject({ school: "all" });
   });
 
   it("the day after Saturday opens in the next week", () => {

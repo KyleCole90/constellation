@@ -400,16 +400,22 @@ function CalendarGrid({
 export function CalendarScreen() {
   const data = useWorkspace((state) => selectCalendar(state, state.now()));
   const gap = useWorkspace(selectSchoolGap);
-  const { week, picked, school } = calendarView(data.today, useSearch({ from: "/calendar" }));
+  const schools = useWorkspace((state) => state.schools);
+  const { week, picked, school } = calendarView(
+    data.today,
+    useSearch({ from: "/calendar" }),
+    schools,
+  );
   const navigate = useNavigate({ from: "/calendar" });
   const today = data.today;
   const show = useCallback(
     (next: Partial<CalendarView>) =>
       void navigate({
-        search: (search) => calendarSearch(today, { ...calendarView(today, search), ...next }),
+        search: (search) =>
+          calendarSearch(today, { ...calendarView(today, search, schools), ...next }),
         replace: true,
       }),
-    [navigate, today],
+    [navigate, today, schools],
   );
   const setWeek = (next: number) =>
     show({ week: next, picked: picked === undefined ? undefined : picked + 7 * (next - week) });
