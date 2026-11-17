@@ -105,7 +105,6 @@ const runnerWith = async (provider: LmsProvider, content: ChangeContent) => {
     sleep: clock.sleep,
     random: () => 0.5,
     policy: DEFAULT_RETRY_POLICY,
-    locks: null,
   });
   const send = () => clock.run(writeback.send([draft.id]));
   return { send, stateOf: () => ledger.get(draft.id)?.state.tag };

@@ -79,25 +79,18 @@ describe("a clean send", () => {
     expect(myComments(rig, submission)).toHaveLength(1);
   });
 
-  it("wraps the send in a lock named for the change", async () => {
+  it("waits while another tab sends the same change, then posts once", async () => {
     const rig = await makeRig();
-    const { id } = await rig.approvedGrade(LCC);
-    const names: string[] = [];
-    const locks = {
-      request: async (name: string, work: () => Promise<unknown>) => (names.push(name), work()),
-    } as unknown as Pick<LockManager, "request">;
-    const writeback = createWriteback({
-      ledger: rig.ledger,
-      providerFor: rig.provider,
-      markExpired: () => undefined,
-      now: rig.clock.now,
-      sleep: rig.clock.sleep,
-      random: () => 0.5,
-      policy: DEFAULT_RETRY_POLICY,
-      locks,
-    });
-    await rig.clock.run(writeback.send([id]));
-    expect(names).toEqual([`lms-send:${id}`]);
+    const { id, submission } = await rig.approvedGrade(LCC);
+    const otherTab = await rig.locks.hold(`lms-send:${id}`);
+    const sending = rig.newWriteback().send([id]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(rig.writes).toEqual([]);
+    expect(rig.stateOf(id).tag).toBe("approved");
+
+    otherTab.release();
+    expect(await rig.clock.run(sending)).toEqual([{ id, state: "sent" }]);
+    expect(myComments(rig, submission)).toHaveLength(1);
   });
 });
 
@@ -554,22 +547,11 @@ describe("a reload during a send", () => {
         .catch(() => undefined),
     );
     rig.ledger.armCrash(null);
-    const heldLock = {
-      request: (_name: string, _options: unknown, work: (lock: null) => Promise<unknown>) =>
-        work(null),
-    } as unknown as Pick<LockManager, "request">;
-    const tab = createWriteback({
-      ledger: rig.ledger,
-      providerFor: rig.provider,
-      markExpired: () => undefined,
-      now: rig.clock.now,
-      sleep: rig.clock.sleep,
-      random: () => 0.5,
-      policy: DEFAULT_RETRY_POLICY,
-      locks: heldLock,
-    });
+    const otherTab = await rig.locks.hold(`lms-send:${id}`);
+    const tab = rig.newWriteback();
     await rig.clock.run(tab.recover());
     expect(rig.stateOf(id).tag).toBe("sending");
+    otherTab.release();
   });
 });
 
@@ -607,7 +589,6 @@ describe("laneRead", () => {
         sleep: rig.clock.sleep,
         random: () => 0.5,
         policy: DEFAULT_RETRY_POLICY,
-        locks: null,
       }),
     };
   };

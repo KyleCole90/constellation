@@ -134,7 +134,6 @@ describe("Canvas reads against a live school", () => {
       sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
       random: () => Math.random(),
       policy: DEFAULT_RETRY_POLICY,
-      locks: null,
     });
     return async () => {
       await writeback.send([draft.id]);

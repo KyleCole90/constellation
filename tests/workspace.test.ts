@@ -449,6 +449,7 @@ describe("a second tab", () => {
     const second = await makeStoreRig({
       storage: first.storage,
       vault: first.vault,
+      locks: first.locks,
       clock: first.clock,
       subscribeStorage: (onChange) => (notify = onChange),
     });

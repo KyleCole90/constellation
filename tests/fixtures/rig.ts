@@ -22,6 +22,7 @@ import {
 import { clickWitness } from "./changes";
 import { VirtualClock } from "./clock";
 import { DurableLedger } from "./ledger";
+import { BrowserLocks } from "./locks";
 import { memoryStorage } from "./storage";
 
 export const LCC = "lcc" as SchoolId;
@@ -96,6 +97,7 @@ export const makeRig = async () => {
   };
   buildProviders();
 
+  let locks = new BrowserLocks();
   const newWriteback = (): Writeback =>
     createWriteback({
       ledger,
@@ -105,7 +107,7 @@ export const makeRig = async () => {
       sleep: clock.sleep,
       random: () => 0.5,
       policy: DEFAULT_RETRY_POLICY,
-      locks: null,
+      locks,
     });
 
   const provider = (school: SchoolId): LmsProvider => {
@@ -179,9 +181,10 @@ export const makeRig = async () => {
     return found;
   };
 
-  /** What a page reload does: new server object and new runner over the same durable state. */
+  /** What a page reload does: new server object and new runner over the same durable state. The old tab's locks go with it. */
   const reload = (): Writeback => {
     server = newServer();
+    locks = new BrowserLocks();
     buildProviders();
     return newWriteback();
   };
@@ -201,6 +204,9 @@ export const makeRig = async () => {
     writes,
     get server() {
       return server;
+    },
+    get locks() {
+      return locks;
     },
     provider,
     connect,

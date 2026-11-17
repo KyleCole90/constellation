@@ -307,6 +307,7 @@ describe("the first edit", () => {
       noKey: true,
       storage: rig.storage,
       vault: rig.vault,
+      locks: rig.locks,
       clock: new VirtualClock(rig.clock.now() + 60_000),
     });
     const theirs = await open(other, submission);
@@ -744,6 +745,7 @@ describe("a blank when AI turns on or another tab is open", () => {
       noKey: true,
       storage: rig.storage,
       vault: rig.vault,
+      locks: rig.locks,
       clock: new VirtualClock(rig.clock.now()),
     });
     await other.clock.run(other.state().addAiKey(KEY));
@@ -763,6 +765,7 @@ describe("a blank when AI turns on or another tab is open", () => {
       noKey: true,
       storage: rig.storage,
       vault: rig.vault,
+      locks: rig.locks,
       clock: new VirtualClock(rig.clock.now() + 60_000),
     });
     await other.clock.run(other.state().boot());

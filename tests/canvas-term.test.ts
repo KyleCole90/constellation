@@ -370,7 +370,6 @@ describe("Canvas term setup writes", () => {
       sleep: clock.sleep,
       random: () => 0.5,
       policy: DEFAULT_RETRY_POLICY,
-      locks: null,
     });
     http.loseNext();
     await clock.run(writeback.send([draft.id]));
@@ -506,7 +505,6 @@ describe("what a Canvas copy brings, as the setup review reads it (#132, #136)",
       sleep: clock.sleep,
       random: () => 0.5,
       policy: DEFAULT_RETRY_POLICY,
-      locks: null,
     });
     await clock.run(writeback.send([draft.id]));
     const record = ledger.get(draft.id);
@@ -681,7 +679,6 @@ describe("Canvas .imscc upload", () => {
       sleep: clock.sleep,
       random: () => 0.5,
       policy: DEFAULT_RETRY_POLICY,
-      locks: null,
     });
     http.loseNext();
     await clock.run(writeback.send([draft.id]));

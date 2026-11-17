@@ -171,7 +171,6 @@ describe("errors a retry can't fix", () => {
       sleep: rig.clock.sleep,
       random: () => 0.5,
       policy: DEFAULT_RETRY_POLICY,
-      locks: null,
     });
     await rig.clock.run(writeback.send([id]));
     return rig.stateOf(id);
