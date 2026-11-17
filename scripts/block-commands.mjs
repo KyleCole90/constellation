@@ -23,20 +23,28 @@ const GIT_VALUE_OPTIONS = [
   "--attr-source",
 ];
 
+// A heredoc and its body. The body loses its quotes before splitting: the shell doesn't parse them there, and an
+// apostrophe would open a quote that swallows the commands after it. Its lines stay, since `bash <<EOF` runs them.
+const HEREDOC = /(<<-?\s*(['"]?)(\w+)\2[^\n]*\n)([\s\S]*?\n\t*\3)(?=\n|$)/g;
+
 /**
  * Splits a shell command into words per simple command, removing quotes and backslashes the way the shell does, so
- * `--no-ver""ify` is one word. A word written wholly inside quotes is `quoted`: it never names a command to run.
+ * `--no-ver""ify` is one word. Comments are dropped. A word written wholly inside quotes is
+ * `quoted`: it never names a command to run.
  */
 const simpleCommands = (command) => {
   const commands = [[]];
   for (const [, op, word] of command
     .replaceAll("\\\n", "")
-    .matchAll(/(&&|\|\||[;|&\n])|((?:"(?:\\.|[^"])*"|'[^']*'|\\.|[^\s"'\\;|&])+)/g)) {
-    if (op) {
-      commands.push([]);
-      continue;
-    }
-    const parts = [...word.matchAll(/"((?:\\.|[^"])*)"|'([^']*)'|\\(.)|([^"'\\]+)/g)];
+    .replace(HEREDOC, (_, head, _quote, _tag, body) => head + body.replaceAll(/["'\\]/g, ""))
+    .matchAll(
+      /(&&|\|\||[;|&\n])|(?<=^|[\s;|&])#[^\n]*|((?:\$?"(?:\\.|[^"])*"|\$?'[^']*'|\\.|[^\s"'\\;|&])+)/g,
+    )) {
+    if (op) commands.push([]);
+    if (!word) continue;
+    const parts = [
+      ...word.matchAll(/\$?"((?:\\.|[^"])*)"|\$?'([^']*)'|\\(.)|((?:[^"'\\$]|\$(?!["']))+)/g),
+    ];
     commands.at(-1).push({
       text: parts
         .map(([, double, single, escaped, bare]) => double ?? single ?? escaped ?? bare)
@@ -47,7 +55,8 @@ const simpleCommands = (command) => {
   return commands;
 };
 
-const HOOKS_PATH = /^core\.hookspath(=|$)/i;
+// Config keys that set core.hooksPath, directly or through an included file.
+const HOOKS_PATH = /^(core\.hookspath|include\.path|includeif\..+\.path)(=|$)/i;
 
 // Git takes any unambiguous prefix of a long option. Below 6 chars the prefix clashes with --no-verbose, so git refuses it.
 // Git sees the word without its quotes, so quoting doesn't matter here.
@@ -98,10 +107,10 @@ const configWritesHooksPath = (args) => {
 // GIT_CONFIG_COUNT (with its KEY_n and VALUE_n), GIT_CONFIG_PARAMETERS, GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM can each
 // set core.hooksPath unseen.
 const setsGitConfigEnv = (words) =>
-  words.some((w) => /^GIT_CONFIG_(COUNT|PARAMETERS|GLOBAL|SYSTEM)=/.test(w.text));
+  words.some((w) => /^GIT_CONFIG_(COUNT|PARAMETERS|GLOBAL|SYSTEM)\+?=/.test(w.text));
 
 // Words that come before the command name: VAR=value, or a shell keyword such as `then` or `do`.
-const BEFORE_COMMAND = /^(\w+=.*|then|do|else|elif|if|while|until|!|[{(])$/;
+const BEFORE_COMMAND = /^(\w+\+?=.*|then|do|else|elif|if|while|until|!|[{(])$/;
 const WRAPPER = /^(sudo|nohup|exec|time|env|timeout|nice|stdbuf|command)$/;
 
 const named = (word, names) => !word.quoted && names.includes(word.text.split("/").at(-1));

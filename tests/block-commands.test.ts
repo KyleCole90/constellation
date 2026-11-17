@@ -43,6 +43,12 @@ describe("git hook skips", () => {
     "git commit -m x \\\n  --no-verify",
     "git config core.hooksPath /dev/null",
     "git config --unset core.hooksPath",
+    "git -c include.path=/tmp/hooks.cfg commit -m x",
+    "git commit $'--no-verify' -m x",
+    `GIT_CONFIG_PARAMETERS+="'core.hooksPath'='/dev/null'" git commit -m x`,
+    "cat <<EOF > notes.txt\nit's fine\nEOF\ngit push --no-verify\necho 'done'",
+    "# don't touch\ngit commit -n -m x; echo 'x'",
+    "bash <<EOF\ngit commit -n -m x\nEOF",
   ])("denies %s", (command) => {
     const { decision, reason } = runHook(command);
     expect(decision).toBe("deny");
@@ -59,6 +65,9 @@ describe("git hook skips", () => {
     "GIT_CONFIG_NOSYSTEM=1 git commit -m x",
     "git config --get core.hooksPath",
     'git commit -m fix -m "--no-verify is banned here"',
+    "cat <<EOF > notes.txt\nit's fine\nEOF\necho 'never run git commit -n here'",
+    'git commit -m "fix #12" -m "it\'s done"',
+    `git commit -m "$(cat <<'EOF'\nfix: don't skip hooks\n\nNever "git push --no-verify".\nEOF\n)"`,
   ])("allows %s", (command) => {
     expect(runHook(command).decision).toBe("allow");
   });
@@ -90,6 +99,8 @@ describe("killing a process this thread did not start", () => {
     "kill $(timeout 5 pgrep -f vite)",
     "kill $(sudo lsof -ti:4320)",
     "kill $(/usr/sbin/lsof -ti:4320)",
+    "cat <<'EOF' > notes.txt\nDon't panic\nEOF\nkill 123\necho 'done'",
+    "# don't touch\npkill -f vite; echo 'x'",
   ])("denies %s", (command) => {
     const { decision, reason } = runHook(command);
     expect(decision).toBe("deny");
