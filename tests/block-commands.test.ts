@@ -49,6 +49,8 @@ describe("git hook skips", () => {
     "cat <<EOF > notes.txt\nit's fine\nEOF\ngit push --no-verify\necho 'done'",
     "# don't touch\ngit commit -n -m x; echo 'x'",
     "bash <<EOF\ngit commit -n -m x\nEOF",
+    'bash <<EOF\ngit commit -m "wip #2" -n\nEOF',
+    'echo "use <<EOF for heredocs"\ngit commit -m "fix #12" -n\ncat <<EOF > x\nhi\nEOF',
   ])("denies %s", (command) => {
     const { decision, reason } = runHook(command);
     expect(decision).toBe("deny");
@@ -65,7 +67,6 @@ describe("git hook skips", () => {
     "GIT_CONFIG_NOSYSTEM=1 git commit -m x",
     "git config --get core.hooksPath",
     'git commit -m fix -m "--no-verify is banned here"',
-    "cat <<EOF > notes.txt\nit's fine\nEOF\necho 'never run git commit -n here'",
     'git commit -m "fix #12" -m "it\'s done"',
     `git commit -m "$(cat <<'EOF'\nfix: don't skip hooks\n\nNever "git push --no-verify".\nEOF\n)"`,
   ])("allows %s", (command) => {
@@ -101,6 +102,7 @@ describe("killing a process this thread did not start", () => {
     "kill $(/usr/sbin/lsof -ti:4320)",
     "cat <<'EOF' > notes.txt\nDon't panic\nEOF\nkill 123\necho 'done'",
     "# don't touch\npkill -f vite; echo 'x'",
+    "sh <<'EOF'\necho \"#\"; kill 123\nEOF",
   ])("denies %s", (command) => {
     const { decision, reason } = runHook(command);
     expect(decision).toBe("deny");

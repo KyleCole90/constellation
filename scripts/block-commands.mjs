@@ -23,8 +23,9 @@ const GIT_VALUE_OPTIONS = [
   "--attr-source",
 ];
 
-// A heredoc and its body. The body loses its quotes before splitting: the shell doesn't parse them there, and an
-// apostrophe would open a quote that swallows the commands after it. Its lines stay, since `bash <<EOF` runs them.
+// A heredoc and its body. An apostrophe in a body (`it's`) opens a quote that would swallow the commands after it,
+// so the hook also reads the command with body quotes removed. Text alone can't tell a real heredoc from `<<` in a
+// string, or a body `bash` runs from one `cat` prints, so a rule that matches either reading denies.
 const HEREDOC = /(<<-?\s*(['"]?)(\w+)\2[^\n]*\n)([\s\S]*?\n\t*\3)(?=\n|$)/g;
 
 /**
@@ -36,7 +37,6 @@ const simpleCommands = (command) => {
   const commands = [[]];
   for (const [, op, word] of command
     .replaceAll("\\\n", "")
-    .replace(HEREDOC, (_, head, _quote, _tag, body) => head + body.replaceAll(/["'\\]/g, ""))
     .matchAll(
       /(&&|\|\||[;|&\n])|(?<=^|[\s;|&])#[^\n]*|((?:\$?"(?:\\.|[^"])*"|\$?'[^']*'|\\.|[^\s"'\\;|&])+)/g,
     )) {
@@ -167,7 +167,11 @@ const RULES = [
 
 const { tool_input } = JSON.parse(readFileSync(0, "utf8"));
 const command = tool_input?.command ?? "";
-const commands = simpleCommands(command);
+const unquotedBodies = command.replace(
+  HEREDOC,
+  (_, head, _quote, _tag, body) => head + body.replaceAll(/["'\\]/g, ""),
+);
+const commands = [command, unquotedBodies].flatMap(simpleCommands);
 const denied = RULES.find((rule) => commands.some((words) => rule.test(words, command)));
 if (denied) {
   console.log(
