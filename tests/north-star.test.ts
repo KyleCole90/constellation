@@ -1620,7 +1620,9 @@ describe("answer lines", () => {
     if (!assignment) throw new Error("No assignment.");
     const source = { kind: "assignment", ref: assignment.ref } as const;
     expect(selectSource(rig.state(), source)?.course).toBe(assignment.course);
-    expect(selectSource(rig.state(), { kind: "assignment", ref: "gone" as never })).toBeNull();
+    expect(
+      selectSource(rig.state(), { kind: "assignment", ref: "gone" as LmsRef<"assignment"> }),
+    ).toBeNull();
     expect(selectSource(rig.state(), { kind: "due" })).toEqual({ course: null });
   });
 });

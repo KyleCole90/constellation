@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { ChangeContent, ChangeSummary, GradeContent } from "~/shared/domain/change";
-import type { ChangeId } from "~/shared/domain/ids";
+import { type ChangeId, isoTime } from "~/shared/domain/ids";
 
 import {
   batchPhase,
@@ -12,16 +12,28 @@ import {
   retryTargets,
 } from "./batch.logic";
 
-const summary = (patch: Partial<ChangeSummary>) =>
-  ({
-    tone: "approval",
-    sentAt: null,
-    canSend: false,
-    banner: null,
-    waitingOnReconnect: false,
-    ...patch,
-  }) as ChangeSummary;
-const SENT = summary({ tone: "done", sentAt: "t" as never });
+const summary = (patch: Partial<ChangeSummary>): ChangeSummary => ({
+  label: "Needs approval",
+  tone: "approval",
+  recovery: "none",
+  banner: null,
+  canEdit: true,
+  canApprove: true,
+  canSend: false,
+  canUndoApproval: false,
+  canDiscard: true,
+  missing: [],
+  reason: null,
+  retriesExhausted: false,
+  approvalReset: null,
+  approvedAt: null,
+  sentAt: null,
+  conflicts: [],
+  waitingUntil: null,
+  waitingOnReconnect: false,
+  ...patch,
+});
+const SENT = summary({ tone: "done", sentAt: isoTime("2026-11-01T12:00:00Z") });
 const STUCK = summary({ tone: "attention", canSend: true, banner: "partial" });
 const WAITING = summary({
   tone: "attention",

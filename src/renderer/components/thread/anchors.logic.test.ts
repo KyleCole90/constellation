@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import type { Rationale } from "~/shared/domain/change";
+
 import {
   criterionHue,
   criterionNumbers,
@@ -105,11 +107,11 @@ describe("nextCriterion", () => {
 describe("criterionNumbers", () => {
   it("numbers only criteria with a passage, in rubric order and without gaps", () => {
     const anchor = { paragraph: 0, start: 0, end: 1 };
-    const rationale = [
+    const rationale: Rationale[] = [
       { field: "c", why: "", anchors: [anchor] },
       { field: "b", why: "", anchors: [] },
       { field: "a", why: "", anchors: [anchor] },
-    ] as never;
+    ];
     expect([...criterionNumbers(["a", "b", "c"], rationale)]).toEqual([
       ["a", 1],
       ["c", 2],

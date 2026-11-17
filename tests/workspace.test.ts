@@ -507,9 +507,7 @@ describe("a second tab", () => {
   it("does not overwrite what the other tab saved", async () => {
     const { first, second } = await twoTabs();
     const id = await openFor(first, "Maya Ortiz");
-    second
-      .state()
-      .dispatchUser(id, { type: "discard", at: first.state().changes[id]?.basis.readAt as never });
+    second.state().dispatchUser(id, { type: "discard", at: first.change(id).basis.readAt });
     expect(stateTag(second, id)).toBe("discarded");
     first.store.syncFromStorage();
     expect(stateTag(first, id)).toBe("discarded");
@@ -839,7 +837,7 @@ describe("dispatchUser", () => {
   it("is the only store route to approved, and needs a witness", async () => {
     const rig = await connected();
     const id = await openFor(rig, "Maya Ortiz");
-    const at = rig.state().changes[id]?.basis.readAt as never;
+    const at = rig.change(id).basis.readAt;
     expect(
       rig.state().dispatchUser(id, {
         type: "approve",
@@ -869,7 +867,7 @@ describe("dispatchUser", () => {
       type: "edit",
       by: "you",
       patch: { kind: "grade", comment: "Changed." },
-      at: rig.state().changes[id]?.basis.readAt as never,
+      at: rig.change(id).basis.readAt,
     });
     expect(rig.state().changes[id]?.state).toMatchObject({ tag: "draft", approvalReset: "edited" });
     expect(rig.state().threads[QUEUE]?.messages.length).toBe(before);

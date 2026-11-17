@@ -209,7 +209,7 @@ describe("liveFilter", () => {
 });
 
 describe("rowLine", () => {
-  const grading = { course: "c" as never, assignment: "a" as never };
+  const grading = { course: "c" as LmsRef<"course">, assignment: "a" as LmsRef<"assignment"> };
 
   it("adds nothing in a thread that names the course and the assignment", () => {
     expect(rowLine(row("a", { dueAt: isoTime("2026-10-26T12:00:00Z") }), grading)).toBe("");
@@ -218,7 +218,7 @@ describe("rowLine", () => {
   it("keeps the subject in a replies thread, which only names the course", () => {
     expect(
       rowLine(row("a", { kind: "conversation", detail: "Screening time" }), {
-        course: "c" as never,
+        course: "c" as LmsRef<"course">,
       }),
     ).toBe("Screening time");
   });

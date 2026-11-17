@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { SchoolId } from "~/shared/domain/ids";
+import type { SchoolId, ThreadId } from "~/shared/domain/ids";
 import { LMS_STORAGE_KEY } from "~/shared/providers/fake-canvas/server";
 import { Secret, revealSecret } from "~/shared/providers/provider";
 import { createMemoryVault } from "~/renderer/providers/vault";
@@ -93,7 +93,7 @@ describe("a token passing through connect", () => {
     await rig.connect(LCC, SENTINEL);
     const ref = rig.state().cache[LCC]?.submissions.find((s) => s.workflow === "submitted")?.ref;
     if (!ref) throw new Error("Nothing to grade.");
-    await rig.clock.run(rig.state().openSubmission("t-queue" as never, ref, { fill: "draft" }));
+    await rig.clock.run(rig.state().openSubmission("t-queue" as ThreadId, ref, { fill: "draft" }));
     expectNoLeak(rig, SENTINEL);
   });
 });

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { FieldConflict, FieldKey } from "~/shared/domain/change";
+import { isoTime } from "~/shared/domain/ids";
+import type { SubmissionComment } from "~/shared/domain/lms";
 import type { PreviewField } from "~/shared/domain/preview";
 
 import {
@@ -174,11 +176,12 @@ describe("conflictColumns", () => {
 
 describe("lastOutsideNote", () => {
   it("takes the newest comment that isn't ours", () => {
-    const comments = [
-      { id: "1", mine: false, text: "older", at: "" },
-      { id: "2", mine: false, text: "newer", at: "" },
-      { id: "3", mine: true, text: "mine", at: "" },
-    ] as never;
+    const at = isoTime(0);
+    const comments: SubmissionComment[] = [
+      { id: "1", mine: false, text: "older", at },
+      { id: "2", mine: false, text: "newer", at },
+      { id: "3", mine: true, text: "mine", at },
+    ];
     expect(lastOutsideNote(comments)).toBe("newer");
   });
 

@@ -116,10 +116,7 @@ describe("an expired token mid-batch", () => {
       "sent",
     ]);
     expect(heldCause(rig, second.id)).toEqual({ tag: "reconnect" });
-    expect(
-      summarize(rig.ledger.get(second.id) as NonNullable<ReturnType<Rig["ledger"]["get"]>>)
-        .recovery,
-    ).toBe("reconnect");
+    expect(summarize(rig.recordOf(second.id)).recovery).toBe("reconnect");
     expect(rig.expired).toEqual([LCC]);
     expect(writeback.laneStatus(LCC)).toEqual({ state: "closed", reason: "reconnect" });
     expect(writeback.laneStatus(RSU)).toEqual({ state: "open" });
@@ -157,8 +154,7 @@ describe("a conflict", () => {
     expect(rig.lmsSubmission(submission).grade).toBe(65);
     expect(await rig.clock.run(writeback.send([id]))).toEqual([{ id, refused: "not-sendable" }]);
 
-    const record = rig.ledger.get(id);
-    const remote = await rig.provider(LCC).observe(record?.content as never);
+    const remote = await rig.provider(LCC).observe(rig.recordOf(id).content);
     if (!remote.ok) throw new Error(remote.error.kind);
     const resolved = rig.ledger.commit(id, {
       type: "resolve-conflict",
@@ -195,7 +191,7 @@ describe("a partial write", () => {
     expect(await rig.clock.run(writeback.send([id]))).toEqual([{ id, state: "held" }]);
     expect(fieldStatus(rig, id, "grade")?.status).toBe("landed");
     expect(fieldStatus(rig, id, "comment")?.status).toBe("failed");
-    expect(summarize(rig.ledger.get(id) as never).label).toBe("Partly sent");
+    expect(summarize(rig.recordOf(id)).label).toBe("Partly sent");
     expect(myComments(rig, submission)).toHaveLength(0);
 
     expect(await rig.clock.run(writeback.send([id]))).toEqual([{ id, state: "sent" }]);
@@ -271,7 +267,7 @@ describe("a lost response", () => {
 
     expect(await rig.clock.run(writeback.send([id]))).toEqual([{ id, state: "held" }]);
     expect(heldCause(rig, id)?.tag).toBe("in-doubt");
-    expect(summarize(rig.ledger.get(id) as never).recovery).toBe("resume");
+    expect(summarize(rig.recordOf(id)).recovery).toBe("resume");
     expect(rig.writes).toHaveLength(1);
     expect(myComments(rig, submission)).toHaveLength(0);
 
@@ -419,7 +415,7 @@ describe("a 429", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     const state = rig.stateOf(id);
     expect(state.tag === "sending" && state.run.waitingUntil).toBeGreaterThan(rig.clock.now());
-    expect(summarize(rig.ledger.get(id) as never).label).toBe("Waiting on the LMS");
+    expect(summarize(rig.recordOf(id)).label).toBe("Waiting on the LMS");
     expect(writeback.laneStatus(LCC)).toMatchObject({ state: "paused", reason: "rate-limited" });
     await rig.clock.run(send);
   });
@@ -533,7 +529,7 @@ describe("a reload during a send", () => {
     await rig.clock.run(rig.reload().recover());
     expect(rig.writes).toHaveLength(writes);
     expect(heldCause(rig, id)?.tag).toBe("interrupted");
-    expect(summarize(rig.ledger.get(id) as never).recovery).toBe("resume");
+    expect(summarize(rig.recordOf(id)).recovery).toBe("resume");
   });
 
   it("recover leaves a change alone when another tab holds its lock", async () => {

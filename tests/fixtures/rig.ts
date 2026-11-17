@@ -136,11 +136,13 @@ export const makeRig = async () => {
   const draft = async (school: SchoolId, content: ChangeContent): Promise<ChangeRecord> => {
     const remote = await provider(school).observe(content);
     if (!remote.ok) throw new Error(`observe failed: ${remote.error.kind}`);
+    const course = server.courses(school)[0]?.ref;
+    if (!course) throw new Error(`No course at ${school}.`);
     const at = isoTime(clock.now());
     const record = newChangeRecord({
       id: `ch-${++seq}` as ChangeId,
       school,
-      course: server.courses(school)[0]?.ref ?? ("" as never),
+      course,
       subject: "test",
       content,
       basis: { readAt: at, remote: remote.value },
@@ -189,10 +191,10 @@ export const makeRig = async () => {
     return newWriteback();
   };
 
-  const stateOf = (id: ChangeId): ChangeRecord["state"] => {
+  const recordOf = (id: ChangeId): ChangeRecord => {
     const record = ledger.get(id);
     if (!record) throw new Error("No such change.");
-    return record.state;
+    return record;
   };
 
   return {
@@ -218,7 +220,8 @@ export const makeRig = async () => {
     lmsSubmission,
     newWriteback,
     reload,
-    stateOf,
+    recordOf,
+    stateOf: (id: ChangeId): ChangeRecord["state"] => recordOf(id).state,
   };
 };
 export type Rig = Awaited<ReturnType<typeof makeRig>>;

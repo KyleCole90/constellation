@@ -84,17 +84,9 @@ describe("the lms channels", () => {
 
   it("the renderer rejects a course list that doesn't parse", async () => {
     const invoke = invoker(async () => ({ ok: true, value: [{ ref: "lcc:course:1" }] }));
-    await expect(
-      invoke("lms.courses", {
-        school: {
-          id: LCC,
-          abbr: "LCC",
-          name: "Lakeshore",
-          host: "l.edu" as never,
-          provider: "fake-canvas",
-        },
-      }),
-    ).rejects.toThrow();
+    const school = FAKE_SCHOOLS.find((entry) => entry.id === LCC);
+    if (!school) throw new Error("No seeded LCC.");
+    await expect(invoke("lms.courses", { school })).rejects.toThrow();
   });
 
   it("a provider read over a bridge that fails reads as the LMS being unavailable", async () => {

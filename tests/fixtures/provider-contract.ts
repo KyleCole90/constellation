@@ -9,7 +9,7 @@ import {
   type LmsError,
   type RemoteState,
 } from "~/shared/domain/change";
-import { type ChangeId, type SchoolId, isoTime } from "~/shared/domain/ids";
+import { type ChangeId, type LmsRef, type SchoolId, isoTime } from "~/shared/domain/ids";
 import { mintSendPermit, type SendPermit } from "~/shared/domain/permit";
 import type { LmsProvider } from "~/shared/providers/provider";
 
@@ -88,7 +88,7 @@ export const permitFor = async (
   const draft = newChangeRecord({
     id: "ch-contract" as ChangeId,
     school,
-    course: "c" as never,
+    course: `${school}:course:1` as LmsRef<"course">,
     subject: "contract",
     content,
     basis: { readAt: AT, remote },
