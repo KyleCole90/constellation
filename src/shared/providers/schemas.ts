@@ -1,7 +1,7 @@
 import * as v from "valibot";
 
 import {
-  FIELD_LABEL,
+  FIELD_KEYS,
   type ChangeContent,
   type FieldKey,
   type GradeContent,
@@ -11,8 +11,7 @@ import {
   type RemoteState,
 } from "../domain/change";
 import {
-  isContentItemType,
-  type ContentItemType,
+  CONTENT_ITEM_TYPES,
   type CopySource,
   type CourseContent,
   type CourseShell,
@@ -50,12 +49,12 @@ import type {
 } from "../domain/lms";
 import {
   isoDate,
-  isWeekday,
   termName,
   type TermDates,
   type TermName,
   type TermPlan,
   type Weekday,
+  WEEKDAYS,
 } from "../domain/term";
 
 import { refParts } from "./canvas-refs";
@@ -76,7 +75,9 @@ export const listOf = <T>(item: v.GenericSchema<T>): v.GenericSchema<readonly T[
 export const brand = <T extends string>(check: (raw: string) => boolean = () => true) =>
   v.custom<T>((input) => typeof input === "string" && check(input));
 
-export const SchoolIdSchema = brand<SchoolId>((raw) => parseSchoolId(raw) === raw);
+export const SchoolIdSchema: v.GenericSchema<SchoolId> = brand<SchoolId>(
+  (raw) => parseSchoolId(raw) === raw,
+);
 /**
  * A school's ref, `school:…`. The kind lives in the type and not in the words: a ref is the vendor's identity, and only
  * the provider that minted it can say what kind it is, so each provider refuses a ref of the wrong kind itself.
@@ -87,17 +88,17 @@ export const lmsRef = <K extends string>(_kind: K) =>
     return parseSchoolId(school) === school && ids.length > 0 && ids.every((id) => id !== "");
   });
 /** Only the format `isoTime` writes, so IsoTimes compare as text and slice to their day. */
-export const IsoTimeSchema = brand<IsoTime>((raw) => parseIsoTime(raw) === raw);
-export const IsoDateSchema = brand<IsoDate>((raw) => isoDate(raw) === raw);
-export const WeekdaySchema = v.custom<Weekday>(
-  (input) => typeof input === "number" && isWeekday(input),
+export const IsoTimeSchema: v.GenericSchema<IsoTime> = brand<IsoTime>(
+  (raw) => parseIsoTime(raw) === raw,
 );
-export const FieldKeySchema = v.custom<FieldKey>(
-  (input) => typeof input === "string" && Object.hasOwn(FIELD_LABEL, input),
+export const IsoDateSchema: v.GenericSchema<IsoDate> = brand<IsoDate>(
+  (raw) => isoDate(raw) === raw,
 );
-export const FieldKeysSchema = listOf(FieldKeySchema);
-export const ChangeIdSchema = brand<ChangeId>((raw) => raw !== "");
-export const ThreadIdSchema = brand<ThreadId>((raw) => raw !== "");
+export const WeekdaySchema: v.GenericSchema<Weekday> = v.picklist(WEEKDAYS);
+export const FieldKeySchema: v.GenericSchema<FieldKey> = v.picklist(FIELD_KEYS);
+export const FieldKeysSchema: v.GenericSchema<readonly FieldKey[]> = listOf(FieldKeySchema);
+export const ChangeIdSchema: v.GenericSchema<ChangeId> = brand<ChangeId>((raw) => raw !== "");
+export const ThreadIdSchema: v.GenericSchema<ThreadId> = brand<ThreadId>((raw) => raw !== "");
 
 export const SchoolSchema: v.GenericSchema<School> = v.object({
   id: SchoolIdSchema,
@@ -165,7 +166,7 @@ export const StudentSchema: v.GenericSchema<Student> = v.object({
 });
 
 /** Keyed by criterion ref, checked as text: valibot types a record keyed by a brand as partial. */
-const ScoresSchema = v.record(
+const ScoresSchema: v.GenericSchema<Readonly<Record<LmsRef<"criterion">, number>>> = v.record(
   v.pipe(
     text,
     v.check((raw) => v.is(lmsRef("criterion"), raw)),
@@ -286,7 +287,9 @@ export const RemoteStateSchema: v.GenericSchema<RemoteState> = v.variant("kind",
 
 // ---- Term setup reads ----
 
-const TermNameSchema = nullable(brand<TermName>((raw) => termName(raw) !== null));
+const TermNameSchema: v.GenericSchema<TermName | null> = nullable(
+  brand<TermName>((raw) => termName(raw) !== null),
+);
 const TermDatesSchema: v.GenericSchema<TermDates> = v.object({
   name: TermNameSchema,
   start: IsoDateSchema,
@@ -294,7 +297,10 @@ const TermDatesSchema: v.GenericSchema<TermDates> = v.object({
   days: v.array(WeekdaySchema),
 });
 
-export const DraftDateSchema = v.union([IsoDateSchema, v.literal("")]);
+export const DraftDateSchema: v.GenericSchema<IsoDate | ""> = v.union([
+  IsoDateSchema,
+  v.literal(""),
+]);
 const PackageTermSchema: v.GenericSchema<PackageTerm> = v.object({
   name: TermNameSchema,
   start: DraftDateSchema,
@@ -340,7 +346,7 @@ export const CourseContentSchema: v.GenericSchema<CourseContent> = v.object({
   items: v.array(
     v.object({
       ref: lmsRef("item"),
-      type: v.custom<ContentItemType>(isContentItemType),
+      type: v.picklist(CONTENT_ITEM_TYPES),
       title: text,
       body: text,
       published: v.boolean(),
@@ -417,13 +423,17 @@ export const TermPlanSchema: v.GenericSchema<TermPlan> = v.object({
   breaks: v.array(v.object({ name: text, start: IsoDateSchema, end: IsoDateSchema })),
 });
 
-export const SubstitutionsSchema = v.custom<Readonly<Partial<Record<Weekday, Weekday>>>>(
-  (input) =>
-    typeof input === "object" &&
-    input !== null &&
-    !Array.isArray(input) &&
-    Object.entries(input).every(([day, to]) => isWeekday(Number(day)) && v.is(WeekdaySchema, to)),
-);
+const substitute = v.exactOptional(WeekdaySchema);
+export const SubstitutionsSchema: v.GenericSchema<Readonly<Partial<Record<Weekday, Weekday>>>> =
+  v.strictObject({
+    0: substitute,
+    1: substitute,
+    2: substitute,
+    3: substitute,
+    4: substitute,
+    5: substitute,
+    6: substitute,
+  });
 
 export const CopySourceSchema = v.variant("kind", [
   v.object({ kind: v.literal("course"), ref: lmsRef("course"), label: text, termName: text }),

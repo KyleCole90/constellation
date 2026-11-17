@@ -102,6 +102,8 @@ const FIELD_MODE = {
   text: "splice",
 } as const;
 export type FieldKey = keyof typeof FIELD_MODE;
+const isFieldKey = (value: string): value is FieldKey => Object.hasOwn(FIELD_MODE, value);
+export const FIELD_KEYS: readonly FieldKey[] = Object.keys(FIELD_MODE).filter(isFieldKey);
 /** An append field adds an entry each time it is written, so sending it twice posts twice. */
 export const appendsEntry = (field: FieldKey): boolean => FIELD_MODE[field] === "append";
 

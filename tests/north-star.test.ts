@@ -1,3 +1,4 @@
+import * as v from "valibot";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -399,8 +400,12 @@ describe("a handoff from North Star", () => {
       "Reply to Imani Okafor",
       expect.any(String),
     ]);
-    type Saved = { version: number; state: { threads: Record<string, { messages: unknown[] }> } };
-    const saved = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as Saved;
+    const Saved = v.looseObject({
+      state: v.looseObject({
+        threads: v.record(v.string(), v.looseObject({ messages: v.array(v.unknown()) })),
+      }),
+    });
+    const saved = v.parse(Saved, JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}"));
     const asV3 = (message: unknown) => {
       const { work, ...rest } = message as { type: string; work?: Record<string, unknown> };
       if (rest.type !== "handoff" || !work) return message;

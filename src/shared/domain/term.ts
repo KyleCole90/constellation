@@ -69,13 +69,13 @@ export interface ShiftRow extends BreakMove {
 }
 
 const DAY_MS = 86_400_000;
-const WEEKDAYS: readonly Weekday[] = [0, 1, 2, 3, 4, 5, 6];
+export const WEEKDAYS: readonly Weekday[] = [0, 1, 2, 3, 4, 5, 6];
 const dayNumber = (date: string): number => Date.parse(`${date}T00:00:00Z`) / DAY_MS;
 const dateAt = (day: number): IsoDate =>
   new Date(day * DAY_MS).toISOString().slice(0, 10) as IsoDate;
 const floorMod7 = (value: number): number => ((value % 7) + 7) % 7;
 const EPOCH_WEEKDAY = 4;
-export const isWeekday = (value: number): value is Weekday =>
+const isWeekday = (value: number): value is Weekday =>
   Number.isInteger(value) && value >= 0 && value <= 6;
 const weekdayAt = (day: number): Weekday => {
   const weekday = floorMod7(day + EPOCH_WEEKDAY);
