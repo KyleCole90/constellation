@@ -108,10 +108,9 @@ const parseIsoDay = (value: unknown): IsoDate | undefined =>
   typeof value === "string" ? (isoDate(value) ?? undefined) : undefined;
 
 const daysFrom = (today: number, iso: IsoDate): number => {
-  const [year, month, day] = iso.split("-").map(Number) as [number, number, number];
   const start = new Date(today);
   return Math.round(
-    (Date.UTC(year, month - 1, day) -
+    (Date.parse(`${iso}T00:00:00Z`) -
       Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())) /
       86_400_000,
   );
