@@ -386,6 +386,40 @@ describe("a handoff from North Star", () => {
     expect(selectHandoffName(rig.state(), card)).toBe(before);
   });
 
+  it("a version 3 save's handoff cards keep their names after the upgrade (#179)", async () => {
+    const first = await connected();
+    await ask(first, "Draft replies in ENG 101");
+    await ask(first, "Reply to Imani Okafor");
+    await ask(first, "Draft an announcement in HUM 150");
+    const namesIn = (rig: StoreRig) =>
+      messagesOf(rig, chatOf(rig), "handoff").map((card) => selectHandoffName(rig.state(), card));
+    const names = namesIn(first);
+    expect(names).toEqual([
+      expect.stringMatching(/^Reply to .+ and \d+ others?$/),
+      "Reply to Imani Okafor",
+      expect.any(String),
+    ]);
+    type Saved = { version: number; state: { threads: Record<string, { messages: unknown[] }> } };
+    const saved = JSON.parse(first.storage.getItem(WORKSPACE_STORAGE_KEY) ?? "{}") as Saved;
+    const asV3 = (message: unknown) => {
+      const { work, ...rest } = message as { type: string; work?: Record<string, unknown> };
+      if (rest.type !== "handoff" || !work) return message;
+      const { kind: _kind, ...fields } = work;
+      return { ...rest, ...fields };
+    };
+    for (const thread of Object.values(saved.state.threads))
+      thread.messages = thread.messages.map(asV3);
+    first.storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify({ ...saved, version: 3 }));
+    const second = await makeStoreRig({
+      storage: first.storage,
+      vault: first.vault,
+      clock: first.clock,
+    });
+    await second.state().boot();
+    expect(second.state().notice ?? "").not.toContain("reset");
+    expect(namesIn(second)).toEqual(names);
+  });
+
   it("drafts one reply to the person named, in their course's thread", async () => {
     const rig = await connected();
     await ask(rig, "Reply to Imani Okafor");

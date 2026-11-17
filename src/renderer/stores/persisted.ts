@@ -31,7 +31,8 @@ import {
   RemoteStateSchema,
   SchoolIdSchema,
   SchoolSchema,
-  SetContentSchema,
+  ItemSetContentSchema,
+  CourseSetContentSchema,
   StudentSchema,
   SubmissionSchema,
   TermPlanSchema,
@@ -263,8 +264,11 @@ const ThreadMessageSchema = v.variant("type", [
     type: v.literal("handoff"),
     to: ThreadIdSchema,
     course: lmsRef("course"),
-    conversation: v.exactOptional(lmsRef("conversation")),
-    people: v.exactOptional(v.array(text)),
+    work: v.variant("kind", [
+      v.object({ kind: v.literal("reply"), conversation: lmsRef("conversation") }),
+      v.object({ kind: v.literal("replies"), people: v.array(text) }),
+      v.object({ kind: v.literal("thread") }),
+    ]),
     brief: text,
   }),
   v.object({
@@ -322,7 +326,9 @@ const FindingSchema = v.object({
   quote: text,
   why: text,
   openUrl: v.nullable(text),
-  fix: v.nullable(v.variant("kind", [TextFixContentSchema, SetContentSchema])),
+  fix: v.nullable(
+    v.variant("kind", [TextFixContentSchema, ItemSetContentSchema, CourseSetContentSchema]),
+  ),
 }) satisfies v.GenericSchema<unknown, Finding>;
 
 const DraftTermSchema = v.object({

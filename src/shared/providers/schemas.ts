@@ -435,14 +435,22 @@ export const TextFixContentSchema = v.object({
   splice: v.object({ prefix: text, before: text, after: text, suffix: text }),
 }) satisfies v.GenericSchema<TextFixContent>;
 
-export const SetContentSchema = v.object({
+export const ItemSetContentSchema = v.object({
   kind: v.literal("item-set"),
-  target: v.union([lmsRef("item"), lmsRef("course-state")]),
+  target: lmsRef("item"),
   where: text,
   intent: v.variant("set", [
     v.object({ set: v.literal("due-at"), at: IsoTimeSchema }),
     v.object({ set: v.literal("item-published") }),
     v.object({ set: v.literal("item-deleted") }),
+  ]),
+}) satisfies v.GenericSchema<SetContent>;
+
+export const CourseSetContentSchema = v.object({
+  kind: v.literal("item-set"),
+  target: lmsRef("course-state"),
+  where: text,
+  intent: v.variant("set", [
     v.object({ set: v.literal("course-published") }),
     v.object({ set: v.literal("course-template") }),
   ]),
@@ -506,7 +514,8 @@ export const ChangeContentSchema: v.GenericSchema<ChangeContent> = v.variant("ki
     }),
   }),
   TextFixContentSchema,
-  SetContentSchema,
+  ItemSetContentSchema,
+  CourseSetContentSchema,
 ]);
 
 export const FieldOutcomeSchema: v.GenericSchema<FieldOutcome> = v.variant("status", [

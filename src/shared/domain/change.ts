@@ -1,6 +1,12 @@
 import type { ChangeId, IsoTime, LmsRef, Result, SchoolId } from "./ids";
 import { ApprovalWitness, fingerprintOf, type Approval, type RiskKey } from "./approval";
-import type { CourseCopyContent, SetContent, SetIntent, TextFixContent } from "./content";
+import {
+  isCourseSet,
+  type CourseCopyContent,
+  type SetContent,
+  type SetIntent,
+  type TextFixContent,
+} from "./content";
 import { applySplice, spliceState } from "./splice";
 import type { DateShiftOptions, TermPlan } from "./term";
 
@@ -812,7 +818,7 @@ export const applyPatch = (content: ChangeContent, patch: ChangePatch): ChangeCo
     return { ...content, splice: { ...content.splice, after: patch.after } };
   // Only a due date has a value to edit. The other intents are a single choice, so the patch has nothing to say.
   if (content.kind === "item-set" && patch.kind === "item-set")
-    return content.intent.set === "due-at"
+    return !isCourseSet(content) && content.intent.set === "due-at"
       ? { ...content, intent: { set: "due-at", at: patch.at } }
       : null;
   return null;

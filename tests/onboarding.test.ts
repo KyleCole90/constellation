@@ -306,7 +306,7 @@ describe("a workspace saved by version 2", () => {
     expect(Object.keys(next.state().threads).sort()).toEqual(Object.keys(before.threads).sort());
     expect(next.state().onboarding).toBe("done");
     expect(next.state().aiSource).toBe("key");
-    expect(rawSave(next.storage)["version"]).toBe(3);
+    expect(rawSave(next.storage)["version"]).toBe(4);
   });
 
   it.each([

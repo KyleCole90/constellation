@@ -5,7 +5,7 @@ import type {
   CourseContent,
   MigrationIssue,
   SetContent,
-  SetIntent,
+  ItemSetIntent,
   TextFixContent,
 } from "./content";
 import type { Brand, LmsRef } from "./ids";
@@ -85,7 +85,7 @@ const textFix = (
   where: item.title,
   splice: spliceAt(item.body, index, length, after),
 });
-const setFix = (item: ContentItem, intent: SetIntent): SetContent => ({
+const setFix = (item: ContentItem, intent: ItemSetIntent): SetContent => ({
   kind: "item-set",
   target: item.ref,
   where: item.title,
