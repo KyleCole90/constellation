@@ -18,19 +18,10 @@ import {
   type RemoteState,
 } from "~/shared/domain/change";
 import type { LmsRef } from "~/shared/domain/ids";
-import type { Assignment, Conversation, Course, Submission } from "~/shared/domain/lms";
 import { previewOf } from "~/shared/domain/preview";
 
-import {
-  AT,
-  COURSE,
-  CRITERION,
-  SCHOOL,
-  SUBMISSION,
-  clickWitness,
-  gradeContent,
-  newDraft,
-} from "./fixtures/changes";
+import { AT, COURSE, CRITERION, clickWitness, gradeContent, newDraft } from "./fixtures/changes";
+import { assignment, conversation, course, submission } from "./fixtures/rows";
 
 const EVIDENCE = "lcc:criterion:2:evidence" as LmsRef<"criterion">;
 const rubric = (thesis: number | null, evidence: number | null): GradeContent["rubric"] => [
@@ -265,24 +256,14 @@ describe("a record saved before scores could be unset", () => {
 });
 
 describe("a blank form", () => {
-  const criterion = { ref: CRITERION, name: "Thesis", maxPoints: 25, description: "" };
-  const assignment = {
-    ref: "a",
-    shortTitle: "Essay 2",
-    pointsPossible: 100,
-    rubric: [criterion],
+  const essay = assignment({
+    rubric: [{ ref: CRITERION, name: "Thesis", maxPoints: 25 }],
     latePointsPerDay: 5,
-  } as unknown as Assignment;
-  const submission = {
-    ref: SUBMISSION,
-    school: SCHOOL,
-    course: COURSE,
-    studentName: "Maya Lin",
-    lateDays: 2,
-  } as unknown as Submission;
+  });
+  const work = submission({ studentName: "Maya Lin", lateDays: 2 });
 
   it("starts every score unset and keeps the late penalty", () => {
-    const { content, subject } = blankGrade(submission, assignment);
+    const { content, subject } = blankGrade(work, essay);
     expect(subject).toBe("Maya Lin, Essay 2");
     expect(content).toMatchObject({
       kind: "grade",
@@ -295,21 +276,17 @@ describe("a blank form", () => {
   });
 
   it.each([[null], [[]]])("takes one overall score when the rubric is %j", (none) => {
-    const { content } = blankGrade(submission, { ...assignment, rubric: none });
+    const { content } = blankGrade(work, { ...essay, rubric: none });
     expect(content).toMatchObject({ rubric: null, points: null });
     expect(unfilled(content)).toEqual(["Score"]);
   });
 
   it("starts a reply and an announcement empty", () => {
-    const conversation = {
-      ref: "c",
-      school: SCHOOL,
-      course: COURSE,
-      from: "Maya Lin",
-    } as unknown as Conversation;
-    const course = { ref: COURSE, school: SCHOOL, code: "ENG101" } as unknown as Course;
-    expect(blankReply(conversation).content).toMatchObject({ kind: "reply", body: "" });
-    expect(blankAnnouncement(course).content).toMatchObject({
+    expect(blankReply(conversation({ from: "Maya Lin" })).content).toMatchObject({
+      kind: "reply",
+      body: "",
+    });
+    expect(blankAnnouncement(course({ code: "ENG101" })).content).toMatchObject({
       kind: "announcement",
       title: "",
       body: "",

@@ -45,12 +45,24 @@ import {
   type RowFilter,
 } from "./gradebook.logic";
 import { filterInbox, messagingNotes, preview, statusCount } from "./inbox.logic";
+import { changeSummary } from "../../../../tests/fixtures/changes";
+import {
+  assignment as assignmentOf,
+  conversation,
+  course,
+  dueItem,
+  inboxRow,
+  school,
+} from "../../../../tests/fixtures/rows";
 
-const lcc = { id: "lcc" as SchoolId, name: "Lakeshore", abbr: "LCC" } as School;
-const rsu = { id: "rsu" as SchoolId, name: "Ridge State", abbr: "RSU" } as School;
+/** A course named by its ref, as the plan shows it. */
+const courseOf = (ref: string) => course({ ref: ref as LmsRef<"course">, code: ref.toUpperCase() });
+
+const lcc = school("lcc", { name: "Lakeshore" });
+const rsu = school("rsu", { name: "Ridge State" });
 
 const due = (school: School, over: Partial<DueItem> = {}) =>
-  ({ school, toGrade: 1, submitted: 3, graded: 2, total: 14, ...over }) as DueItem;
+  dueItem({ school, toGrade: 1, submitted: 3, graded: 2, total: 14, ...over });
 const groups: readonly DueGroup[] = [
   { key: "past", label: "Past due", items: [due(lcc), due(rsu)] },
   { key: "later", label: "Later", items: [due(rsu, { toGrade: 0 })] },
@@ -62,23 +74,30 @@ const extras = {
 
 describe("the work plan", () => {
   const NOW = new Date("2026-10-30T14:00:00").getTime();
-  const assignment = (course: string, title: string, days: number, toGrade: number, late = 0) =>
-    ({
+  const assignment = (
+    ref: string,
+    title: string,
+    days: number,
+    toGrade: number,
+    late = 0,
+  ): DatedItem => ({
+    ...dueItem({
       school: rsu,
       toGrade,
       late,
-      days,
       submitted: toGrade,
-      graded: 0,
       total: 10,
-      course: { ref: course, code: course.toUpperCase() },
-      assignment: {
-        ref: `${course}:${title}`,
+      course: courseOf(ref),
+      assignment: assignmentOf({
+        ref: `${ref}:${title}` as LmsRef<"assignment">,
+        course: courseOf(ref).ref,
         title,
         shortTitle: title,
-        dueAt: new Date(NOW + days * 86_400_000 + 8 * 3_600_000).toISOString(),
-      },
-    }) as unknown as DatedItem;
+        dueAt: isoTime(NOW + days * 86_400_000 + 8 * 3_600_000),
+      }),
+    }),
+    days,
+  });
   const draft = (course: string, tone = "todo", drafted = true) =>
     ({
       school: rsu,
@@ -88,21 +107,31 @@ describe("the work plan", () => {
       drafted,
       status: { label: drafted ? "In progress" : "Not started", tone },
     }) as unknown as DueExtras["drafts"][number];
-  const reply = (course: string, from: string, status?: string) =>
-    ({
+  const reply = (ref: string, from: string, status?: string): InboxRow => {
+    const last = {
+      id: "m1",
+      mine: false,
+      author: from,
+      text: "A question.",
+      at: isoTime(NOW - 86_400_000),
+    };
+    return inboxRow({
       school: rsu,
-      course: { ref: course, code: course.toUpperCase() },
-      conversation: {
-        ref: `${course}:${from}`,
+      course: courseOf(ref),
+      conversation: conversation({
+        ref: `${ref}:${from}` as LmsRef<"conversation">,
+        course: courseOf(ref).ref,
         from,
         subject: `Question from ${from}`,
         unread: true,
-      },
-      last: { at: new Date(NOW - 86_400_000).toISOString(), mine: false },
+        messages: [last],
+      }),
+      last,
       summary: status
-        ? { label: status, tone: status === "Needs approval" ? "approval" : "ready" }
+        ? changeSummary({ label: status, tone: status === "Needs approval" ? "approval" : "ready" })
         : null,
-    }) as unknown as InboxRow;
+    });
+  };
   const plan = (
     items: readonly DueItem[],
     over: Partial<DueExtras> = {},
@@ -535,17 +564,25 @@ describe("what's due", () => {
 });
 
 const summary = (over: Partial<ChangeSummary>) =>
-  ({ canApprove: false, sentAt: null, label: "Needs approval", ...over }) as ChangeSummary;
+  changeSummary({ canApprove: false, sentAt: null, label: "Needs approval", ...over });
 const row = (
   school: School,
   over: { unread?: boolean; mine?: boolean; summary?: ChangeSummary | null } = {},
-) =>
-  ({
+): InboxRow => {
+  const last = {
+    id: "m1",
+    mine: over.mine ?? false,
+    author: over.mine ? "You" : "Maya Ortiz",
+    text: "When is it due?",
+    at: isoTime("2026-10-31T09:00:00.000Z"),
+  };
+  return inboxRow({
     school,
-    conversation: { unread: over.unread ?? false },
-    last: { mine: over.mine ?? false, text: "When is it due?", at: "2026-10-31T09:00:00.000Z" },
+    conversation: conversation({ unread: over.unread ?? false, messages: [last] }),
+    last,
     summary: over.summary ?? null,
-  }) as unknown as InboxRow;
+  });
+};
 
 describe("the inbox", () => {
   const rows = [

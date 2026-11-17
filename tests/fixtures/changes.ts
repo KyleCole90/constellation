@@ -1,10 +1,12 @@
 import { ApprovalWitness, fingerprintOf } from "~/shared/domain/approval";
 import {
   newChangeRecord,
+  summarize,
   transition,
   type ChangeEvent,
   type ChangeRecord,
   type ChangeContent,
+  type ChangeSummary,
   type GradeContent,
   type RemoteState,
 } from "~/shared/domain/change";
@@ -95,3 +97,9 @@ export const sent = (record: ChangeRecord = sending()): ChangeRecord =>
   step(record, { type: "finish", at: AT });
 export const discarded = (record: ChangeRecord = newDraft()): ChangeRecord =>
   step(record, { type: "discard", at: AT });
+
+/** A fresh draft's summary, with what the test cares about changed. */
+export const changeSummary = (patch: Partial<ChangeSummary> = {}): ChangeSummary => ({
+  ...summarize(newDraft()),
+  ...patch,
+});
