@@ -10,28 +10,21 @@ import type { Call, SourceId } from "./metrics";
 
 export type Env = Readonly<Record<string, string | undefined>>;
 
-/** How a source tells the harness what each model request used and how long the model took. */
 interface Meter {
   request(calls: readonly Call[], modelMs: number): void;
 }
 
 interface OpenSource {
-  /** The same `agent.run` handler main would register for this source. */
   run: Handlers["agent.run"];
   claudeCodeVersion: string | null;
-  /** Weekly-limit utilization in percent, or null for a source with no weekly limit. */
   weeklyUsed(): Promise<number | null>;
 }
 
-/** An AI source to bench. */
 export interface BenchSource {
   id: SourceId;
   model: string;
-  /** The startup-overhead guard's p50 limit, or null where it doesn't apply. */
   overheadLimitMs: number | null;
-  /** The first-try-validity guard's floor, as a percent of drafts. */
   minValidPercent: number;
-  /** What this source still needs before it can run, in words for the maintainer. Empty when it can run. */
   missing(env: Env): Promise<readonly string[]>;
   open(env: Env, meter: Meter): Promise<OpenSource>;
 }
@@ -48,7 +41,6 @@ const MessageUsage = v.object({
   usage: v.object({ ...Tokens.entries, iterations: v.nullish(v.array(v.unknown())) }),
 });
 
-/** Every attempt in a response, each under its own model, as `spendOf` reads them. Anything else is no model request. */
 export const callsOf = (body: unknown): Call[] => {
   const message = v.safeParse(MessageUsage, body);
   if (!message.success) return [];
@@ -70,7 +62,6 @@ export const callsOf = (body: unknown): Call[] => {
   }));
 };
 
-/** The provider main builds for a saved key, given the key from the environment and a `fetch` that reads each response's usage. */
 const apiKey: BenchSource = {
   id: "api-key",
   model: MODEL,
@@ -92,9 +83,7 @@ const apiKey: BenchSource = {
         let body: unknown = null;
         try {
           body = JSON.parse(text);
-        } catch {
-          // An unreadable body is no model request; the provider reports the failure itself.
-        }
+        } catch {}
         meter.request(callsOf(body), modelMs);
         return new Response(text, response);
       },
@@ -104,7 +93,6 @@ const apiKey: BenchSource = {
   }),
 };
 
-/** The `claude` on this Mac, or the one `CONSTELLATION_CLAUDE` names, as main runs it, with its usage read from each result. */
 const claudeCodeFor = (env: Env, meter?: Meter) => {
   const binary = env["CONSTELLATION_CLAUDE"];
   return claudeCodeAgent({
@@ -118,7 +106,6 @@ const claudeCode: BenchSource = {
   id: "claude-code",
   model: MODEL,
   overheadLimitMs: 300,
-  // 90% first-try valid is enough for Claude Code (#82).
   minValidPercent: 90,
   missing: async (env) => {
     const status = await claudeCodeFor(env).status();
@@ -132,7 +119,6 @@ const claudeCode: BenchSource = {
     return {
       run: agent.run,
       claudeCodeVersion: status.installed ? status.version : null,
-      // Claude Code reports the week's usage only as a run's rate-limit event, so there's none before the first draft.
       weeklyUsed: async () => (await agent.status()).weekly?.usedPercent ?? null,
     };
   },
@@ -140,7 +126,6 @@ const claudeCode: BenchSource = {
 
 export const SOURCES: readonly BenchSource[] = [apiKey, claudeCode];
 
-/** Which sources have what they need, and what the rest are missing. */
 export const sortSources = async (sources: readonly BenchSource[], env: Env) => {
   const checked = await Promise.all(
     sources.map(async (source) => ({ source, missing: await source.missing(env) })),
@@ -153,7 +138,6 @@ export const sortSources = async (sources: readonly BenchSource[], env: Env) => 
   };
 };
 
-/** Why the benchmark won't start: nothing it could run, and each missing credential by name. */
 export const refusal = (
   unavailable: Awaited<ReturnType<typeof sortSources>>["unavailable"],
 ): string =>

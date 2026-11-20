@@ -435,7 +435,6 @@ describe("a 429", () => {
 });
 
 describe("a reload during a send", () => {
-  /** Field applications that actually reached the LMS, read from its own durable state. */
   const landedWrites = (rig: Rig): number => savedLms(rig.storage).seq;
 
   const SCENARIOS: Readonly<Record<string, (rig: Rig) => void>> = {
@@ -472,7 +471,6 @@ describe("a reload during a send", () => {
         ),
     );
     rig.ledger.armCrash(null);
-    // A write the crashed tab already handed to the LMS keeps its fate, so nothing armed survives the reload.
     await rig.clock.flush();
 
     const writeback = rig.reload();

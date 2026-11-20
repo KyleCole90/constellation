@@ -49,7 +49,6 @@ const rateLimit = (info: Record<string, unknown>) => ({
   rate_limit_info: info,
 });
 
-/** What the fake records: a line when a run starts, and one when it has written its output. */
 const Recorded = v.union([
   v.object({
     pid: v.number(),
@@ -74,7 +73,6 @@ afterEach(() => {
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
-/** A Claude Code whose `claude` is the fake, replaying this scenario. */
 const claude = (scenario: Record<string, unknown>, options: Record<string, unknown> = {}) => {
   const file = join(dir, "scenario.json");
   const record = join(dir, "runs.jsonl");
@@ -171,7 +169,6 @@ describe("a Claude Code run", () => {
       "handoff",
     ]);
     for (const item of items) expect(item.required).toContain("type");
-    // The CLI rejects output that breaks the schema, so an empty `edit` aimed at no draft can't come back.
     expect(items.find((item) => item.properties.type.const === "edit")).toMatchObject({
       additionalProperties: false,
       properties: { change: { minLength: 1 }, why: { minLength: 1 } },

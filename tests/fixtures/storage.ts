@@ -2,7 +2,6 @@ import type { StorageLike } from "~/shared/providers/fake-canvas/server";
 
 export interface MemoryStorage extends StorageLike {
   keys(): readonly string[];
-  /** The next write throws, like a full localStorage. */
   failNextWrite(): void;
 }
 

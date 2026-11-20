@@ -97,7 +97,6 @@ describe("the sample packages", () => {
 describe("the new-term seed", () => {
   const SHELL_FOR: Readonly<Record<string, string>> = { lcc: "ENG 101", rsu: "ENG 210" };
 
-  /** Copies one source into an empty shell, lets the job finish, and scans the result the way the app would. */
   const typesAfterCopying = async (
     school: "lcc" | "rsu",
     make: (shell: Awaited<ReturnType<typeof rigShell>>["shell"]) => ReturnType<typeof copyContent>,
@@ -153,7 +152,6 @@ describe("the new-term seed", () => {
     expect([...FINDING_TYPES].filter((type) => !types.has(type))).toEqual([]);
   });
 
-  /** A link into another school's host can only ever be "another course"; nothing on this host can tell whether it is broken. */
   const UNCHECKABLE_FROM_ANOTHER_HOST = ["broken-link", "missing-file", "lti-link"];
 
   it.each(PACKAGES.filter((pkg) => pkg.body !== null).map((pkg) => [pkg.name, pkg] as const))(

@@ -16,7 +16,6 @@ import { ASSIGNMENTS, SUBMISSIONS, type AuthoredSubmission } from "./fixtures/au
 import type { FixtureKind } from "./metrics";
 import { lmsRef, schoolId } from "../tests/fixtures/ids";
 
-/** One submission as "Draft N" sends it: the narrowed scope's three records and the files main would read for it. */
 export interface Fixture {
   id: string;
   kind: FixtureKind;
@@ -50,7 +49,6 @@ const listed = (name: string, bytes: number): SubmissionFile => ({
   bytes,
 });
 
-/** What main's `lms.file` hands the renderer: Word and Markdown as their words in Markdown, everything else as is. */
 const read = async (file: SubmissionFile): Promise<SubmittedFile> => {
   const data = new Uint8Array(await readFile(join(FILES, file.name)));
   if (file.mediaType === "application/pdf" || file.mediaType === "image/png")
@@ -111,7 +109,6 @@ const courseOf = (key: string): Course => ({
   studentCount: 28,
 });
 
-/** The 30 synthetic submissions, in order, with no real student in any of them. */
 export const loadClass = (): Promise<Fixture[]> =>
   Promise.all(
     SUBMISSIONS.map(async (authored) => {

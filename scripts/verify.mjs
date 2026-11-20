@@ -1,5 +1,3 @@
-// Drives the real app with trusted mouse and key events: the unpackaged Electron app against vite, or with `--web` the built demo in headless Chrome.
-// Starts its own server and app, and stops only those.
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -91,19 +89,13 @@ const until = async (probe, failure) => {
   throw new Error(failure);
 };
 
-// The window is never shown, so it paints without stealing focus, and no other window can cover it: a covered or minimised window gets no frames.
-// Only the fake LMS answers, so no address typed in a run reaches a real Canvas host.
-// ELECTRON_RUN_AS_NODE, set by some agent shells, would start Electron as plain Node.
 const { ELECTRON_RUN_AS_NODE: _, ...APP_ENV } = {
   ...process.env,
   CONSTELLATION_WINDOW: "hidden",
   CONSTELLATION_LMS: "fake",
 };
-/** What main's .imscc picker answers in this launch, in place of the native dialog. */
 const pickedPackageFile = (profile) => join(profile, "picked-package.txt");
-/** Whether verify's fake `claude` reads as signed in, in this launch. It starts signed out. */
 const fakeClaudeFile = (profile) => join(profile, "fake-claude.txt");
-/** Where main writes each telemetry batch in this launch, one JSON line each, in place of PostHog. */
 const telemetrySinkFile = (profile) => join(profile, "telemetry.jsonl");
 const FAKE_CLAUDE = join(ROOT, "scripts/verify/fake-claude.mjs");
 const launch = (port, profile, origin) =>
@@ -121,8 +113,7 @@ const launch = (port, profile, origin) =>
         ],
         { stdio: "ignore" },
       )
-    : // A mock Keychain: safeStorage still encrypts, but verify never writes to the login Keychain or waits on its prompt.
-      spawn(
+    : spawn(
         electron,
         [
           `--remote-debugging-port=${port}`,
@@ -155,7 +146,6 @@ const stop = (child) =>
 
 const IS_CSS = /^[[.#]|^[a-z][a-z0-9]*[[.#:]/;
 
-// Runs in the page. Buttons and other controls win over plain text, so "Approve" finds the button rather than a sentence about approving.
 const FINDER = `(query, css, within, nth) => {
   const scope = within ? document.querySelector(within) : document;
   if (!scope) return null;
@@ -180,7 +170,6 @@ const main = async () => {
       (await readdir(SHOTS)).map((name) => rm(join(SHOTS, name), { recursive: true, force: true })),
     );
   await mkdir(SHOTS, { recursive: true });
-  // The demo ships built. The app runs against vite, because the fault lab the modules drive exists only in dev.
   const vite = WEB ? await startBuiltServer() : await startDevServer();
   const { origin } = vite;
   let app = null;
@@ -261,8 +250,6 @@ const main = async () => {
       return send(method, params).then(() => done);
     };
 
-    // A fresh launch on a fresh profile starts with no storage at all, and nothing an earlier page writes late can reach it.
-    // Electron can't open a browser context or a target over CDP, so a fresh page is a fresh app.
     const freshPage = async () => {
       socket?.close();
       await stop(app);
@@ -285,7 +272,6 @@ const main = async () => {
         "no page opened",
       );
       ({ sessionId: session } = await send("Target.attachToTarget", { targetId, flatten: true }));
-      // Electron opens the app itself. Leaving before that load finishes would fail main's loadURL.
       const first = WEB ? "about:" : "app:";
       await until(
         () => evaluate(`location.protocol === "${first}" && document.readyState === "complete"`),
@@ -296,11 +282,9 @@ const main = async () => {
       await send("Runtime.enable");
       await send("Log.enable");
       await load("Page.navigate", { url: "about:blank" });
-      // A window that is never shown never has focus, and the app moves focus the way it would in a person's focused window.
       await send("Emulation.setFocusEmulationEnabled", { enabled: true });
       await media({});
     };
-    // Every module sees the dark theme and full motion, whatever the machine's own settings. A module overrides one by name, and the rest keep these.
     const media = (features) =>
       send("Emulation.setEmulatedMedia", {
         features: Object.entries({
@@ -314,8 +298,6 @@ const main = async () => {
     const locate = (query, within, nth) =>
       `(${FINDER})(${JSON.stringify(query)}, ${IS_CSS.test(query)}, ${JSON.stringify(within ?? null)}, ${nth})`;
 
-    // Null while the target is missing, disabled, or under something else, so a click can only land where a person's would.
-    // The press listener judges a hit by the same rule, at the moment of the press, because the click may unmount the target or navigate.
     const hitPoint = (query, within, nth) => `(() => {
         const el = ${locate(query, within, nth)};
         if (!el || el.disabled) return null;
@@ -366,8 +348,6 @@ const main = async () => {
         return reachable();
       })()`;
 
-    // A reading counts once no finite animation is running and it holds across painted frames. A click aimed at something still sliding or reflowing lands beside it.
-    // Time between readings is not enough. Headless Chrome on a hosted runner can go 100ms without a frame, and an animation can hold at its first frame until one comes.
     const steady = async (expression, ready, timeout, failure) => {
       const end = Date.now() + timeout;
       let last = null;
@@ -396,36 +376,28 @@ const main = async () => {
 
     const t = {
       origin,
-      /** The text of main's vault file in this launch's profile: `{}` when there is none, and in the web demo. */
       vaultFile: () =>
         WEB
           ? Promise.resolve("{}")
           : readFile(join(profile, "vault.json"), "utf8").catch(() => "{}"),
-      /** The batches main has sent this launch, one JSON line each: `""` before the first, and in the web demo. */
       telemetrySink: () =>
         WEB ? Promise.resolve("") : readFile(telemetrySinkFile(profile), "utf8").catch(() => ""),
       shots: SHOTS,
-      /** Makes main's "Choose a .imscc file" pick `path` next, or cancel with null. */
       pickPackage: (path) => writeFile(pickedPackageFile(profile), path ?? ""),
-      /** Signs verify's fake `claude` in or out, as the teacher would in Terminal. */
       signInClaude: (signedIn) =>
         writeFile(fakeClaudeFile(profile), signedIn ? "signed-in" : "signed-out"),
       sleep,
       consoleEntries,
       cdp: send,
       media,
-      /** Calls `handler` with each CDP event named `method` until the returned function stops it. */
       on(method, handler) {
         listeners.set(method, handler);
         return () => listeners.delete(method);
       },
       eval: evaluate,
-      /** Starts again as a first-time visitor, in a fresh app on a fresh profile. */
       fresh: freshPage,
-      /** Evaluates `expression` until its value holds across painted frames with no animation running, and returns it. */
       steady: (expression, timeout = WAIT_MS) =>
         steady(expression, () => true, timeout, `never held still: ${expression.slice(0, 80)}`),
-      /** Loads a path on the app's server, or a whole URL. */
       goto: (path) => load("Page.navigate", { url: new URL(path, origin).href }),
       reload: () => load("Page.reload"),
       async viewport(width, height) {
@@ -459,7 +431,6 @@ const main = async () => {
           button: "left",
           clickCount: 1,
         });
-        // A full navigation takes the record with the old page, which leaves nothing to judge, so that click passes.
         const press = await evaluate(
           `(() => { const press = window.__press; window.__press = null; return press ?? (window.__aim ? { unseen: true } : null); })()`,
         ).catch(() => null);
@@ -474,7 +445,6 @@ const main = async () => {
             `click aimed at ${JSON.stringify(query)} was pressed on it but released on ${press.release.landed}; the target moved ${press.release.moved} under the pointer`,
           );
       },
-      // Every press and release goes out at once, so nothing the app waits out can pass between the clicks. Returns what each click landed on and its gap from the first.
       async clickAtOnce(selectors) {
         const points = await evaluate(
           `${JSON.stringify(selectors)}.map((selector) => { const el = document.querySelector(selector); el.scrollIntoViewIfNeeded?.(); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })`,
@@ -567,7 +537,6 @@ const main = async () => {
           console.log(`FAIL  ${label}${detail ? `\n      ${detail}` : ""}`);
         }
       },
-      /** Polls a page expression until it is truthy, counts as a check, and stops the module if it never is. */
       async waitFor(expression, label, timeout = WAIT_MS) {
         const end = Date.now() + timeout;
         for (;;) {
@@ -638,7 +607,6 @@ const main = async () => {
             ).join("\n      "),
           );
       },
-      // Sees the same state at 1180, then puts the window and every scroll position back, so the steps after the shot don't notice.
       async twin(base) {
         const { width, height } = t.size;
         const positions = `[...document.querySelectorAll("*")].filter((el) => el.scrollTop || el.scrollLeft)`;
@@ -662,7 +630,6 @@ const main = async () => {
           `window.__twinScroll.forEach(([el, top, left]) => { el.scrollTop = top; el.scrollLeft = left; })`,
         );
       },
-      // A passing audit only means something if the same code catches each defect on purpose.
       async auditSeeds() {
         await t.viewport(1000, 800);
         const seed = async (html) => {
@@ -685,7 +652,6 @@ const main = async () => {
         );
         t.assert(noise.length === 0, "audit seed: a clean page raises nothing", noise.join("; "));
       },
-      // The click check only means something if it fails a press that lands beside its target.
       async clickSeeds() {
         const seed = (html) => evaluate(`void (document.body.innerHTML = ${JSON.stringify(html)})`);
         const clickError = () =>
@@ -720,7 +686,6 @@ const main = async () => {
     for (const name of MODULES) {
       console.log(`\n== ${name}`);
       const module = await import(new URL(`./verify/${name}.mjs`, import.meta.url));
-      // Each module starts as a first-time visitor, so its checks can't lean on what the last one left behind.
       await freshPage();
       twinImages = TWIN_IMAGES[name] ?? [];
       try {
@@ -728,7 +693,6 @@ const main = async () => {
       } catch (error) {
         failures.push(`${name}: ${error.message}`);
         console.log(`FAIL  ${name} stopped: ${error.message}`);
-        // A frozen page never answers the screenshot, so give up on it rather than hang the run.
         await Promise.race([t.shot(`FAILED-${name}`), sleep(5000)]).catch(() => {});
       }
       for (const image of twinImages)

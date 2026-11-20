@@ -34,10 +34,6 @@ interface Reply {
   headers?: Record<string, string>;
 }
 
-/**
- * Canvas as recorded responses: each request's path and query, without `per_page`, names its reply. A request with no
- * reply fails the test, so a provider that asks for more than it should is caught.
- */
 const recorded = (replies: Record<string, Reply | (() => never)>) => {
   const requests: { url: string; auth: string | null }[] = [];
   const fetch: Fetch = async (url, init) => {
@@ -84,7 +80,6 @@ const ok = (name: string, headers?: Record<string, string>): Reply => ({
   ...(headers ? { headers } : {}),
 });
 const SELF = { "/api/v1/users/self": ok("users-self.json") };
-/** `submissions.json` as Canvas groups it by student, one entry per student holding their submissions. */
 const GROUPED_SUBMISSIONS = (() => {
   const rows = v.parse(
     v.array(v.looseObject({ user_id: v.number() })),
@@ -183,7 +178,6 @@ describe("Canvas reads", () => {
       const page = Number(new URL(url).searchParams.get("page") ?? "1");
       open += 1;
       most = Math.max(most, open);
-      // Page 2 answers last, so a list built in answer order would be out of page order.
       await new Promise((wake) => setTimeout(wake, page === 2 ? 20 : 1));
       open -= 1;
       return new Response(fixture(pages[page - 1] ?? "courses-page-1.json"), {
@@ -323,7 +317,7 @@ describe("Canvas reads", () => {
   });
 
   it("reads a big course's submissions a few students a page, sharing one limit across courses", async () => {
-    const PAGES = 134; // 400 students at 3 a page
+    const PAGES = 134;
     let open = 0;
     let most = 0;
     let requests = 0;
@@ -363,7 +357,6 @@ describe("Canvas reads", () => {
     );
     expect(reads.map((read) => read.ok && read.value.length)).toEqual([PAGES, PAGES, PAGES]);
     expect(requests).toBe(1 + 3 * PAGES);
-    // Each course's first page, plus the school's 8 shared slots for later pages.
     expect(most).toBeLessThanOrEqual(3 + 8);
   });
 

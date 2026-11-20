@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Verify's stand-in for the teacher's `claude`, which an unpackaged app runs from CONSTELLATION_CLAUDE. It answers only
-// what `claudeCode.status` asks. It is signed in while the file at CONSTELLATION_FAKE_CLAUDE_STATE reads "signed-in".
 import { readFileSync } from "node:fs";
 
 const VERSION = "2.1.323";

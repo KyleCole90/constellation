@@ -1,7 +1,3 @@
-// Writes the sample .imscc packages the fake LMS offers. Each is a real zip holding an imsmanifest.xml, so a
-// person can open one and see what a Common Cartridge looks like. Content is invented, and the names must
-// match samplePackages() in src/shared/providers/fake-canvas/seed-term.ts. Run: node scripts/make-imscc.mjs
-
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,7 +20,6 @@ const u16 = (n) => [n & 0xff, (n >>> 8) & 0xff];
 const u32 = (n) => [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff];
 const encoder = new TextEncoder();
 
-/** A deflated zip, as Canvas writes its exports. Small enough to read here. */
 const zip = (entries) => {
   const local = [];
   const central = [];
@@ -111,7 +106,6 @@ const manifest = (title, resources) => `<?xml version="1.0" encoding="UTF-8"?>
 </manifest>
 `;
 
-/** Canvas's own course settings file. Its dates are in the course's time zone, with no offset. */
 const courseSettings = (title, { start, conclude }) => `<?xml version="1.0" encoding="UTF-8"?>
 <course identifier="settings" xmlns="http://canvas.instructure.com/xsd/cccv1p0">
   <title>${title}</title>
@@ -168,7 +162,6 @@ const PACKAGES = [
     name: "damaged-export.imscc",
     title: "Damaged export",
     pages: [["syllabus", "Syllabus", "<p>This package is missing most of its files.</p>"]],
-    // A real export often leaves the end out, so the teacher types only that.
     settings: { start: "2026-01-20", conclude: null },
     missing: true,
   },

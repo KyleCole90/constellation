@@ -4,16 +4,8 @@ import { serve, type Handlers } from "~/shared/ipc";
 
 export type AgentRun = Parameters<Handlers["agent.run"]>[0];
 
-/**
- * Main's schema leaves the scope unknown, because main only writes it into the prompt. In process it is the renderer's
- * own object, so the rules agent standing in for Claude can read it.
- */
 export const scopeOf = (run: AgentRun): AgentScope => run.scope as AgentScope;
 
-/**
- * Main's `agent.run`, with the rules agent drafting in Claude's place. Each call goes through main's own input schema
- * first, so a payload main would reject fails here too. `before` may answer instead, as a plan limit does.
- */
 export const rulesMain = (
   options: {
     spend?: { tokens: number; usd: number };

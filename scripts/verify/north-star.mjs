@@ -117,10 +117,8 @@ const DUE_FRAMES = `(() => {
   frame();
 })()`;
 
-// Where each setup row and the No AI option sit below the address field, as "host top height", so scrolling doesn't count.
 const SETUP_LAYOUT = `(() => { const field = document.querySelector('[data-testid="address-field"]').getBoundingClientRect().top; return [...document.querySelectorAll('[data-host], input[name="ai-source"][value="none"]')].map((el) => { const r = el.getBoundingClientRect(); return \`\${el.dataset.host ?? "no AI"} \${Math.round(r.top - field)} \${Math.round(r.height)}\`; }); })()`;
 
-// Issue #21: a person who connects every school and finishes without waiting, at the fake LMS's default latency.
 const finishWaitsForReads = async (t) => {
   await t.goto("/welcome");
   await t.click("Set up");
@@ -140,7 +138,6 @@ const finishWaitsForReads = async (t) => {
     };
     frame();
   })()`);
-  // Last row first, so a connected row that jumped to the top would show.
   for (const host of hosts.toReversed()) {
     await t.click(`[data-host="${host}"] button[type="submit"]`);
     await t.waitFor(
@@ -496,7 +493,6 @@ const sidebarMap = async (t) => {
   );
   const collapsedPlain = await plainCount(unreadSignal(unreadCourse));
   await expandCourse(t, unreadCourse);
-  // A course's messages thread counts the replies waiting on the teacher, read or not (#127).
   const threadPlain = await plainCount(
     `${SIDEBAR} li a[href^="/threads/"] [aria-label$=" waiting"]`,
   );
@@ -703,7 +699,6 @@ const nextUp = async (t) => {
       JSON.stringify(seen),
     );
   }
-  // The open list shows whole rows, up to its share of the screen, and gives up rows on a short screen so the card's grade and comment stay in view (#159).
   await t.eval(
     `window.__layoutErrors = []; window.addEventListener("error", (event) => window.__layoutErrors.push(event.message))`,
   );
@@ -947,7 +942,6 @@ const nextUp = async (t) => {
 const question = async (t) => {
   const navBeforeChats = await navTops(t);
   const hero = await composerCard(t);
-  // When the glide starts animating, the chat's URL must already be showing. A skipped glide (Chrome skips one on a busy machine) holds nothing up.
   await t.eval(
     `(() => { const start = document.startViewTransition?.bind(document); if (start) document.startViewTransition = (...args) => { const glide = start(...args); window.__glide = glide.ready.then(() => location.pathname, () => "skipped"); return glide; }; })()`,
   );
@@ -1861,7 +1855,6 @@ const missingWork = async (t) => {
   await shot(t, "missing-work-row");
 };
 
-// Issue #57: the chat said it couldn't see grades while the roster showed them.
 const whoIsBehind = async (t) => {
   await backHome(t);
   await t.click(COMPOSER);
@@ -2053,7 +2046,6 @@ const settleRow = async (t, chat) => {
   await t.waitFor(`!${inChats(chat)}`, `Settle takes ${chat} out of Chats`);
 };
 
-// Issue #256: one Undo covers every settle, the open chat says it is settled, the toast clears the send button, and the rail reaches Settled.
 const settlingEveryChat = async (t) => {
   await t.viewport(1440, 900);
   await t.goto(NORTH_STAR);
@@ -2168,7 +2160,6 @@ const markedChats = `[...document.querySelectorAll('[data-testid="sidebar-chats"
 const inSidebarView = (href) =>
   `(() => { const list = document.querySelector('[data-testid="sidebar-list"]').getBoundingClientRect(); const r = document.querySelector(${JSON.stringify(sidebarLink(href))})?.getBoundingClientRect(); return Boolean(r) && r.top >= list.top && r.bottom <= list.bottom; })()`;
 
-// Issue #255: two chats hand off to one thread, and the card in the older chat opens it.
 const markFollowsTheCard = async (t) => {
   await backHome(t);
   const older = await askFromHome(t, "Reply to Owen Tierney");
@@ -2248,7 +2239,6 @@ const CARD_NAME = `${GROUP} a[data-handoff] .text-body`;
 const cardName = (t) =>
   t.eval(`[...document.querySelectorAll(${JSON.stringify(CARD_NAME)})].at(-1)?.innerText ?? ""`);
 
-// Issue #263: a replies card keeps the name it was handed off with after a send.
 const repliesCardKeepsItsName = async (t) => {
   await t.viewport(1440, 900);
   await backHome(t);

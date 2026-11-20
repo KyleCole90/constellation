@@ -11,15 +11,9 @@ export interface LinkContext {
   files: ReadonlySet<number>;
 }
 
-/** Canvas's editor writes links into the same course without the origin, so a bare `/courses/...` path is this host. */
 const COURSE_PATH =
   /^(?:https?:\/\/([^/]+))?\/courses\/(\d+)\/(pages|files|external_tools|assignments|discussion_topics|modules)\/([^/?#]+)/;
 
-/**
- * Canvas's URL grammar, read here and nowhere above. Same host and this course: a page or file is checked against what
- * the course holds, and a tool link stays a tool link for the scan to check against configured tools. Another course
- * gets a replacement only when it is on the same host and the same page exists here. Anything else is the open web.
- */
 export const classifyLink = (
   link: { text: string; url: string },
   ctx: LinkContext,

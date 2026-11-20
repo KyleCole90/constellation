@@ -1,4 +1,3 @@
-// Scores North Star as a place to start work. START is half checks on the running app and half what fresh readers get from one screenshot. Black box: it knows the composer and the sidebar, and nothing about how the start screen is built.
 import { spawn } from "node:child_process";
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -94,7 +93,6 @@ const land = async (page, base) => {
   await page.waitForTimeout(500);
 };
 
-/** Everything in the main pane that a person can see or use. The sidebar is its own check. */
 const readPane = (page) =>
   page.evaluate(
     ({ sidebar, composer }) => {
@@ -175,7 +173,6 @@ const typesRightAway = async (page, base) => {
   return typed === "x";
 };
 
-/** Clicks every control in the main pane in turn, from the same saved state, and counts the different pieces of work one click reaches. */
 const oneClickWork = async (page, base, saved) => {
   await land(page, base);
   const total = await page
@@ -208,7 +205,6 @@ const ask = async (page, text) => {
   await page.waitForTimeout(ANSWERED);
 };
 
-/** A question that needs an answer must be answerable where it was asked: some control in the reply finishes the ask without leaving the conversation. */
 const answersInPlace = async (page, base, saved) => {
   await restoreStorage(page, saved);
   await land(page, base);
@@ -233,7 +229,6 @@ const answersInPlace = async (page, base, saved) => {
   return done;
 };
 
-/** Going home after a conversation gives a clean start again, and the conversation is still one click away. */
 const startsFresh = async (page, base, saved) => {
   await restoreStorage(page, saved);
   await land(page, base);
@@ -389,7 +384,6 @@ const runReader = async (prompt, files) => {
 
 const askOne = (image) => runReader(PROMPT, { "screen.png": image });
 
-/** Which side the screen under test sits on is random per reader, so "a" bias can't move the score. Scored against a frozen baseline, 50 means no better. */
 const compareOne = async (image, reference, swapped) => {
   const result = await runReader(
     COMPARE,

@@ -1,5 +1,3 @@
-// `npm run dev`: vite in this process, then Electron against it. A change under src/main, src/preload or src/shared
-// rebuilds main and preload and restarts Electron; the renderer reloads through vite. `npm run dev:web` is the web app alone.
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { relative } from "node:path";
@@ -38,7 +36,6 @@ const launch = () => {
     env: { ...process.env, CONSTELLATION_DEV_URL: server.origin },
   });
   app = child;
-  // Quitting the app ends the session. A restart swaps `app` out first, so its exit doesn't.
   child.once("exit", () => {
     if (app === child) void quit();
   });
@@ -63,7 +60,6 @@ const restart = async () => {
 
 await pack();
 launch();
-// vite already watches the project, so main and preload ride on its watcher.
 server.watcher.on("all", (_event, path) => {
   if (!MAIN_SIDE.test(relative(SRC, path))) return;
   clearTimeout(pending);
@@ -71,5 +67,4 @@ server.watcher.on("all", (_event, path) => {
 });
 
 process.once("SIGINT", () => void quit());
-// vite exits this process itself on SIGTERM, skipping `quit`. Electron goes with it.
 process.once("exit", () => app?.kill());

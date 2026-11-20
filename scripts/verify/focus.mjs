@@ -176,7 +176,6 @@ const discard = async (t) => {
   const row = await t.eval(
     `[...document.querySelectorAll('[data-testid="queue-list"] [data-row]')].find((row) => row.innerText.includes("Not started"))?.dataset.row`,
   );
-  // With no panel animation to re-place the chat, a card that settles after the agent finishes must not move Discard out from under the press.
   await t.media({ "prefers-reduced-motion": "reduce" });
   await t.click(`[data-row="${row}"] button`);
   await t.waitFor(`document.querySelector('[data-testid="grade-open"]')`, "the submission opens");

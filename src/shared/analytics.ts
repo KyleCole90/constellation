@@ -1,10 +1,5 @@
 import * as v from "valibot";
 
-/**
- * Every usage event the desktop app may send, and every property each may carry. Values are only fixed
- * words and counts: every free string in this app could be a student's, so none has a slot here. Strict, so an event
- * carrying anything more is rejected rather than trimmed.
- */
 const AiSourceSchema = v.picklist(["none", "key", "on-device", "claude-code"]);
 const DraftKindSchema = v.picklist(["grade", "reply", "announcement", "message"]);
 export type DraftKind = v.InferOutput<typeof DraftKindSchema>;

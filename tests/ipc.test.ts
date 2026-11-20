@@ -8,7 +8,6 @@ type Listener = (sender: string | null, input: unknown) => Promise<unknown>;
 
 const APP = "app://constellation/";
 
-/** Main's side: the listeners `handle` registers, by channel, and every input a handler was given. */
 const registered = () => {
   const listeners = new Map<string, Listener>();
   const reports: unknown[] = [];

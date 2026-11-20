@@ -1,5 +1,3 @@
-// A real account's first run: the fakes with no demo, so no seeded thread stands in for a built-in one (#114).
-// The teacher types a school's address and a token, the way a real Canvas teacher does, with AI on and with No AI.
 import { KEY } from "./storage.mjs";
 
 const HOST = "lakeshore.instructure.com";
@@ -10,7 +8,6 @@ const BUILT_IN = ["t-north-star", "t-queue", "t-inbox"];
 
 const firstRun = async (t, ai) => {
   await t.goto("/welcome");
-  // The first load saved the demo's threads, so the switch starts from empty storage.
   await t.eval(`sessionStorage.setItem("verify.demo", "off"); localStorage.clear()`);
   await t.reload();
   await t.click("Set up");
@@ -60,7 +57,6 @@ const opensBuiltIns = async (t, ai) => {
       `${ai}: the sidebar links North Star`,
     );
 
-  // Every step navigates inside the app: a page load reboots it, and boot drops the fake schools a real account never has.
   await t.click("Messages", { within: SIDEBAR });
   await t.waitFor(
     `location.pathname === "/inbox" && !!document.querySelector('[data-testid="inbox-list"]')`,

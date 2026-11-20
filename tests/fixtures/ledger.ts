@@ -9,21 +9,18 @@ import { isChange } from "~/renderer/stores/workspace";
 import type { ChangeLedger } from "~/renderer/writeback/writeback";
 
 export interface Crash {
-  /** 1-based count of accepted commits since armed. */
   atCommit: number;
   when: "before-durable" | "after-durable";
 }
 
 export class SimulatedCrash extends Error {}
 
-/** A row read back through the workspace load's own check, as a reload would. */
 const reread = (row: string): ChangeRecord => {
   const record: unknown = JSON.parse(row);
   if (!isChange(record)) throw new Error("A reload would refuse this change.");
   return record;
 };
 
-/** Records live as JSON, so whatever a reload could not read back is a test failure rather than a lucky reference. */
 export class DurableLedger implements ChangeLedger {
   readonly #rows = new Map<ChangeId, string>();
   #crash: Crash | null = null;

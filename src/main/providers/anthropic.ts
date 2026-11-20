@@ -24,7 +24,6 @@ import {
 
 import type { Fetch } from "./canvas";
 
-/** Dollars per million tokens, input then output. A fallback the table doesn't name is priced at its highest rate, so a thread never shows less than it cost. */
 const PRICES: Readonly<Record<string, readonly [number, number]>> = {
   "claude-opus-5-5": [4, 20],
   "claude-opus-5": [5, 25],
@@ -46,7 +45,6 @@ const REFUSED_REQUEST = failed(
 );
 const ANTHROPIC_DOWN = failed("Anthropic had a problem answering. Ask again in a moment.");
 
-/** Raw effects for the renderer's parser. */
 const effectsOf = (content: readonly BetaContentBlock[]): unknown[] =>
   content.flatMap((block): unknown[] => {
     if (block.type === "tool_use") return effectOf(block.name, block.input);
@@ -55,7 +53,6 @@ const effectsOf = (content: readonly BetaContentBlock[]): unknown[] =>
     return [];
   });
 
-/** Every attempt is billed, including one a fallback model finished, so each is priced at its own model's rate. */
 export const spendOf = (message: BetaMessage): { tokens: number; usd: number } => {
   const attempts = message.usage.iterations ?? [{ ...message.usage, model: message.model }];
   let tokens = 0;
@@ -67,8 +64,6 @@ export const spendOf = (message: BetaMessage): { tokens: number; usd: number } =
     const written = attempt.cache_creation_input_tokens ?? 0;
     const read = attempt.cache_read_input_tokens ?? 0;
     tokens += attempt.input_tokens + written + read + attempt.output_tokens;
-    // Cache writes at the 1-hour rate (2x input) and reads at the full input rate: both at or above what Anthropic bills, so
-    // the thread never shows less than it cost. The app sets no cache, so these are 0 unless that changes.
     usd +=
       ((attempt.input_tokens + 2 * written + read) * inRate + attempt.output_tokens * outRate) /
       1_000_000;
@@ -92,7 +87,6 @@ const ask = async (client: Anthropic, input: Input): Promise<Answer> => {
       model: MODEL,
       max_tokens: 16_000,
       output_config: { effort: "medium" },
-      // A policy decline is retried on the model Anthropic picks for it, inside the same call.
       betas: ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
       system: SYSTEM,
@@ -105,17 +99,11 @@ const ask = async (client: Anthropic, input: Input): Promise<Answer> => {
     return reasonFor(error);
   }
   const spend = spendOf(message);
-  // A refusal can stop partway through, so nothing it wrote is kept.
   if (message.stop_reason === "refusal")
     return { ok: true, effects: [{ type: "decline", text: DECLINED }], spend };
   return { ok: true, effects: effectsOf(message.content), spend };
 };
 
-/**
- * `agent.run` in main: Claude with the key from main's vault. The key is read for each run
- * and never kept, logged or sent anywhere but Anthropic. What comes back is raw: the renderer's `parseAgentEffect`
- * decides what of it counts, and nothing it yields can approve or send.
- */
 export const anthropicAgent =
   (options: { lease: CredentialLease; fetch: Fetch }): Handlers["agent.run"] =>
   (input) =>

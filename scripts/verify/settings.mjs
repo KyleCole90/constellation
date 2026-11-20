@@ -509,7 +509,6 @@ const refusesDuplicate = async (
   );
 };
 
-// Pretends to be another platform for every page load until the returned function undoes it.
 const pretendPlatform = async (t, platform, brand) => {
   const { identifier } = await t.cdp("Page.addScriptToEvaluateOnNewDocument", {
     source: `Object.defineProperty(Navigator.prototype, "platform", { get: () => ${JSON.stringify(platform)} }); Object.defineProperty(Navigator.prototype, "userAgentData", { get: () => ({ platform: ${JSON.stringify(brand)} }) });`,
@@ -1473,7 +1472,6 @@ const sinkLines = async (t) => (await t.telemetrySink()).split("\n").filter(Bool
 const sinkEvents = (lines) =>
   lines.flatMap((line) => JSON.parse(line).batch.map((event) => event.event));
 
-/** The one opt-out: on by default, the sink holds only typed events, and off sends nothing more. */
 const usageData = async (t, shot) => {
   await openSection(t, "Privacy");
   await t.waitFor(`document.querySelector('${TOGGLE}')`, "Privacy shows the usage-data toggle");
@@ -1618,7 +1616,6 @@ const openStudent = async (t, student) => {
   );
 };
 
-// The panel slides in over 200ms, and a click aimed mid-slide lands beside the tab it was aimed at.
 const openPreview = async (t) => {
   await t.waitFor(
     `document.querySelector(${JSON.stringify(PANEL)})?.getAnimations().length === 0`,
@@ -1865,7 +1862,6 @@ const reloadStays = async (t) => {
   await assertNoLeak(t, "after a reload");
 };
 
-// Named by its host, as the Canvas provider names a school someone adds by address.
 const REAL_SCHOOL = {
   id: "verify-real",
   abbr: "VR",
@@ -1874,7 +1870,6 @@ const REAL_SCHOOL = {
   provider: "canvas",
 };
 
-/** A real school can't connect under verify, so it joins the saved workspace the way a reload would find it. */
 const withSchools = async (t, saved, pick) => {
   await t.eval(`(() => {
     const stored = JSON.parse(${JSON.stringify(saved)});

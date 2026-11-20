@@ -34,7 +34,6 @@ const workLines = (
   ];
 };
 
-/** Wording per finding where the rule's words are too terse for a person who has not seen the rule. */
 const wordsFor = (
   finding: Finding,
   item: ContentItem,

@@ -8,14 +8,12 @@ const CARD = "[data-focused]";
 const START = '[data-testid="queue-start"]';
 const NEXT_ARROW = '[aria-label="Next in queue"]';
 const OPEN = '[data-testid="grade-open"]';
-/** The student on screen, drafted or not. */
 const shows = (title) =>
   `(document.querySelector(${JSON.stringify(CARD)})?.innerText.includes(${JSON.stringify(title)}) || document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(title)}))`;
 const draftOffered = `[...document.querySelectorAll(${JSON.stringify(`${OPEN} button`)})].some((b) => b.innerText === "Draft with Claude")`;
 const draftIfOffered = async (t) => {
   if (await t.eval(draftOffered)) await t.click("Draft with Claude", { within: OPEN });
 };
-/** Opening drafted nothing, so this asks for the draft the way the teacher does (#48). */
 const draftShown = async (t, title, what) => {
   if (await t.has(OPEN)) {
     t.assert(
@@ -187,7 +185,6 @@ const tick = (t, title) =>
     `[...document.querySelectorAll('[data-row]')].find((row) => row.querySelector("button span[title]")?.innerText === ${JSON.stringify(title)}).querySelector('input[type="checkbox"]').click()`,
   );
 
-/** Start grading and Next walk the rows the teacher ticked, in list order, skipping the rest. */
 const AWAY = "/threads/t-h150-seq";
 
 const startOnTicked = async (t) => {
@@ -265,7 +262,6 @@ const startOnTicked = async (t) => {
 
 const FIONA = "[data-row]:last-of-type";
 
-/** The teacher can write to a missing student without grading, and the message still waits for Approve. */
 const messageMissing = async (t) => {
   await t.click('[aria-label="Message Fiona Kerr"]', { within: QUEUE });
   await t.waitFor(
@@ -305,7 +301,6 @@ const messageMissing = async (t) => {
   );
 };
 
-/** A student with nothing turned in is a row the teacher can settle with a zero, through the usual approval. */
 const missingWork = async (t) => {
   await t.goto("/threads/t-h150-seq");
   await t.waitFor(
@@ -367,7 +362,6 @@ const missingWork = async (t) => {
 const queueTitles = `[...document.querySelectorAll(${JSON.stringify(`${QUEUE} [data-row]`)})].map((row) => row.querySelector("button span[title]").innerText)`;
 const fionaRow = `[...document.querySelectorAll(${JSON.stringify(`${QUEUE} [data-row]`)})].find((row) => row.querySelector("button span[title]")?.innerText === "Fiona Kerr")`;
 
-/** Her zero posting turns her Missing into graded in the LMS, but she keeps her place, so Next stays off on the last row. */
 const keepsPlaceAfterSend = async (t, order) => {
   if (!(await t.has(LIST))) await t.click("Expand queue");
   await t.waitFor(
@@ -415,7 +409,6 @@ const openLastMissing = async (t, thread, what) => {
   return name;
 };
 
-/** A hand grade takes the same steps as an AI draft: ⌘↵ reviews and stops at Approve, the button approves, and ⌘↵ sends (#51). */
 const approveThenSend = async (t, what) => {
   await t.key("Meta+Enter");
   await t.waitFor(
@@ -448,7 +441,6 @@ const approveThenSend = async (t, what) => {
 const SETTLED = `Promise.allSettled(document.getAnimations().filter((a) => a.effect.getTiming().iterations !== Infinity).map((a) => a.finished)).then(() => null)`;
 const FOOTER_ROW = `(() => { const bar = document.querySelector(${JSON.stringify(`${FORM} [data-testid="card-actions"]`)}); const first = bar.querySelector("button").getBoundingClientRect(); const approve = bar.querySelector("[data-approve]").getBoundingClientRect(); return { panel: Boolean(document.querySelector("[data-panel-scroll]")), sameRow: Math.abs(first.top + first.height / 2 - approve.top - approve.height / 2) < 1, approveRight: approve.right, barRight: bar.getBoundingClientRect().right - parseFloat(getComputedStyle(bar).paddingRight) }; })()`;
 
-/** With the submission panel open the footer may wrap, but the primary pair stays together on the right. */
 const footerKeepsPairRight = async (t) => {
   for (const [width, height] of [
     [1180, 800],
@@ -465,7 +457,6 @@ const footerKeepsPairRight = async (t) => {
   }
 };
 
-/** With AI off nothing drafts the zero, so one Zero click fills every criterion. Every hand grade, a zero or a commented 1, is approved and then sent. */
 const missingZeroAiOff = async (t) => {
   await openLastMissing(t, "t-e101-essay2", "AI off");
   t.assert(await t.has(`${FORM} [data-criterion]`), "AI off: Essay 2 is graded on a rubric");
@@ -526,7 +517,6 @@ const missingZeroAiOff = async (t) => {
   await approveThenSend(t, "AI off");
 };
 
-/** A documented absence is excused instead of zeroed, drops the agent's zero note, and goes through the same approval. */
 const missingExcused = async (t) => {
   await openLastMissing(t, "t-e101-rr6", "excuse");
   const comment = `document.querySelector(${JSON.stringify(`${FORM} textarea`)})?.value`;
@@ -575,7 +565,6 @@ const missingExcused = async (t) => {
 const TOTAL = `${FORM} [data-testid="draft-grade"]`;
 const totalNumber = async (t) => Number((await t.text(TOTAL)).match(/[\d.]+/)?.[0]);
 
-/** An extension waives the late penalty, and the teacher's own total overrides the scores. Both wait for Approve. */
 const lateWaiveAndOverride = async (t) => {
   await t.goto("/threads/t-e102-bib");
   const late = `[...document.querySelectorAll(${JSON.stringify(`${QUEUE} [data-row]`)})].find((row) => /late/i.test(row.innerText))`;

@@ -19,7 +19,6 @@ const RSU = schoolId("rsu");
 const TOKEN = "SENTINEL-vault-token-4d1e9b7c";
 const APP = "app://constellation/";
 
-/** Stands in for `safeStorage`: reversible, and its ciphertext never contains the plaintext. */
 const fakeCipher = (available = true): Cipher => {
   const flip = (bytes: Buffer) => Buffer.from(bytes.map((byte) => byte ^ 0x5a));
   return {
@@ -140,7 +139,6 @@ describe("main's vault", () => {
   });
 });
 
-/** The renderer's vault, over the real IPC map, into main's vault on a temp file. */
 const bridged = () => {
   const file = vaultFile();
   const main = createVault(file, fakeCipher());
@@ -166,7 +164,6 @@ const bridged = () => {
   const invoke = invoker(async (channel, input) => {
     const listener = listeners.get(channel);
     if (!listener) throw new Error(`no listener for ${channel}`);
-    // Through structured clone, as Electron's IPC does, so nothing but plain data crosses.
     return structuredClone(await listener(APP, structuredClone(input)));
   });
   return { file, vault: createBridgeVault({ invoke }) };

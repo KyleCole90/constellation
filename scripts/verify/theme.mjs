@@ -1,4 +1,3 @@
-// The light and dark themes: the first frame matches the OS or the stored choice, Settings switches it, text and focus rings clear WCAG AA, and the main screens pass the layout audit in both at 1440x900 and 1280x720.
 import { APP_URL } from "../../src/main/security.ts";
 import { addAiKey } from "./ai-key.mjs";
 
@@ -14,7 +13,6 @@ const THEMES = ["light", "dark"];
 
 const os = (t, scheme) => t.media({ "prefers-color-scheme": scheme });
 
-// The mean brightness of each painted frame, so a frame shown in the other theme before the stylesheet or the app loads shows up.
 const SIDE_OF_FRAMES = `async (frames) => {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
@@ -95,7 +93,6 @@ const SCHOOLS = ["lcc", "rsu"];
 const CRITS = [1, 2, 3, 4];
 const tint = (color, percent) => `color-mix(in srgb, ${color} ${percent}%, transparent)`;
 
-// [what, surface layers, text or ring colour, the AA minimum]
 const PAIRS = [
   ...Object.entries(SURFACES).flatMap(([surface, layers]) =>
     TEXT.map((ink) => [`${ink} on ${surface}`, layers, v(ink), 4.5]),
@@ -171,8 +168,6 @@ const backgroundIs = (t, theme) =>
     return side === ${JSON.stringify(theme)};
   })()`);
 
-// A screencast started before a reload can miss the new page's first paints, and a page that then holds still sends no more frames.
-// The new page stops at its first script, before it can paint, and the screencast starts there, so every frame it sends is the new page's, from the first.
 const firstFrames = async (t, label, theme) => {
   const frames = [];
   const off = t.on("Page.screencastFrame", ({ data, sessionId }) => {
@@ -220,7 +215,6 @@ const firstFrames = async (t, label, theme) => {
   t.assert(await backgroundIs(t, theme), `${label}: the page background is ${theme}`);
 };
 
-// The build lowers light-dark() to variables that only a stylesheet's color-scheme sets, so the shipped CSS gets its own pass at every OS and choice.
 const COMBOS = [
   ["light", null, "light"],
   ["dark", null, "dark"],
@@ -229,7 +223,6 @@ const COMBOS = [
 ];
 
 const builtApp = async (t) => {
-  // app:// serves the build, so this is the shipped app on its own origin.
   await t.cdp("Page.navigate", { url: APP_URL });
   await t.waitFor(
     `location.href.startsWith(${JSON.stringify(APP_URL)}) && document.readyState === "complete"`,

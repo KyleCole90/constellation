@@ -5,7 +5,6 @@ import { AnalyticsEventSchema, type AnalyticsEvent } from "../src/shared/analyti
 
 import { telemetryMain } from "./fixtures/telemetry-main";
 
-/** What a teacher's Mac holds and PostHog must never see. */
 const PLANTED = {
   name: "Maria Garcia",
   id: "student-48213",
@@ -17,7 +16,6 @@ const PLANTED = {
 };
 const STRINGS = Object.values(PLANTED);
 
-/** One of each event the app sends. */
 const VALID: readonly AnalyticsEvent[] = [
   { event: "app_opened" },
   { event: "onboarding_step_completed", step: "welcome", ai_source: "none" },
@@ -29,7 +27,6 @@ const VALID: readonly AnalyticsEvent[] = [
   { event: "grade_posted", count: 3 },
 ];
 
-/** Each valid event with student data riding along, and each slot given student data in place of its value. */
 const planted = (): unknown[] =>
   VALID.flatMap((event) => [
     ...STRINGS.map((value) => ({ ...event, student: value })),
@@ -88,7 +85,6 @@ describe("usage events never carry student data", () => {
 
   it("main drops an event its own code builds with more than the schema allows", async () => {
     const main = telemetryMain();
-    // Not an object literal, so the compiler lets the extra property through. The schema doesn't.
     const spread = { event: "app_opened" as const, student: PLANTED.name };
     main.telemetry.track(spread);
     await main.telemetry.flush();

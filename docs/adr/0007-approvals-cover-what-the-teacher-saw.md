@@ -1,0 +1,13 @@
+# An approval covers exactly the change the teacher saw
+
+A send needs a click by a person on a button that shows the change. The click carries a fingerprint of what the screen showed, so anything outside the fingerprint could change after the click without making it stale. Only a person, through the setup screens, confirms what an agent may not draft.
+
+- `Fingerprint` in `src/shared/domain/approval.ts` checks the integrity of what the teacher reviewed. It is not a security boundary, so `hash53` (cyrb53, not cryptographic) is enough. It must stay synchronous because renders compute it, which rules out WebCrypto's async digest.
+- `ApprovalWitness.fromClick` in `src/shared/domain/approval.ts` accepts the trusted `click` that Enter or Space on the focused `ApproveButton` produces. That is still a person pressing the button, and the button must work without a mouse. Never filter out keyboard clicks, for example by `event.detail`.
+- `previewOf` in `src/shared/domain/preview.ts` builds the preview only from what `fingerprintOf` hashes: the content, `basis.remote` and `landed`. The click certifies the preview.
+- `riskOf` in `src/shared/domain/change.ts` reads a copy's risk (students and items) only from `basis.remote`, which the fingerprint covers. A later read that changes the counts also makes the approval stale, so an old click can't approve a riskier copy.
+- In `CourseCopyContent` in `src/shared/domain/content.ts`, `plan` is what the person confirmed and what the preview reads. `shift` is what the LMS is told, and it may carry day overrides. Never build the preview from `shift` or the LMS request from `plan`.
+- `AgentContent` and `isAgentContent` in `src/shared/domain/change.ts` leave out course-copy and item-set, so an agent can never draft a copy's dates or a setting's value. `src/shared/agent/rules/index.ts` uses `isAgentContent` to refuse them.
+- The events in `src/shared/domain/change.ts` split by who may send them. Screens dispatch only `UserEvent`, through `dispatchUser` in `workspace.ts`. The store sends `HostEvent`, because an agent's edit must say it is the agent's and a resolved conflict carries an LMS read a screen can't vouch for. Only the writeback runner sends `RunEvent`.
+- `ChangeRecord.activity` in `src/shared/domain/change.ts` grows only inside `transition`, so the log can't disagree with the state. Stores never push entries themselves.
+- `countOf` in `src/shared/domain/splice.ts` counts overlapping matches by moving one character at a time. Text like "aaa" then can't pass as unique splice context. Moving by the match length undercounts and lets a splice land in the wrong place.

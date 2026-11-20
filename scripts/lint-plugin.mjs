@@ -1,6 +1,7 @@
-/** Project lint rules, loaded by `lint.jsPlugins` in vite.config.ts. */
+import { dirname, normalize, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-import { dirname, normalize, resolve } from "node:path";
+import { BASELINE, counts, readBaseline } from "./comments.mjs";
 
 const MESSAGE =
   "Don't spawn `vp {{command}}` as a child process: `vp` doesn't forward SIGTERM, so vite outlives it and keeps the port (#138, #142). " +
@@ -52,7 +53,6 @@ const isJsonParse = (node) =>
 
 const isCast = (node) => node.type === "TSAsExpression" || node.type === "TSTypeAssertion";
 
-/** `JSON.parse` returns `any`, so a cast on it claims a shape nothing checked. The no-unsafe-* rules miss this one. */
 const noJsonParseCast = {
   meta: {
     type: "problem",
@@ -87,7 +87,6 @@ const insideBrand = (node) => {
   return false;
 };
 
-/** An unannotated schema's type is whatever valibot infers, so the domain type can drift from it and still compile (#170). */
 const annotatedSchemas = {
   meta: {
     type: "problem",
@@ -143,7 +142,6 @@ const annotatedSchemas = {
   },
 };
 
-/** `never` fits every parameter, so a test that passes `x as never` keeps compiling after the signature changes (#177). */
 const noAsNever = {
   meta: {
     type: "problem",
@@ -166,7 +164,6 @@ const noAsNever = {
 const PROCESS_FOLDER = /(?:^|\/)src\/(main|preload|renderer|shared)\//i;
 const processOf = (path) => PROCESS_FOLDER.exec(path)?.[1]?.toLowerCase() ?? null;
 
-/** Each process folder imports only itself and `src/shared`, so main-only or renderer-only code can't leak across. */
 const processBoundary = {
   meta: {
     type: "problem",
@@ -205,7 +202,6 @@ const unparen = (node) =>
 
 const TEST_FILE = /(?:^|\/)tests\/|\.test\.ts$/;
 
-/** A second cast claims a type the compiler said the value can't have. Only a test forging what the type exists to stop may. */
 const noDoubleAssertion = {
   meta: {
     type: "problem",
@@ -238,7 +234,6 @@ const noDoubleAssertion = {
   },
 };
 
-/** Every `Brand<…>` alias. `tests/assertion-rules.test.ts` fails when src declares one this list misses. */
 const BRANDS = new Set([
   "ChangeId",
   "FindingKey",
@@ -253,7 +248,6 @@ const BRANDS = new Set([
   "ThreadId",
 ]);
 
-/** The brand a cast claims, through arrays, unions and `readonly`. */
 const brandIn = (type) => {
   switch (type.type) {
     case "TSTypeReference":
@@ -283,16 +277,13 @@ const isToIsoString = (node) =>
 const isStringLiteral = (node) =>
   (node.type === "Literal" && typeof node.value === "string") ||
   (node.type === "TemplateLiteral" && node.expressions.length === 0);
-/** `isoTime()` is the one way to make an IsoTime, so these two casts always have a better form. */
 const castsToIsoTime = (node) =>
   brandIn(node.typeAnnotation) === "IsoTime" &&
   (isToIsoString(unparen(node.expression)) || isStringLiteral(unparen(node.expression)));
 
-/** The files that mint brands. Everywhere else asks them. */
 const MINT_FILE =
   /(?:^|\/)(?:src\/shared\/domain\/(?:ids|term|approval|scan)|src\/shared\/providers\/canvas-refs|tests\/fixtures\/ids)\.ts$/;
 
-/** A brand stands for a check. A cast skips it, so only the files that mint a brand may cast to one. */
 const noBrandCast = {
   meta: {
     type: "problem",
@@ -330,6 +321,44 @@ const useIsoTime = {
   },
 };
 
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const allowedComments = readBaseline();
+
+const noComments = {
+  meta: {
+    type: "problem",
+    messages: {
+      comment:
+        "{{path}} has {{actual}} comments and " +
+        BASELINE +
+        " allows {{allowed}}. Delete this one: make the code say it, " +
+        "file an issue for a hack, or record a decision in docs/adr/ (see .claude/skills/delete-comment/SKILL.md). Never raise the baseline.",
+      stale:
+        "{{path}} has {{actual}} comments but " +
+        BASELINE +
+        " allows {{allowed}}. Lower its entry to {{actual}} " +
+        "(`node scripts/comments.mjs --write-baseline`), so the baseline only shrinks.",
+    },
+  },
+  create(context) {
+    const path = relative(ROOT, context.filename);
+    const allowed = allowedComments[path] ?? 0;
+    return {
+      "Program:exit"(program) {
+        const comments = context.sourceCode
+          .getAllComments()
+          .filter((comment) => counts(comment, context.sourceCode.text));
+        const data = { path, actual: comments.length, allowed };
+        if (comments.length > allowed)
+          for (const comment of comments)
+            context.report({ loc: comment.loc, messageId: "comment", data });
+        else if (comments.length < allowed)
+          context.report({ node: program, messageId: "stale", data });
+      },
+    };
+  },
+};
+
 export default {
   meta: { name: "constellation" },
   rules: {
@@ -341,5 +370,6 @@ export default {
     "no-double-assertion": noDoubleAssertion,
     "no-brand-cast": noBrandCast,
     "use-iso-time": useIsoTime,
+    "no-comments": noComments,
   },
 };

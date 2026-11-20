@@ -1,4 +1,3 @@
-// Runs in the page after every screenshot, at the shot's width and at 1180. Reads computed styles and real hit-testing, not class names.
 export const CATEGORIES = [
   "font",
   "button",
@@ -350,7 +349,6 @@ export const AUDIT_PAGE = String.raw`(() => {
   return { found, census };
 })()`;
 
-// One known defect per category, plus a clean block, so a passing audit can't be a broken audit.
 const SEEDS = String.raw`
 <style>body{margin:0;background:#111;color:#eee;font:13px/20px sans-serif}[data-slot=button]{display:inline-block;box-sizing:border-box;border:0}.panel{position:absolute;left:0;width:600px;background:#222}</style>
 <div class="panel" style="top:0;height:60px;padding:16px">
@@ -382,7 +380,6 @@ const SEEDS = String.raw`
 
 const SEED_STYLE = String.raw`<style>body{margin:0;background:#111;color:#eee;font:13px/20px sans-serif}[data-slot=button]{display:inline-block;box-sizing:border-box;border:0}.panel{position:absolute;left:0;width:600px;background:#222}</style>`;
 
-// The escapes: an exemption can't be claimed by a button, spill can't hide in a scroller, and a dialog's own contents still count.
 const ESCAPE_SEEDS = String.raw`${SEED_STYLE}
 <div class="panel" style="top:0;height:30px;padding:0 16px"><div data-banner="failed">seed one</div><p role="alert">Ran out of tries on it</p></div>
 <div class="panel" style="top:100px;height:40px;padding:4px 16px"><button data-slot="button" data-text-link style="height:22px;padding:0 8px;font:13px sans-serif">seed-exempt-button</button></div>
@@ -433,8 +430,6 @@ export const SEED_PAGES = [
   [DIALOG_SEED, [["occluded", "seed-covered-in-a-dialog"]]],
 ];
 
-// Plan section 6 lists these, and the frozen set has no 1180 version of them. The rest of section 6 already has its own 1180 shot.
-// Keyed by verify module and named without the shot number, because new shots renumber the ones after them.
 export const TWIN_IMAGES = {
   grading: ["queue-expanded", "send-preview", "banner-reconnect"],
   courses: [

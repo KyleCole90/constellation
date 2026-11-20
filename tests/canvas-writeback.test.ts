@@ -84,7 +84,6 @@ runProviderContract("Canvas over HTTP", async () => {
   };
 });
 
-/** The runner over `provider`, with one approved change of `content` read from Canvas first, as the app drafts one. */
 const runnerWith = async (provider: LmsProvider, content: ChangeContent) => {
   const clock = new VirtualClock();
   const ledger = new DurableLedger();
@@ -134,7 +133,6 @@ describe("a Canvas grade whose response was lost", () => {
 });
 
 describe("main's send gate for a real school", () => {
-  /** When the teacher last pressed something in the window. Now, unless a test moves it. */
   const setUp = async () => {
     const http = new CanvasHttp();
     const press = { at: Date.now() };
@@ -144,7 +142,6 @@ describe("main's send gate for a real school", () => {
       school: SCHOOL,
       lease: createMemoryVault().leaseFor(SCHOOL.id),
     });
-    /** What a renderer that ignores approval could send: plain data straight down the channel. */
     const forge = (content: ChangeContent, fields: readonly string[], changeId = "ch-forged") =>
       lms.call("lms.apply", { school: SCHOOL, permit: { changeId, content, fields } });
     const pressNow = () => (press.at = Date.now());

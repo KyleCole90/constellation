@@ -42,10 +42,6 @@ export const WriteRecordSchema: v.GenericSchema<WriteRecord> = v.object({
   fields: FieldKeysSchema,
 });
 
-/**
- * Everything the failure lab can see, as main sends it to the renderer whenever it moves. The Settings screen reads it
- * synchronously, so the renderer keeps the latest one.
- */
 export interface LabSnapshot {
   noise: NoiseConfig;
   defaultNoise: NoiseConfig;
@@ -70,10 +66,6 @@ export const labSnapshot = (lab: FaultLab): LabSnapshot => ({
   writes: lab.writes(),
 });
 
-/**
- * One FaultLab call, plus the controls only a fake LMS in another process needs: its reset, its clock, and a reload,
- * which starts it over from storage the way a page reload does in the web demo, so faults armed but not fired are gone.
- */
 export const LabCommandSchema = v.variant("do", [
   v.object({
     do: v.literal("setNoise"),
@@ -120,7 +112,6 @@ export const LabCommandSchema = v.variant("do", [
   v.object({ do: v.literal("setDemoScript"), enabled: v.boolean() }),
   v.object({ do: v.literal("reset") }),
   v.object({ do: v.literal("reload") }),
-  /** The demo clock's lead over real time, since the app's clock decides what time the fake LMS thinks it is. */
   v.object({ do: v.literal("clock"), offsetMs: count }),
 ]);
 export type LabCommand = v.InferOutput<typeof LabCommandSchema>;

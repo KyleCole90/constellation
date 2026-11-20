@@ -38,7 +38,6 @@ import { jsonObject, rawSave } from "./fixtures/saved";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 import { lmsRef, schoolId, threadId } from "./fixtures/ids";
 
-/** What the parser kept, and the parts it set aside. */
 const parsed = (raw: unknown, scope: AgentScope) => {
   const dropped: AgentViolation[] = [];
   const result = parseAgentEffect(raw, scope, (violation) => void dropped.push(violation));

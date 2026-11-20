@@ -10,7 +10,6 @@ const canonicalJson = (value: unknown): string => {
   return JSON.stringify(value) ?? "null";
 };
 
-/** cyrb53: sync, and well distributed for integrity checks. Not cryptographic, as the note on Fingerprint says. */
 export const hash53 = (text: string): string => {
   let h1 = 0xdeadbeef;
   let h2 = 0x41c6ce57;
@@ -24,7 +23,6 @@ export const hash53 = (text: string): string => {
   return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, "0");
 };
 
-/** Integrity of what was reviewed, not a security boundary. Sync, so a render can carry it. */
 export type Fingerprint = Brand<string, "Fingerprint">;
 export const fingerprintOf = (change: {
   content: ChangeContent;
@@ -40,7 +38,6 @@ export const fingerprintOf = (change: {
     }),
   ) as Fingerprint;
 
-/** What a person must face before a risky change is approved, as in `students:14|items:3`. Read from the basis, so the fingerprint already covers it. */
 export type RiskKey = Brand<string, "RiskKey">;
 export const riskKey = (students: number, items: number): RiskKey =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: the brand is this format
@@ -59,13 +56,6 @@ export interface ApprovalTarget {
   risk?: RiskKey;
 }
 
-/**
- * Proof that a person clicked a button showing exactly these changes. The # field makes it impossible to
- * build by cast or JSON copy, and `isTrusted` cannot be set by script, so a tool driving the DOM mints nothing.
- * Enter or Space on the focused button is a trusted click too, on purpose: it is still a person pressing this button, and the button has to work without a mouse.
- * Carrying fingerprints means an edit that wins a race makes the click stale rather than approving newer text.
- * A risky target rides alone: the click that acknowledges a risk must be about that one change.
- */
 export class ApprovalWitness {
   readonly #targets: ReadonlyMap<ChangeId, Fingerprint>;
   readonly #risks: ReadonlyMap<ChangeId, RiskKey>;
@@ -84,11 +74,9 @@ export class ApprovalWitness {
   acknowledges(id: ChangeId, risk: RiskKey): boolean {
     return this.#risks.get(id) === risk;
   }
-  /** Lets `transition` reject casts, JSON copies, and prototype spoofs. Holds no minting power. */
   static isGenuine(value: unknown): value is ApprovalWitness {
     return typeof value === "object" && value !== null && #targets in value;
   }
-  /** Only ApproveButton may import this. A structure test fails the build otherwise. */
   static fromClick(
     click: { isTrusted: boolean; type: string },
     targets: readonly ApprovalTarget[],

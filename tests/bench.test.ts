@@ -58,7 +58,6 @@ describe("the headline", () => {
       ]),
       META,
     );
-    // (1000 + 500 + 200 + 1000) and (3000 + 3000), over two submissions.
     expect(file.headline.weightedOpusTokensPerSubmission).toBe(4350);
     expect(file.weights).toEqual({ input: 1, cacheWrite: 1.25, cacheRead: 0.1, output: 5 });
     expect(file.raw.pinnedModel).toEqual({
@@ -225,7 +224,6 @@ describe("the results file", () => {
 const NO_CLAUDE = { CONSTELLATION_CLAUDE: "/nowhere/claude" };
 const CLAUDE_MISSING = "a signed-in, current Claude Code, for the claude-code source";
 
-/** The fake `claude` from the Claude Code tests, signed in, drafting one say from a 2,000-token request. */
 const fakeClaude = () => {
   const dir = mkdtempSync(join(tmpdir(), "bench-claude-"));
   const scenario = join(dir, "scenario.json");

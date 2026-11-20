@@ -3,9 +3,7 @@ import type { Result } from "../shared/domain/ids";
 import { bufferSource, zipEntries, zipEntryText, type ZipSource } from "./zip";
 
 const MB = 1024 * 1024;
-/** `word/document.xml` is markup around the words, so a long paper's is a few MB. Past this it's not a paper. */
 const MAX_XML_BYTES = 20 * MB;
-/** About 70,000 words, far past any paper, and well inside what one request to Claude can hold. */
 const MAX_CHARS = 400_000;
 
 const UNREADABLE = "Couldn't read this file.";
@@ -16,10 +14,8 @@ const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 
 const cp1252 = new TextDecoder("windows-1252");
 
-/** A paragraph that starts with a typed bullet, as TextEdit writes a list item: "\t•\tFewer car crashes". */
 const BULLET = /^[\t ]*[•◦▪‣·*-][\t ]+/;
 
-/** Paragraphs as Markdown: headings get `#`, list items `- `, and empty paragraphs go. */
 const markdownOf = (
   paragraphs: readonly { text: string; heading?: number; listed?: boolean }[],
 ): string =>
@@ -48,7 +44,6 @@ const decodeXml = (text: string): string =>
     return code <= 0x10ffff ? String.fromCodePoint(code) : whole;
   });
 
-/** "heading 2", or the style id "Heading2", is level 2; a title is 1 and a subtitle 2. */
 const levelNamed = (name: string): number | undefined => {
   const heading = /^heading\s*([1-6])$/i.exec(name)?.[1];
   if (heading) return Number(heading);
@@ -57,11 +52,6 @@ const levelNamed = (name: string): number | undefined => {
   return undefined;
 };
 
-/** Word's outline levels count from 0; 9 is body text. */
-/**
- * The inside of each `<tag ...>…</tag>`, found in one pass. A regex that looks ahead for the closing tag goes
- * quadratic on a file full of tags that never close.
- */
 const elements = (xml: string, tag: string): { open: string; body: string }[] =>
   xml
     .split(`</${tag}>`)
@@ -88,7 +78,6 @@ const headingStyles = (styles: string): Map<string, number> => {
   return levels;
 };
 
-/** Only the words a reader sees: `w:t` runs, not deletions (`w:delText`) or field codes (`w:instrText`). */
 const runsOf = (paragraph: string): string => {
   let text = "";
   for (const [token, words] of paragraph.matchAll(
@@ -100,7 +89,6 @@ const runsOf = (paragraph: string): string => {
   return text;
 };
 
-/** Reads two entries as text and nothing else, so macros, embedded objects and outside links never run or load. */
 const docxText = async (source: ZipSource): Promise<string | null> => {
   const entries = await zipEntries(source);
   const document = entries.find((entry) => entry.name === "word/document.xml");
@@ -124,7 +112,6 @@ const docxText = async (source: ZipSource): Promise<string | null> => {
   return markdownOf(paragraphs);
 };
 
-/** Groups whose words aren't the document's: tables of fonts and colors, metadata, pictures, headers and footers. */
 const RTF_SKIPPED = new Set([
   "fonttbl",
   "colortbl",
@@ -180,7 +167,6 @@ const rtfText = (rtf: string): string | null => {
     paragraphs.push(current);
     current = "";
   };
-  /** Steps past one control word, symbol or character, as `\ucN` counts what to skip after a `\u`. */
   const skipOne = () => {
     if (rtf[at] !== "\\") {
       at += 1;
@@ -245,7 +231,6 @@ const rtfText = (rtf: string): string | null => {
   return markdownOf(paragraphs.map((text) => ({ text })));
 };
 
-/** UTF-8 first, or UTF-16 by its byte order mark; text that is neither is read as Windows' Western encoding. */
 const plainText = (data: Uint8Array): string | null => {
   if (data[0] === 0xff && data[1] === 0xfe) return new TextDecoder("utf-16le").decode(data);
   if (data[0] === 0xfe && data[1] === 0xff) return new TextDecoder("utf-16be").decode(data);
@@ -273,10 +258,6 @@ const textOf = async (mediaType: string, data: Uint8Array): Promise<string | nul
   }
 };
 
-/**
- * The words in a Word, RTF, text or Markdown file, as Markdown: paragraphs apart by a blank line, headings with `#`,
- * list items with `- `. The error is a sentence for the teacher.
- */
 export const documentText = async (
   mediaType: string,
   data: Uint8Array,

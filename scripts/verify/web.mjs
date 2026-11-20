@@ -1,4 +1,3 @@
-// `npm run verify:web`: the demo build loads, and onboarding finishes.
 import { onboard } from "./onboard.mjs";
 
 export const run = async (t) => {

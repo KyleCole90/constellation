@@ -12,10 +12,6 @@ import config from "../vite.config";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const RULES = ["annotated-schemas", "no-as-never", "no-json-parse-cast"] as const;
 
-/**
- * Each fixture sits at its real path in a scratch copy of the project, linted with vite.config.ts's own lint section,
- * so a test proves the rule and the files it is scoped to. A line the rule must report ends in `// flagged: <rule>`.
- */
 const FIXTURES: Readonly<Record<string, string>> = {
   "src/shared/providers/schemas.ts": `
 import * as v from "valibot";

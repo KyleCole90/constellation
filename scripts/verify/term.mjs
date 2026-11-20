@@ -48,7 +48,6 @@ const setField = (t, selector, value) =>
     el.dispatchEvent(new Event("change", { bubbles: true }));
   })()`);
 
-/** The desktop app's own path: main's picker, answered through verify's stand-in for the native dialog. */
 const pickPackage = async (t, file) => {
   await t.pickPackage(file && `${FIXTURES}${file}`);
   await t.click(id("cartridge-pick"));
@@ -143,7 +142,6 @@ const assertReviewSpacing = async (t) => {
   );
 };
 
-// The review note named this screen, so it gets measured here as well as wherever the button actually renders.
 const assertReviewScreenEdge = async (t) => {
   const { width, height } = t.size;
   for (const [w, h] of [
@@ -200,7 +198,6 @@ const pickDaysIfBlank = async (t, side, days) => {
   }
 };
 
-// In a window too short for the card, Approve stays on screen while the card scrolls under it.
 const assertFooterPins = async (t, code) => {
   const { width, height } = t.size;
   await t.viewport(1180, 420);
@@ -445,7 +442,6 @@ const publish = async (t, code) => {
     !(await t.has(`${id("published-card")} ${id("save-template")}`)),
     `${code}: the published card offers no end-of-term template`,
   );
-  // The card shows before the send's sync lands. The sync adds the course row above the other offers, so a click aimed before it lands misses.
   await t.waitFor(
     `![...document.querySelectorAll('${id("setup-offer")}[data-surface="sidebar"]')].some((el) => el.innerText.includes(${JSON.stringify(code)}))`,
     `${code}: once the sync lands, the published course leaves the setup offers`,
@@ -460,7 +456,6 @@ const stored = (t, expression) =>
 
 const SIDEBAR_LIST = '[data-testid="sidebar-list"]';
 
-/** #140: a course just set up, unpublished with no students, is a course: it lists, shows an Overview, and lists what Canvas posted. */
 const justSetUpCourse = async (t, code, course) => {
   const ref = JSON.stringify(course);
   const page = `/courses/${encodeURIComponent(course)}`;
@@ -518,7 +513,6 @@ const justSetUpCourse = async (t, code, course) => {
   await listed("after a reload");
 };
 
-/** #134: a link to a sent setup fix stays in setup, and the course drafts its welcome announcement before it is published. */
 const announceBeforePublish = async (t, code, course) => {
   const ref = JSON.stringify(course);
   const setupPath = await t.eval("location.pathname");
@@ -741,7 +735,6 @@ const syncShells = async (t, test, label) => {
   );
 };
 
-// Many schools hide term dates from teachers, so Canvas reports them as null. Setup still offers every course and asks for the dates.
 const hiddenTermDates = async (t) => {
   const code = "ENG 101";
   await t.eval("window.__faultLab.hideTermDates(true)");
@@ -797,7 +790,6 @@ const hiddenTermDates = async (t) => {
       `${code}: the package opens Dates`,
     );
   };
-  // A Default Term shell: no term dates, and the course's own dates not set yet (#58).
   await changeToPackage();
   const opened = await t.eval(
     `["old-term-start", "old-term-end", "new-term-start", "new-term-end"].map((name) => document.querySelector('[data-testid="' + name + '"]').value)`,
@@ -827,7 +819,6 @@ const hiddenTermDates = async (t) => {
     `${code}: an old end the teacher typed stays when the new dates change`,
   );
 
-  // The teacher sets the course's own dates in Canvas while the setup is open.
   await changeToPackage();
   const thread = await t.eval("location.pathname");
   await t.eval("window.__faultLab.hideTermDates(false)");
@@ -881,7 +872,6 @@ const dismissAndUndo = async (t) => {
   const code = "COMM 110";
   const offer = await offerSelector(t, code, "due");
   const before = await sidebarSetupCount(t);
-  // At 1280x720 the offers sit below the fold, and its 1180x800 twin can't scroll as far, so that shot keeps the list at the top.
   for (const [width, height, scroll] of [
     [
       1440,
@@ -925,7 +915,6 @@ const dismissAndUndo = async (t) => {
   await t.viewport(1440, 900);
 };
 
-/** Claude's summary links each drafted fix. One opens that fix's row in this setup thread, never another thread (#136). */
 const fixLinkStaysInSetup = async (t, code) => {
   const links = `[...document.querySelectorAll('[data-testid="chat"] [data-testid="sources"] [data-source="change"]')]`;
   await t.waitFor(`${links}.length > 0`, `${code}: Claude's summary links the drafted fixes`, WAIT);
@@ -1117,7 +1106,6 @@ const previousCourseFlow = async (t) => {
     `${code}: with the reviewed dates back, the approved copy can send`,
   );
   t.assert(!(await t.has(id("copy-stale"))), `${code}: the out-of-date mark clears`);
-  // Slow enough that the sync after the send takes seconds, as it does against a real school.
   await t.eval(`window.__faultLab.setNoise({ latencyMs: [400, 400] })`);
   await t.click(id("copy-send"));
   await t.waitFor(
@@ -1519,7 +1507,6 @@ const cartridgeFromConnected = async (t) => {
     `${code}: an old term that doesn't match the package is called out`,
   );
   await shot(t, "dates-package-term-mismatch");
-  // A Canvas export carries no term name, so the teacher leaves it blank.
   await fillOldTerm(t, "", "2026-08-24", "2026-12-11");
   await pickDaysIfBlank(t, "old", [2, 4]);
   await pickDaysIfBlank(t, "new", [2, 4]);
@@ -1817,7 +1804,6 @@ const unfoldSidebarOffers = (t) =>
     `document.querySelectorAll('[data-testid="setup-offers-toggle"][aria-expanded="false"]').forEach((row) => row.click())`,
   );
 
-// Nothing here presses Sync now: the network coming back, a relaunch, and coming back to the window each read what Canvas added meanwhile.
 const newCourseWithoutSync = async (t) => {
   await t.click("What's due");
   await t.waitFor(`location.pathname === "/due"`, "What's due opens");
@@ -1866,7 +1852,6 @@ const newCourseWithoutSync = async (t) => {
     !(await t.eval(offered("PHYS 120"))),
     "a course Canvas adds while the teacher is in another window is not offered yet",
   );
-  // The launch sync just ran, and focus syncs at most every two minutes, so the page's clock moves past that.
   await t.eval(`{ const real = Date.now; Date.now = () => real() + 3 * 60_000; }`);
   await t.eval(`window.dispatchEvent(new Event("focus"))`);
   await t.waitFor(
@@ -1879,7 +1864,6 @@ const newCourseWithoutSync = async (t) => {
   await shot(t, "auto-sync-focus");
 };
 
-/** #155: a fresh install knows a course set up elsewhere from Canvas, so it lists it as a course and doesn't offer it again. */
 const setUpOnAnotherInstall = async (t) => {
   const code = "BIO 105";
   await openOffer(t, code);

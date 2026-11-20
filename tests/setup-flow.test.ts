@@ -32,7 +32,6 @@ const connected = async (options: Parameters<typeof makeStoreRig>[0] = {}): Prom
   return rig;
 };
 
-/** A real reload: the old store's timers live on the old clock, so its watcher never wakes again. */
 const reload = async (rig: StoreRig, options: { agent?: Agent } = {}): Promise<StoreRig> => {
   const next = await makeStoreRig({
     storage: rig.storage,
@@ -87,7 +86,6 @@ const send = (rig: StoreRig, ids: readonly ChangeId[]) =>
   rig.clock.run(rig.state().sendChanges(ids));
 const sentCount = (rig: StoreRig) =>
   Object.values(rig.state().changes).filter((change) => summarize(change).sentAt !== null).length;
-/** The one invariant of the whole flow: the LMS holds a write only for a change a person approved and sent. */
 const expectWritesMatchSends = (rig: StoreRig) =>
   expect(rig.server.writes()).toHaveLength(sentCount(rig));
 
@@ -137,7 +135,6 @@ const pickSource = async (
   };
 };
 
-/** Start, choose, confirm: up to a copy draft nobody has approved. */
 const toDraftCopy = async (
   rig: StoreRig,
   school: SchoolId,
@@ -169,7 +166,6 @@ const toReview = async (rig: StoreRig, school: SchoolId, code: string, pick: Pic
   return started;
 };
 
-/** Works every row the way a person would, one round at a time, until the course has nothing open. */
 const workThrough = async (rig: StoreRig, course: Course) => {
   for (let round = 0; round < 12; round++) {
     const open = rows(rig, course).filter(
@@ -670,7 +666,6 @@ describe("a fix", () => {
 
 describe("the scan's own summary (#65)", () => {
   it("survives a line that points at the course being set up and a finding whose quote isn't there", async () => {
-    // Claude's real answer to a cartridge scan, in a setup thread whose cache has no courses yet.
     const agent: Agent = {
       async *run(input) {
         const shell = input.scope.scan?.content.shell;

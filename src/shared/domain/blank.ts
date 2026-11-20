@@ -47,7 +47,6 @@ export const blankReply = (conversation: Conversation): Proposal => ({
   content: { kind: "reply", target: conversation.ref, body: "" },
 });
 
-/** The subject names the assignment, so the conversation reads on its own in the student's inbox. */
 export const blankMessage = (
   submission: Submission,
   assignment: Assignment,

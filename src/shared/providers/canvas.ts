@@ -2,7 +2,6 @@ import type { Capabilities, LmsProvider, ProviderDescriptor } from "./provider";
 
 const MIN_TOKEN_LENGTH = 20;
 
-/** A draft's attachment is a name and a size, not a file, so Canvas takes no attachments until there is one to upload. */
 const CAPABILITIES: Capabilities = {
   messaging: true,
   rubricWrite: true,
@@ -30,17 +29,14 @@ const SCOPE_WORDS: Readonly<Record<string, string>> = {
   "url:DELETE|/api/v1/courses/:course_id/discussion_topics/:topic_id": "Delete an announcement",
   "url:PUT|/api/v1/files/:id": "Show files to students",
 };
-/** A personal access token carries all its owner's rights. These are the ones the app uses so far. */
 export const CANVAS_SCOPES = Object.keys(SCOPE_WORDS);
 
-/** What the app knows about real Canvas without asking it. Main runs the provider; the renderer shows this face. */
 export const CANVAS_FACE = {
   vendorLabel: "Canvas",
   capabilities: CAPABILITIES,
   describeScope: (scope: string) => SCOPE_WORDS[scope] ?? scope,
 } satisfies Pick<LmsProvider, "vendorLabel" | "capabilities" | "describeScope">;
 
-/** Paste-token enrolment: a school's address and a personal access token. */
 export const CANVAS: Omit<ProviderDescriptor, "create"> = {
   kind: "canvas",
   label: "Canvas",

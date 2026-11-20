@@ -118,7 +118,6 @@ export interface Route {
   school: SchoolId;
   kind: "read" | "write";
   label: string;
-  /** The connect check is the one call allowed to present a token the server has not seen. */
   verify?: boolean;
 }
 
@@ -135,7 +134,6 @@ interface TokenBook {
   revoked: readonly string[];
 }
 
-/** A course for the new term. Kept apart from `courses` until published, because `courses()` lists only what students can reach. */
 export interface ShellRow {
   school: SchoolId;
   canvasId: number;
@@ -165,13 +163,11 @@ export interface SourceRow {
 interface TermState {
   shells: ShellRow[];
   sources: SourceRow[];
-  /** Keyed by course ref, or `pkg:<name>` for a sample package. */
   content: Record<string, RawBody>;
   migrations: MigrationRecord[];
   seq: number;
 }
 
-/** What the provider turns into CourseContent. Links are raw because classifying them is the provider's job. */
 export interface RawCourseContent {
   shell: CourseShell;
   host: string;
@@ -198,7 +194,6 @@ export interface LmsState {
   script: { enabled: boolean; fired: DemoFault[] };
   writeLog: WriteRecord[];
   term: TermState;
-  /** Absent until someone changes it in Settings. */
   noise?: NoiseConfig;
 }
 
@@ -210,7 +205,6 @@ export interface ServerOptions {
   noise?: NoiseConfig;
   demoScript?: boolean;
   quota?: { capacity: number; refillPerSec: number };
-  /** How long a copy job runs from start to completion. */
   migrationMs?: number;
 }
 
@@ -227,7 +221,6 @@ const clip = (text: string): string => {
   return line.length > 40 ? `${line.slice(0, 39)}…` : line;
 };
 
-/** Many fixes land on one page, so a write log row names what each one did. */
 const whatChanged = (content: TextFixContent | SetContent): string => {
   if (content.kind === "text-fix")
     return content.splice.before === ""
@@ -367,7 +360,6 @@ const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): 
         workflow: WORKFLOW[status] ?? "unsubmitted",
         attempt: !hasWork ? 0 : prior ? 2 : 1,
         lateDays,
-        // Early work on an assignment not yet due can't carry a date past today, or it reads as a resubmission after any grade sent now.
         submittedAt: hasWork
           ? isoTime(Math.min(due + offset, new Date(SEED.now).getTime() + offset))
           : null,
@@ -587,7 +579,6 @@ const TermStateSchema: v.GenericSchema<TermState> = v.object({
   seq: count,
 });
 
-/** A store written before new-term setup or the write log existed lacks them, so it gets fresh ones and keeps the rest. */
 const LmsStateSchema: v.GenericSchema<unknown, LmsState> = v.object({
   version: v.literal(3),
   seq: count,
@@ -667,7 +658,6 @@ export class FakeCanvasServer implements FaultLab {
   #raw: string | null = null;
   readonly #listeners = new Set<() => void>();
   #version = 0;
-  /** One-shot and in memory, like the other armed faults. */
   #nextMigrationFailure: { stage: "pre_processing" | "running"; message: string } | null = null;
   #termDatesHidden = false;
   readonly #held: Partial<Record<Route["kind"], { gate: Promise<void>; release: () => void }>> = {};
@@ -742,7 +732,6 @@ export class FakeCanvasServer implements FaultLab {
     if (book.revoked.includes(hash)) return { kind: "auth_expired" };
     if (book.accepted.includes(hash)) return null;
     if (!route.verify) return { kind: "auth_expired" };
-    // A demo has no token issuer, so the first verify of any well-formed token issues it.
     this.#state.tokens[route.school] = { ...book, accepted: [...book.accepted, hash] };
     this.#push();
     return null;
@@ -824,8 +813,6 @@ export class FakeCanvasServer implements FaultLab {
     this.#changed();
   }
 
-  // ---- Copy jobs. Clock-driven on every call, so a reload or a long absence changes nothing about where a job stands. ----
-
   #advanceJobs(): void {
     const now = this.#options.now();
     const duration = this.#options.migrationMs ?? DEFAULT_MIGRATION_MS;
@@ -839,7 +826,6 @@ export class FakeCanvasServer implements FaultLab {
     if (changed) this.#push();
   }
 
-  /** Lands a completed job's content once. Items arrive copied, tools unconfigured, and assignments become real rows. */
   #land(record: MigrationRecord): MigrationRecord {
     const { term } = this.#state;
     const targetRef = refs.course({ school: record.school, course: record.course_id });
@@ -896,7 +882,6 @@ export class FakeCanvasServer implements FaultLab {
     return this.#state.term.shells.find((shell) => shell.canvasId === courseId);
   }
 
-  /** As Canvas, an unpublished new-term course takes announcements too, ahead of its students. */
   #announceable(ref: LmsRef<"course">): { school: SchoolId; code: string } | undefined {
     return (
       this.#state.courses.find((c) => c.ref === ref) ??
@@ -906,7 +891,6 @@ export class FakeCanvasServer implements FaultLab {
     );
   }
 
-  /** Any course a person can save as a template: a new-term course, or one already taught. */
   #courseRow(courseId: number): ShellRow | SourceRow | undefined {
     return (
       this.#shell(courseId) ??
@@ -938,7 +922,6 @@ export class FakeCanvasServer implements FaultLab {
       termName: row.termName,
       ...this.#dates(row),
       itemCount: body.items.length,
-      // Every copy here is one the app sent, so any that finished was the teacher's.
       setUp: this.#state.term.migrations.some(
         (record) => record.course_id === courseId && record.workflow_state === "completed",
       ),
@@ -958,9 +941,6 @@ export class FakeCanvasServer implements FaultLab {
     return body && item ? { body, item, school, courseId: Number(courseId) } : null;
   }
 
-  // ---- Reads. Clones, so nothing a caller holds can reach server state. ----
-
-  /** Only what students could reach: the grading courses plus any new-term course that has been published. */
   courses = (school: SchoolId): readonly Course[] =>
     structuredClone([
       ...this.#state.courses.filter((c) => c.school === school),
@@ -979,7 +959,6 @@ export class FakeCanvasServer implements FaultLab {
       )
       .flatMap((shell) => this.#shellOf(refs.course({ school, course: shell.canvasId })) ?? []);
   };
-  /** A new-term course joins the list once it is saved as a template. */
   copySources = (school: SchoolId): readonly SourceCourse[] =>
     [...this.#state.term.sources, ...this.#state.term.shells.filter((shell) => shell.template)]
       .filter((source) => source.school === school)
@@ -1007,7 +986,6 @@ export class FakeCanvasServer implements FaultLab {
           title: source.title,
           termName: source.termName,
           ...this.#dates(source),
-          // As real Canvas: it keeps no meeting pattern, so the days come from the due dates.
           meetingDays: meetingDaysOf(dated.map((item) => dateOfTime(item.dueAt))),
           template: source.template,
           dated,
@@ -1061,7 +1039,6 @@ export class FakeCanvasServer implements FaultLab {
     structuredClone(this.#state.assignments.filter((a) => a.course === course));
   students = (course: LmsRef<"course">): readonly Student[] =>
     structuredClone(this.#state.students.filter((s) => s.course === course));
-  /** Like Canvas, work with nothing turned in reads as missing once its due date passes. */
   submissions = (course: LmsRef<"course">): readonly Submission[] => {
     const now = this.#options.now();
     const pastDue = new Set(
@@ -1091,7 +1068,6 @@ export class FakeCanvasServer implements FaultLab {
   announcements = (course: LmsRef<"course">): readonly Announcement[] =>
     structuredClone(this.#state.announcements.filter((a) => a.course === course));
 
-  /** Null means the target is gone. */
   observe(content: ChangeContent): RemoteState | null {
     switch (content.kind) {
       case "grade": {
@@ -1173,7 +1149,6 @@ export class FakeCanvasServer implements FaultLab {
     }
   }
 
-  /** A deleted item still observes, as `deleted`, so a delete whose response was lost reads as done rather than gone. */
   #observeSet(content: SetContent): RemoteState | null {
     if (isCourseSet(content)) {
       const row = this.#courseRow(Number(refParts(content.target)[2]));
@@ -1202,16 +1177,12 @@ export class FakeCanvasServer implements FaultLab {
     return { kind: "item-set", targetVersion: "present", value };
   }
 
-  /** Fires just after the read that becomes the draft's basis, so the regrade happens "while you were grading". */
   #fireDemoConflict(submission: Submission): void {
     const target = this.findSubmission(DEMO_CONFLICT.student, DEMO_CONFLICT.assignment);
     if (submission.ref !== target || !this.#armDemo("conflict")) return;
     this.changeGradeOutOfBand(target, DEMO_CONFLICT.newGrade, DEMO_CONFLICT.by);
   }
 
-  // ---- Writes. Called from inside `call`, so an applied field is applied even if the response is then lost. ----
-
-  /** Stops at the first failing field: a failed field did not land, and neither did anything queued behind it. */
   applyFields(content: ChangeContent, fields: readonly FieldKey[]): FieldOutcomes {
     const at = isoTime(this.#options.now());
     const outcomes: Partial<Record<FieldKey, FieldOutcome>> = {};
@@ -1381,7 +1352,6 @@ export class FakeCanvasServer implements FaultLab {
     }
   }
 
-  /** The record is Canvas-shaped. A damaged package or an armed failure gives it a point to fail at. */
   #startMigration(content: CourseCopyContent, at: IsoTime): void {
     const { term } = this.#state;
     const courseId = Number(refParts(content.target)[2]);
@@ -1470,7 +1440,6 @@ export class FakeCanvasServer implements FaultLab {
     );
   }
 
-  /** A conversation names its student only by name, the way the seed writes it. */
   #conversationsWith(student: Student): readonly Conversation[] {
     return this.#state.conversations.filter(
       (c) => c.course === student.course && c.from === student.name,
@@ -1557,11 +1526,9 @@ export class FakeCanvasServer implements FaultLab {
     this.#termDatesHidden = hidden;
     this.#changed();
   };
-  /** A course's term dates as the teacher reads them: none while `hideTermDates` holds. */
   #dates({ startAt, endAt }: { startAt: IsoDate; endAt: IsoDate }) {
     return this.#termDatesHidden ? { startAt: null, endAt: null } : { startAt, endAt };
   }
-  /** A new unpublished course for next term, as when the registrar adds a section while the app is open. */
   createShell = (school: SchoolId, code: string, title: string): void => {
     this.#pull();
     const { shells, sources, content } = this.#state.term;
@@ -1634,7 +1601,6 @@ export class FakeCanvasServer implements FaultLab {
     this.#push();
     this.#changed();
   };
-  /** Verify's way to name a submission. Not on FaultLab, because over IPC it can only answer later. */
   findSubmission = (student: string, assignmentShort: string): LmsRef<"submission"> | null => {
     const assignment = this.#state.assignments.find((a) => a.shortTitle === assignmentShort);
     return (

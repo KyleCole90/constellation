@@ -19,7 +19,6 @@ import { isoDate, type TermBreak, type TermDates, type Weekday } from "./term";
 
 export type CommentEffect = "append" | "replace";
 
-/** No body shows an old value beside a new one. A passage reads as it will read, and a note names what it replaces. */
 export type PreviewBody =
   | { kind: "grade"; points: number; outOf: number }
   | { kind: "excused" }
@@ -52,7 +51,6 @@ export interface PreviewField {
   label: string;
   status: "proposed" | "sending" | "landed" | "failed" | "unknown";
   body: PreviewBody;
-  /** A plain sentence about something the instructor can't see in the value itself. */
   note: string | null;
 }
 
@@ -76,7 +74,6 @@ const DAY_NAMES: Readonly<Record<Weekday, string>> = {
   5: "Friday",
   6: "Saturday",
 };
-/** Dates in the app are plain calendar days, so they format in UTC and never slide a day in some time zone. */
 export const longDate = (date: IsoDate): string =>
   new Date(`${date}T00:00:00Z`).toLocaleDateString("en-US", {
     month: "short",
@@ -84,7 +81,6 @@ export const longDate = (date: IsoDate): string =>
     year: "numeric",
     timeZone: "UTC",
   });
-/** A finding quotes what it found, and a bare ISO date reads as a date. */
 export const quoteWords = (quote: string): string => {
   const date = isoDate(quote);
   return date ? longDate(date) : quote;
@@ -142,7 +138,6 @@ const gradeBody = (content: GradeContent, field: FieldKey): PreviewBody => {
     case "excuse":
       return { kind: "excused" };
     case "grade":
-    // A grade has none of these fields.
     case "message":
     case "conversation":
     case "post":
@@ -302,7 +297,6 @@ const statusOf = (record: ChangeRecord, field: FieldKey): PreviewField["status"]
   }
 };
 
-/** What the send will write, read from the content the approval fingerprint covers. */
 export const previewOf = (record: ChangeRecord, effect: CommentEffect): readonly PreviewField[] =>
   fieldsOf(record.content).map((field) => ({
     field,

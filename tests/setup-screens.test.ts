@@ -21,7 +21,6 @@ import { planFor, termOf } from "./fixtures/term";
 
 const holder = vi.hoisted(() => ({ store: null as unknown }));
 
-// A server render has no subscriptions, so the hook reads the rig's store directly. Each render below shows one moment of the flow.
 vi.mock("~/renderer/stores/workspace", async (actual) => {
   const module = await actual<typeof import("~/renderer/stores/workspace")>();
   const store = () => holder.store as WorkspaceStore;

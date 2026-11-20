@@ -32,7 +32,6 @@ runProviderContract("fake Canvas", async (): Promise<ContractHarness> => {
   };
 });
 
-/** The desktop app's provider: a bridge client, through the IPC map, to the fake in main. */
 runProviderContract("fake Canvas over the bridge", async (): Promise<ContractHarness> => {
   const lms = bridgedLms();
   await lms.connect(LCC);

@@ -1,5 +1,3 @@
-// The design review set: every surface at 1440x900 and 1180x800, from the same seed every run.
-// `VERIFY_SHOTS=out/ui-shots node scripts/verify.mjs --only=ui-shots`
 import { readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -21,7 +19,6 @@ const idle = (t) =>
     30_000,
   );
 
-// `pose` sets the hover or focus a shot shows. It runs again at each width, because a resize moves what the pointer is over. The default parks the pointer in the corner, so a click from the step before doesn't leave a hover in the shot.
 const blur = async (t) => {
   await t.cdp("Input.dispatchMouseEvent", { type: "mouseMoved", x: 0, y: 0 });
   await t.eval(`document.activeElement?.blur?.()`);
@@ -79,7 +76,6 @@ export const run = async (t) => {
   await addAiKey(t);
   await t.waitFor(`document.querySelector(${JSON.stringify(id("queue-list"))})`, "grading list");
   await snap(t, "04-grading-list");
-  // A Tab press first, so the focus that follows shows the keyboard ring.
   await snap(t, "15-keyboard-focus", async () => {
     await t.key("Tab");
     await t.eval(`document.querySelector('${id("queue-list")} li:nth-child(2) button')?.focus()`);

@@ -515,7 +515,6 @@ describe("a second tab", () => {
 
     expect(await first.clock.run(first.state().sendChanges([id]))).toEqual([{ id, state: "sent" }]);
     expect(stateTag(first, id)).toBe("sent");
-    // The stale tab reads the disk before it acts, so it can't send what it thought was still approved.
     expect(await second.clock.run(second.state().sendChanges([id]))).toEqual([
       { id, refused: "not-sendable" },
     ]);

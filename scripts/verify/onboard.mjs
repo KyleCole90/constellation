@@ -1,7 +1,3 @@
-// The one way a script reaches a connected app: welcome, Set up, fill the demo schools and tokens, Connect each row, choose AI, Finish.
-// `onboard` drives the CDP harness in scripts/verify.mjs, and `onboardPage` drives a Playwright page. Both take the same options.
-// ai: "none" lands on What's due, "key" saves a demo key and lands on North Star. hosts: connect only these, by address.
-
 const ROWS = "[data-host]";
 const row = (host) => `[data-host="${host}"]`;
 const RADIO = (ai) => `input[name="ai-source"][value="${ai}"]`;

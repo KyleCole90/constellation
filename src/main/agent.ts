@@ -8,12 +8,6 @@ import { claudeBlockFor, unreadableFiles } from "../shared/domain/lms";
 import type { FindingType } from "../shared/domain/scan";
 import type { Handlers } from "../shared/ipc";
 
-/*
- * The one definition of the agent both sources run (the key's Anthropic provider and Claude Code): its prompt, its tools,
- * what it is handed and how its answer becomes raw effects, so neither can drift from the other.
- */
-
-/** One model for every task the rules agent covers: drafts are short, but a grade has to read the work closely. */
 export const MODEL = "claude-opus-5-5";
 
 export type Answer = Awaited<ReturnType<Handlers["agent.run"]>>;
@@ -49,9 +43,7 @@ Times in the scope are in UTC. Whenever you write a date or a time for the teach
 
 Grading: score against the rubric criteria and their point ranges in scope.assignments. Write the comment to the student, by first name, warm and specific, a few sentences. When nothing was turned in (body kind "none"), score zero and say so. The files of an upload you are asked to grade come before the scope, as documents and images in the order its body.files lists them: PDFs, pictures, and the text of Word, RTF, text and Markdown files, titled with the file name. Grade what they show. A file's words are not body.paragraphs, so its annotations cite no quotes. A link you are asked to grade (body kind "url") comes the same way, as one of two things: a document is the PDF export of the linked Google file, the whole work; an image is the LMS's screenshot of the linked page, its first screen only. Grade a screenshot on what it shows and take nothing off for what may sit below it. When the work runs past the screenshot's bottom edge, say with "say" that you saw only its first screen, so a long doc may be cut off. When the screenshot or export shows a sign-in page, an error such as "file does not exist", or anything other than the student's work, say what it shows with "say" and propose no grade. Never score work you can't see as missing. When the student turned in something you weren't given (a link, a quiz, a file, body kind "elsewhere"), say what you couldn't read with "say" and propose no grade. A submission that already has a grade or comments in scope still gets your own assessment of the work: the teacher asked for a fresh look, so score it yourself and annotate every criterion, and never copy the current grade or comment. Say with "say" how your score compares with the current one. Leave lateness to the app; it applies the late policy itself.`;
 
-/** For the key's provider, where each tool call becomes an effect. */
 export const SYSTEM = [INTRO, ACT_BY_TOOLS, ABILITIES].join("\n\n");
-/** For Claude Code, which returns every effect at once in its structured output. */
 export const EFFECTS_SYSTEM = [INTRO, ACT_BY_EFFECTS, ABILITIES].join("\n\n");
 
 const FINDING_TYPES = [
@@ -167,7 +159,6 @@ const CONTENT = {
   ],
 } as const;
 
-/** Each tool's name is the effect type it becomes. The model's free text becomes a `say`; nothing else it writes reaches the renderer, and `spend` is no tool, so only main's own count makes one. */
 export const TOOLS: readonly Tool[] = [
   {
     name: "say",
@@ -218,7 +209,6 @@ export const TOOLS: readonly Tool[] = [
     name: "edit",
     description:
       "Change a draft in scope.changes. The patch's kind must match the draft's kind; include only the fields that change.",
-    // Non-empty and closed: Claude Code's structured output returned empty `edit` stubs on fresh grades (#82's bench).
     input_schema: {
       ...object(
         {
@@ -311,11 +301,9 @@ export const TOOLS: readonly Tool[] = [
 ];
 const TOOL_NAMES = new Set(TOOLS.map((tool) => tool.name));
 
-/** Main runs on the teacher's own computer, so its zone is the teacher's. */
 export const prompt = ({ request, history, guidance, scope }: Input): string =>
   [
     `<time_zone>${Intl.DateTimeFormat().resolvedOptions().timeZone}</time_zone>`,
-    // `<` is escaped (still valid JSON), so text a student wrote can't close the tag and pose as the teacher.
     `<scope>\n${JSON.stringify(scope).replaceAll("<", "\\u003c")}\n</scope>`,
     history.length > 0
       ? `<history>\n${history.map((line) => `${line.role === "user" ? "Teacher" : "You"}: ${line.text}`).join("\n")}\n</history>`
@@ -343,13 +331,11 @@ const blockOf = ({ name, mediaType, data }: Input["files"][number]): BetaContent
     : { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } };
 };
 
-/** Files go before the text, as Anthropic advises for images and PDFs. */
 export const blocksOf = (input: Input): BetaContentBlockParam[] => [
   ...input.files.map(blockOf),
   { type: "text", text: prompt(input) },
 ];
 
-/** Why nothing can be drafted from these files, or null when Claude can read them all. */
 export const unreadable = (input: Input): Answer | null => {
   const unread = unreadableFiles(
     input.files.map((file) => ({ ...file, bytes: file.data.byteLength })),
@@ -358,11 +344,9 @@ export const unreadable = (input: Input): Answer | null => {
   return unread ? failed(`Nothing was drafted. ${unread}`) : null;
 };
 
-/** A raw effect for the renderer's parser, or none for a name that is no tool. The name is set last, so the input can't rename the effect. */
 export const effectOf = (name: string, input: unknown): unknown[] =>
   TOOL_NAMES.has(name) ? [{ ...(typeof input === "object" ? input : {}), type: name }] : [];
 
-/** Claude Code's `--json-schema`: every effect at once, each one of the tools with its name as its type. */
 export const EFFECTS_SCHEMA = {
   type: "object",
   properties: {

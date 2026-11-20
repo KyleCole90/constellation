@@ -44,11 +44,6 @@ import {
 import { canvasTermSetup } from "./canvas-term";
 import { Id, OptionalTime, Time } from "./canvas-wire";
 
-/**
- * The school at `raw` as real Canvas: an `https:` host name with no port, path or credentials, and no IP literal,
- * since a school's Canvas always has a name. The id is the host, so a token saved under an id only ever goes to that
- * host. Null when `raw` isn't such a host.
- */
 export const canvasSchoolAt = (raw: string): School | null => {
   const parsed = parseSchoolHost(raw);
   if (!parsed.ok) return null;
@@ -59,7 +54,6 @@ export const canvasSchoolAt = (raw: string): School | null => {
   } catch {
     return null;
   }
-  // The URL parser reads `0x7f.1` as an IPv4 address, so anything it rewrites is refused along with plain IPs and ports.
   const id = schoolIdOf(host);
   if (normalized !== host || id === null || /^[\d.]+$/.test(host)) return null;
   return {
@@ -87,7 +81,6 @@ const retryAfterMs = (response: Response): number | null => {
     : null;
 };
 
-/** Canvas throttles with a 403 whose body says so, not a 429. */
 const errorOf = async (response: Response): Promise<LmsError> => {
   if (response.type === "opaqueredirect" || (response.status >= 300 && response.status < 400))
     return {
@@ -118,11 +111,8 @@ const linkTo = (header: string | null, rel: "next" | "last"): string | null =>
     .flatMap((part) => new RegExp(`<([^>]+)>\\s*;\\s*rel="${rel}"`).exec(part)?.[1] ?? [])[0] ??
   null;
 
-// ---- What Canvas sends, per its public API docs. Unknown keys are dropped; a missing required one fails the read. ----
-
 const Self = v.object({ id: Id, name: v.string() });
 const CourseRow = v.union([
-  /** A course whose dates have passed or not begun lists with only these. */
   v.object({ id: Id, access_restricted_by_date: v.literal(true) }),
   v.object({
     id: Id,
@@ -184,19 +174,16 @@ const ConversationDetail = v.object({
   subject: v.nullish(v.string(), ""),
   workflow_state: v.string(),
   context_code: v.nullish(v.string(), null),
-  /** A message sent to a course's students can carry the account as its `context_code`; the course is here. */
   audience_contexts: v.nullish(
     v.object({ courses: v.nullish(v.record(v.string(), v.unknown()), {}) }),
     null,
   ),
-  /** By the name the roster lists (`full_name`), not the display name the person picked in Canvas (`name`). */
   participants: v.array(
     v.pipe(
       v.object({ id: Id, name: v.string(), full_name: v.nullish(v.string(), null) }),
       v.transform((person) => ({ id: person.id, name: person.full_name ?? person.name })),
     ),
   ),
-  /** Newest first. */
   messages: v.array(v.object({ id: Id, author_id: Id, body: v.string(), created_at: Time })),
 });
 const AnnouncementRow = v.object({
@@ -215,7 +202,6 @@ const ENTITIES: Readonly<Record<string, string>> = {
   nbsp: " ",
 };
 
-/** Canvas stores rich text as HTML. The app shows plain paragraphs. */
 const paragraphsOf = (html: string): string[] =>
   html
     .replace(/<\s*(br|\/p|\/div|\/li|\/h\d)\b[^>]*>/gi, "\n")
@@ -225,7 +211,6 @@ const paragraphsOf = (html: string): string[] =>
       const point = name.startsWith("#x")
         ? Number.parseInt(name.slice(2), 16)
         : Number(name.slice(1));
-      // Student-written HTML can name any number, and one past Unicode must not throw out of the whole read.
       const valid = point <= 0x10ffff && (point < 0xd800 || point > 0xdfff);
       return valid ? String.fromCodePoint(point) : "\uFFFD";
     })
@@ -235,14 +220,12 @@ const paragraphsOf = (html: string): string[] =>
 
 const escapeHtml = (text: string): string =>
   text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-/** Plain text as the rich text Canvas stores: a paragraph per blank line, which `paragraphsOf` reads back. */
 const htmlOf = (text: string): string =>
   text
     .split(/\n\s*\n/)
     .map((paragraph) => `<p>${escapeHtml(paragraph.trim()).replace(/\n/g, "<br>")}</p>`)
     .join("");
 
-/** Text on one line: a newline, a control character or a direction override can't break it. A break shows as ¶. */
 const oneLine = (text: string): string =>
   text
     .replace(/\s*\n\s*/g, " ¶ ")
@@ -250,10 +233,6 @@ const oneLine = (text: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
-/**
- * The order a grade's fields go out in, one request each so each reports its own outcome. Canvas may score a submission
- * from its rubric assessment, so the grade follows the rubric and keeps the teacher's total.
- */
 const WRITE_ORDER: readonly FieldKey[] = [
   "excuse",
   "rubric",
@@ -340,11 +319,9 @@ const bodyOf = (row: v.InferOutput<typeof SubmissionRow>): SubmissionBody => {
 };
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
-/** The most the app sends Claude at once, so the most a link's export may be. */
 const MAX_EXPORT_BYTES = 20 * 1024 * 1024;
 const EXPORT_TIMEOUT_MS = 20_000;
 
-/** The body, or null once it passes `max` bytes: a stream is read only that far, whatever its header claims. */
 const bytesUpTo = async (
   response: Response,
   max: number,
@@ -370,7 +347,6 @@ const bytesUpTo = async (
   return data;
 };
 
-/** What Canvas answers a migration created with a `pre_attachment`: where, and with which fields, to post the file. */
 const PreAttachment = v.object({
   pre_attachment: v.object({
     upload_url: v.pipe(v.string(), v.url()),
@@ -383,31 +359,17 @@ const PreAttachment = v.object({
 });
 
 const PER_PAGE = 100;
-/** How many requests are out at once across the school's lists. Canvas throttles a token that asks for too much in parallel. */
 const PARALLEL_PAGES = 8;
-/**
- * Students per page of a course's submissions. Canvas reads each submission slowly, and it pages ungrouped
- * submissions by bookmark, one page after another. Grouped by student it pages by number, so small pages read in parallel.
- */
 const STUDENTS_PER_PAGE = 3;
-/** A list longer than this many rows is a Canvas fault (a looping or endless `next`), not a course. */
 const MAX_ROWS = 10_000;
 
-/** `fetch` as the provider calls it. Main passes Electron's `net.fetch`, which uses the system's proxy and certificates. */
 export type Fetch = (url: string, init: RequestInit) => Promise<Response>;
 
-/**
- * A school's real Canvas, run in main with the token from main's vault. Each read
- * follows `Link: rel="next"` to the end, so it returns the whole list. A throttle comes back as `rate_limited` at once:
- * the runner pauses the lane, and this never sleeps. Each written field is its own request, so it reports its own
- * outcome, and a request whose answer never came back is `unknown` until a read says otherwise.
- */
 export const createCanvasProvider = (deps: {
   school: School;
   lease: CredentialLease;
   fetch: Fetch;
   now(): number;
-  /** The `.imscc` file main's picker chose under `name` for this school, or null when none was. */
   packageFile(name: string): Promise<Blob | null>;
 }): LmsProvider => {
   const { school, lease } = deps;
@@ -415,7 +377,6 @@ export const createCanvasProvider = (deps: {
 
   let free = PARALLEL_PAGES;
   const waiting: (() => void)[] = [];
-  /** Runs `work` once one of the school's parallel page slots is free. */
   const slot = async <T>(work: () => Promise<T>): Promise<T> => {
     if (free > 0) free -= 1;
     else await new Promise<void>((wake) => waiting.push(wake));
@@ -437,7 +398,6 @@ export const createCanvasProvider = (deps: {
     try {
       response = await deps.fetch(url, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-        // A redirect could carry the request to another host. Canvas answers its API without one.
         redirect: "manual",
       });
       if (!response.ok) return { ok: false, error: await errorOf(response) };
@@ -454,11 +414,6 @@ export const createCanvasProvider = (deps: {
     return { ok: true, value: { body, link: response.headers.get("link") } };
   };
 
-  /**
-   * Every page of `path`, each parsed by `row`. The token goes only to this school's origin, page links included.
-   * Canvas pages most lists by number and names the last page, so the rest are read a few at a time. A list paged by
-   * bookmark names no last page, so it is read link by link.
-   */
   const list = <T extends v.GenericSchema>(
     path: string,
     row: T,
@@ -522,7 +477,6 @@ export const createCanvasProvider = (deps: {
       return { ok: true, value: rows };
     });
 
-  /** One object: the same request as a list of one, since Canvas pages only arrays. It takes a page slot, so a course's many pages read in parallel without flooding Canvas. */
   const one = async <T extends v.GenericSchema>(path: string, schema: T): Read<v.InferOutput<T>> =>
     lease.use(async (credential) => {
       if (!credential) return { ok: false, error: { kind: "auth_expired" } };
@@ -536,7 +490,6 @@ export const createCanvasProvider = (deps: {
     });
 
   let selfId: Promise<Result<number, LmsError>> | null = null;
-  /** Who "mine" is on a comment or message. Asked once; a failed ask is asked again next time. */
   const me = (): Promise<Result<number, LmsError>> => {
     selfId ??= one("/users/self", Self).then((result) => {
       if (!result.ok) selfId = null;
@@ -545,10 +498,6 @@ export const createCanvasProvider = (deps: {
     return selfId;
   };
 
-  /**
-   * The Canvas ids in a ref this provider minted, as `<school>:<kind>:<digits>...`. The ref comes from the untrusted
-   * renderer, so anything else goes nowhere near a request path.
-   */
   const idsIn = (ref: string, kind: string, count: number): number[] | null => {
     const [owner, refKind, ...ids] = refParts(ref);
     return owner === school.id &&
@@ -563,7 +512,6 @@ export const createCanvasProvider = (deps: {
     const [id] = idsIn(course, "course", 1) ?? [];
     return id === undefined ? NOT_FOUND : read(id);
   };
-  /** A submission ref's course, assignment and student, and the path Canvas keeps it at. */
   const submissionAt = (ref: LmsRef<"submission">) => {
     const [course, assignment, user] = idsIn(ref, "submission", 3) ?? [];
     if (course === undefined || assignment === undefined || user === undefined) return null;
@@ -575,7 +523,6 @@ export const createCanvasProvider = (deps: {
     };
   };
 
-  /** The rubric scores as Canvas takes them, by criterion id. Null when one names a criterion of another assignment. */
   const rubricOf = (content: GradeContent, assignment: number): [string, number][] | null => {
     const scores: [string, number][] = [];
     for (const [criterion, points] of Object.entries(scoredRubricPoints(content.rubric ?? []))) {
@@ -595,10 +542,6 @@ export const createCanvasProvider = (deps: {
   };
   const NO_SUCH_CRITERION = "A rubric score names a criterion this assignment doesn't have.";
 
-  /**
-   * One write. Canvas answering at all means it did or didn't apply; a request that never got an answer may have
-   * applied, so it is `unknown`, and only a later read can say.
-   */
   const write = (
     method: "PUT" | "POST" | "DELETE",
     path: string,
@@ -630,11 +573,6 @@ export const createCanvasProvider = (deps: {
   const refused = (reason: string): Promise<FieldOutcome> =>
     Promise.resolve({ status: "failed", error: { kind: "rejected", reason } });
 
-  /**
-   * A package import, as Canvas documents a file upload: create the migration with a `pre_attachment`, post the file
-   * to the upload address it returns, then confirm back at the school if the upload redirects. The upload address is
-   * often file storage on another host, so that request carries only Canvas's upload params and never the token.
-   */
   const importPackage = (path: string, form: URLSearchParams, file: Blob, name: string) =>
     lease.use(async (credential): Promise<FieldOutcome> => {
       if (!credential) return { status: "failed", error: { kind: "auth_expired" } };
@@ -686,7 +624,6 @@ export const createCanvasProvider = (deps: {
       const files = new FormData();
       for (const [key, value] of Object.entries(upload.upload_params))
         files.append(key, String(value));
-      // Last, as the storage behind the upload address requires.
       files.append(upload.file_param, file, name);
       let uploaded: Response;
       try {
@@ -704,8 +641,6 @@ export const createCanvasProvider = (deps: {
         return rejected("Canvas's file storage redirected the upload where the app can't follow.");
       if (uploaded.status < 300 || uploaded.status >= 400)
         return rejected(`The package upload was refused (status ${uploaded.status}).`);
-      // A redirect is Canvas's confirm step: a GET back at the school, with the token, marks the file uploaded. Storage
-      // chose this address, so the token goes only to the one path Canvas documents for it.
       const location = uploaded.headers.get("location");
       const confirm =
         location !== null && URL.canParse(location, upload.upload_url)
@@ -739,7 +674,6 @@ export const createCanvasProvider = (deps: {
     oneLine,
   });
 
-  /** The request that writes `field` of `content`, or a refusal when the content names nothing this school holds. */
   const writeOf = (content: ChangeContent, field: FieldKey): Promise<FieldOutcome> => {
     const form = (entries: Record<string, string>) => new URLSearchParams(entries);
     switch (content.kind) {
@@ -790,7 +724,6 @@ export const createCanvasProvider = (deps: {
       case "message": {
         const at = submissionAt(content.target);
         if (!at) return refused("That student isn't at this school.");
-        // `force_new`, or Canvas adds the message to an earlier conversation with the student.
         if (field === "conversation")
           return write(
             "POST",
@@ -911,7 +844,6 @@ export const createCanvasProvider = (deps: {
         if (!at) return NOT_FOUND;
         const mine = await me();
         if (!mine.ok) return mine;
-        // A conversation the teacher started and nobody answered sits in "sent", not the inbox.
         const rows = await list(
           `/conversations?scope=sent&filter[]=user_${at.user}`,
           ConversationRow,
@@ -933,7 +865,6 @@ export const createCanvasProvider = (deps: {
       }
       case "announcement":
         return inCourse(content.target, async (id) => {
-          // Every topic, delayed ones too: a post this app made is there whether or not it shows yet.
           const rows = await list(
             `/courses/${id}/discussion_topics?only_announcements=true`,
             AnnouncementRow,
@@ -944,7 +875,6 @@ export const createCanvasProvider = (deps: {
             value: {
               kind: "announcement",
               targetVersion: "course",
-              // Only teachers post announcements, and `seen` tells this app's posts from earlier ones.
               posts: rows.value.map((row) => ({
                 id: String(row.id),
                 mine: true,
@@ -960,10 +890,6 @@ export const createCanvasProvider = (deps: {
     }
   };
 
-  /**
-   * Canvas signs a storage address for the file, which is read without the token: Electron's fetch would carry the
-   * token along a redirect to another host, so the app never follows one with it.
-   */
   const file = async (ref: LmsRef<"submission">, id: string): Read<FileContent> => {
     const at = submissionAt(ref);
     if (!at || !/^\d+$/.test(id)) return NOT_FOUND;
@@ -994,11 +920,6 @@ export const createCanvasProvider = (deps: {
     }
   };
 
-  /**
-   * The export of the Google file a link submission points at, read with no token and no cookies, so Google serves it
-   * only when the student shared it publicly. The link is the one Canvas holds; a private file answers with a sign-in
-   * page, which isn't a PDF.
-   */
   const linkExport = async (ref: LmsRef<"submission">): Read<FileContent> => {
     const at = submissionAt(ref);
     if (!at) return NOT_FOUND;
@@ -1030,7 +951,6 @@ export const createCanvasProvider = (deps: {
     id: number,
     mine: number,
   ): Promise<Result<Conversation | null, LmsError>> => {
-    // Reading a conversation marks it read unless told not to, and a sync must not change what the teacher sees.
     const detail = await one(`/conversations/${id}?auto_mark_as_read=false`, ConversationDetail);
     if (!detail.ok) return detail;
     const row = detail.value;
@@ -1074,8 +994,6 @@ export const createCanvasProvider = (deps: {
     },
     courses: async () => {
       const rows = await list(
-        // Only a published course is one students can reach. `enrollment_state=active` would also drop a course whose
-        // term hasn't started, so Canvas's `concluded` flag is what leaves out past terms.
         "/courses?enrollment_type=teacher&include[]=total_students&include[]=concluded&state[]=available",
         CourseRow,
       );
@@ -1156,7 +1074,6 @@ export const createCanvasProvider = (deps: {
           ok: true,
           value: students.value
             .flatMap(({ submissions }) => submissions)
-            // A student in two sections can come back once per section.
             .filter((row) => {
               const key = `${row.assignment_id}:${row.user_id}`;
               return !seen.has(key) && Boolean(seen.add(key));
@@ -1218,7 +1135,6 @@ export const createCanvasProvider = (deps: {
     conversations: async () => {
       const mine = await me();
       if (!mine.ok) return mine;
-      // A conversation the teacher started and nobody answered sits in "sent", not the inbox.
       const inbox = await list("/conversations", ConversationRow);
       if (!inbox.ok) return inbox;
       const sent = await list("/conversations?scope=sent", ConversationRow);
@@ -1242,7 +1158,6 @@ export const createCanvasProvider = (deps: {
         return {
           ok: true,
           value: rows.value.flatMap((row): Announcement[] =>
-            // An announcement with no post time is a draft or delayed, and not posted yet.
             row.posted_at === null
               ? []
               : [
@@ -1259,10 +1174,6 @@ export const createCanvasProvider = (deps: {
         };
       }),
     observe,
-    /**
-     * In `WRITE_ORDER`, one request per field. After a field that didn't land, nothing more is sent, so the rest
-     * failed: with its error, or as unavailable when its answer was lost.
-     */
     apply: async (permit) => {
       if (!SendPermit.isGenuine(permit)) return {};
       const { content, fields } = permit;

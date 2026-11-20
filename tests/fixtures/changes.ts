@@ -99,7 +99,6 @@ export const sent = (record: ChangeRecord = sending()): ChangeRecord =>
 export const discarded = (record: ChangeRecord = newDraft()): ChangeRecord =>
   step(record, { type: "discard", at: AT });
 
-/** A fresh draft's summary, with what the test cares about changed. */
 export const changeSummary = (patch: Partial<ChangeSummary> = {}): ChangeSummary => ({
   ...summarize(newDraft()),
   ...patch,

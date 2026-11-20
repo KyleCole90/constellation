@@ -1,6 +1,5 @@
 const macrotask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-/** Time moves only when everything runnable has run, so a sleep can never beat the work that should precede it. */
 export class VirtualClock {
   #now: number;
   #timers: { at: number; resolve: () => void }[] = [];
@@ -28,7 +27,6 @@ export class VirtualClock {
     return true;
   }
 
-  /** Drives one piece of work to the end, leaving later timers unfired. */
   async run<T>(work: Promise<T>): Promise<T> {
     let settled = false;
     const tracked = work.finally(() => {
@@ -42,7 +40,6 @@ export class VirtualClock {
     }
   }
 
-  /** Fires every remaining timer, so anything scheduled for later has happened. */
   async flush(): Promise<void> {
     await macrotask();
     while (this.#fireNext()) await macrotask();

@@ -134,7 +134,6 @@ const namedCourses = (ask: Ask): readonly Course[] => {
   return /\b(all|every)\b/i.test(ask.request) ? ask.scope.courses : [];
 };
 
-/** What looks like a course code but isn't one of theirs, so a typo gets said out loud instead of dropped. */
 const unknownCodeNote = ({ request, scope }: Ask): string => {
   const unknown = (request.match(/\b[A-Z]{2,5} ?\d{3}\b/g) ?? []).filter(
     (code) => !scope.courses.some((course) => mentions(code, course.code)),
@@ -154,7 +153,6 @@ const WHEN_WORDS: ReadonlySet<string> = new Set(
     " ",
   ),
 );
-/** "Thursday at 7pm" says when, not what, so it can't be what an announcement is about. */
 const saysOnlyWhen = (tokens: readonly string[]): boolean =>
   tokens.every((token) =>
     wordsOf(token).every(
@@ -188,7 +186,6 @@ const withoutCourses = ({ scope, northStar }: Ask, text: string): string =>
 const saidIn = (ask: Ask, asked: string): string =>
   asked === ask.request ? asked : `${asked}, ${ask.request}`;
 
-/** What an announcement ask says it's about, articles kept, so the draft can say it in their words. */
 const topicIn = (ask: Ask, said: string): string | undefined => {
   const tokens = (ABOUT.exec(withoutCourses(ask, said))?.[1] ?? "").trim().split(/\s+/);
   return saysOnlyWhen(tokens)
@@ -233,7 +230,6 @@ const hasOpenChange = (scope: AgentScope, target: string): boolean =>
       change.state.tag !== "discarded",
   );
 
-/** The work the app counts as to grade, so every count here matches the badge. Asked-back work waits on the student. */
 const waitingToGrade = ({ scope, northStar }: Pick<Ask, "scope" | "northStar">) =>
   scope.submissions.filter((s) => northStar.grading.toGrade.includes(s.ref));
 
@@ -299,7 +295,6 @@ const addressee = (ask: Ask): string | undefined => {
   return name.length > 0 ? name : undefined;
 };
 
-/** Every word they gave has to be in the sender's name, so a typo asks instead of guessing. */
 const sendersFor = (
   { request }: Ask,
   conversations: readonly Conversation[],
@@ -423,7 +418,6 @@ const titledAssignments = (ask: Ask): readonly Assignment[] => {
       (courses.length === 0 || courses.some((course) => course.ref === a.course)) &&
       (mentions(ask.request, a.shortTitle) || mentions(ask.request, a.title)),
   );
-  // "Essay 3 Outline" also says "Essay 3". The longest title is the one they meant.
   const longest = Math.max(0, ...titled.map((a) => a.shortTitle.length));
   return titled.filter((a) => a.shortTitle.length === longest);
 };
@@ -510,7 +504,6 @@ function* whatsDue({ scope, northStar }: Ask): Generator<AgentEffect, void> {
   const coming = scope.assignments
     .flatMap((assignment) => {
       if (!assignment.dueAt) return [];
-      // Rounded, because a day that crosses a clock change isn't 24 hours long.
       const days = Math.round((startOfDay(assignment.dueAt) - today) / DAY);
       return new Date(assignment.dueAt).getTime() > now && days <= DUE_DAYS
         ? [{ assignment, due: assignment.dueAt }]
@@ -557,7 +550,6 @@ function* gradingSummary(ask: Ask): Generator<AgentEffect, void> {
   ]);
 }
 
-/** Behind is what the roster calls Watch or At risk, or any missing work, from the same gradebook totals. */
 function* behind(ask: Ask): Generator<AgentEffect, void> {
   const { scope, northStar } = ask;
   const named = specificCourses(ask);
@@ -715,7 +707,6 @@ function* find(ask: Ask): Generator<AgentEffect, void> {
   );
 }
 
-/** Work that already has its draft gets no pill. The answer links the draft, and asking again would only hand off a second card for it. */
 const askFor = (scope: AgentScope, { course, work: next }: NextWork): string | null => {
   const code = codeOf(scope, course);
   switch (next.kind) {
@@ -764,7 +755,6 @@ function* refuse({ scope }: Ask, text: string): Generator<AgentEffect, void> {
   };
 }
 
-/** The handoff card isn't in the history the agent reads, so this replays their earlier asks, newest first, for the last work this chat started. */
 const latestHandoff = (ask: Ask): NextWork | undefined => {
   for (let at = ask.history.length - 1; at >= 0; at -= 1) {
     const said = ask.history[at];
@@ -778,7 +768,6 @@ const latestHandoff = (ask: Ask): NextWork | undefined => {
   return undefined;
 };
 
-/** A grading handoff opens a list and drafts nothing, so it has no draft to link. */
 const DRAFT_KIND: Readonly<Record<HandoffWork["kind"], ChangeRecord["content"]["kind"] | null>> = {
   reply: "reply",
   replies: "reply",
@@ -859,7 +848,6 @@ function* fallback(ask: Ask): Generator<AgentEffect, void> {
   );
 }
 
-/** "Do the same for Owen" repeats the chat's last reply for the student they name. */
 function* sameFor(ask: Ask): Generator<AgentEffect, void> {
   const name = SAME_FOR.exec(ask.request)?.[1]?.trim();
   if (!name || latestHandoff(ask)?.work.kind !== "reply") return yield* fallback(ask);
@@ -868,7 +856,6 @@ function* sameFor(ask: Ask): Generator<AgentEffect, void> {
 
 const SAME: Intent = { matches: ({ request }) => SAME_FOR.test(request), run: sameFor };
 
-/** "What did she ask about?" or "make it friendlier" points back at the work this chat last started. */
 const FOLLOW_UP: Intent = {
   matches: ({ request }) => BACK_REFERENCE.test(request),
   run: followUp,
@@ -876,7 +863,6 @@ const FOLLOW_UP: Intent = {
 
 const FALLBACK: Intent = { matches: () => true, run: fallback };
 
-/** First match wins, so the order is the meaning: a refusal beats everything, and a search beats the words it searches for. */
 const INTENTS: readonly Intent[] = [
   { matches: ({ request }) => asksToAct(request), run: (ask) => refuse(ask, OUT_OF_SCOPE) },
   {

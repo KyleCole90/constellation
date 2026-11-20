@@ -38,7 +38,6 @@ const yields = (...raw: readonly unknown[]): Agent => ({
   },
 });
 
-/** A setup thread's scope: the source course's content and what the rules found in it. */
 const setupScope = async () => {
   const rig = await makeTermRig();
   const shell = await rig.shellNamed(LCC, "ENG 101");

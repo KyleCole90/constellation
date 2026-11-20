@@ -10,7 +10,6 @@ export interface School {
   provider: ProviderKind;
 }
 
-/** A demo school runs on the fake LMS. A new provider has to pick a side here. */
 const DEMO_PROVIDER: Readonly<Record<ProviderKind, boolean>> = {
   "fake-canvas": true,
   canvas: false,
@@ -18,11 +17,9 @@ const DEMO_PROVIDER: Readonly<Record<ProviderKind, boolean>> = {
 
 export const isDemoSchool = (school: School): boolean => DEMO_PROVIDER[school.provider];
 
-/** Resetting the demo forgets every saved token, so it is offered only while no real school would lose one. */
 export const canResetDemo = (schools: readonly School[]): boolean =>
   schools.length > 0 && schools.every(isDemoSchool);
 
-/** The one order schools take in every list and filter: by name. */
 export const bySchoolName = (a: School, b: School): number => a.name.localeCompare(b.name);
 
 export interface Student {
@@ -74,13 +71,10 @@ export interface FileContent {
 
 export type SubmissionBody =
   | { kind: "text"; title: string; wordCount: number; paragraphs: readonly string[] }
-  /** The student's own posts on a graded discussion, oldest first. */
   | { kind: "discussion"; title: string; wordCount: number; paragraphs: readonly string[] }
   | { kind: "media"; title: string; durationLabel: string; transcript: readonly string[] }
-  /** A link, with any snapshot the LMS took of the page. */
   | { kind: "url"; title: string; url: string; files: readonly SubmissionFile[] }
   | { kind: "upload"; title: string; files: readonly SubmissionFile[] }
-  /** Work the app can't read here, such as a quiz or an external tool. `what` names it for the teacher. */
   | { kind: "elsewhere"; title: string; what: string }
   | { kind: "none" };
 
@@ -98,7 +92,6 @@ export interface Submission {
   assignment: LmsRef<"assignment">;
   student: LmsRef<"student">;
   studentName: string;
-  /** Mirrors the LMS, so a resubmission reads as submitted with its prior grade still present. */
   workflow: "unsubmitted" | "missing" | "submitted" | "graded" | "excused";
   attempt: number;
   lateDays: number;
@@ -107,15 +100,12 @@ export interface Submission {
   rubricScores: Readonly<Record<LmsRef<"criterion">, number>> | null;
   comments: readonly SubmissionComment[];
   body: SubmissionBody;
-  /** The LMS's own `https:` page for this submission, which opens in the browser. */
   page: string | null;
 }
 
-/** New work after the grade: the LMS reopens a graded submission as submitted and keeps the earlier grade (#133). */
 export const resubmitted = (submission: Pick<Submission, "workflow" | "grade">): boolean =>
   submission.workflow === "submitted" && submission.grade !== null;
 
-/** The text a rationale can anchor to: paragraphs of writing or posts, or the transcript of a recording. */
 export const passagesOf = (submission: Submission): readonly string[] => {
   switch (submission.body.kind) {
     case "text":
@@ -149,7 +139,6 @@ export const excerptNote = (body: SubmissionBody): string | null => {
   }
 };
 
-/** How a file reaches the teacher and Claude: a PDF, a picture, or words. */
 export type FileView = "document" | "image" | "text";
 
 const CLAUDE_READS: Readonly<Record<string, FileView>> = {
@@ -162,14 +151,12 @@ const CLAUDE_READS: Readonly<Record<string, FileView>> = {
   "image/webp": "image",
 };
 const MB = 1024 * 1024;
-/** The app's own caps on what it sends Claude, kept under Anthropic's limits with room for base64. */
 const MAX_IMAGE_BYTES = 5 * MB;
 const MAX_CLAUDE_BYTES = 20 * MB;
 
 export const claudeBlockFor = (file: Pick<SubmissionFile, "mediaType">): FileView | null =>
   CLAUDE_READS[file.mediaType] ?? null;
 
-/** Types main reads the words out of, so the app and Claude get them as Markdown text (#68). */
 const MAIN_READS_AS_TEXT = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/rtf",
@@ -181,14 +168,12 @@ const MAIN_READS_AS_TEXT = new Set([
 
 export const mainReadsAsText = (mediaType: string): boolean => MAIN_READS_AS_TEXT.has(mediaType);
 
-/** What the app can show of a listed file, once main has read it: null when it can't open it at all. */
 export const viewOf = (file: Pick<SubmissionFile, "mediaType">): FileView | null =>
   claudeBlockFor(file) ?? (mainReadsAsText(file.mediaType) ? "text" : null);
 
 const sizeLabel = (bytes: number): string =>
   bytes < MB ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / MB).toFixed(1)} MB`;
 
-/** A file's type and size as a teacher reads them: "PDF, 4 KB". */
 export const fileLabel = (file: Pick<SubmissionFile, "name" | "mediaType" | "bytes">): string => {
   const extension = /\.([a-z0-9]{1,5})$/i.exec(file.name)?.[1];
   return `${extension ? extension.toUpperCase() : file.mediaType}, ${sizeLabel(file.bytes)}`;
@@ -202,11 +187,6 @@ const GOOGLE_EXPORTS = {
 const GOOGLE_FILE =
   /^https?:\/\/docs\.google\.com\/(document|presentation|spreadsheets)\/(?:u\/\d+\/)?d\/([\w-]+)(?:[/?#]|$)/i;
 
-/**
- * The PDF export of the Google Doc, Slides deck or Sheet a link points at, or null for any other link. Google serves
- * it to an app with no account only when the file is shared publicly. The address is built from the file's id, so it is
- * always Google's own `https:` host whatever else the student's link carried.
- */
 export const googleExportOf = (url: string): { what: string; url: string } | null => {
   const [, kind, id] = GOOGLE_FILE.exec(url.trim()) ?? [];
   if (!id || (kind !== "document" && kind !== "presentation" && kind !== "spreadsheets"))
@@ -215,15 +195,10 @@ export const googleExportOf = (url: string): { what: string; url: string } | nul
   return { what, url: `https://docs.google.com/${kind}/d/${id}/${path}` };
 };
 
-/** The page snapshot the LMS took of a link, when it is a picture the app can send Claude. */
 export const snapshotOf = (body: Extract<SubmissionBody, { kind: "url" }>): SubmissionFile | null =>
   body.files.find((file) => claudeBlockFor(file) === "image" && file.bytes <= MAX_IMAGE_BYTES) ??
   null;
 
-/**
- * What Claude can read of a link, best first (#71): the export of a public Google file, which is the whole work, then
- * the LMS's snapshot of the page, which is only its first screen. A draft tries each in turn.
- */
 export const linkReads = (
   body: Extract<SubmissionBody, { kind: "url" }>,
 ): readonly ("export" | "snapshot")[] => [
@@ -231,11 +206,6 @@ export const linkReads = (
   ...(snapshotOf(body) ? (["snapshot"] as const) : []),
 ];
 
-/**
- * Why Claude can't draft a grade from this submission, or null when it can read everything the student turned in.
- * The one rule that keeps a draft from scoring work it never saw as nothing (#64): every caller that offers or runs
- * a grade draft asks here first. A download that fails later is refused where the files are read.
- */
 export const undraftableReason = (body: SubmissionBody): string | null => {
   switch (body.kind) {
     case "text":
@@ -259,10 +229,6 @@ export const undraftableReason = (body: SubmissionBody): string | null => {
   }
 };
 
-/**
- * `kindOf` defaults to what main can turn a listed file into. Main's own last check passes `claudeBlockFor`, since
- * the bytes it sends Claude must already be what Claude reads.
- */
 export const unreadableFiles = (
   files: readonly Omit<SubmissionFile, "id">[],
   kindOf: (file: Pick<SubmissionFile, "mediaType">) => FileView | null = viewOf,
@@ -273,7 +239,6 @@ export const unreadableFiles = (
   const big = files.find((file) => kindOf(file) === "image" && file.bytes > MAX_IMAGE_BYTES);
   if (big)
     return `${big.name} is larger than the 5 MB picture the app sends to Claude. Grade it yourself.`;
-  // A Word file's size is mostly what main leaves out, so only the files sent as they are count.
   const sent = files.filter((file) => kindOf(file) !== "text");
   if (sent.reduce((sum, file) => sum + file.bytes, 0) > MAX_CLAUDE_BYTES)
     return "These files are larger than the 20 MB the app sends to Claude at once. Grade it yourself.";
@@ -294,17 +259,11 @@ export interface Conversation {
   course: LmsRef<"course">;
   subject: string;
   from: string;
-  /** Everyone in it besides the teacher, so a message can be matched to the student it went to. */
   students: readonly LmsRef<"student">[];
   unread: boolean;
   messages: readonly ConversationMessage[];
 }
 
-/**
- * The conversation's last message is the student's and no reply to it has gone out. What's due, Messages, a course's threads and North Star all
- * ask this, so they agree. Reading or opening the conversation answers nothing (#127). A reply the app sent counts
- * before the next sync brings it back as the last word.
- */
 export const awaitsReply = (
   last: Pick<ConversationMessage, "mine" | "at"> | null | undefined,
   repliedAt: IsoTime | null,
@@ -319,19 +278,16 @@ export interface Announcement {
   postedAt: IsoTime;
 }
 
-/** Words too common in assignment titles to tell one assignment from another ("Create a …", "Your own …"). */
 const TITLE_FILLER = new Set(["a", "an", "the", "of", "and", "to", "your", "my", "own", "create"]);
 const wordsOf = (text: string): readonly string[] =>
   text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 
-/** Every telling word of the assignment's title appears in the text, so the text is about that assignment. */
 const namesAssignment = (text: string, assignment: Pick<Assignment, "title">): boolean => {
   const telling = wordsOf(assignment.title).filter((word) => !TITLE_FILLER.has(word));
   const words = new Set(wordsOf(text));
   return telling.length > 0 && telling.every((word) => words.has(word));
 };
 
-/** A message about a submission names its assignment, so the LMS can say later what it was about. */
 export const namingAssignment = <M extends { subject: string; body: string }>(
   message: M,
   assignment: Pick<Assignment, "title">,
@@ -340,10 +296,6 @@ export const namingAssignment = <M extends { subject: string; body: string }>(
     ? message
     : { ...message, body: `${message.body.trimEnd()}\n\nAssignment: ${assignment.title}` };
 
-/**
- * When the teacher last wrote to the student about this assignment since they turned it in, read from the LMS's own
- * conversations: one the teacher started, with that student, in that course, naming the assignment.
- */
 export const askedInLms = (
   conversations: readonly Conversation[],
   submission: Submission,
@@ -355,7 +307,6 @@ export const askedInLms = (
     if (
       !opening?.mine ||
       conversation.course !== submission.course ||
-      // A cache saved before `students` existed lacks it until the next sync.
       !(conversation.students ?? []).includes(submission.student) ||
       !namesAssignment(`${conversation.subject}\n${opening.text}`, assignment)
     )

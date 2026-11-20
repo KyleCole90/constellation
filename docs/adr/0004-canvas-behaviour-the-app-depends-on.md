@@ -1,0 +1,16 @@
+# The Canvas provider follows how real Canvas behaves
+
+The Canvas API has gaps and quirks that its documentation doesn't state. The provider works around each one where it reads Canvas, so the rest of the app sees a plain model.
+
+- `createCanvasProvider` in `src/main/providers/canvas.ts`, and the Anthropic provider, get Electron's `net.fetch` from `src/main/index.ts`, not Node's global `fetch`. `net.fetch` uses the OS proxy settings and certificate store, which many school networks require. No test fails if this switches to the global `fetch`.
+- `fewAtATime` in `src/shared/providers/provider.ts` reads many courses two at a time. Main sends a school's requests through a few first-come slots, and a read over every course at once queues ahead of reads someone waits on, like a copy's progress (#147).
+- `SetupCourse.concluded` in `src/main/providers/canvas-term.ts` is requested with `include[]=concluded`, because Canvas reports whether a course is over even when it hides the term's dates from teachers. `isComing` in `src/shared/domain/content.ts` trusts that flag and treats an unknown start date as still to come. Requiring a start date would hide every course at those schools.
+- `CourseShell.setUp` in `src/shared/domain/content.ts` comes from the LMS's own migration history, so a copy started from another install or device counts. Never derive it from this app's local records.
+- `SourceId` in `src/main/providers/canvas-term.ts` accepts `settings.source_course_id` as a number or a numeric string, because Canvas sends either on a course copy.
+- `courseContent` in `src/main/providers/canvas-term.ts` marks an item `copied` when its `created_at` falls inside a completed migration's run, because Canvas has no flag for it. The syllabus has no date of its own, so it counts as copied once any copy into the course has completed.
+- `courseContent` in `src/main/providers/canvas-term.ts` sets `configured: true` on every tool, because `/courses/:id/external_tools` lists only tools installed for the course or its account. A tool link with no listed tool is unconfigured.
+- `jobOfMigration` in `src/shared/domain/setup.ts` rounds Canvas's fractional completion (55.80645161290322) down, so the copy card never shows 100% before the copy is done. `advanceMigration` in `src/shared/providers/fake-canvas/migrations.ts` leaves its completion unrounded to match.
+- `resubmitted` in `src/shared/domain/lms.ts` relies on Canvas reopening a graded submission as `submitted` with the old grade kept when the student turns in new work (#133).
+- `writeOf` in `src/main/providers/canvas.ts` sends `force_new=true` for a new conversation. Without it Canvas adds the message to an older conversation with that student.
+- `COURSE_PATH` in `src/shared/providers/canvas-links.ts` reads an origin-less `/courses/...` link as this host, because Canvas's rich content editor writes links inside the course without the origin.
+- The `files` cache in `src/main/lms.ts` keeps failed reads too. A Canvas file id names one upload that never changes, so a file main can't read once stays unreadable.

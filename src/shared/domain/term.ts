@@ -8,13 +8,11 @@ export interface DateShiftOptions {
   newEnd: IsoDate;
   substitutions: Readonly<Partial<Record<Weekday, Weekday>>>;
 }
-/** A term's name, never blank. Only `termName` makes one, so a scan can't search text for an empty name. */
 export type TermName = Brand<string, "TermName">;
 export const termName = (text: string): TermName | null =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: the blank test is the brand's check
   text.trim() === "" ? null : (text as TermName);
 export interface TermDates<D extends DraftDate = IsoDate> {
-  /** Null when the term has none: a Canvas export carries no term name, and a course can have no term. */
   name: TermName | null;
   start: D;
   end: D;
@@ -30,11 +28,8 @@ export interface TermPlan {
   newTerm: TermDates;
   breaks: readonly TermBreak[];
 }
-/** A date field as the Dates form holds it: a day, or `""` until the person fills it in. */
 export type DraftDate = IsoDate | "";
-/** A term as the Dates form holds it: the name as typed, and dates that may be blank. */
 export type DraftTerm = Omit<TermDates<DraftDate>, "name"> & { name: string };
-/** The Dates form as typed. Only `checkPlan` turns it into a `TermPlan`. */
 export interface PlanDraft {
   oldTerm: DraftTerm;
   newTerm: DraftTerm;
@@ -46,7 +41,6 @@ export const draftTerm = ({ name, start, end, days }: TermDates<DraftDate>): Dra
   end,
   days,
 });
-/** A confirmed plan back in the form, to edit again. */
 export const draftOf = (plan: TermPlan): PlanDraft => ({
   ...plan,
   oldTerm: draftTerm(plan.oldTerm),
@@ -57,7 +51,6 @@ export interface BreakMove {
   movedFrom: TermBreak | null;
   outsideTerm: boolean;
 }
-/** One item's due day, which is all a shift reads. */
 export interface DueDay {
   title: string;
   due: IsoDate;
@@ -65,7 +58,6 @@ export interface DueDay {
 export interface ShiftRow extends BreakMove {
   title: string;
   from: IsoDate;
-  /** Before any break move: what the LMS itself will produce. */
   shifted: IsoDate;
 }
 
@@ -87,17 +79,14 @@ const weekdayAt = (day: number): Weekday => {
 const roundHalfAway = (value: number): number => Math.sign(value) * Math.round(Math.abs(value));
 const byNumber = (a: number, b: number): number => a - b;
 
-/** The day that ends a span as long as `from` to `to`, starting at `start`. */
 export const sameSpanEnd = (start: IsoDate, from: IsoDate, to: IsoDate): IsoDate =>
   dateAt(dayNumber(start) + dayNumber(to) - dayNumber(from));
 export const weekdayOf = (date: IsoDate): Weekday => weekdayAt(dayNumber(date));
-/** The weekdays the old due dates fall on, which is where a class's work is usually due. The person confirms or changes them. */
 export const meetingDaysOf = (dates: readonly IsoDate[]): readonly Weekday[] =>
   [...new Set(dates.map(weekdayOf))].sort(byNumber);
 export const dateOfTime = (at: IsoTime): IsoDate =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: an IsoTime starts with its YYYY-MM-DD day
   at.slice(0, 10) as IsoDate;
-/** Keeps the time exactly as the LMS wrote it, so a moved due date changes only its day. */
 export const timeOnDate = (at: IsoTime, date: IsoDate): IsoTime =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: swaps one YYYY-MM-DD day for another and keeps the time
   `${date}${at.slice(10)}` as IsoTime;
@@ -111,7 +100,6 @@ export const isoDate = (text: string): IsoDate | null => {
 const isInside = (date: IsoDate, range: { start: IsoDate; end: IsoDate }): boolean =>
   date >= range.start && date <= range.end;
 
-/** Total over the week. Old meeting days pair with new ones by position, and every other day keeps its weekday. */
 export const planDays = (
   oldDays: readonly Weekday[],
   newDays: readonly Weekday[],
@@ -141,10 +129,6 @@ export const shiftOptionsOf = ({ oldTerm, newTerm }: TermPlan): DateShiftOptions
   substitutions: planDays(oldTerm.days, newTerm.days),
 });
 
-/**
- * The LMS's own rule, unclamped, so a preview matches what the copy will do. Its source defaults a missing weekday to
- * itself, and leaves a date alone when the proportion already landed on the wanted weekday.
- */
 export const shiftDate = (date: IsoDate, options: DateShiftOptions): IsoDate => {
   const oldSpanDays = dayNumber(options.oldEnd) - dayNumber(options.oldStart);
   const newSpanDays = dayNumber(options.newEnd) - dayNumber(options.newStart);
@@ -208,7 +192,6 @@ export const NO_NEW_DAYS = "Pick at least one meeting day for the new term.";
 export const planProblems = ({ oldTerm, newTerm, breaks }: TermPlan): readonly string[] => [
   ...(oldTerm.start >= oldTerm.end ? ["The old term has to end after it starts."] : []),
   ...(newTerm.start >= newTerm.end ? ["The new term has to end after it starts."] : []),
-  // An old meeting day needs a new one to move to. With none, nothing moves by weekday.
   ...(newTerm.days.length === 0 && oldTerm.days.length > 0 ? [NO_NEW_DAYS] : []),
   ...breaks.flatMap((held) => {
     if (held.start > held.end) return [`${held.name} has to end on or after the day it starts.`];
@@ -218,17 +201,13 @@ export const planProblems = ({ oldTerm, newTerm, breaks }: TermPlan): readonly s
   }),
 ];
 
-// ---- Dates written in prose. ----
-
 export interface DateMention {
   index: number;
   length: number;
   text: string;
-  /** With no written year, the year that puts it nearest the term it was read against. */
   date: IsoDate;
   yearWritten: boolean;
   numeric: boolean;
-  /** "Oct 12-14". Only the first day is matched, so rewriting it alone would leave a wrong range. */
   range: boolean;
 }
 
@@ -348,7 +327,6 @@ const leadWord = (date: IsoDate, written: string | undefined): string => {
   return DAY_NAMES.includes(written) ? name : name.slice(0, 3);
 };
 
-/** The same mention, naming another date in the format it was first written. */
 export const rewriteMention = (mention: DateMention, date: IsoDate): string => {
   const month = Number(date.slice(5, 7));
   const day = Number(date.slice(8, 10));
@@ -386,10 +364,6 @@ export const rewriteMention = (mention: DateMention, date: IsoDate): string => {
   );
 };
 
-/**
- * Whether a mention still reads as the old term. A bare "8/10" counts only inside the old term, because it is as likely a score.
- * A year-less date inside both terms stays stale here, because only a record of what was written can tell the two apart.
- */
 export const mentionIsStale = (mention: DateMention, plan: TermPlan): boolean => {
   const { date } = mention;
   if (mention.yearWritten)

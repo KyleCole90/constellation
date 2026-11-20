@@ -38,7 +38,6 @@ export const assignment = (patch: Partial<Assignment> = {}): Assignment => ({
   ...patch,
 });
 
-/** Text turned in on time, not graded yet. */
 export const submission = (patch: Partial<Submission> = {}): Submission => ({
   ref: SUBMISSION,
   school: SCHOOL,
@@ -90,7 +89,6 @@ const rowDefaults = {
   draftable: true,
 } satisfies Omit<WorkRow, "key" | "kind">;
 
-/** A queue row for a submission, titled by its key, with nothing drafted yet. */
 export const submissionRow = (
   key: string,
   patch: Partial<Omit<SubmissionRow, "kind" | "key">> = {},
@@ -102,7 +100,6 @@ export const submissionRow = (
   kind: "submission",
 });
 
-/** A queue row for a conversation, titled by its key, with nothing drafted yet. */
 export const conversationRow = (
   key: string,
   patch: Partial<Omit<ConversationRow, "kind" | "key">> = {},
@@ -114,7 +111,6 @@ export const conversationRow = (
   kind: "conversation",
 });
 
-/** An assignment with nothing turned in, and no due date. */
 export const dueItem = (patch: Partial<DueItem> = {}): DueItem => ({
   assignment: assignment(),
   course: course(),
@@ -129,7 +125,6 @@ export const dueItem = (patch: Partial<DueItem> = {}): DueItem => ({
   ...patch,
 });
 
-/** A conversation no one has written in, with no reply under way. */
 export const inboxRow = (patch: Partial<InboxRow> = {}): InboxRow => ({
   conversation: conversation(),
   course: course(),

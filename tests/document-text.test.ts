@@ -10,7 +10,6 @@ const DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 const fixture = (name: string) =>
   new Uint8Array(readFileSync(new URL(`./fixtures/files/${name}`, import.meta.url)));
 
-/** A zip of deflated entries. The CRC is left at zero, since the reader never checks it. */
 const deflatedZip = (entries: Readonly<Record<string, Buffer>>): Uint8Array => {
   const locals: Buffer[] = [];
   const directory: Buffer[] = [];

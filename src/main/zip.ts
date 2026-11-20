@@ -3,10 +3,8 @@ import { inflateRawSync } from "node:zlib";
 const END_OF_DIRECTORY = 0x06054b50;
 const DIRECTORY_ENTRY = 0x02014b50;
 const LOCAL_ENTRY = 0x04034b50;
-/** The end record is 22 bytes, after a comment of at most 65,535. */
 const TAIL_BYTES = 22 + 0xffff;
 
-/** A zip's bytes, read a slice at a time, so a large archive on disk is never read whole. */
 export interface ZipSource {
   size: number;
   readAt: (position: number, length: number) => Promise<Buffer>;
@@ -27,7 +25,6 @@ export const bufferSource = (data: Uint8Array): ZipSource => {
   };
 };
 
-/** The archive's table of contents. Throws on anything that isn't a plain zip. */
 export const zipEntries = async (source: ZipSource): Promise<readonly ZipEntry[]> => {
   const tailStart = Math.max(0, source.size - TAIL_BYTES);
   const tail = await source.readAt(tailStart, source.size - tailStart);
@@ -50,7 +47,6 @@ export const zipEntries = async (source: ZipSource): Promise<readonly ZipEntry[]
   return entries;
 };
 
-/** An entry's text, unpacked. Throws past `maxBytes` either side of inflating, so a zip bomb stops at the cap. */
 export const zipEntryText = async (
   source: ZipSource,
   entry: ZipEntry,

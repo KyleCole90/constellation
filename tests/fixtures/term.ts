@@ -18,7 +18,6 @@ const CONTACT: Readonly<Record<string, string>> = {
   rsu: "kyle@riverbend.edu",
 };
 
-/** The plan a person would confirm: the source's term into the shell's, meeting days kept, the seeded break. Where the LMS hides the new term's dates, the person types Spring 2027's. */
 export const planFor = (oldTerm: TermDates, shell: CourseShell): TermPlan => ({
   oldTerm,
   newTerm: {
@@ -29,7 +28,6 @@ export const planFor = (oldTerm: TermDates, shell: CourseShell): TermPlan => ({
   },
   breaks: SPRING_2027_BREAKS,
 });
-/** The source's term as the Dates step holds it. Where the LMS hides its dates, the person types Fall 2026's. */
 export const termOf = (source: SourceCourse): TermDates => ({
   name: termName(source.termName),
   start: source.startAt ?? FALL_2026([]).start,
@@ -72,7 +70,6 @@ export const cartridgeContent = (
   };
 };
 
-/** The rig plus the term-setup reads, with the job clock under the test's control. */
 export const makeTermRig = async () => {
   const rig = await makeRig();
   const setup = (school: SchoolId): TermSetup => {
@@ -106,13 +103,11 @@ export const makeTermRig = async () => {
     return found;
   };
 
-  /** Sends through the real runner and drives the virtual clock until it settles. */
   const send = async (ids: readonly ChangeId[]): Promise<void> => {
     const writeback = rig.newWriteback();
     await rig.clock.run(writeback.send(ids));
   };
 
-  /** Moves the clock past a job's duration and reads it, which is what lands the content. */
   const finishJobs = async (
     school: SchoolId,
     course: LmsRef<"course">,

@@ -42,13 +42,11 @@ export type FindingType =
   | "empty-module"
   | "migration-issue";
 export type FindingKey = Brand<string, "FindingKey">;
-/** A key no finding can have, where a sent fix keeps the record of what it wrote once its twin takes the original key. */
 export const retiredKey = (key: FindingKey, change: ChangeId): FindingKey =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: no hash contains `:`, so no finding has this key
   `${key}:${change}` as FindingKey;
 
 export interface Finding {
-  /** Hash of type, item, and the passage's words and place among its twins. Stable across scans. */
   key: FindingKey;
   type: FindingType;
   item: LmsRef<"item"> | LmsRef<"module"> | null;
@@ -56,16 +54,13 @@ export interface Finding {
   quote: string;
   why: string;
   openUrl: string | null;
-  /** The change's real content. Null means a person does this in the LMS. */
   fix: TextFixContent | SetContent | null;
 }
 
 export interface ScanContext {
   plan: TermPlan;
   issues: readonly MigrationIssue[];
-  /** Text fixes this setup already sent. A year-less date in both terms can only be told apart by this. */
   written: readonly TextFixContent[];
-  /** Replaces a foreign address. Null makes that finding manual. */
   contactEmail: string | null;
 }
 
@@ -111,7 +106,6 @@ const indexesOf = (body: string, text: string): readonly number[] => {
   return found;
 };
 
-/** Only a fix to these same words can change this key, so a landing beside the passage leaves it alone. */
 const passageKey = (
   type: FindingType,
   item: ContentItem,
@@ -122,7 +116,6 @@ const passageKey = (
   return keyOf(type, item.ref, text, String(indexesOf(item.body.slice(0, index), text).length));
 };
 
-/** One side of the context can change when a fix lands beside this one, so either side is enough. */
 const wasWritten = (ctx: ScanContext, item: ContentItem, mention: DateMention): boolean =>
   ctx.written.some(({ target, splice: { prefix, after, suffix } }) => {
     if (target !== item.ref) return false;
@@ -252,7 +245,6 @@ const oldTermName: ScanRule = (content, { plan }) => {
   ]);
 };
 
-/** One row per link target in an item. Pointing at the same dead target twice is one thing to fix. */
 const linksOf = (
   item: ContentItem,
   wanted: (link: ContentLink) => boolean,
@@ -400,7 +392,6 @@ const missingStatement: ScanRule = (content) => {
     });
 };
 
-/** What a page reads as, without its markup. */
 const pageWords = (body: string): string =>
   body
     .replaceAll(/<[^>]*>/g, " ")
@@ -408,7 +399,6 @@ const pageWords = (body: string): string =>
     .replaceAll(/\s+/g, " ")
     .trim();
 
-/** A page that says nothing, or only its own title, as a sandbox's "Test" page does. Publishing it would only show students that. */
 const isPlaceholder = (item: ContentItem): boolean => {
   const words = pageWords(item.body).toLowerCase();
   return item.type === "page" && (words === "" || words === item.title.trim().toLowerCase());

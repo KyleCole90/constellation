@@ -2,11 +2,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { claudeCodeAgent } from "~/main/providers/claude-code";
 
-/*
- * `CLAUDE_CODE_LIVE=1 npm run contract:live -- tests/claude-code.live.ts`: one tiny draft through the real, signed-in
- * `claude` on this Mac, with the same flags and checks as the app. It spends plan usage, so it runs only when asked,
- * never in `npm test` or CI. Run it before raising CLAUDE_CODE_MINIMUM (src/shared/claude-code.ts).
- */
 const LIVE = Boolean(process.env["CLAUDE_CODE_LIVE"]) && !process.env["CI"];
 
 describe.skipIf(!LIVE)("the real Claude Code", () => {
