@@ -8,14 +8,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
 type Rule = "no-double-assertion" | "no-brand-cast" | "use-iso-time";
 
-/** Each fixture is one file at `<root>/<path>`, linted by the real `vp lint`, and the rules it breaks. */
 const FIXTURES: Record<string, { code: string; breaks: readonly Rule[] }> = {
-  // #165: the saved workspace, forced past the load check.
   "src/renderer/stores/load.ts": {
     code: "export const v = ({ state, version: 3 } as unknown as StorageValue<WorkspaceData>);",
     breaks: ["no-double-assertion"],
   },
-  // #166: a stale stored LMS, forced into the current shape.
   "src/shared/providers/lms.ts": {
     code: "export const read = (state: object) => state as unknown as LmsState;",
     breaks: ["no-double-assertion"],
@@ -40,7 +37,6 @@ const FIXTURES: Record<string, { code: string; breaks: readonly Rule[] }> = {
     code: "export const permits = [\n  // forged: permits mintSendPermit never made\n  ...([{}] as unknown as SendPermit[]),\n];",
     breaks: [],
   },
-  // The old `selectors.ts` constants and `setup.ts` key read, before they asked a mint.
   "src/renderer/stores/selectors.ts": {
     code: 'export const INBOX = "t-inbox" as ThreadId;',
     breaks: ["no-brand-cast"],
@@ -65,7 +61,6 @@ const FIXTURES: Record<string, { code: string; breaks: readonly Rule[] }> = {
     code: "export const threadId = (text: string): ThreadId => text as ThreadId;",
     breaks: ["no-brand-cast"],
   },
-  // #175: a zone-less literal and a hand-rolled `isoTime()`.
   "tests/north-star.test.ts": {
     code: 'export const at = "2026-10-30T09:00:00" as IsoTime;',
     breaks: ["use-iso-time"],
@@ -90,7 +85,6 @@ const FIXTURES: Record<string, { code: string; breaks: readonly Rule[] }> = {
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
-/** Every `Brand<…>` alias src declares, so a new brand the rule doesn't know fails here. */
 const declaredBrands = (): readonly string[] => {
   const files = readdirSync(join(ROOT, "src"), { recursive: true, encoding: "utf8" }).filter(
     (file) => file.endsWith(".ts"),
@@ -113,7 +107,6 @@ const RULE = /^constellation\((no-double-assertion|no-brand-cast|use-iso-time)\)
 const isRule = (name: string): name is Rule =>
   name === "no-double-assertion" || name === "no-brand-cast" || name === "use-iso-time";
 
-/** Reads `vp lint --format json`: how many files it linted and which of these rules each one broke. */
 const parseLint = (stdout: string) => {
   const report: unknown = JSON.parse(stdout);
   if (typeof report !== "object" || report === null)

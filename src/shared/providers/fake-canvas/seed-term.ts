@@ -14,7 +14,6 @@ interface RawLink {
   text: string;
   url: string;
 }
-/** An item as the LMS stores it. Links are raw here, and the provider classifies them on the way out. */
 export interface RawItem {
   id: number;
   type: ContentItemType;
@@ -45,7 +44,6 @@ export interface RawBody {
   tools: RawTool[];
 }
 
-/** A Canvas term, which always has a name. */
 type SeedTerm = Omit<TermDates, "name"> & { name: string };
 const hintOf = (term: SeedTerm): TermDates => ({ ...term, name: termName(term.name) });
 
@@ -79,11 +77,9 @@ export interface PackageSeed {
   kb: number;
   note: string;
   hint: TermDates | null;
-  /** Where the package came from. Links inside still point there. */
   host: string;
   courseId: number;
   issues: readonly PackageIssueSeed[];
-  /** Null for a package that cannot be read. */
   body: RawBody | null;
   damaged: boolean;
 }
@@ -129,7 +125,6 @@ export const HOSTS: Readonly<Record<string, string>> = Object.fromEntries(
 );
 const NORTHGATE_HOST = "northgate.instructure.com";
 
-/** Where a person at each school is expected to be reached. Statements are what each school's syllabus must carry. */
 export const POLICIES: Readonly<Record<string, SchoolPolicy>> = {
   lcc: {
     contactDomain: "lakeshore.edu",
@@ -165,7 +160,6 @@ export const POLICIES: Readonly<Record<string, SchoolPolicy>> = {
   },
 };
 
-/** The instructor teaches at both schools, so each school's old course carries the other school's address. */
 const FOREIGN_EMAIL: Readonly<Record<string, string>> = {
   lcc: "kyle@riverbend.edu",
   rsu: "kyle@lakeshore.edu",
@@ -173,9 +167,7 @@ const FOREIGN_EMAIL: Readonly<Record<string, string>> = {
 
 interface Dues {
   early: string;
-  /** Lands inside Spring break once shifted into Spring 2027. */
   mid: string;
-  /** Lands after the new term ends. */
   late: string;
 }
 const DUES: Readonly<Record<string, Dues>> = {
@@ -194,7 +186,6 @@ interface ComposeArgs {
   courseId: number;
   code: string;
   term: SeedTerm;
-  /** The term before this one. A syllabus still points at its pages. */
   priorCourseId: number;
   foreign: string;
 }
@@ -203,7 +194,6 @@ const MISSING_FILE_ID = 555001;
 const url = (host: string, courseId: number, path: string): string =>
   `https://${host}/courses/${courseId}/${path}`;
 
-/** One course's worth of content with every finding type planted once. Ids are unique per course by construction. */
 const composeBody = ({
   host,
   courseId,
@@ -332,7 +322,6 @@ const DAYS_BY_CODE: Readonly<Record<string, readonly Weekday[]>> = {
   "HUM 150": MON_WED,
 };
 const TEMPLATE_CODES = new Set(["ENG 101", "ENG 210"]);
-/** The concluded course each Fall course descends from, so its syllabus can still point there. */
 const PRIOR_IDS: Readonly<Record<number, number>> = {
   48213: 45108,
   48227: 45121,
@@ -579,7 +568,6 @@ export const PACKAGES: readonly PackageSeed[] = [
   },
 ];
 
-/** Canvas reports this warning when a copied course's tool is not configured. */
 export const COURSE_COPY_ISSUES: readonly PackageIssueSeed[] = [
   {
     issue_type: "warning",

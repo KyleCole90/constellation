@@ -38,7 +38,6 @@ import { Id, OptionalTime } from "./canvas-wire";
 
 type SetupContent = CourseCopyContent | TextFixContent | SetContent;
 
-/** The request helpers `createCanvasProvider` builds, so term setup shares its paging, origin check and error mapping. */
 export interface CanvasClient {
   school: School;
   now(): number;
@@ -49,35 +48,27 @@ export interface CanvasClient {
     path: string,
     form: URLSearchParams,
   ): Promise<FieldOutcome>;
-  /** Creates a package migration at `path` and uploads `file` to where Canvas says, without the token. */
   importPackage(
     path: string,
     form: URLSearchParams,
     file: Blob,
     name: string,
   ): Promise<FieldOutcome>;
-  /** The package main's picker chose under `name`, or null. */
   packageFile(name: string): Promise<Blob | null>;
   me(): Promise<Result<number, LmsError>>;
-  /** The Canvas ids in a ref this school minted, or null. */
   idsIn(ref: string, kind: string, count: number): number[] | null;
-  /** Text on one line, with control and direction characters gone. */
   oneLine(text: string): string;
 }
-
-// ---- What Canvas sends for term setup, per its public API docs. ----
 
 const SetupCourse = v.object({
   id: Id,
   name: v.string(),
   course_code: v.string(),
   workflow_state: v.string(),
-  /** Whether the course is over, which Canvas knows even when it hides the term's dates from a teacher. */
   concluded: v.nullish(v.boolean(), false),
   start_at: OptionalTime,
   end_at: OptionalTime,
   total_students: v.nullish(v.number(), 0),
-  /** A course an account offers as a template. Absent on schools without course templates. */
   template: v.nullish(v.boolean(), false),
   term: v.nullish(
     v.object({ name: v.nullish(v.string(), ""), start_at: OptionalTime, end_at: OptionalTime }),
@@ -86,7 +77,6 @@ const SetupCourse = v.object({
   syllabus_body: v.nullish(v.string(), null),
 });
 type SetupCourseRow = v.InferOutput<typeof SetupCourse>;
-/** Canvas files a course with no term under its placeholder "Default Term", which isn't a term a teacher would name. */
 const termNameOf = (row: SetupCourseRow): string =>
   row.term?.name === "Default Term" ? "" : (row.term?.name ?? "");
 const SetupCourseRow = v.union([
@@ -134,7 +124,6 @@ const ModuleRow = v.object({
 });
 const ToolRow = v.object({ id: Id, name: v.string() });
 const Profile = v.object({ primary_email: v.nullish(v.string(), null) });
-/** Canvas sends `settings.source_course_id` on a course copy, as a number or a numeric string. */
 const SourceId = v.union([
   Id,
   v.pipe(
@@ -153,7 +142,6 @@ const MigrationRow = v.object({
   finished_at: OptionalTime,
   progress_url: v.nullish(v.string(), null),
   settings: v.nullish(v.object({ source_course_id: v.nullish(SourceId, null) }), null),
-  /** A package import's file, as it was named when uploaded. */
   attachment: v.nullish(v.object({ display_name: v.nullish(v.string(), null) }), null),
 });
 type MigrationRow = v.InferOutput<typeof MigrationRow>;
@@ -170,10 +158,8 @@ const IssueRow = v.object({
 });
 
 const ACTIVE = new Set(["pre_processing", "pre_processed", "waiting_for_select", "running"]);
-/** New Quizzes copies a course's quizzes after the migration reports done, each one unpublished until it lands. */
 const ARRIVING = new Set(["duplicating", "importing", "migrating", "outcome_alignment_cloning"]);
 const AssignmentState = v.object({ workflow_state: v.nullish(v.string(), null) });
-/** A real school's quizzes took about 15 seconds. A quiz still arriving past this is stuck, so the copy reads done and the scan flags it. */
 const ARRIVE_MS = 5 * 60_000;
 const arrivingAt = (row: MigrationRow, now: number): boolean =>
   row.workflow_state === "completed" &&
@@ -186,11 +172,6 @@ const stateOf = (row: MigrationRow, progress: string | null): Migration["state"]
   return "preparing";
 };
 
-/**
- * A package migration is `pre_processing` while Canvas waits for its file or prepares it. Still there this long, it may
- * never have got the file (the create's answer, with the upload address, was lost), or the file may be big or Canvas
- * busy. Canvas doesn't say which, so it is `stalled`, never `failed`: it may still run.
- */
 const STALLED_MS = 10 * 60_000;
 const stalledAt = (row: MigrationRow, now: number): boolean =>
   row.migration_type === "common_cartridge_importer" &&
@@ -203,15 +184,9 @@ const hashOf = (value: unknown): string =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16);
 
 const ANCHOR = /<a\b[^>]*?\bhref\s*=\s*(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi;
-/** A sentence's closing mark isn't part of the address it ends on. */
 const BARE_URL = /https?:\/\/[^\s"'<>]*[^\s"'<>.,;:!?)]/g;
 const REFUSED_FILE_TEXT = "This app doesn't edit files in Canvas.";
 
-/**
- * Term setup on a school's real Canvas: the reads a new term needs, and the writes a
- * copy, a fix, a publish and a template send, each one request. Long jobs aren't waited on here: `migrations` reads
- * each job's progress once, and the setup screen asks again.
- */
 export const canvasTermSetup = (client: CanvasClient) => {
   const { school, list, one, write, idsIn } = client;
   const origin = `https://${school.host}`;
@@ -224,7 +199,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
       `/courses/${id}?include[]=term&include[]=total_students&include[]=syllabus_body`,
       SetupCourse,
     );
-  /** A course's own dates, or its term's when it has none. */
   const datesOf = (row: SetupCourseRow) => ({
     start: dateOf(row.start_at ?? row.term?.start_at ?? null),
     end: dateOf(row.end_at ?? row.term?.end_at ?? null),
@@ -249,14 +223,12 @@ export const canvasTermSetup = (client: CanvasClient) => {
       startAt: start,
       endAt: end,
       itemCount,
-      // A school's own template copy has no user, or an admin's, so only a copy the teacher started counts.
       setUp: jobs.some((job) => job.user_id === mine && job.workflow_state === "completed"),
       copyTarget: refs.migrations({ school: school.id, course: row.id }),
       stateTarget: refs.courseState({ school: school.id, course: row.id }),
     };
   };
 
-  /** What a copy would land on top of: everything a course lists, without reading any bodies. */
   const itemCount = async (id: number): Read<number> => {
     const lists = await Promise.all([
       list(`/courses/${id}/pages`, PageRow),
@@ -305,7 +277,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
     return { ok: true, value: out };
   };
 
-  /** Courses taught before, and any course saved as a template. Dates Canvas hides from the teacher stay null, for the person to fill in. */
   const copySources = async (): Read<readonly SourceCourse[]> => {
     const rows = await teacherCourses("state[]=available&state[]=completed&state[]=unpublished");
     if (!rows.ok) return rows;
@@ -338,7 +309,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
         termName: termNameOf(row),
         startAt: start,
         endAt: end,
-        // Canvas keeps no meeting pattern, so the old due dates stand in for one, read the way the date shift reads them.
         meetingDays: meetingDaysOf(items.map((item) => dateOfTime(item.dueAt))),
         template: row.template,
         dated: items,
@@ -351,7 +321,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
     const rows = await list(`/courses/${id}/content_migrations`, MigrationRow);
     return rows.ok ? { ok: true, value: rows.value.toSorted((a, b) => a.id - b.id) } : rows;
   };
-  /** A job by the words a copy change carries: the course it copied from, or the package's name. Any other job matches no change. */
   const signatureOf = (row: MigrationRow): string => {
     const source = row.settings?.source_course_id ?? null;
     const file = row.attachment?.display_name ?? null;
@@ -379,7 +348,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
     return id === undefined ? null : one(`/progress/${id}`, ProgressRow);
   };
 
-  /** Every job, oldest first. A live or failed job's progress is read once; a finished job's issues come with it. */
   const migrations = (courseRef: LmsRef<"course">): Read<readonly Migration[]> => {
     const [id] = idsIn(courseRef, "course", 1) ?? [];
     if (id === undefined) return Promise.resolve(NOT_FOUND);
@@ -441,7 +409,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
     const [id] = idsIn(courseRef, "course", 1) ?? [];
     if (id === undefined) return Promise.resolve(NOT_FOUND);
     return (async () => {
-      // A publish check waits on this read, so its requests go out together rather than one after another.
       const [row, pages, assignments, topics, files, modules, tools, jobs, profile, mine] =
         await Promise.all([
           course(id),
@@ -477,7 +444,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
         bodies.set(pageId, read.value.body);
       }
 
-      /** Canvas marks no item as copied, so an item made while a copy into this course ran came with it. */
       const windows = jobs.value.flatMap((job) =>
         job.workflow_state === "completed" && job.started_at !== null && job.finished_at !== null
           ? [{ from: job.started_at, to: job.finished_at }]
@@ -492,7 +458,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
         pages: new Set(pages.value.map((page) => page.url)),
         files: new Set(files.value.map((file) => file.id)),
       };
-      /** Every anchor's href, and every web address written out as text outside an anchor. */
       const linksIn = (html: string) => {
         const anchors = [...html.matchAll(ANCHOR)].map((match) => ({
           from: match.index,
@@ -542,7 +507,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
                 published: true,
                 dueAt: null,
                 openUrl: `${origin}/courses/${id}/assignments/syllabus`,
-                // The syllabus is a course field with no date of its own, and a copy brings it.
                 copied: windows.length > 0,
               }),
             ]),
@@ -580,7 +544,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
           item("file", file.id, {
             title: file.display_name,
             body: "",
-            // A `hidden` file, or one in a hidden folder such as Uploaded Media, is one students open from a link.
             published: !file.locked,
             dueAt: null,
             openUrl: `${origin}/courses/${id}/files/${file.id}`,
@@ -606,13 +569,11 @@ export const canvasTermSetup = (client: CanvasClient) => {
           itemCount: module.items_count,
           openUrl: `${origin}/courses/${id}/modules/${module.id}`,
         })),
-        // A tool Canvas lists for the course, its own or its account's, is set up for it.
         tools: tools.value.map((tool) => ({
           ref: refs.tool({ school: school.id, course: id, tool: tool.id }),
           name: tool.name,
           configured: true,
         })),
-        // Canvas keeps no required statements, so only the teacher's own address is school policy here.
         policy:
           email === null || domain === ""
             ? { contactDomain: school.host, statements: [] }
@@ -627,13 +588,9 @@ export const canvasTermSetup = (client: CanvasClient) => {
     copySources,
     courseContent,
     migrations,
-    // A real school's packages come from the teacher's own disk, through main's picker, so none are offered here.
     samplePackages: () => Promise.resolve({ ok: true, value: [] }),
   };
 
-  // ---- Writes. Each ref comes from the untrusted renderer, so it is parsed before any path is built. ----
-
-  /** An item ref this school minted: `<school>:item:<course>:<type>:<id>`. */
   const itemAt = (ref: string) => {
     const [owner, kind, courseId, type, itemId, ...rest] = refParts(ref);
     if (
@@ -651,7 +608,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
   };
   type ItemAt = NonNullable<ReturnType<typeof itemAt>>;
 
-  /** The rich text an item holds, as Canvas stores it, and the form key that writes it back. */
   const textOf = async (
     at: ItemAt,
   ): Read<{ body: string; title: string; path: string; key: string }> => {
@@ -705,7 +661,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
             }
           : read;
       }
-      // A file has no text to fix, but has a name for the send dialog.
       case "file": {
         const read = await one(`${at.base}/files/${at.id}`, FileItem);
         return read.ok
@@ -715,7 +670,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
     }
   };
 
-  /** Where an item's published state is read and written, and the form that publishes it. Null for the syllabus. */
   const publishOf = (
     at: ItemAt,
   ): { read?: string; path: string; form: Record<string, string> } | null => {
@@ -730,7 +684,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
       case "announcement":
         return { path: `${at.base}/discussion_topics/${at.id}`, form: { published: "true" } };
       case "file":
-        // Canvas writes a file at `/files/:id` only, which names no course, so the read goes through the course.
         return {
           read: `${at.base}/files/${at.id}`,
           path: `/files/${at.id}`,
@@ -822,16 +775,11 @@ export const canvasTermSetup = (client: CanvasClient) => {
     };
   };
 
-  /**
-   * Canvas can answer 200 to a setting it doesn't apply, as with a file its hidden folder keeps hidden. A setting lands
-   * only once Canvas reads back the value it was sent.
-   */
   const confirmed = async (content: SetContent, sent: FieldOutcome): Promise<FieldOutcome> => {
     const read = await observe(content);
     if (!read.ok) return { status: "unknown", since: isoTime(client.now()) };
     const now = read.value.kind === "item-set" ? read.value.value : null;
     const wanted = fieldText(content, "value");
-    // Canvas stores a due time of exactly midnight as 11:59:59 the night before, which is the date that was sent.
     const same =
       content.intent.set === "due-at" && now !== null
         ? Math.abs(Date.parse(now) - Date.parse(wanted)) <= 1000
@@ -870,7 +818,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
         const at = itemAt(content.target);
         const publish = at && publishOf(at);
         if (!publish) return refused("That item can't be published from here.");
-        // A file id is global in Canvas, so it is written only once its own course says it holds it.
         if (publish.read !== undefined) {
           const held = await one(publish.read, FileItem);
           if (!held.ok) return { status: "failed", error: held.error };
@@ -947,7 +894,6 @@ export const canvasTermSetup = (client: CanvasClient) => {
         if (path === null)
           return valueOf("present", intent.set === "item-deleted" ? "present" : null);
         const read = await one(path, v.object({ ...Published.entries, due_at: OptionalTime }));
-        // A deleted item still observes, as `deleted`, so a delete whose response was lost reads as done.
         if (!read.ok) return read.error.kind === "not_found" ? valueOf("deleted", "deleted") : read;
         switch (intent.set) {
           case "due-at":

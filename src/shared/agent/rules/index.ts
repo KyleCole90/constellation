@@ -53,7 +53,6 @@ const ANNOUNCEMENT_CAPABILITIES =
   'I can adjust the announcement you have open. Try "make it about the midterm review on Friday", "drop the last sentence", "say X instead of Y", "make it shorter", or "mention the room change".';
 const TEXT_CAPABILITIES =
   'I can adjust the draft you have open. Try "drop the last sentence", "say X instead of Y", "make it shorter", "warmer", or "mention the due date".';
-/** Names this draft's own criteria, so an example never points at a rubric that isn't open. */
 const gradeCapabilities = ({ rubric }: GradeContent): string => {
   const [first, second] = rubric ?? [];
   const examples = [
@@ -123,7 +122,6 @@ const genericDraft = (assignment: Assignment, submission: Submission): GradeDraf
   };
 };
 
-/** Nothing to read means nothing to score, so the draft is a zero. Rubric criteria fall to 0 below. */
 const missingDraft = (assignment: Assignment): GradeDraft => ({
   opens: "",
   scores: null,
@@ -144,7 +142,6 @@ const gradeDraftFor = (submission: Submission, assignment: Assignment): GradeDra
     ? missingDraft(assignment)
     : (findBankDraft(submission) ?? genericDraft(assignment, submission));
 
-/** Fills only what the teacher left blank, so a score or comment they typed stays theirs. */
 async function* fillGrade({ scope }: AgentInput): AsyncGenerator<unknown, void> {
   const change = scope.changes.find((c) => c.id === scope.focus);
   const content = change?.content;
@@ -201,7 +198,6 @@ async function* draftGrade(input: AgentInput): AsyncGenerator<unknown, void> {
     return;
   }
   const { kind } = submission.body;
-  // Like Claude: an upload or link reaches it only as files, so without them there is nothing to grade.
   if ((kind === "upload" || kind === "url") && !input.files?.length) {
     yield {
       type: "say",
@@ -324,7 +320,6 @@ function* draftMessage({
   };
 }
 
-/** A draft about what the person named. The rule agent knows no details beyond their words, so it adds none. */
 const announcementAbout = (code: string, topic: string) => {
   const subject = topic.replace(/^(the|a|an|our|your)\s+/i, "");
   return {
@@ -375,7 +370,6 @@ function* draftAnnouncement(
   };
 }
 
-/** A draft's rewritable text and the patch that replaces it. Null when the draft has no text to rewrite. */
 const textField = (
   content: ChangeContent,
 ): { text: string; patch: (text: string) => ChangePatch } | null => {
@@ -405,7 +399,6 @@ const findCriterion = (rubric: readonly RubricScore[], phrase: string): RubricSc
 };
 
 const say = (text: string): AgentEffect => ({ type: "say", text });
-/** How a teacher states a preference for the drafts still to come, as opposed to a change to the one open. */
 const STANDING_PREFERENCE = /\b(from now on|stricter|harsher|tougher|gentler|more lenient)\b/i;
 const decline = (text: string): AgentEffect => ({ type: "decline", text });
 const edit = (change: ChangeRecord, patch: ChangePatch, why: string): Edit => ({
@@ -428,7 +421,6 @@ const setCriterion = (change: ChangeRecord, criterion: RubricScore, value: numbe
   );
 };
 
-/** Reaches a target total by spreading the difference over criteria in order, within each one's range. */
 const spread = (rubric: readonly RubricScore[], delta: number): Record<string, number> | null => {
   const points: Record<string, number> = {};
   let left = delta;
@@ -443,7 +435,6 @@ const spread = (rubric: readonly RubricScore[], delta: number): Record<string, n
 };
 
 const setGrade = (change: ChangeRecord, content: GradeContent, final: number): AgentEffect => {
-  // Rescoring would drop the teacher's total and move rubric scores the student sees.
   if (content.override != null)
     return decline(
       `You set this total to ${content.override} yourself. Change it on the form, or choose Use the scores.`,
@@ -481,7 +472,6 @@ const normalized = (request: string): string =>
     .replace(/\s+please$/i, "")
     .replace(/(\d)\s*(?:points?|pts)\b/gi, "$1");
 
-/** Each clause is read against the draft as the clauses before it left it, so two text edits stack instead of the second undoing the first. */
 const correct = (
   request: string,
   change: ChangeRecord,
@@ -622,7 +612,6 @@ const correctOne = (
   return say(capabilitiesFor(content));
 };
 
-/** Yields raw objects on purpose: this agent goes through the same parser a real model would. */
 export const createRuleAgent = (): Agent => ({
   async *run(input) {
     const { request, scope } = input;

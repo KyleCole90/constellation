@@ -30,7 +30,6 @@ export const LCC = schoolId("lcc");
 export const RSU = schoolId("rsu");
 const TOKEN = "fake-token-with-enough-length";
 
-/** A grade a teacher might give: 80% on every criterion, with a comment and nothing attached. */
 export const gradeContentFor = (
   server: FakeCanvasServer,
   submission: Submission,
@@ -61,7 +60,6 @@ export const gradeContentFor = (
   };
 };
 
-/** Sends through the real runner against the fake LMS, with a clock the test drives and a record of each write. */
 export const makeRig = async () => {
   const clock = new VirtualClock();
   const storage = memoryStorage();
@@ -165,7 +163,6 @@ export const makeRig = async () => {
     if (!result.ok) throw new Error(`approve rejected: ${result.error}`);
   };
 
-  /** A ready-to-send change for the nth submission that needs a grade at this school. */
   const approvedGrade = async (
     school: SchoolId,
     index = 0,
@@ -184,7 +181,6 @@ export const makeRig = async () => {
     return found;
   };
 
-  /** What a page reload does: new server object and new runner over the same durable state. The old tab's locks go with it. */
   const reload = (): Writeback => {
     server = newServer();
     locks = new BrowserLocks();

@@ -1,12 +1,10 @@
 import type { ContentItemType } from "~/shared/domain/content";
 import type { LmsRef, SchoolId } from "~/shared/domain/ids";
 
-/** Canvas-shaped numeric ids live inside the ref, so `describe` can print a real path without a lookup. */
 const ref = <K extends string>(school: SchoolId, kind: K, ...ids: readonly (string | number)[]) =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: the provider that parses refs writes them here
   [school, kind, ...ids].join(":") as LmsRef<K>;
 
-/** Named, so each call says which Canvas id is which instead of trusting the order of three numbers. */
 type In<Ids extends string, Id = number> = { school: SchoolId } & Readonly<Record<Ids, Id>>;
 
 export const refs = {
@@ -22,7 +20,6 @@ export const refs = {
     ref(school, "conversation", conversation),
   announcement: ({ school, announcement }: In<"announcement", string | number>) =>
     ref(school, "announcement", announcement),
-  /** `type` rides in the ref because each Canvas item type has its own path, and a route needs it without a lookup. */
   item: ({ school, course, type, item }: In<"course" | "item"> & { type: ContentItemType }) =>
     ref(school, "item", course, type, item),
   module: ({ school, course, module }: In<"course" | "module">) =>

@@ -8,10 +8,6 @@ import { build, createServer, preview } from "vite";
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const HOST = "127.0.0.1";
 
-/**
- * Serves the app in this process, so it dies with the script. `vp dev` ran vite as a grandchild that outlived a killed `vp` and kept serving its worktree on [::1].
- * A port probed on 127.0.0.1 looked free while one of those held it, so a run could drive another checkout's app. Port 0 on one address leaves no such gap.
- */
 export const startDevServer = async () => {
   const server = await createServer({
     root: ROOT,
@@ -26,7 +22,6 @@ export const startDevServer = async () => {
   };
 };
 
-/** Builds the app into a temporary folder and serves it the way it ships, for checks where the built CSS differs from dev. */
 export const startBuiltServer = async () => {
   const outDir = await mkdtemp(join(tmpdir(), "constellation-built-"));
   await build({ root: ROOT, logLevel: "error", build: { outDir, emptyOutDir: true } });

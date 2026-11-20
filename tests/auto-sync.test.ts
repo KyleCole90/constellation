@@ -11,7 +11,6 @@ const LCC = schoolId("lcc");
 const RSU = schoolId("rsu");
 const MINUTE = 60_000;
 
-/** A timer the test fires by hand, so the app's interval never races the assertions. */
 const handTimer = () => {
   const armed: { run: () => void; ms: number; live: boolean }[] = [];
   return {

@@ -10,7 +10,6 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 interface Enforcers {
   scripts: ReadonlySet<string>;
-  /** Lint rules switched on as errors, anywhere in the config. oxlint itself rejects a rule name that doesn't exist. */
   lintRules: ReadonlySet<string>;
   lintPlugins: ReadonlySet<string>;
   compilerOptions: ReadonlySet<string>;
@@ -22,7 +21,6 @@ interface Row {
   enforcedBy: readonly string[];
 }
 
-/** The rows of the "Rules and what enforces them" table, with each enforcer cell's backticked names. */
 const tableRows = (markdown: string): readonly Row[] => {
   const section = markdown
     .split(/^## /m)

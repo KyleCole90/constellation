@@ -263,7 +263,6 @@ describe("the AI source", () => {
 });
 
 describe("a workspace saved by version 2", () => {
-  /** What version 2 wrote: the same state with the key status and a per-school step. */
   const asVersion2 = (
     rig: StoreRig,
     patch: { onboarding: string; aiKeyStatus: "none" | "saved" },

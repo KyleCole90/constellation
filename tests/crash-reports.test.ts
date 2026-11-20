@@ -8,7 +8,6 @@ import { telemetryMain } from "./fixtures/telemetry-main";
 
 const holder = vi.hoisted(() => ({ bridge: undefined as Bridge | undefined }));
 
-// The UI reads the preload's bridge once, at import, so the bridge below exists before the screens load.
 vi.mock("~/renderer/desktop", async (actual) => ({
   ...(await actual<typeof import("~/renderer/desktop")>()),
   get desktopBridge() {

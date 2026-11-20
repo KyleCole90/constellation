@@ -50,7 +50,6 @@ const sent = (
   messages: [{ id: "1", mine: true, author: "Teacher", text, at: isoTime(at) }],
 });
 
-/** The messages found in the sandbox's sent folder, as their subjects and openings read. */
 const SENT = [
   sent(
     JOEY,

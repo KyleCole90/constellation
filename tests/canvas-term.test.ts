@@ -73,7 +73,6 @@ const setupOf = (provider: LmsProvider): TermSetup => {
   if (!provider.termSetup) throw new Error("Canvas offers no term setup");
   return provider.termSetup;
 };
-/** The new-term course and last term's course, as the setup screens find them. */
 const shellAndSource = async (provider: LmsProvider) => {
   const setup = setupOf(provider);
   const shell = (await unwrap(setup.newCourses())).find((entry) => entry.ref === SHELL);
@@ -118,7 +117,6 @@ describe("Canvas term setup reads", () => {
       ref: `${TERM_HOST}:course:${SOURCE_ID}`,
       startAt: "2026-08-24",
       endAt: "2026-12-11",
-      // Essay 1 is due on a Thursday, so the class reads as meeting Thursdays until the teacher says otherwise.
       meetingDays: [4],
       dated: [{ title: "Essay 1", dueAt: "2026-09-10T23:59:00.000Z" }],
     });
@@ -247,7 +245,6 @@ describe("Canvas term setup reads", () => {
     const provider = canvasOver(new CanvasTermHttp());
     const sources = await unwrap(setupOf(provider).copySources());
     expect(sources.map((entry) => [entry.code, entry.template, entry.termName])).toEqual([
-      // Canvas's placeholder "Default Term" is no term a teacher would name.
       ["ENG-TPL", true, ""],
       ["ENG-101", false, "Fall 2026"],
     ]);
@@ -380,7 +377,6 @@ describe("Canvas term setup writes", () => {
 });
 
 describe("what a Canvas copy brings, as the setup review reads it (#132, #136)", () => {
-  /** The shell with ENG-101's copy sent, at the moment Canvas reports the migration completed. */
   const copied = async (http = new CanvasTermHttp()) => {
     const provider = canvasOver(http);
     const { shell, source } = await shellAndSource(provider);
@@ -626,7 +622,6 @@ describe("Canvas .imscc upload", () => {
     const { content } = await importOf(provider);
     const sent = await provider.apply(await permitFor(provider, content, ["copy"], SCHOOL.id));
     expect(sent.copy).toMatchObject({ status: "failed", error: { kind: "rejected" } });
-    // The fake throws on any request that leaves the school, so getting here means none did.
     expect(http.requests.some((line) => line.includes("create_success"))).toBe(false);
   });
 
@@ -685,18 +680,14 @@ describe("Canvas .imscc upload", () => {
     await clock.run(writeback.send([draft.id]));
     expect(ledger.get(draft.id)?.state.tag).toBe("sent");
     expect(http.jobs).toHaveLength(1);
-    // Its upload address went with the lost answer, so the job waits for a file: one job, never two imports.
     expect(http.uploads).toEqual([]);
     const jobs = await unwrap(setupOf(provider).migrations(shell.ref));
     expect(jobs.map((job) => job.state)).toEqual(["preparing"]);
 
-    // Past the bound it reads as stalled, never failed: Canvas can't say the file didn't arrive, so the setup offers
-    // Copy again with a warning rather than declaring the import gone.
     http.advance(11 * 60_000);
     const stalled = await unwrap(setupOf(provider).migrations(shell.ref));
     expect(stalled.map((job) => job.state)).toEqual(["stalled"]);
 
-    // Copying again is a new change. Its send passes over the stalled job, so this send imports once.
     const again = {
       ...newDraft("ch-imscc-again", content, await unwrap(provider.observe(content))),
       school: SCHOOL.id,
@@ -778,7 +769,6 @@ describe("main's .imscc picker", () => {
     expect(JSON.stringify(picked)).not.toContain(path);
 
     const { shell, content } = await importOf(provider);
-    // The renderer's size is only a request; the upload uses main's file.
     const lying = { ...content, source: { ...content.source, kb: 999_999 } };
     const sent = await provider.apply(await permitFor(provider, lying, ["copy"], SCHOOL.id));
     expect(sent.copy?.status).toBe("landed");
@@ -806,7 +796,6 @@ describe("main's .imscc picker", () => {
     expect(await unwrap(pick(fixture("comm110-lakeshore-fall2026-export.imscc")))).toMatchObject({
       hint: { name: null, start: "2026-08-24", end: "2026-12-11", days: [2, 4] },
     });
-    // A real export often leaves the end blank; the teacher types only what's missing.
     expect(await unwrap(pick(fixture("damaged-export.imscc")))).toMatchObject({
       hint: { start: "2026-01-20", end: "", days: [] },
     });

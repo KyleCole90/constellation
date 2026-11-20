@@ -21,18 +21,12 @@ type Listener = (sender: string | null, input: unknown) => Promise<unknown>;
 const APP = "app://constellation/";
 const TOKEN = "fake-token-with-enough-length";
 
-/**
- * Main's `lms.*` handlers, with tokens from `vault`: real Canvas over `fetch` as the teacher's app runs, or without it
- * a quiet fake LMS on `clock`, as verify runs the app.
- */
 export const fakeLmsHandlers = (
   options: {
     clock?: VirtualClock;
     vault?: Vault;
     fetch?: Fetch;
-    /** When the teacher last pressed something in the window. Just now, unless a test says otherwise. */
     pressedAt?: () => number;
-    /** The path main's file picker answers. Cancels unless a test says otherwise. */
     choosePackage?: () => Promise<string | null>;
     onServer?: (server: FakeCanvasServer) => void;
   } = {},
@@ -65,11 +59,6 @@ export const fakeLmsHandlers = (
   });
 };
 
-/**
- * The desktop app's LMS in one process: the renderer's bridge client, the real IPC map with structured clone on
- * both edges, and main's handlers over real Canvas when given `fetch`, or else a quiet fake LMS. Main's vault is a
- * memory vault here.
- */
 export const bridgedLms = (
   options: {
     fetch?: Fetch;
@@ -108,7 +97,6 @@ export const bridgedLms = (
       }),
     },
   );
-  /** What main's listener for `channel` answers, as the preload would get it. */
   const call = async (channel: string, input: unknown, sender: string | null = APP) => {
     const listen = listeners.get(channel);
     if (!listen) throw new Error(`no listener for ${channel}`);
@@ -118,7 +106,6 @@ export const bridgedLms = (
     fakes: options.fetch === undefined,
     invoke: invoker((channel, input) => call(channel, input)),
   };
-  // Only the fake world has a lab to follow: real Canvas refuses `lms.lab`.
   const fake =
     options.fetch === undefined
       ? bridgeFakeLms(bridge, FAKE_CANVAS, FAKE_CANVAS_FACE, clock.now)
@@ -127,7 +114,6 @@ export const bridgedLms = (
     if (!fake) throw new Error("this rig runs real Canvas, with no fake");
     return fake;
   };
-  /** Main's live fake: the renderer reloads it on start, as a page load does. */
   const server = () => {
     const live = servers.at(-1);
     if (!live) throw new Error("main made no server");
@@ -139,7 +125,6 @@ export const bridgedLms = (
     if (!school) throw new Error(`No school ${id}`);
     return theFake().descriptor.create({ school, lease: vault.leaseFor(id) });
   };
-  /** Saves a token in main's vault, then checks it through the bridge. */
   const connect = async (id: SchoolId) => {
     await vault.enroll(id, { kind: "bearer", token: new Secret(TOKEN) });
     const result = await provider(id).verify();

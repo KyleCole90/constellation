@@ -60,16 +60,10 @@ import {
 import { refParts } from "./canvas-refs";
 import type { AccountInfo, FieldOutcome, FieldOutcomes } from "./provider";
 
-/*
- * What a provider's reads and writes carry across the bridge. Each schema is annotated with its domain type, so the
- * domain type stays the only definition and a schema that drifts from it fails to compile.
- */
-
 const text = v.string();
 const count = v.number();
 const nullable = <T>(schema: v.GenericSchema<T>) => v.nullable(schema);
 
-/** A whole list, as every provider read returns one. */
 export const listOf = <T>(item: v.GenericSchema<T>): v.GenericSchema<readonly T[]> => v.array(item);
 
 export const brand = <T extends string>(check: (raw: string) => boolean = () => true) =>
@@ -78,16 +72,11 @@ export const brand = <T extends string>(check: (raw: string) => boolean = () => 
 export const SchoolIdSchema: v.GenericSchema<SchoolId> = brand<SchoolId>(
   (raw) => parseSchoolId(raw) === raw,
 );
-/**
- * A school's ref, `school:…`. The kind lives in the type and not in the words: a ref is the vendor's identity, and only
- * the provider that minted it can say what kind it is, so each provider refuses a ref of the wrong kind itself.
- */
 export const lmsRef = <K extends string>(_kind: K) =>
   brand<LmsRef<K>>((raw) => {
     const [school = "", ...ids] = refParts(raw);
     return parseSchoolId(school) === school && ids.length > 0 && ids.every((id) => id !== "");
   });
-/** Only the format `isoTime` writes, so IsoTimes compare as text and slice to their day. */
 export const IsoTimeSchema: v.GenericSchema<IsoTime> = brand<IsoTime>(
   (raw) => parseIsoTime(raw) === raw,
 );
@@ -122,14 +111,11 @@ export const LmsErrorSchema: v.GenericSchema<LmsError> = v.variant("kind", [
   v.object({ kind: v.literal("unsupported"), capability: text }),
 ]);
 
-/** A provider read: the value, or the LMS error it met. */
 export const readOf = <T>(value: v.GenericSchema<T>): v.GenericSchema<Result<T, LmsError>> =>
   v.variant("ok", [
     v.object({ ok: v.literal(true), value }),
     v.object({ ok: v.literal(false), error: LmsErrorSchema }),
   ]);
-
-// ---- Reads ----
 
 export const AccountInfoSchema: v.GenericSchema<AccountInfo> = v.object({
   displayName: text,
@@ -165,7 +151,6 @@ export const StudentSchema: v.GenericSchema<Student> = v.object({
   name: text,
 });
 
-/** Keyed by criterion ref, checked as text: valibot types a record keyed by a brand as partial. */
 const ScoresSchema: v.GenericSchema<Readonly<Record<LmsRef<"criterion">, number>>> = v.record(
   v.pipe(
     text,
@@ -284,8 +269,6 @@ export const RemoteStateSchema: v.GenericSchema<RemoteState> = v.variant("kind",
   v.object({ kind: v.literal("text-fix"), targetVersion: text, body: text }),
   v.object({ kind: v.literal("item-set"), targetVersion: text, value: nullable(text) }),
 ]);
-
-// ---- Term setup reads ----
 
 const TermNameSchema: v.GenericSchema<TermName | null> = nullable(
   brand<TermName>((raw) => termName(raw) !== null),
@@ -414,8 +397,6 @@ export const SamplePackageSchema: v.GenericSchema<SamplePackage> = v.object({
   note: text,
   hint: nullable(PackageTermSchema),
 });
-
-// ---- Writes ----
 
 export const TermPlanSchema: v.GenericSchema<TermPlan> = v.object({
   oldTerm: TermDatesSchema,

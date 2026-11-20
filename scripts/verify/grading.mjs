@@ -36,7 +36,6 @@ const settled = (t, label) =>
 const OPEN = '[data-testid="grade-open"]';
 const savedChanges = `Object.keys(JSON.parse(localStorage.getItem(${KEY})).state.changes).length`;
 
-/** Opening spends nothing: the submission shows with the two choices, no agent runs, and no change is saved (#48). */
 const opensUndrafted = async (t, student, label) => {
   await t.waitFor(
     `document.querySelector(${JSON.stringify(OPEN)})?.innerText.includes(${JSON.stringify(student)})`,
@@ -104,7 +103,6 @@ const chips = (replies) => replies.flatMap((reply) => reply.edited);
 const chipsOnScreen = (t) =>
   t.eval(`[...document.querySelectorAll('${CHAT} [data-edited] li')].map((li) => li.innerText)`);
 
-/** A correction answers with the words that moved, in this rubric's own names. */
 const speechCorrections = async (t) => {
   const visual = await ask(t, "make visual aid 15");
   t.assert(
@@ -353,7 +351,6 @@ const pinnedQueue = async (t) => {
   await expandQueue(t);
   const MORE = '[data-testid="queue-more"]';
   const hiddenBelow = `(() => { const list = document.querySelector(${JSON.stringify(LIST)}).getBoundingClientRect(); return [...document.querySelectorAll("[data-row]")].filter((row) => row.getBoundingClientRect().bottom > list.bottom + 1).length; })()`;
-  // The list refits its height a frame after the card resizes, so a count read before it settles is off by the rows the refit adds or takes away.
   const { below, cue } = await t.steady(
     `({ below: ${hiddenBelow}, cue: document.querySelector(${JSON.stringify(MORE)})?.innerText })`,
   );
@@ -1677,7 +1674,6 @@ const keyboardAndClear = async (t) => {
     "a clear queue's receipt offers the next course's work, not the one just sent, before the sync reads it back (#78)",
     await t.text(onward),
   );
-  // A page load starts a fresh fake LMS, which drops the hold, so What's due opens from the sidebar.
   await t.click('[data-testid="sidebar"] a[href="/due"]');
   await t.waitFor(
     `document.querySelector('[data-testid="due-list"]')`,
@@ -1802,7 +1798,6 @@ const keyboardAndClear = async (t) => {
   await t.shot("announcement-retarget");
 };
 
-/** Issue #36: a draft that fails leaves the submission open, so "Draft this one", Draft with Claude and a hand grade all work. */
 const failedDraft = async (t) => {
   await t.goto("/threads/t-queue");
   await t.waitFor(
@@ -1899,7 +1894,6 @@ const failedDraft = async (t) => {
   await t.eval(`window.__setAgentStandIn(null)`);
 };
 
-/** A hand grade takes the same two steps as an AI draft: Approve stops at Approved. Not sent, and only Send writes to the LMS (#51). */
 const handApproveThenSend = async (t, student) => {
   const scores = await t.eval(`document.querySelectorAll('${CARD} [data-typed-score]').length`);
   for (let index = 0; index < scores; index++) {
@@ -1988,7 +1982,6 @@ const network = async (t, offline) => {
   });
 };
 
-/** Grade it yourself isn't one-way: an untouched hand form offers Draft with Claude, which spends a model call only on click (#59). */
 const handFormBackToClaude = async (t) => {
   await t.goto("/threads/t-queue");
   await t.waitFor(`document.querySelector(${JSON.stringify(QUEUE)})`, "hand form: the list loads");
@@ -2038,7 +2031,6 @@ const handFormBackToClaude = async (t) => {
   );
 };
 
-/** A hand form the teacher has typed into still offers Draft with Claude, which keeps what they typed, and Discard stays on the student (#66). */
 const handFormTypedBackToClaude = async (t) => {
   await t.goto("/threads/t-queue");
   await t.waitFor(
@@ -2106,7 +2098,6 @@ const handFormTypedBackToClaude = async (t) => {
   );
 };
 
-/** Grading a rubric from the keyboard: Tab from the last score lands in the comment, so a typed comment can't press Override total (#144). */
 const handFormKeyboard = async (t) => {
   await t.goto("/threads/t-e101-essay2");
   await t.waitFor(
@@ -2202,7 +2193,6 @@ const discard = async (t) => {
     "Undo brings the grade back with your edit",
   );
   await t.waitFor(`location.search.startsWith("?row=")`, "Undo puts the row back in the URL");
-  // Undo slides the preview back in and the comment rewraps after it, with a pause between that a two-sample check reads as still.
   const discardAt = `JSON.stringify([...document.querySelectorAll('[data-testid="card-actions"] button')].find((b) => b.innerText === "Discard")?.getBoundingClientRect())`;
   for (let before = null, tries = 0; tries < 20; tries++) {
     const now = await t.eval(discardAt);
@@ -2220,7 +2210,6 @@ const discard = async (t) => {
   await t.shot("discard-done");
 };
 
-/** A teacher types into Claude's comment and clicks Approve: one click commits the edit and approves it (#116). */
 const editThenApprove = async (t) => {
   const { width, height } = t.size;
   await t.goto("/threads/t-queue");
@@ -2233,7 +2222,6 @@ const editThenApprove = async (t) => {
     15_000,
   );
   await settled(t, "edit then approve: agent finished");
-  // The walker's window, where a longer status label rewrapped this name onto one more line.
   await t.viewport(1280, 788);
   await t.click(`${CARD} [data-edit-field]`);
   await t.eval(`document.activeElement.setSelectionRange(1e6, 1e6)`);
@@ -2543,8 +2531,6 @@ const submissionTypes = async (t) => {
   await t.waitFor(`!document.querySelector(${JSON.stringify(CARD)})`, "Word draft: discarded");
 };
 
-/** Issues #81 and #91: once Claude says it can't see the work, the app's own message for that submission leads, and the unchanged submission offers no paid redraft, reload included. The same student's next unreadable link gets its own decline and its own message. */
-/** A student result says "to grade" only when it opens work that is, never the row waiting on them to resubmit (#121). */
 const searchStudent = async (t, student, asked, label) => {
   await t.key("Meta+k");
   await t.waitFor(
@@ -2847,7 +2833,6 @@ const cantSee = async (t) => {
   await t.shot("cant-see-fresh-copy-gradebook");
 };
 
-/** A preference typed in chat is the thread's guidance: it shows above the composer, survives a reload, reaches the next Draft press, and clears (#97). */
 const preference = async (t) => {
   const STRICTER = "Be a bit stricter with grades from now on";
   const GUIDANCE = '[data-testid="thread-guidance"]';

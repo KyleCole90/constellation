@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// A stand-in for `claude`: it answers --version and `auth status`, and for a run records its argv, environment,
-// working folder and stdin, then replays the stream-json lines of the scenario file named by FAKE_CLAUDE.
 import { appendFileSync, readFileSync, readdirSync } from "node:fs";
 
 const scenario = JSON.parse(readFileSync(process.env.FAKE_CLAUDE, "utf8"));
@@ -34,7 +32,6 @@ process.stdin.on("end", async () => {
   await new Promise((resolve) => setTimeout(resolve, scenario.delayMs ?? 0));
   for (const line of scenario.lines ?? []) process.stdout.write(`${JSON.stringify(line)}\n`);
   appendFileSync(scenario.record, `${JSON.stringify({ pid: process.pid, ended: Date.now() })}\n`);
-  // Hangs until killed, but never outlives the test run that started it.
   if (scenario.hang) {
     const parent = process.ppid;
     setInterval(() => process.ppid !== parent && process.exit(0), 100);

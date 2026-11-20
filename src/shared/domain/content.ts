@@ -3,35 +3,23 @@ import type { Course } from "./lms";
 import type { Splice } from "./splice";
 import type { DateShiftOptions, DraftDate, DueDay, TermDates, TermPlan, Weekday } from "./term";
 
-// ---- What a provider returns for a new term. Neutral, with no wire types. ----
-
 export interface CourseShell extends Course {
   termName: string;
   startAt: IsoDate | null;
   endAt: IsoDate | null;
   itemCount: number;
-  /** A copy or package import the teacher started has finished in it, from this install or any other. */
   setUp: boolean;
   copyTarget: LmsRef<"migrations">;
   stateTarget: LmsRef<"course-state">;
 }
 
-/**
- * Whether an unpublished course is one to set up for a coming term. Many schools hide term dates from teachers, so the
- * LMS says whether a course is over, and an unknown start counts as still to come.
- */
 export const isComing = (
   course: { concluded: boolean; startAt: IsoDate | null },
   today: IsoDate,
 ): boolean => !course.concluded && (course.startAt === null || course.startAt > today);
 
-/** Dashes, colons and the like a title can start or end with, which say nothing alone. */
 const LOOSE_ENDS = /^[\s\-\u2013\u2014:|\u00b7,]+|[\s\-\u2013\u2014:|\u00b7,]+$/g;
 
-/**
- * What a course's title says beyond its code, or null when nothing. Canvas often holds the code in the title too, as
- * code "Music Theory" with title "Music Theory -", so showing both would say it twice.
- */
 export const titleBeyondCode = ({ code, title }: Pick<Course, "code" | "title">): string | null => {
   const trimmed = title.replace(LOOSE_ENDS, "");
   const prefix = code.trim();
@@ -43,7 +31,6 @@ export const titleBeyondCode = ({ code, title }: Pick<Course, "code" | "title">)
   return rest === "" ? null : rest;
 };
 
-/** A course's code and title, each said once. */
 export const courseName = (course: Pick<Course, "code" | "title">): string =>
   [course.code, titleBeyondCode(course)].filter(Boolean).join(" ");
 
@@ -58,7 +45,6 @@ export interface SourceCourse {
   code: string;
   title: string;
   termName: string;
-  /** Null when the school hides the term's dates and the course has none of its own; the person fills them in. */
   startAt: IsoDate | null;
   endAt: IsoDate | null;
   meetingDays: readonly Weekday[];
@@ -70,19 +56,13 @@ export type CopySource =
   | { kind: "course"; ref: LmsRef<"course">; label: string; termName: string }
   | { kind: "cartridge"; name: string; kb: number; hint: PackageTerm | null };
 
-/** How a copy names where it comes from: a course with its term, when it has one, or a package by its file name. */
 export const sourceName = (source: CopySource): string => {
   if (source.kind === "cartridge") return source.name;
   return source.termName === "" ? source.label : `${source.label} (${source.termName})`;
 };
 
-/**
- * What a package says about its own term, and the due days it holds, as written in the course's own time zone. A real
- * export may leave out its end date, or have no due dates to read days from.
- */
 export type PackageTerm = TermDates<DraftDate> & { dated: readonly DueDay[] };
 
-/** A package main's file picker chose: its name, size and own term cross to the renderer, never its path or bytes. */
 export type PickedPackage = Pick<SamplePackage, "name" | "kb"> & { hint: PackageTerm | null };
 
 export interface SamplePackage {
@@ -103,7 +83,6 @@ export type ContentItemType = (typeof CONTENT_ITEM_TYPES)[number];
 export const isContentItemType = (value: unknown): value is ContentItemType =>
   CONTENT_ITEM_TYPES.some((type) => type === value);
 
-/** Classified by the provider, because URL grammar is vendor knowledge. Rules never parse a vendor URL. */
 export type ContentLink = { text: string; url: string } & (
   | { points: "this-course" | "web" | "missing-page" | "missing-file" }
   | { points: "other-course"; replacement: string | null }
@@ -119,7 +98,6 @@ export interface ContentItem {
   dueAt: IsoTime | null;
   openUrl: string;
   links: readonly ContentLink[];
-  /** Came in with a migration, rather than being written in this course. */
   copied: boolean;
 }
 
@@ -145,14 +123,12 @@ interface RequiredStatement {
 
 export interface SchoolPolicy {
   contactDomain: string;
-  /** This instructor's address at the school. What a foreign address is replaced with. */
   contactEmail?: string;
   statements: readonly RequiredStatement[];
 }
 
 export interface CourseContent {
   shell: CourseShell;
-  /** Moves when anything in the course moves. A publish draft's targetVersion. */
   version: string;
   items: readonly ContentItem[];
   modules: readonly CourseModule[];
@@ -169,18 +145,13 @@ export interface MigrationIssue {
 
 export interface Migration {
   ref: LmsRef<"migration">;
-  /** Equals the copy field's text. How a change finds its job. */
   signature: string;
-  /** `stalled` has been preparing far longer than it should. It may still run, or may never have got its file. */
   state: "queued" | "preparing" | "stalled" | "running" | "completed" | "failed";
   completion: number;
   message: string | null;
   issues: readonly MigrationIssue[];
 }
 
-// ---- Setup content. Members of ChangeContent, so a copy and a finding's fix are changes like any other. ----
-
-/** `plan` is what the person confirmed and what the preview reads. `shift` is what the LMS is told, and may carry day overrides. */
 export interface CourseCopyContent {
   kind: "course-copy";
   target: LmsRef<"migrations">;
@@ -204,7 +175,6 @@ export type ItemSetIntent =
 type CourseSetIntent = { set: "course-published" } | { set: "course-template" };
 export type SetIntent = ItemSetIntent | CourseSetIntent;
 
-/** The intent decides the target: a course setting goes to the course's state, every other setting to an item. */
 export type SetContent = ItemSetContent | CourseSetContent;
 interface ItemSetContent {
   kind: "item-set";

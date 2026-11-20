@@ -1,7 +1,3 @@
-// Boots the packaged app and checks what only a packaged build can show: its fuses, that its window runs the
-// app from app://, that it seeds no demo but keeps the built-in threads, and that it lets no debugger in. Takes the .app path, or finds this Mac's `electron-builder --dir`
-// output. A packaged app takes no CDP, so the window check reads the renderer's store from a scratch user-data
-// folder. Starts its own app processes, and stops only those.
 import { spawn } from "node:child_process";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:net";
@@ -17,13 +13,8 @@ const APP =
   join(ROOT, "out/release", process.arch === "arm64" ? "mac-arm64" : "mac", "Constellation.app");
 const BINARY = join(APP, "Contents/MacOS/Constellation");
 const WAIT_MS = 30_000;
-/** The key the workspace store writes, under the app's own origin, in Chromium's localStorage log. */
 const STORE_KEY = "_app://constellation\u0000\u0001lms-app.v1";
 
-/**
- * The fuses a packaged build keeps: no RunAsNode, NODE_OPTIONS or --inspect, asar-only with integrity checks, cookie
- * encryption, and no file:// privileges.
- */
 const FUSES = {
   RunAsNode: false,
   EnableNodeOptionsEnvironmentVariable: false,
@@ -54,10 +45,6 @@ const answers = async (port) => {
   }
 };
 
-/**
- * Launches the app with its own user-data folder, so it never reads or locks a real install's data or Keychain item,
- * and with telemetry off, so a build made with a PostHog key still sends nothing from here.
- */
 const launch = async (args) => {
   const userData = await mkdtemp(join(tmpdir(), "constellation-smoke-"));
   const env = { ...process.env, CONSTELLATION_TELEMETRY_ENABLED: "false" };
@@ -77,7 +64,6 @@ const launch = async (args) => {
   return { userData, exited, running: () => running, stop };
 };
 
-/** Routes and links point at these, so a first store without one sends the teacher into a redirect loop (#114). */
 const BUILT_IN_THREADS = ["t-north-star", "t-queue", "t-inbox"];
 
 const storeLog = async (userData) => {
@@ -93,7 +79,6 @@ const storeLog = async (userData) => {
 
 const storeWritten = async (userData) => (await storeLog(userData)).includes(STORE_KEY);
 
-/** Chromium keeps a localStorage value as Latin-1 or as UTF-16LE, so a JSON fragment is looked for in both. */
 const inStore = (bytes, text) =>
   bytes.includes(Buffer.from(text, "latin1")) || bytes.includes(Buffer.from(text, "utf16le"));
 
@@ -106,7 +91,6 @@ const checkFuses = async () => {
   console.log(`ok fuses: ${Object.entries(FUSES).map(([n, on]) => `${n}=${on}`)}`);
 };
 
-/** A normal launch, with `--inspect` that the fuse must ignore: the window runs the app, and no inspector listens. */
 const checkWindowAndInspect = async () => {
   const port = await freePort();
   const app = await launch([`--inspect=${port}`]);

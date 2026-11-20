@@ -12,7 +12,6 @@ import { copyContent, makeTermRig, planFor, termOf } from "./fixtures/term";
 
 const at = (rig: { clock: { now(): number } }): IsoTime => isoTime(rig.clock.now());
 
-/** A copy into the one seeded course that already has people and content in it. */
 const riskyCopy = async () => {
   const rig = await makeTermRig();
   const shell = await rig.shellNamed(RSU, "HUM 150");
@@ -21,7 +20,6 @@ const riskyCopy = async () => {
   return { rig, shell, source, draft };
 };
 
-/** A copy into an empty new course, which needs only the plain click. */
 const plainCopy = async () => {
   const rig = await makeTermRig();
   const shell = await rig.shellNamed(LCC, "ENG 101");
@@ -30,7 +28,6 @@ const plainCopy = async () => {
   return { rig, shell, source, draft };
 };
 
-/** Two text fixes on the same syllabus, in different paragraphs. */
 const twoFixes = async () => {
   const rig = await makeTermRig();
   const shell = await rig.shellNamed(LCC, "ENG 101");
@@ -224,7 +221,6 @@ describe("a passage fix", () => {
     const { rig, termFix } = await twoFixes();
     const draft = await rig.draft(LCC, termFix);
     rig.approve(draft.id);
-    // Someone rewrites the same passage in the LMS before the send.
     rig.server.applyFields({ ...termFix, splice: { ...termFix.splice, after: "Autumn 2026" } }, [
       "text",
     ]);

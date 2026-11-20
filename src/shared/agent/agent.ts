@@ -22,14 +22,12 @@ import { FINDING_TYPES, type Finding, type FindingType } from "~/shared/domain/s
 import type { TermDates, TermPlan } from "~/shared/domain/term";
 import { isRecord } from "~/shared/is-record";
 
-/** What a course thread is asked to start. Each member names only what that work needs. */
 export type HandoffWork =
   | { kind: "announcement"; topic?: string }
   | { kind: "replies" }
   | { kind: "reply"; conversation: LmsRef<"conversation"> }
   | { kind: "grading"; assignment: LmsRef<"assignment"> };
 
-/** Something North Star points at. The parser checks it exists, so an answer can't cite a thing that isn't there. */
 export type Source =
   | { kind: "course"; ref: LmsRef<"course"> }
   | { kind: "assignment"; ref: LmsRef<"assignment"> }
@@ -50,12 +48,9 @@ export interface NextWork {
   work: HandoffWork;
 }
 
-/** Everything an agent may cause. There is no approve or send member, so no parser branch can produce one. */
 export type AgentEffect =
   | { type: "say"; text: string; lines?: readonly AnswerLine[]; replies?: readonly string[] }
-  /** The agent saying no. The thread renders it apart from ordinary replies. */
   | { type: "decline"; text: string; lines?: readonly AnswerLine[] }
-  /** Members whose parsed shape is already the effect: no scope lookup turns them into something else. */
   | Raw<"limited" | "work" | "guide" | "spend">
   | {
       type: "propose";
@@ -65,7 +60,6 @@ export type AgentEffect =
       content: ChangeContent;
     }
   | { type: "edit"; change: ChangeId; patch: ChangePatch; why: string }
-  /** Rationale for one rubric criterion or the overall score, with quotes that must exist in the submission. */
   | {
       type: "annotate";
       change: ChangeId;
@@ -73,10 +67,6 @@ export type AgentEffect =
       why: string;
       quotes: readonly v.InferOutput<typeof Quote>[];
     }
-  /**
-   * Something the agent noticed in a course being set up. The quote has to be in the item's body. `after` is suggested
-   * replacement text, which the store turns into a fix only by way of the scan rules, so an agent names no kind and sets no risk.
-   */
   | {
       type: "finding";
       findingType: FindingType;
@@ -85,10 +75,6 @@ export type AgentEffect =
       why: string;
       after: string | null;
     }
-  /**
-   * Starts work in a course thread. Only a North Star chat's scope allows it, and what starts is still only a draft.
-   * `request` is the ask in the person's words, which may be messages back from the answer that named the course. `left` names what they asked for that this draft doesn't use.
-   */
   | {
       type: "handoff";
       school: SchoolId;
@@ -99,13 +85,10 @@ export type AgentEffect =
       left?: string;
     };
 
-/** Data only. No provider, store, vault, or token is reachable from here. `scope.changes` stays current during a run, so a propose is visible to the annotate that follows it. */
 export interface AgentInput {
   request: string;
-  /** `guidance` is the thread's standing preference. A draft of one item hears it and none of the thread's chat. */
   thread: { history: readonly { role: "user" | "agent"; text: string }[]; guidance?: string };
   scope: AgentScope;
-  /** The files of the one submission being drafted, read from the LMS, in the order its body lists them. */
   files?: readonly SubmittedFile[];
 }
 
@@ -116,7 +99,6 @@ export interface SubmittedFile {
 }
 export type Standing = "On track" | "Watch" | "At risk" | "No grades yet";
 
-/** One course's gradebook as the Gradebook and the course's roster show it: each student's total over graded work. */
 export interface CourseGrades {
   course: LmsRef<"course">;
   average: number | null;
@@ -128,7 +110,6 @@ export interface CourseGrades {
   }[];
 }
 
-/** The allowlist parseAgentEffect checks against. An agent cannot aim outside what the thread opened. */
 export interface AgentScope {
   focus: ChangeId | null;
   changes: readonly ChangeRecord[];
@@ -136,7 +117,6 @@ export interface AgentScope {
   assignments: readonly Assignment[];
   conversations: readonly Conversation[];
   courses: readonly Course[];
-  /** Present only in a setup thread. The rules' own findings ride along so the agent can speak to them. */
   scan?: ScanScope;
   northStar?: {
     announcements: readonly Announcement[];
@@ -144,7 +124,6 @@ export interface AgentScope {
     now: IsoTime;
     next: readonly NextWork[];
     grades: readonly CourseGrades[];
-    /** The submissions the app counts as to grade, and the ones asked back to resubmit, which wait on the student. */
     grading: {
       toGrade: readonly LmsRef<"submission">[];
       asked: readonly LmsRef<"submission">[];
@@ -152,7 +131,6 @@ export interface AgentScope {
   };
 }
 
-/** The plan as a scan's agent reads it: the old term is only a name when its dates say nothing. */
 type ScanPlan = Omit<TermPlan, "oldTerm"> & {
   oldTerm: TermDates | Pick<TermDates, "name">;
 };
@@ -162,7 +140,6 @@ export interface ScanScope {
   plan: ScanPlan;
 }
 
-/** With nothing due, the Dates step fills a blank old term with the new term's dates, which the teacher never gave (#103). */
 export const scanScopeOf = (
   content: CourseContent,
   findings: readonly Finding[],
@@ -175,21 +152,17 @@ export const scanScopeOf = (
     : { ...plan, oldTerm: { name: plan.oldTerm.name } },
 });
 
-/** What the app sends when a person opens something to work on. The scope holds only that one thing. */
 export const DRAFT_GRADE_REQUEST = "Draft a grade for this submission.";
 export const DRAFT_REPLY_REQUEST = "Draft a reply to this conversation.";
 export const DRAFT_ANNOUNCEMENT_REQUEST = "Draft an announcement for this course.";
 export const DRAFT_MESSAGE_REQUEST = "Draft a message to this student about this assignment.";
-/** The same ask with what the person said it should be about, in their words. */
 export const draftAnnouncementAbout = (topic: string): string =>
   `Draft an announcement for this course about ${topic}.`;
-/** "Draft with Claude" on a grade the teacher has started by hand: what they entered stays. */
 export const FILL_GRADE_REQUEST =
   "Fill in the rest of this grade. Keep the scores and comment I already entered.";
 export const SCAN_COURSE_REQUEST = "Look over this course for the new term.";
 
 export interface Agent {
-  /** Yields unknown, so a real model's output must pass the parser. The rule agent goes through it too. */
   run(input: AgentInput, signal: AbortSignal): AsyncIterable<unknown>;
 }
 
@@ -204,16 +177,12 @@ const MAX_TEXT = 20_000;
 const fail = (error: AgentViolation): Result<AgentEffect, AgentViolation> => ({ ok: false, error });
 const clip = (value: unknown): string => String(value).slice(0, 80);
 
-// ---- What the agent writes, before the scope says what it points at. Each message is the violation's detail. ----
-
-/** Words that aren't blank and fit on a card. */
 const text = (detail: string) =>
   v.pipe(
     v.string(detail),
     v.check((raw) => raw.trim().length > 0 && raw.length <= MAX_TEXT, detail),
   );
 const amount = (detail: string) => v.pipe(v.number(detail), v.finite(detail));
-/** A list the parser reads item by item, so one bad item drops alone. */
 const Items = v.array(v.unknown());
 
 const Attachment = v.object(
@@ -297,7 +266,6 @@ const Work = v.variant(
   (issue) => (issue.path ? `handoff work ${clip(issue.input)}` : "handoff work"),
 );
 
-/** Allowlist: `{ type: "approve" }` matches none. Objects are rebuilt, so extra keys never pass through. */
 const RawEffect = v.variant("type", [
   v.object({
     type: v.literal("say"),
@@ -310,15 +278,12 @@ const RawEffect = v.variant("type", [
     text: text("decline text"),
     lines: v.optional(v.unknown()),
   }),
-  /** A decline because the teacher's Claude plan limit is reached, so a batch stops instead of asking again. Main sets it, never the model. */
   v.object({ type: v.literal("limited"), text: text("limited text") }),
   v.object({ type: v.literal("work"), line: text("work line") }),
-  /** The teacher's standing preference for every later draft in this thread, in full, replacing the last; null clears it. */
   v.object({
     type: v.literal("guide"),
     text: v.nullish(v.pipe(text("guide text"), v.trim()), null),
   }),
-  /** What a model run cost, from the API's own count. The model can't write one: main adds it after the run. */
   v.object({
     type: v.literal("spend"),
     tokens: v.pipe(v.number("spend"), v.integer("spend"), v.minValue(0, "spend")),
@@ -363,12 +328,8 @@ const EFFECT_TYPES: ReadonlySet<unknown> = new Set(
   RawEffect.options.map((option) => option.entries.type.literal),
 );
 
-// ---- What it points at, checked against the thread's scope. ----
-
-/** Hears what a parse set aside from an effect it still kept. */
 type Drop = (violation: AgentViolation) => void;
 
-/** A list that isn't one is dropped whole, under `detail`; an item `item` can't read is dropped alone. */
 const itemsOf = <T>(
   raw: unknown,
   item: v.GenericSchema<unknown, T>,
@@ -425,7 +386,6 @@ const sourceOf = (
   }
 };
 
-/** A line that points at nothing in scope is dropped, and the answer it hangs from still stands. */
 const linesOf = (raw: unknown, scope: AgentScope, drop: Drop): AnswerLine[] =>
   raw === undefined
     ? []
@@ -534,7 +494,6 @@ const gradePatchOf = (
   return { ok: true, value: raw };
 };
 
-/** A patch has the kind of the draft it changes, so it can't turn a reply into a grade. */
 const patchOf = (
   raw: v.InferOutput<typeof Patch>,
   { content }: ChangeRecord,
@@ -597,7 +556,6 @@ const handoffOf = (raw: Raw<"handoff">, scope: AgentScope): Result<AgentEffect, 
   };
 };
 
-/** A reason stands on its own words. A quote that isn't in the submission loses only its highlight. */
 const annotateOf = (
   raw: Raw<"annotate">,
   scope: AgentScope,
@@ -632,7 +590,6 @@ const findingOf = (raw: Raw<"finding">, scan: ScanScope): Result<AgentEffect, Ag
   if (!item) return fail({ kind: "out-of-scope", target: clip(raw.item) });
   if (!item.body.includes(raw.quote))
     return fail({ kind: "quote-not-found", quote: clip(raw.quote) });
-  // Only the rules' findings reach the review list, so a finding of the agent's own would vanish there.
   if (
     !scan.findings.some((finding) => finding.type === raw.findingType && finding.item === item.ref)
   )
@@ -709,16 +666,13 @@ const resolve = (
   }
 };
 
-/** Effects the thread's kind rules out whatever they say, checked before they're read. */
 const closedTo = (type: unknown, scope: AgentScope): AgentViolation | null => {
   if (type === "handoff" && !scope.northStar) return { kind: "out-of-scope", target: "handoff" };
-  // North Star drafts nothing itself, so a preference set there would reach no draft.
   if (type === "guide" && scope.northStar) return { kind: "out-of-scope", target: "guidance" };
   if (type === "finding" && !scope.scan) return { kind: "out-of-scope", target: "course content" };
   return null;
 };
 
-/** A missing key fails on its object, whose message is valibot's own, so it is named by the key. Every other issue carries its field's detail. */
 const detailOf = (issue: v.BaseIssue<unknown>): string => {
   const key = issue.path?.at(-1)?.key;
   return issue.kind === "schema" && issue.type === "object" && typeof key === "string"
@@ -726,10 +680,6 @@ const detailOf = (issue: v.BaseIssue<unknown>): string => {
     : issue.message;
 };
 
-/**
- * Reads what the agent wrote, then checks what it points at against the scope. A bad part of an otherwise good effect
- * (a line, a reply list, a quote) is dropped through `drop`, and the rest is kept.
- */
 export const parseAgentEffect = (
   raw: unknown,
   scope: AgentScope,
@@ -745,7 +695,6 @@ export const parseAgentEffect = (
   return resolve(parsed.output, scope, drop);
 };
 
-/** For diagnosis, never for the teacher: it names the agent's mistake, not what the teacher can do. */
 export const describeViolation = (violation: AgentViolation): string => {
   switch (violation.kind) {
     case "unknown-effect":
@@ -762,16 +711,10 @@ export const describeViolation = (violation: AgentViolation): string => {
 };
 
 export interface AgentSink {
-  /** Awaited, so the next yield parses against a scope that includes this effect. */
   effect(effect: AgentEffect): void | Promise<void>;
-  /**
-   * Something the parser set aside: a whole effect, or a bad part of one it kept. `effect` is the type the agent wrote,
-   * or null when the run itself broke.
-   */
   refuse(violation: AgentViolation, effect: string | null): void;
 }
 
-/** The only way agent output reaches the app. A model that throws reads like any other bad output. */
 export const runAgent = async (
   agent: Agent,
   input: AgentInput,

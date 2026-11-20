@@ -11,10 +11,6 @@ import { fakeLmsHandlers } from "./bridge";
 type Listener = (sender: string | null, input: unknown) => Promise<unknown>;
 const APP = "app://constellation/";
 
-/**
- * Main as the app builds it: telemetry over `telemetry.json` in a fresh `userData`, behind the real IPC map. `post`
- * answers each POST with a status; every body is kept, whatever the answer.
- */
 export const telemetryMain = (post: () => Promise<number> = async () => 200) => {
   const file = join(mkdtempSync(join(tmpdir(), "telemetry-main-")), "telemetry.json");
   const saved = jsonFile(file, TelemetrySavedSchema, { enabled: true });
@@ -54,7 +50,6 @@ export const telemetryMain = (post: () => Promise<number> = async () => 200) => 
       ...fakeLmsHandlers(),
     },
   );
-  /** What the renderer's raw `ipcRenderer.invoke` would hand main, unchecked by any type. */
   const call = async (channel: string, input: unknown) => {
     const listener = listeners.get(channel);
     if (!listener) throw new Error(`no listener for ${channel}`);

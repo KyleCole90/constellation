@@ -55,7 +55,6 @@ const NO_CACHE = {
   cache_read_input_tokens: 0,
 };
 
-/** A whole message as the SDK hands it to `spendOf`, with only the usage a test sets. */
 const billed = (usage: Partial<BetaUsage>, model = MODEL): BetaMessage => ({
   id: "msg_test",
   container: null,
@@ -96,7 +95,6 @@ interface Sent {
   body: Record<string, unknown>;
 }
 
-/** Anthropic's HTTP API, scripted: each call answers with what `reply` makes of the request body. */
 const transport = (reply: (body: Record<string, unknown>) => Response) => {
   const sent: Sent[] = [];
   const fetch: Fetch = async (url, init) => {
@@ -318,7 +316,6 @@ describe("main's Anthropic agent", () => {
     };
     const answer = await anthropicAgent({ lease: leaseOf(KEY), fetch })(INPUT);
     expect(answer).toEqual({ ok: false, reason: expect.stringContaining("Nothing was queued") });
-    // The SDK's own retries, and no more: nothing waits to be sent later.
     expect(calls).toBe(3);
   });
 
@@ -392,7 +389,6 @@ describe("main's Anthropic agent", () => {
   });
 });
 
-/** A model at Anthropic's transport that grades what it is given: every criterion at full marks, quoting the work. */
 const gradingModel = (body: Record<string, unknown>) => {
   const [turn] = body["messages"] as [{ content: string }];
   const scope = v.parse(
@@ -462,7 +458,6 @@ describe("an AI-drafted grade, end to end", () => {
       invoke: invoker(async (channel, input) => {
         const listener = listeners.get(channel);
         if (!listener) throw new Error(`no listener for ${channel}`);
-        // Through structured clone, as Electron's IPC does.
         return structuredClone(await listener(APP, structuredClone(input)));
       }),
     };
@@ -525,7 +520,6 @@ describe("offline", () => {
 
 describe("the live check", () => {
   const key = process.env["ANTHROPIC_API_KEY"];
-  // Opt-in and never in CI: it spends real money on the key in the environment.
   it.skipIf(!key || process.env["CI"])(
     "Claude answers a draft request with effects the parser reads",
     async () => {

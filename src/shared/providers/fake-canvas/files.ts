@@ -42,7 +42,6 @@ const chunk = (type: string, data: Uint8Array<ArrayBuffer>): number[] => {
   return [...u32(data.length), ...body, ...u32(crc32(body))];
 };
 
-/** A grayscale PNG of `width` by `height`, each pixel from `shade`, in stored (uncompressed) deflate blocks. */
 const pngOf = (width: number, height: number, shade: (x: number, y: number) => number) => {
   const raw: number[] = [];
   for (let y = 0; y < height; y++) {
@@ -88,7 +87,6 @@ const pngOf = (width: number, height: number, shade: (x: number, y: number) => n
 const u16le = (n: number) => [n & 0xff, (n >>> 8) & 0xff];
 const u32le = (n: number) => [...u16le(n & 0xffff), ...u16le(n >>> 16)];
 
-/** A zip of stored (uncompressed) ASCII entries, which is all a test document needs. */
 const zipOf = (entries: Readonly<Record<string, string>>): Uint8Array<ArrayBuffer> => {
   const local: number[] = [];
   const directory: number[] = [];
@@ -126,7 +124,6 @@ const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main
 const escapeXml = (text: string) =>
   text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
-/** A Word document as Word writes one: a Heading 1 paragraph styled through `word/styles.xml`, then body text. */
 const docxOf = (heading: string, paragraphs: readonly string[]): Uint8Array<ArrayBuffer> => {
   const paragraph = (text: string, style?: string) =>
     `<w:p>${style ? `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>` : ""}<w:r><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`;
@@ -181,7 +178,6 @@ export const fixtureFile = (id: string, mediaType: string): FileContent | null =
   return draw ? { mediaType, data: draw() } : null;
 };
 
-/** The Google files the fake web shares publicly, by the export address the app asks for. Any other doc is private. */
 const PUBLIC_EXPORTS: Readonly<Record<string, () => Uint8Array<ArrayBuffer>>> = {
   "https://docs.google.com/document/d/rr5-cardenas-public/export?format=pdf": () =>
     pdfOf([

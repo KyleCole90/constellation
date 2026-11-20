@@ -3,26 +3,17 @@ import type { IsoDate } from "~/shared/domain/ids";
 import { shiftDate, type Weekday } from "~/shared/domain/term";
 import { isoDate } from "./ids";
 
-/**
- * A small Canvas over HTTP for term setup, in the shapes the Canvas docs give, all synthetic: a course taught last term,
- * a template, and an empty unpublished course for next term. A course copy is a content migration whose progress moves
- * with the test's clock; its content lands once, when the job completes. A write whose response is lost still applies.
- */
 export const TERM_HOST = "canvas.example.edu";
 const ORIGIN = `https://${TERM_HOST}`;
-/** Where Canvas sends a package upload: file storage on another host, which must never see the token. */
 export const STORAGE_ORIGIN = "https://files.storage.example";
 export const TERM_TOKEN = "SENTINEL-canvas-token-71c3";
 export const SELF_ID = 4101;
 export const SOURCE_ID = 2201;
 export const TEMPLATE_ID = 2301;
 export const SHELL_ID = 3301;
-/** Another course on this host, which the old course's pages still link to. */
 const ELSEWHERE_ID = 1901;
 const JOB_MS = 4000;
-/** How long New Quizzes takes to copy a quiz after the migration completes, about what a real school took. */
 export const QUIZ_MS = 10_000;
-/** Canvas hides its Uploaded Media folder, where media embedded in content is kept. */
 const HIDDEN_FOLDERS = new Set<FileRow["folder"]>(["Uploaded Media"]);
 
 interface Page {
@@ -40,16 +31,13 @@ interface Assignment {
   due_at: string | null;
   published: boolean;
   created_at: string;
-  /** A New Quiz. Its copy lands after the migration reports done, as New Quizzes copies it on its own. */
   quiz?: boolean;
-  /** When a copied quiz lands. Until then Canvas reads it `duplicating`, unpublished. */
   arrivesMs?: number;
 }
 interface FileRow {
   id: number;
   display_name: string;
   locked: boolean;
-  /** The file's own setting. Canvas also reads a file `hidden` when its folder is hidden. */
   hidden: boolean;
   folder: "course files" | "Uploaded Media";
   created_at: string;
@@ -84,7 +72,6 @@ interface Job {
   id: number;
   course: number;
   source: number;
-  /** Who started it: the teacher, or null for a copy the school made, as when a shell is made from a template. */
   by: number | null;
   createdMs: number;
   startedMs: number;
@@ -97,11 +84,9 @@ interface Job {
   };
   failAt: { completion: number; message: string } | null;
   landed: boolean;
-  /** A package import: it waits for its file, then for the confirm step, before it runs. */
   cartridge: { name: string; size: number; uploaded: boolean; confirmed: boolean } | null;
 }
 
-/** One request to file storage, as it arrived. */
 interface Upload {
   url: string;
   authorization: string | null;
@@ -233,19 +218,12 @@ export class CanvasTermHttp {
   ];
   readonly jobs: Job[] = [];
   readonly uploads: Upload[] = [];
-  /** Set to make storage answer 201 with no redirect, as Instructure's own file storage does. */
   storageCreates = false;
-  /** How long Canvas prepares a package after its file arrives, as a big file or a busy queue makes it. */
   prepareMs = 0;
-  /** Where storage's redirect sends the confirm step. Canvas sends it back to the school. */
   confirmOrigin = ORIGIN;
-  /** The path storage's redirect names after the origin. */
   confirmPath = (fileId: number) => `/api/v1/files/${fileId}/create_success`;
-  /** Set to report every term's dates, and the courses' own, as null: a school whose terms have no teacher dates. */
   hideTermDates = false;
-  /** How long New Quizzes takes to bring a copied quiz in. Set it past any wait to make one stuck. */
   quizMs = QUIZ_MS;
-  /** Set to answer a file write 200 and change nothing, as Canvas does with a setting it doesn't apply. */
   inertFileWrites = false;
   readonly issues = [
     {
@@ -286,7 +264,6 @@ export class CanvasTermHttp {
   #course(id: number): CourseRow | undefined {
     return this.courses.find((row) => row.id === id);
   }
-  /** Where a job is now, from the clock alone. Its content lands on the first look after it completes. */
   #status(job: Job) {
     if (job.cartridge && (!job.cartridge.confirmed || this.#now < job.startedMs))
       return { state: "queued", completion: 0, message: null };
@@ -375,7 +352,6 @@ export class CanvasTermHttp {
             ? at(job.startedMs + JOB_MS)
             : null,
         progress_url: `${ORIGIN}/api/v1/progress/${job.id + 1}`,
-        // Canvas makes the file at the preflight, so a job names its package before the upload lands.
         attachment: { display_name: job.cartridge.name, size: job.cartridge.size },
         settings: {},
       };
@@ -398,7 +374,6 @@ export class CanvasTermHttp {
       },
     };
   }
-  /** Canvas decides from the real dates, even the ones it hides from the teacher. */
   #concluded(row: CourseRow): boolean {
     return row.workflow_state === "completed" || Date.parse(row.end_at) < this.#now;
   }
@@ -443,7 +418,6 @@ export class CanvasTermHttp {
     return response;
   };
 
-  /** File storage: takes a multipart post with Canvas's params and the file last, and no token. */
   #store(url: string, init: RequestInit): Response {
     const body = init.body instanceof FormData ? init.body : new FormData();
     const entries = [...body.entries()];
@@ -566,7 +540,6 @@ export class CanvasTermHttp {
     }
     if (rest === "/modules" || rest === "/external_tools") return json([]);
     if (rest === "/content_migrations")
-      // Newest first, as Canvas lists them.
       return json(
         this.jobs
           .filter((job) => job.course === row.id)
@@ -671,7 +644,6 @@ export class CanvasTermHttp {
       assignment && row.body.assignments.find((entry) => entry.id === Number(assignment[1]));
     if (method === "PUT" && due) {
       const at = form.get("assignment[due_at]");
-      // Canvas's "fancy midnight": a due time of exactly 00:00 is stored as 23:59:59 the night before.
       if (at !== null)
         due.due_at = at.includes("T00:00:00")
           ? new Date(Date.parse(at) - 1000).toISOString().replace(".000", "")

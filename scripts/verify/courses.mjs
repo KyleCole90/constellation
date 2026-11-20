@@ -100,7 +100,6 @@ const unreadInSidebar = async (t) => {
   return Number(text.match(/(\d+) unread/)?.[1] ?? 0);
 };
 
-/** What's due's summary counts the replies Messages' Needs reply chip counts, read or not (#110). Leaves What's due open. */
 export const repliesAgree = async (t, label) => {
   const status = '[data-testid="inbox-list"] [aria-label="Filter by status"]';
   await t.click("Messages", { within: SIDEBAR });
@@ -157,7 +156,6 @@ const pageFits = async (t, label) => {
   t.assert(stray === 0, `${label}: nothing runs past the right edge`, `${stray} elements`);
 };
 
-// The panel slides in over 200ms, so anything aimed or measured mid-slide is off by however far it has left to go.
 const panelSettled = (t) =>
   t.waitFor(
     `document.querySelector(${JSON.stringify(PANEL)})?.getAnimations().length === 0`,
@@ -440,7 +438,6 @@ const gradableAgrees = async (t) => {
   );
 };
 
-/** A message read but not answered still waits: its thread's strip and the course's Threads list agree with What's due (#127). */
 const dueReplies = async (t) => {
   await t.click("What's due", { within: SIDEBAR });
   const refs = await t.eval(
@@ -508,7 +505,6 @@ const dueReplies = async (t) => {
   await t.shot("issue-127-overview", null);
 };
 
-// The day column weeksThatFit wants before it shows two weeks, past the 160px course lane.
 const MIN_DAY_WIDTH = 83;
 
 const calendar = async (t) => {
@@ -778,7 +774,6 @@ const calendar = async (t) => {
   );
   await shot(t, "calendar-day-1180");
   await t.viewport(1280, 720);
-  // The lane width follows a ResizeObserver, so it lags a resize by a frame. Measure once the day width holds across frames.
   await t.eval(
     `new Promise((done) => { let last = -1, steady = 0, frames = 0; const tick = () => { const width = document.querySelector("[data-calendar-day]").getBoundingClientRect().width; steady = width === last ? steady + 1 : 0; last = width; if (steady >= 3 || ++frames > 120) done(); else requestAnimationFrame(tick); }; requestAnimationFrame(tick); })`,
   );
@@ -849,7 +844,6 @@ const calendar = async (t) => {
       `${label}: the popup opens`,
     );
   const popupCovers = async (ref, label) => {
-    // Measured once it holds still: CI once caught the popup at its scale-95 entry, 1.8 px short of its marker.
     const fits = await t.steady(
       `(() => { const p = document.querySelector(${JSON.stringify(MARKER_POPUP)}).getBoundingClientRect(), m = document.querySelector(${JSON.stringify(markerAt(ref))}).getBoundingClientRect(); return { inside: p.left >= 0 && p.top >= 0 && p.right <= innerWidth && p.bottom <= innerHeight, covers: p.left <= m.left + 0.5 && p.top <= m.top + 0.5 && p.right >= m.right - 0.5 && p.bottom >= m.bottom - 0.5, popup: [p.left, p.top, p.right, p.bottom], marker: [m.left, m.top, m.right, m.bottom], viewport: [innerWidth, innerHeight] }; })()`,
     );
@@ -924,7 +918,6 @@ const calendar = async (t) => {
   );
   await pointerOff("the rightmost marker");
 
-  // Short enough that the lowest marker starts below the fold, so scrolling can bring it flush.
   const edgeHeight = 440;
   await t.viewport(narrowestTwoWeeks, edgeHeight);
   const lowest = await t.eval(
@@ -1021,7 +1014,6 @@ const calendar = async (t) => {
   await t.viewport(1440, 900);
 };
 
-/** A real school can't connect under verify, so one joins the saved workspace the way a reload would find it. */
 const realSchoolCalendar = async (t) => {
   const saved = await t.eval(`localStorage.getItem(${KEY})`);
   await t.eval(
@@ -1047,7 +1039,6 @@ const realSchoolCalendar = async (t) => {
   );
 };
 
-/** The student's latest message, the first since the teacher last wrote, shows whole above the reply at 1280×800 and 1440×900 (#120). */
 const answeredInView = async (t, what, reply) => {
   const [width0, height0] = await t.eval(`[innerWidth, innerHeight]`);
   for (const [width, height] of [
@@ -1683,7 +1674,6 @@ const gradebook = async (t) => {
     "Everyone shows the whole class again",
   );
 
-  // ENG 101 has few enough assignments to fit at 1180 wide, so it takes a narrower window to make it scroll sideways.
   await t.viewport(860, 520);
   await t.waitFor(
     `(() => { const s = document.querySelector(${JSON.stringify(SCROLL)}); return s.scrollWidth > s.clientWidth && s.scrollHeight > s.clientHeight; })()`,
@@ -1729,7 +1719,6 @@ const gradebook = async (t) => {
   );
   await shot(t, "gradebook-sticky-scrolled");
 
-  // A long student name, like Canvas's "Pageview 2362 Verify Student", widens the Student column past its 188px floor.
   await t.eval(
     `document.head.append(Object.assign(document.createElement("style"), { id: "long-name", textContent: "[data-first-col] { min-width: 240px }" }))`,
   );
@@ -1911,7 +1900,6 @@ const gradebook = async (t) => {
   await missingCellExcused(t);
 };
 
-/** A missing cell opens the form Claude's card opens, where Excuse reaches the preview and Discard sends nothing (#152). */
 const missingCellExcused = async (t) => {
   await goTab(t, "ENG 101", "Gradebook");
   const ref = await t.eval(
@@ -1958,7 +1946,6 @@ const missingCellExcused = async (t) => {
   );
 };
 
-/** A graded cell with no change opens on that student, with the grade and comment the LMS holds and the same two choices (#39). */
 const gradedWithoutThread = async (t) => {
   await goTab(t, "ENG 101", "Gradebook");
   const cell = await t.eval(
@@ -2053,7 +2040,6 @@ const overview = async (t) => {
     `document.querySelector('[data-highlighted="true"]')`,
     "a student leads to their row in the gradebook",
   );
-  // A real course runs to ~50 columns; columns this wide put even the first one's missing mark past the visible table.
   await goCourse(t, "ENG 101");
   await t.eval(
     `document.head.append(Object.assign(document.createElement("style"), { id: "wide-columns", textContent: "th[data-column] { min-width: 1600px }" }))`,

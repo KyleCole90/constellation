@@ -16,11 +16,6 @@ import { changeId } from "../tests/fixtures/ids";
 
 const AT = isoTime("2026-11-03T16:00:00Z");
 
-/**
- * One fixture through the path a teacher's "Draft N" takes: the renderer's bridge agent, main's input check and
- * handler, then `runAgent`'s parse. A propose files a draft into scope, as the store does, so the annotates after it
- * parse against it. Wall time is the handler's alone, the part a source can change.
- */
 const draftOne = async (run: Handlers["agent.run"], fixture: Fixture) => {
   const changes: ChangeRecord[] = [];
   const scope: AgentScope = {
@@ -94,7 +89,6 @@ const draftOne = async (run: Handlers["agent.run"], fixture: Fixture) => {
   return { wallMs, valid: problems.length === 0, problems };
 };
 
-/** One source's pass over the class, one draft at a time, as "Draft N" runs them. */
 export const benchmark = async (
   source: BenchSource,
   env: Env,

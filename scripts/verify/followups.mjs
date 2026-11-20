@@ -2,7 +2,6 @@ import { addAiKey } from "./ai-key.mjs";
 import { onboard } from "./onboard.mjs";
 import { KEY } from "./storage.mjs";
 
-// A long student name, clicks right after a selection change, and Save as template's distance from the window edge. Starts from a fresh visit, because it spends drafts the other modules count on.
 const QUIET = JSON.stringify({ rate429: 0, rate5xx: 0, rateLost: 0, latencyMs: [20, 60] });
 const LONG_NAME = "Arjun Venkataraghavan-Subramaniam Krishnamurthy";
 const LIST = '[data-testid="queue-list"]';
@@ -51,7 +50,6 @@ const until = async (t, check, ms = 3000) => {
 const tagBecomes = (t, subject, tag, ms) =>
   until(t, async () => (await tagOf(t, subject)) === tag, ms);
 
-// Every line of the name has to be inside its scope and the window, on top where it's painted, and clear of every control in that scope.
 const nameProblems = (t, scope) =>
   t.eval(`(() => {
     const name = ${JSON.stringify(LONG_NAME)};
@@ -379,7 +377,6 @@ const selectionClicks = async (t) => {
   await t.click('[aria-label="Close batch"]');
 };
 
-// Walking to the next row and approving at once acts on that row, and never on the one just left.
 const singleItemClicks = async (t) => {
   await t.click(STUDENT.cody, { within: LIST });
   await t.waitFor(

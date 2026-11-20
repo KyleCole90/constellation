@@ -63,17 +63,14 @@ const SCOPE_WORDS: Readonly<Record<string, string>> = {
 };
 const SCOPES = Object.keys(SCOPE_WORDS);
 
-/** What the app knows about the fake Canvas without asking it, wherever the fake itself runs. */
 export const FAKE_CANVAS_FACE = {
   vendorLabel: "Canvas",
   capabilities: CAPABILITIES,
   describeScope: (scope: string) => SCOPE_WORDS[scope] ?? scope,
 } satisfies Pick<LmsProvider, "vendorLabel" | "capabilities" | "describeScope">;
 
-/** The Canvas path for one content item. The syllabus is a course field, so it goes through the course itself. */
 const itemPath = (target: LmsRef<"item">): string => {
   const [, , course, type, id] = refParts(target);
-  // This provider minted the ref, so an unknown type is a corrupt ref. Writing it to some other path would be worse than failing.
   if (!isContentItemType(type)) throw new Error(`Not a content item ref: ${target}`);
   switch (type) {
     case "syllabus":
@@ -111,7 +108,6 @@ const routeOf = (content: ChangeContent): string => {
   }
 };
 
-/** Canvas finds a setting's target by the kind its intent writes to, so a ref of any other kind reaches nothing. */
 const reachesTarget = (content: SetContent): boolean =>
   refParts(content.target)[1] === (isCourseSet(content) ? "course-state" : "item");
 
@@ -206,7 +202,6 @@ const createFakeCanvasProvider = (
 
   const courseId = (course: LmsRef<"course">): string => refParts(course)[2] ?? "";
 
-  /** The list, then one progress read per live job and one issues read per finished job, as the real API lays it out. */
   const migrations = async (course: LmsRef<"course">): Read<readonly Migration[]> => {
     const list = await read(
       route("read", `GET /api/v1/courses/${courseId(course)}/content_migrations`),
@@ -344,7 +339,6 @@ const createFakeCanvasProvider = (
   };
 };
 
-/** The fake Canvas as onboarding shows it: as real Canvas does. `create` is the one part that needs the fake itself. */
 export const FAKE_CANVAS: Omit<ProviderDescriptor, "create"> = { ...CANVAS, kind: "fake-canvas" };
 
 export const createFakeCanvasDescriptor = (

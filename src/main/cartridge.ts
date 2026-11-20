@@ -6,15 +6,12 @@ import { isoDate, meetingDaysOf, type DueDay } from "../shared/domain/term";
 
 import { zipEntries, zipEntryText, type ZipSource } from "./zip";
 
-/** Settings files are a few KB. A bigger one isn't what this reads. */
 const MAX_ENTRY_BYTES = 1024 * 1024;
 const COURSE_SETTINGS = "course_settings/course_settings.xml";
 
-/** The day in a Canvas export's `<tag>2026-01-12T08:00:00</tag>`, written in the course's own time zone. */
 const dayIn = (xml: string, tag: string): IsoDate | null =>
   isoDate(new RegExp(`<${tag}>(\\d{4}-\\d{2}-\\d{2})`).exec(xml)?.[1] ?? "");
 
-/** An assignment's `<title>`, with the entities Canvas writes for markup characters read back. */
 const titleIn = (xml: string): string =>
   (/<title>([^<]*)<\/title>/.exec(xml)?.[1] ?? "")
     .replaceAll("&lt;", "<")
@@ -23,10 +20,6 @@ const titleIn = (xml: string): string =>
     .replaceAll("&apos;", "'")
     .replaceAll("&amp;", "&");
 
-/**
- * What a Canvas export says about the term it came from: the course's start and end from its settings, and its
- * assignments' due days, which give the meeting days. Null when the package says none of it, or can't be read.
- */
 export const packageTerm = async (path: string): Promise<PackageTerm | null> => {
   let file: FileHandle | null = null;
   try {

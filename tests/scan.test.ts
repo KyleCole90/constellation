@@ -96,7 +96,6 @@ interface RuleCase {
   fix: "text" | "set" | "manual";
 }
 
-/** A Record, so a new finding type fails to compile here until it has both fixtures. */
 const CASES: Readonly<Record<FindingType, RuleCase>> = {
   "plain-date": {
     positive: course({ items: [item({ body: "Week 3, Oct 12: bring a draft." })] }),

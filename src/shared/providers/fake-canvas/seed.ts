@@ -1,6 +1,3 @@
-// Hard-coded fake data. Every school detail below the two named instances, every student, and every submission is invented.
-// LMS facts only. What the agent would say about them lives in src/shared/agent/rules/drafts.ts.
-
 import {
   parseSchoolHost,
   parseSchoolId,
@@ -8,7 +5,6 @@ import {
   type SchoolId,
 } from "~/shared/domain/ids";
 
-/** Seeds go through the app's own validators once, at load, so a typo fails at startup instead of minting a bad id. */
 export const seeded = <T>(value: T | null, raw: string): T => {
   if (value === null) throw new Error(`Invalid seed value: ${raw}`);
   return value;
@@ -46,7 +42,6 @@ export interface SeedAssignment {
   title: string;
   due: string;
   pts: number;
-  /** One character per student: G graded, N new, L late, R resubmitted, M missing, - not submitted. */
   statuses: string;
   canvasId?: number;
   lateRate?: number;
@@ -89,7 +84,6 @@ export interface SeedCourse {
   section: string;
   canvasId: number;
   students: readonly string[];
-  /** A concluded enrollment, or Canvas's Test Student: Canvas still returns their submissions, after `students` in each status string, but not them on the roster. */
   offRoster?: readonly string[];
   assignments: readonly SeedAssignment[];
   threads: readonly SeedThread[];
@@ -1153,7 +1147,6 @@ export const SEED: SeedData = {
   ],
 };
 
-/** Not every seeded assignment has a Canvas id, and a path needs one. */
 export const assignmentCanvasId = (
   assignment: { canvasId?: number },
   courseIndex: number,

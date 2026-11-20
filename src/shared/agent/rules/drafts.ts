@@ -1,14 +1,9 @@
-// What the rule agent would write about the seeded work. The provider never sees this file.
-// Rubric keys are criterion names, because a ref belongs to the provider that minted it.
-
 export interface GradeDraft {
-  /** Start of the first paragraph. Two assignments have two different submissions under one title. */
   opens: string;
   scores: Readonly<Record<string, number>> | null;
   score: number | null;
   why: Readonly<Record<string, string>>;
   anchors: Readonly<Record<string, readonly { paragraph: number; quote: string }[]>>;
-  /** {first} becomes the student's first name. */
   comment: string;
   attach: boolean;
 }

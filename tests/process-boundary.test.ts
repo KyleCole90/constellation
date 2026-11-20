@@ -5,7 +5,6 @@ import { dirname, join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
-/** Each fixture is a one-import file at `src/<path>`, linted by the real `vp lint`. */
 const FIXTURES = {
   "shared/alias-cross.ts": "~/renderer/lib/utils",
   "shared/alias-dotdot-cross.ts": "~/shared/../renderer/lib/utils",
@@ -28,7 +27,6 @@ let lint: { status: number | null; stderr: string; files: number; flagged: Set<s
 
 const RULE = "constellation(process-boundary)";
 
-/** Reads `vp lint --format json`: how many files it linted and which ones broke the rule. */
 const parseLint = (stdout: string) => {
   const report: unknown = JSON.parse(stdout);
   if (typeof report !== "object" || report === null)

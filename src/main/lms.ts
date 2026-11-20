@@ -33,10 +33,6 @@ import { documentText } from "./document-text";
 import { jsonFile } from "./json-file";
 import { canvasSchoolAt, createCanvasProvider, type Fetch } from "./providers/canvas";
 
-/**
- * A `StorageLike` in one JSON file under `userData`. Main is its only writer, so it reads
- * the file once and answers from memory after that.
- */
 export const createFileStorage = (file: string): StorageLike => {
   const disk = jsonFile<Readonly<Record<string, string>>>(
     file,
@@ -58,7 +54,6 @@ export const createFileStorage = (file: string): StorageLike => {
   };
 };
 
-/** The fake LMS as the desktop app runs it: on real time, storing to `storage`. */
 export const fakeServer = (storage: StorageLike) => (now: () => number) =>
   new FakeCanvasServer({
     storage,
@@ -73,7 +68,6 @@ const FILE_CACHE_BYTES = 64 * 1024 * 1024;
 
 type LmsChannel = Extract<keyof Handlers, `lms.${string}`>;
 
-/** How recently the teacher must have pressed something for a send to count as theirs: long enough for the read before it. */
 export const SEND_PRESS_MS = 10_000;
 
 const NOT_PRESSED: LmsError = {
@@ -87,11 +81,9 @@ const NOT_THIS_CHANGE: LmsError = {
 const failedAll = (fields: readonly FieldKey[], error: LmsError): FieldOutcomes =>
   Object.fromEntries(fields.map((field) => [field, { status: "failed", error }]));
 
-/** Canvas's own default cap on an import, so a bigger file is refused before anything is sent. */
 const MAX_PACKAGE_BYTES = 500 * 1024 * 1024;
 const refusal = (reason: string) => ({ ok: false, error: { kind: "rejected", reason } }) as const;
 
-/** The file at `path` if it can be a course package: an `.imscc` file, not empty and not over the cap. */
 const packageAt = async (
   path: string,
 ): Promise<Result<{ name: string; size: number }, LmsError>> => {
@@ -114,31 +106,17 @@ const NO_TERM_SETUP = {
   error: { kind: "unsupported", capability: "term setup" },
 } as const satisfies Result<never, LmsError>;
 
-/**
- * Main's half of every `lms.*` channel: one provider per school, holding a lease on main's vault, so a token never
- * crosses to the renderer. The fake LMS runs here, the way a real one will.
- */
 export const lmsHandlers = (options: {
-  /**
-   * The one LMS world main runs. Verify runs the fake's demo schools, so nothing reaches a real host; the teacher's app
-   * runs real Canvas, with no demo school, fault lab or verify read.
-   */
   lms:
     | { kind: "fake"; makeServer(now: () => number): FakeCanvasServer }
     | { kind: "canvas"; fetch: Fetch };
   realNow(): number;
   leaseFor(key: VaultKey): CredentialLease;
-  /**
-   * When the teacher last clicked in the window or pressed Return or Space there, in `realNow` time, as the OS
-   * delivered it. Page script can't produce that input, so the renderer can't fake a press.
-   */
   pressedAt(): number;
-  /** Main's native file picker for an `.imscc` file: its path, or null when the teacher cancels. */
   choosePackage(): Promise<string | null>;
 }): Pick<Handlers, LmsChannel> => {
   let offset = 0;
   const now = () => options.realNow() + offset;
-  /** Counts every move of the lab, across reloads, for `lms.labNext` to wait on. */
   let version = 0;
   const waiting = new Set<() => void>();
   const moved = () => {
@@ -163,19 +141,13 @@ export const lmsHandlers = (options: {
     return live;
   };
 
-  /**
-   * The packages the teacher chose in main's picker, by school and file name, for as long as main runs. The renderer
-   * only ever names one, so it can't send a file the teacher didn't choose. A later pick of the same name replaces it.
-   */
   const picked = new Map<string, string>();
   const packageFile = async (school: SchoolId, name: string): Promise<Blob | null> => {
     const path = picked.get(`${school}\n${name}`);
-    // Checked again, since the file may have changed on disk since it was chosen.
     if (path === undefined || !(await packageAt(path)).ok) return null;
     return openAsBlob(path).catch(() => null);
   };
   const canvas = new Map<SchoolId, LmsProvider>();
-  /** The renderer is untrusted, so a Canvas school counts only as main itself would mint it from its host. */
   const canvasProvider = (school: School): LmsProvider => {
     const minted = canvasSchoolAt(school.host);
     if (world.kind !== "canvas" || minted?.id !== school.id)
@@ -200,7 +172,6 @@ export const lmsHandlers = (options: {
         return fakeProvider(school);
     }
   };
-  /** Main's own record of a demo school, so a renderer can't point the fake at a real school's token. */
   const fakeProvider = (asked: School): LmsProvider => {
     const fake = theFake();
     const school = FAKE_SCHOOLS.find((entry) => entry.id === asked.id && entry.host === asked.host);
@@ -211,17 +182,7 @@ export const lmsHandlers = (options: {
     fake.providers.set(school.id, created);
     return created;
   };
-  /**
-   * The content each change was sent with, by school and change id, for as long as main runs. A first send of any
-   * content needs the teacher's press moments before, and a retry or resume of the same content doesn't. A field that
-   * adds an entry (a comment, a message, a post) goes out once per press: once sent, sending it again needs a new press,
-   * so even a renderer that replays the request can't post twice without the teacher pressing Send again.
-   */
   const pressed = new Map<string, { content: ChangeContent; sent: Set<FieldKey> }>();
-  /**
-   * The renderer is untrusted, so its permit is only a request. Main writes to a real school only right after the
-   * teacher pressed something, and only the fields that content sends.
-   */
   const applyCanvas = async (
     school: School,
     changeId: ChangeId,
@@ -244,16 +205,13 @@ export const lmsHandlers = (options: {
       press = { content, sent: new Set() };
       pressed.set(key, press);
     }
-    // Counted as sent before the request leaves, so a second request racing this one needs a new press.
     const appends = fields.filter(appendsEntry);
     for (const field of appends) press.sent.add(field);
     const outcomes = await provider.apply(SendPermit.relayed(changeId, content, fields));
     for (const field of appends) if (outcomes[field]?.status === "failed") press.sent.delete(field);
     return outcomes;
   };
-  /** A file's id names one upload, which Canvas never changes, so a file main can't read stays refused. */
   const files = new Map<string, Result<FileContent, LmsError>>();
-  /** Word, RTF and text files reach the renderer and Claude as their words, in Markdown (#68). */
   const asText = async (content: FileContent): Promise<Result<FileContent, LmsError>> => {
     if (!mainReadsAsText(content.mediaType)) return { ok: true, value: content };
     const text = await documentText(content.mediaType, content.data);
@@ -361,7 +319,6 @@ export const lmsHandlers = (options: {
       switch (school.provider) {
         case "canvas":
           return applyCanvas(school, changeId, content, fields);
-        // The demo's LMS is a file the renderer can already rewrite through the failure lab, so nothing is guarded here.
         case "fake-canvas":
           return fakeProvider(school).apply(SendPermit.relayed(changeId, content, fields));
       }
@@ -373,7 +330,6 @@ export const lmsHandlers = (options: {
     "lms.migrations": ({ school, course }) => term(school, (setup) => setup.migrations(course)),
     "lms.samplePackages": ({ school }) => term(school, (setup) => setup.samplePackages()),
     "lms.pickPackage": async ({ school }) => {
-      // Throws unless main itself would mint this school from its host. A demo school's import reads only the name.
       if (school.provider === "canvas") canvasProvider(school);
       const path = await options.choosePackage();
       if (path === null) return { ok: true, value: null };
@@ -392,7 +348,6 @@ export const lmsHandlers = (options: {
     "lms.lab": async (command) => run(command),
     "lms.labNext": async ({ after }) => {
       theFake();
-      // Bounded, so a waiter left by a closed or reloaded window doesn't sit forever; the renderer simply asks again.
       if (after === version)
         await new Promise<void>((wake) => {
           waiting.add(wake);

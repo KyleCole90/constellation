@@ -30,7 +30,6 @@ const SIGNED_OUT: ClaudeCodeStatus = {
 
 type Answers = Record<string, (input: unknown) => Promise<unknown>>;
 
-/** Main as the preload reaches it: every answer parsed by the real IPC contract. */
 const fakeMain = (answers: Answers) => {
   const told: AgentSource[] = [];
   const bridge: Bridge = {
@@ -50,7 +49,6 @@ const fakeMain = (answers: Answers) => {
   return { bridge, agentMain, told };
 };
 
-/** Claude Code as main runs it: the rules agent drafts, at no dollar cost, until the plan limit after `allowed` runs. */
 const claudeCodeRuns = (allowed: number) => {
   let runs = 0;
   const answers: Answers = {

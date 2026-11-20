@@ -24,7 +24,6 @@ interface SourceFile {
 const IMPORT =
   /(?:import|export)\s+([^'"`;]*?)\s*from\s*["']([^"']+)["']|import\s*\(\s*["']([^"']+)["']\s*\)|import\s+["']([^"']+)["']/g;
 
-/** Resolves every form of an import to a path under src, so a relative import cannot dodge an alias check. */
 const resolveSpec = (spec: string, from: string): string => {
   if (spec.startsWith("~/")) return spec.slice(2);
   if (spec.startsWith(".")) return relative(SRC, resolve(dirname(from), spec));
@@ -44,7 +43,6 @@ const SOURCES = filesUnder(SRC).map(load);
 const startsWith = (file: SourceFile, dir: string) =>
   file.path === dir || file.path.startsWith(`${dir}/`);
 
-/** True when this import brings in a runtime value of this name, or the whole module under a namespace. */
 const bringsValue = (clause: string, name: string): boolean => {
   if (clause.startsWith("type ")) return false;
   if (/\*\s+as\s+/.test(clause)) return true;
@@ -97,7 +95,6 @@ const permitImporters = (sources: readonly SourceFile[]): readonly string[] =>
     )
     .map((file) => file.path);
 
-/** Main builds its own permit from IPC data once it has decided the send may go. Nothing else may. */
 const relayers = (sources: readonly SourceFile[]): readonly string[] =>
   sources
     .filter(
@@ -165,7 +162,6 @@ const fakeFile = (path: string, text: string): SourceFile => {
   };
 };
 
-/** Only main starts a process, so only main can run Claude Code. */
 const spawners = (sources: readonly SourceFile[]): readonly string[] =>
   sources
     .filter(

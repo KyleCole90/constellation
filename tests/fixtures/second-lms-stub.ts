@@ -28,10 +28,6 @@ const CAPABILITIES: Capabilities = {
 const OK = <T>(value: T): Read<T> => Promise.resolve({ ok: true, value });
 const FAIL = <T>(error: LmsError): Read<T> => Promise.resolve({ ok: false, error });
 
-/**
- * A made-up second LMS, to prove the seam fits something other than Canvas: the grade and the feedback are separate
- * requests with no transaction across them, feedback replaces the earlier text, and there is no messaging.
- */
 export class SecondLmsStub {
   static readonly SCHOOL = schoolId("ksu");
   static readonly COURSE = lmsRef<"course">("ksu:org:6606");
@@ -69,7 +65,6 @@ export class SecondLmsStub {
     return null;
   }
 
-  /** One vendor request. Returns the error if it failed, null if it applied, and "lost" if it applied unconfirmed. */
   #request(name: "grade" | "feedback", content: GradeContent): LmsError | null | "lost" {
     this.requests.push(name);
     const failure = this.#denied() ?? this.#fail.get(name) ?? null;
@@ -169,7 +164,6 @@ export class SecondLmsStub {
           if (content.kind !== "grade")
             return FAIL({ kind: "unsupported", capability: content.kind });
           if (content.target !== SecondLmsStub.TARGET) return FAIL({ kind: "not_found" });
-          // Every saved feedback gets a new version, so a replace reads as a fresh entry that `seen` does not hold.
           const comments = this.feedback
             ? [{ id: `fb:${this.feedback.version}`, mine: true, text: this.feedback.text }]
             : [];

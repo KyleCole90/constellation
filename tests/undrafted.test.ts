@@ -23,7 +23,6 @@ const QUEUE = threadId("t-queue");
 const LCC = schoolId("lcc");
 const SAID = "I didn't draft a grade because I can't see Maya's work.";
 
-/** Claude reads the work, can't see it, and drafts no grade, the way it answers a dead link. Asked for a message, it drafts one. It keeps what each call heard. */
 const cantSee = (): Agent & { calls: number; heard: AgentInput[] } => {
   const agent: Agent & { calls: number; heard: AgentInput[] } = {
     calls: 0,
@@ -165,7 +164,6 @@ describe("once the message asking for a resubmit is sent (#98)", () => {
   };
   const rowOf = (rig: StoreRig, ref: LmsRef<"submission">) =>
     selectQueueRows(rig.state()).find((row) => row.submission.ref === ref);
-  /** The submission's Gradebook cell, which must say what the grading list says. */
   const cellOf = (rig: StoreRig, ref: LmsRef<"submission">) => {
     const course = rowOf(rig, ref)?.course.ref;
     if (!course) throw new Error("no row");
@@ -173,7 +171,6 @@ describe("once the message asking for a resubmit is sent (#98)", () => {
       ?.rows.flatMap((row) => row.cells)
       .find((cell) => cell.submission?.ref === ref);
   };
-  /** The grading list, the course's sidebar count and What's due, which must agree. */
   const toGrade = (rig: StoreRig, ref: LmsRef<"submission">) => {
     const course = rowOf(rig, ref)?.course.ref;
     if (!course) throw new Error("no row");
@@ -208,7 +205,6 @@ describe("once the message asking for a resubmit is sent (#98)", () => {
     expect(toGrade(rig, ref)).toEqual(before);
   });
 
-  /** Another computer, or this one after a reinstall: nothing local, only what the LMS holds. */
   const freshCopy = async (rig: StoreRig) => {
     rig.store.setState({ changes: {}, undrafted: {} });
     await rig.clock.run(rig.state().syncSchool(LCC));

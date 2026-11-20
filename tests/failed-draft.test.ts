@@ -12,7 +12,6 @@ import { threadId } from "./fixtures/ids";
 const QUEUE = threadId("t-queue");
 const UNREACHABLE = "Claude couldn't be reached, so nothing was drafted.";
 
-/** Claude is down for the first run, then back: the walk's outage, then coming back online. */
 const downOnce = (): Agent => {
   const rules = createRuleAgent();
   let down = true;
@@ -28,7 +27,6 @@ const downOnce = (): Agent => {
   };
 };
 
-/** Asks for a draft of Maya's essay with Claude down, so the draft fails. */
 const failedDraft = async () => {
   const rig = await makeStoreRig({ agent: downOnce() });
   await rig.connectAll();

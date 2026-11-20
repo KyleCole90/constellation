@@ -33,12 +33,6 @@ import { DurableLedger } from "./fixtures/ledger";
 import { cartridgeContent, copyContent } from "./fixtures/term";
 import { changeId, lmsRef } from "./fixtures/ids";
 
-/*
- * `npm run contract:live`: every Canvas read against a live school, each answer parsed as the bridge would parse it,
- * then one grade and comment sent through the runner with the comment's response thrown away, and, given a sandbox
- * shell and source, a course copied and published. It reaches a real host,
- * so it runs only through that script, never in `npm test` or CI.
- */
 const {
   CANVAS_HOST: host = "",
   CANVAS_TOKEN: token = "",
@@ -47,7 +41,6 @@ const {
   CANVAS_TERM_SOURCE: termSource = "",
   CANVAS_IMSCC_SHELL: imsccShell = "",
 } = process.env;
-/** The fixture package `contract:live` imports, with the term its dates came from. */
 const LIVE_PACKAGE = PACKAGES.find(
   (pkg) => pkg.name === "eng210-northgate-spring2026-export.imscc",
 );
@@ -65,7 +58,6 @@ describe("Canvas reads against a live school", () => {
     it.skip("skipped: set CANVAS_HOST (as school.instructure.com) and CANVAS_TOKEN (a personal access token) to run", () => {});
     return;
   }
-  /** Set to throw away the answer to the next comment write, after Canvas has applied it. */
   let loseComment = false;
   const provider = createCanvasProvider({
     school,
@@ -91,7 +83,6 @@ describe("Canvas reads against a live school", () => {
         : null,
   });
 
-  /** Polls a course's jobs until the one named `signature` finishes. */
   const finished = async (course: LmsRef<"course">, signature: string) => {
     const setup = provider.termSetup;
     if (!setup) throw new Error("Canvas offers no term setup");
@@ -106,7 +97,6 @@ describe("Canvas reads against a live school", () => {
     return job;
   };
 
-  /** One change read, approved with a trusted click and sent through the runner, as the app sends it. */
   const runnerFor = async (content: ChangeContent, course: LmsRef<"course">) => {
     const at = isoTime(Date.now());
     const remote = unwrap("observe", await provider.observe(content));

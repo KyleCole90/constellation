@@ -9,15 +9,9 @@ import { benchmark } from "./harness";
 import { results, resultsPath, sum, weighted } from "./metrics";
 import { SOURCES, refusal, sortSources } from "./sources";
 
-/*
- * `npm run bench:claude-code`: drafts the 30-fixture class through each AI source that has credentials and writes a
- * dated results file per source to bench/results. It spends real quota, so it runs only through that script, never in
- * `npm test` or CI. `BENCH_FIXTURES=2` drafts only the first two and writes nothing, for a cheap check while developing.
- */
 const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" }).trim();
 const localDate = () => new Date().toLocaleDateString("sv-SE");
 
-/** Unset runs every fixture; a positive whole number runs that many and writes nothing. Anything else is a typo. */
 const fixtureLimit = (raw: string | undefined) => {
   if (raw === undefined) return undefined;
   if (!/^[1-9]\d*$/.test(raw))

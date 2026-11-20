@@ -1,6 +1,3 @@
-// Claude Code PreToolUse hook: denies a Bash call that skips git hooks or kills a process this thread
-// did not start. Wired in .claude/settings.json. Reads the hook payload on stdin.
-
 import { readFileSync } from "node:fs";
 
 const NO_VERIFY_REASON =
@@ -9,10 +6,8 @@ const NO_VERIFY_REASON =
 const KILL_REASON =
   "Other agent threads run verify on this Mac, and a process search or a PID from ps matches their processes too. Stop only what you started: capture $! when you start it, run it under timeout <seconds>, or use TaskStop for your own background task.";
 
-// Short commit options that take a value; in a cluster like -nm, chars after one of these are its value.
 const COMMIT_VALUE_FLAGS = "mFcCtSu";
 
-// Git's global options that take their value as the next word.
 const GIT_VALUE_OPTIONS = [
   "-C",
   "-c",
@@ -23,10 +18,6 @@ const GIT_VALUE_OPTIONS = [
   "--attr-source",
 ];
 
-/**
- * Splits a shell command into words per simple command, removing quotes and backslashes the way the shell does, so
- * `--no-ver""ify` is one word. A word written wholly inside quotes is `quoted`: it never names a command to run.
- */
 const shellWords = (command) => {
   const commands = [[]];
   for (const [, op, word] of command
@@ -55,12 +46,6 @@ const shellWords = (command) => {
   return commands;
 };
 
-/**
- * The split this hook shipped with: a quote starts a word only at its start, so `it's` in a heredoc or a comment
- * can't open a quote. Shell syntax is too rich to read one way, so the hook reads the command both ways and denies
- * when a rule matches either, which also keeps every command this split denied denied. A quoted piece glued to its
- * neighbour (`"x""--"`) is only part of an argument, so it is `notFlag`.
- */
 const plainWords = (command) => {
   const commands = [[]];
   for (const match of command.matchAll(
@@ -79,10 +64,8 @@ const plainWords = (command) => {
   return commands;
 };
 
-// Config keys that set core.hooksPath, directly or through an included file.
 const HOOKS_PATH = /^(core\.hookspath|include\.path|includeif\..+\.path)(=|$)/i;
 
-// Git takes any unambiguous prefix of a long option. Below 6 chars the prefix clashes with --no-verbose, so git refuses it.
 const isNoVerify = ({ text, notFlag }) =>
   !notFlag && text.length >= 6 && "--no-verify".startsWith(text);
 
@@ -123,21 +106,17 @@ const skipsHooks = (words) => {
   return false;
 };
 
-/** `git config core.hooksPath` and `--get` only read it; a value or an unset after the key changes it. */
 const configWritesHooksPath = (args) => {
   const key = args.findIndex((w) => HOOKS_PATH.test(w.text));
   return key !== -1 && (key < args.length - 1 || args.some((w) => /^(--)?unset/.test(w.text)));
 };
 
-// GIT_CONFIG_COUNT (with its KEY_n and VALUE_n), GIT_CONFIG_PARAMETERS, GIT_CONFIG_GLOBAL and GIT_CONFIG_SYSTEM can each
-// set core.hooksPath unseen. They take effect before the command name, or as arguments to `export` and its kin.
 const setsGitConfigEnv = (words) => {
   const first = words.findIndex((w) => w.quoted || !BEFORE_COMMAND.test(w.text));
   const assignments = first === -1 || runs(words, ASSIGNERS) ? words : words.slice(0, first);
   return assignments.some((w) => /^GIT_CONFIG_(COUNT|PARAMETERS|GLOBAL|SYSTEM)\+?=/.test(w.text));
 };
 
-// Commands whose arguments can set a variable for what they run.
 const ASSIGNERS = [
   "export",
   "env",
@@ -154,16 +133,11 @@ const ASSIGNERS = [
   "zsh",
 ];
 
-// Words that come before the command name: VAR=value, or a shell keyword such as `then` or `do`.
 const BEFORE_COMMAND = /^(\w+\+?=.*|then|do|else|elif|if|while|until|!|[{(])$/;
 const WRAPPER = /^(sudo|nohup|exec|time|env|timeout|nice|stdbuf|command)$/;
 
 const named = (word, names) => !word.quoted && names.includes(word.text.split("/").at(-1));
 
-/**
- * The index of the word that runs one of `names`, or -1. Behind a wrapper such as `sudo -u root` or `timeout -k 5 300`,
- * the command can't be told from the wrapper's own arguments, so any later word that names one counts.
- */
 const commandIndex = (words, names) => {
   const first = words.findIndex((w) => w.quoted || !BEFORE_COMMAND.test(w.text));
   if (first === -1) return -1;
@@ -179,7 +153,6 @@ const killArgs = (words) => {
   return kill === -1 ? [] : words.slice(kill + 1);
 };
 
-/** True when an operand is a literal PID or process group. Quoting doesn't matter: "$pid" is not a number. */
 const killsLiteralPid = (words) => {
   const args = killArgs(words);
   for (let i = 0, operands = false; i < args.length; i++) {
@@ -192,12 +165,9 @@ const killsLiteralPid = (words) => {
   return false;
 };
 
-// Looks at the whole Bash call, because the search and the kill are often apart: `PID=$(lsof -ti:4320); kill $PID`.
-// Any substitution that mentions a search tool counts, whatever wraps it: `$(sudo /usr/sbin/lsof -ti:4320)`.
 const killsSearchResult = (words, command) =>
   runs(words, ["kill"]) && /(\$\(|`)[^)`]*\b(pgrep|pidof|lsof|ps|fuser)\b/.test(command);
 
-// A pipeline splits into one simple command per stage, so `pgrep x | xargs kill` arrives as `xargs kill`.
 const xargsKill = (words) =>
   runs(words, ["xargs"]) && words.some((w) => !w.quoted && w.text === "kill");
 

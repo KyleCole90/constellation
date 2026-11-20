@@ -1,5 +1,3 @@
-// The live app is wired the way tests/security.test.ts checks the parts: main serves app:// under the CSP, the window
-// runs sandboxed with only the preload's bridge, main parses what crosses it, and navigation stays locked.
 import { APP_URL, CSP } from "../../src/main/security.ts";
 
 export const run = async (t) => {
@@ -23,7 +21,6 @@ export const run = async (t) => {
     "the page has no process or require, and window.constellation exposes only invoke and whether it runs on fakes (it does, under verify)",
     JSON.stringify(globals),
   );
-  // A well-formed report reaches main's handler, so the malformed one is refused by main's parse, not by a missing handler.
   const report = (input) =>
     t.eval(
       `window.constellation.invoke("error.report", ${JSON.stringify(input)}).then(() => "resolved", (error) => error.message)`,
@@ -37,7 +34,6 @@ export const run = async (t) => {
   );
   t.assert(await t.eval(`window.open(location.href) === null`), "window.open opens nothing");
 
-  // A refused navigation stops loading without ever committing a new page.
   const away = new URL("/welcome", t.origin).href;
   const offs = [];
   const outcome = new Promise((resolve) => {

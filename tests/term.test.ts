@@ -81,7 +81,6 @@ describe("the worked case", () => {
 });
 
 describe("shiftDate against the LMS's own formula", () => {
-  // Expected values came from an independent port of the Ruby method, run outside this codebase. They are not this module's output.
   it.each([
     ["2026-08-24", "2027-01-25"],
     ["2026-08-25", "2027-01-25"],

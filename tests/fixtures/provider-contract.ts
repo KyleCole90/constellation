@@ -19,13 +19,11 @@ const AT = isoTime("2026-10-30T12:00:00.000Z");
 export interface ContractHarness {
   provider: LmsProvider;
   school: SchoolId;
-  /** A grade with a comment and no attachment. */
   content: ChangeContent;
   failNext(field: "grade" | "comment", error: LmsError): void;
   loseNext(): void;
   throttleNext(ms: number): void;
   expire(): void;
-  /** Requests that reached the LMS as writes. */
   writeCount(): number;
 }
 
@@ -78,7 +76,6 @@ export const unwrap = async <T>(
   return result.value;
 };
 
-/** A real permit for a test: the change is observed, approved with a trusted click, and begun, the way the runner would. */
 export const permitFor = async (
   provider: LmsProvider,
   content: ChangeContent,
@@ -114,7 +111,6 @@ const gradeOf = (remote: RemoteState) => {
   return remote;
 };
 
-/** Every provider, real or fake, passes this before the runner can trust it. */
 export const runProviderContract = (
   name: string,
   makeHarness: () => Promise<ContractHarness>,

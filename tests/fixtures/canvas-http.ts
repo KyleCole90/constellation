@@ -1,10 +1,5 @@
 import type { Fetch } from "~/main/providers/canvas";
 
-/**
- * A small Canvas over HTTP, for the provider's write path: one course, one assignment with a rubric, two students, a
- * conversation and an announcement. It answers the routes the provider calls, in the shapes the Canvas docs give,
- * and applies writes the way Canvas does. A write whose response is lost still applies.
- */
 export const HOST = "canvas.example.edu";
 const ORIGIN = `https://${HOST}`;
 export const TOKEN = "SENTINEL-canvas-token-71c3";
@@ -46,7 +41,6 @@ interface ConversationState {
   subject: string;
   context_code: string;
   participants: { id: number; name: string }[];
-  /** Newest first, as Canvas sends them. */
   messages: Message[];
 }
 interface Topic {
@@ -93,9 +87,7 @@ export class CanvasHttp {
   #throttleMs: number | null = null;
   #fail: { field: Field; status: number } | null = null;
   #lose: { field: Field | null } | null = null;
-  /** Every write that reached Canvas, by field, in order. */
   readonly writes: Field[] = [];
-  /** Every request, as `METHOD /path?query`. */
   readonly requests: string[] = [];
   readonly submissions = new Map<number, SubmissionState>(
     [MAYA, THEO].map((user) => [
@@ -135,14 +127,12 @@ export class CanvasHttp {
   expire(): void {
     this.#expired = true;
   }
-  /** The next request gets Canvas's throttle: a 403 that says so. */
   throttleNext(ms: number): void {
     this.#throttleMs = ms;
   }
   failNext(field: Field, status: number): void {
     this.#fail = { field, status };
   }
-  /** The next write (of `field`, if given) applies, and its response never arrives. */
   loseNext(field: Field | null = null): void {
     this.#lose = { field };
   }
@@ -207,7 +197,6 @@ export class CanvasHttp {
       return json([MAYA, THEO].map((id) => ({ id, name: NAMES[id] })));
     if (path === `/courses/${COURSE_ID}/students/submissions`) {
       const rows = [...this.submissions.values()].map((row) => this.#submissionJson(row));
-      // Grouped, Canvas answers one entry per student holding that student's submissions.
       return query.get("grouped") === "true"
         ? json(
             [...new Set(rows.map((row) => row.user_id))].map((user_id) => ({
@@ -279,7 +268,6 @@ export class CanvasHttp {
       }
       if (Object.keys(rubric).length > 0) {
         row.rubric_assessment = rubric;
-        // The rubric is used for grading, so Canvas scores the submission from it.
         row.score = Object.values(rubric).reduce((sum, { points }) => sum + points, 0);
         row.workflow_state = "graded";
       }

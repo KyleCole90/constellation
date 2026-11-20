@@ -1,6 +1,3 @@
-// Renders bench/pages into the files bench/files commits (#85): `x.pdf.html` printed to a Letter PDF, `x.png.html` as a
-// full-page picture 1200 px wide, `x.shot.html` as the first 1280x800 screen a link's snapshot shows, `x.md` copied, and
-// `x.docx.md` as a Word file. Rerun after editing a page: `node scripts/make-bench-fixtures.mjs`.
 import { copyFile, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { crc32 } from "node:zlib";
@@ -15,7 +12,6 @@ const CHROME =
 
 const escape = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** Headings, paragraphs and `- ` lists: all a bench page uses, and all the app's Word reader needs to see. */
 const documentXml = (markdown) => {
   const paragraphs = markdown
     .split(/\n{2,}/)
@@ -35,7 +31,6 @@ const documentXml = (markdown) => {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphs.join("")}</w:body></w:document>`;
 };
 
-/** A stored (uncompressed) zip: enough for a docx, with no dependency. */
 const zip = (entries) => {
   const locals = [];
   const centrals = [];

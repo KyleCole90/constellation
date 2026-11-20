@@ -30,22 +30,17 @@ export interface StoreRigOptions {
   agent?: Agent;
   noKey?: boolean;
   capabilities?: Partial<Capabilities>;
-  /** What the LMS answers when a token is checked, in place of the fake's own account read. */
   verify?: LmsProvider["verify"];
   demoScript?: boolean;
   noise?: NoiseConfig;
-  /** Share these to act as a second tab, or as a reload of the first. */
   storage?: MemoryStorage;
   vault?: Vault;
   clock?: VirtualClock;
   subscribeStorage?: (onChange: () => void) => void;
   subscribeFocus?: (onFocus: () => void) => void;
-  /** Share another rig's to act as a second tab of the same browser. */
   locks?: BrowserLocks;
   connectivity?: { online(): boolean; subscribe(onChange: () => void): void };
-  /** These seeded schools join as real Canvas, served by the same fake. */
   realSchools?: readonly SchoolId[];
-  /** Runs as the teacher's desktop app, whose backend has no demo. */
   noDemo?: boolean;
   timer?: (run: () => void, ms: number) => () => void;
   agentMain?: WorkspaceDeps["agentMain"];
@@ -112,7 +107,6 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
 
   const state = () => store.getState();
 
-  /** Adds the seeded school at first, as onboarding does, and reconnects it after that. */
   const connect = async (school: SchoolId, token = STORE_TOKEN) => {
     if (state().schools.some((entry) => entry.id === school))
       return clock.run(state().connect(school, new Secret(token)));
@@ -133,7 +127,6 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
       if (!server) throw new Error("No server.");
       return server;
     },
-    /** The change, which the test expects to exist. */
     change: (id: ChangeId): ChangeRecord => {
       const record = state().changes[id];
       if (!record) throw new Error(`No change ${id}.`);
@@ -143,7 +136,6 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
     connectAll: async () => {
       for (const school of SCHOOLS) await connect(school);
     },
-    /** The scope a thread would give the agent for this change. */
     scopeFor: (id: ChangeId): AgentScope => {
       const record = state().changes[id];
       const cache = record && state().cache[record.school];

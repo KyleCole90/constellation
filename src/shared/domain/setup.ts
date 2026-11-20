@@ -34,7 +34,6 @@ export interface CourseSetup {
   shell: CourseShell;
   source: CopySource | null;
   plan: TermPlan | null;
-  /** The Dates form as last typed, so a reload keeps it. Cleared when the plan is confirmed or the source changes. Absent from setups saved before it existed. */
   draft?: PlanDraft | null;
   copy: ChangeId | null;
   publish: ChangeId | null;
@@ -46,12 +45,10 @@ export interface CourseSetup {
 
 export interface JobView {
   label: string;
-  /** Null until a read has said how far along the job is. */
   completion: number | null;
   message: string | null;
 }
 
-/** Live and unpersisted. A reload loses it, and the next read of the job restores it. */
 export interface SetupLive {
   migration: Migration | null;
   scan: JobView | null;
@@ -60,7 +57,6 @@ export interface SetupLive {
 export type SetupStage =
   | { tag: "source" }
   | { tag: "dates" }
-  /** `stale` while the Dates form holds other dates than the copy was drafted from, so the copy on screen is not what the form says. */
   | { tag: "approve-copy"; copy: ChangeId; stale: boolean }
   | { tag: "copying"; job: JobView }
   | { tag: "copy-failed"; migration: Migration }
@@ -90,7 +86,6 @@ const STAGE_STEP: Readonly<Record<SetupStage["tag"], number>> = {
   "publish-check": 6,
   published: 7,
 };
-/** One-based, as the rail numbers its steps. Detect is never current, because a setup exists only after the offer was taken. */
 export const stepOf = (stage: SetupStage): number => STAGE_STEP[stage.tag];
 
 const STAGE_WORDS: Readonly<Record<SetupStage["tag"], string>> = {
@@ -117,17 +112,12 @@ const MIGRATION_LABEL: Readonly<Record<Migration["state"], string>> = {
 };
 const jobOfMigration = ({ state, completion, message }: Migration): JobView => ({
   label: MIGRATION_LABEL[state],
-  // Canvas reports a fraction, as 55.80645161290322. Down, so the card never says 100 before the copy is done.
   completion: Math.floor(completion),
   message,
 });
 const CHECKING_COPY: JobView = { label: "Checking on the copy", completion: null, message: null };
 const SCANNING: JobView = { label: "Scanning the course", completion: null, message: null };
 
-/**
- * `seen` lists the jobs present when the first send started, so a retry with the same words cannot pick up the job that failed.
- * Before any send, no job can be this change's. `signature` is the copy field's text.
- */
 export const copyMigration = (
   record: { seen: Seen | null },
   signature: string,
@@ -168,7 +158,6 @@ export const stageOf = (
   };
 };
 
-/** A sending change is landing, and a held one in doubt may still land, so neither is discarded from here. */
 export const canDropFix = ({ state }: ChangeRecord): boolean => {
   switch (state.tag) {
     case "draft":
@@ -184,17 +173,11 @@ export const canDropFix = ({ state }: ChangeRecord): boolean => {
   }
 };
 
-/** Until the copy may have reached the LMS, nothing there depends on this setup, so dropping it leaves the shell as it was. */
 export const canCancelSetup = (setup: CourseSetup, changes: ChangeMap): boolean => {
   const copy = setup.copy ? changes[setup.copy] : undefined;
   return !copy || copy.state.tag === "discarded" || canDropFix(copy);
 };
 
-/**
- * Idempotent. A live or sent change keeps its link, so a rerun creates nothing twice and never overwrites an edited fix.
- * A sent fix whose key is found again wrote one of two twins, and the other now has its key. The sent fix moves to a key
- * no finding can have, where it stays the record of what was written, and the passage gets a new draft.
- */
 export const reconcile = (
   setup: CourseSetup,
   findings: readonly Finding[],
@@ -222,12 +205,10 @@ export const reconcile = (
   };
 };
 
-/** `manual` is a person's to do in the LMS. `fix` has a change, or will after the next reconcile. `checking` was sent after the last scan read the course, so that scan can't speak for it. `still-here` was sent, and a later scan still finds it. */
 type RowStatus = "manual" | "fix" | "checking" | "still-here" | "fixed" | "dismissed" | "handled";
 
 export interface ReviewRow {
   key: FindingKey;
-  /** Null for a fix whose finding the last scan no longer finds. Its change's subject names it. */
   finding: Finding | null;
   status: RowStatus;
   change: ChangeRecord | null;
@@ -329,7 +310,6 @@ const READINESS_GROUP: Readonly<Record<FindingType, ReadinessGroup>> = {
 export const readinessGroupOf = ({ finding }: ReviewRow): ReadinessGroup =>
   finding ? READINESS_GROUP[finding.type] : "findings";
 
-/** Not a second engine: every group is a count of open rows from the ordinary rules. */
 export const readinessOf = (
   rows: readonly ReviewRow[],
 ): { ready: boolean; groups: Readonly<Record<ReadinessGroup, number>> } => {
@@ -343,10 +323,6 @@ export const readinessOf = (
   return { ready: Object.values(groups).every((count) => count === 0), groups };
 };
 
-/**
- * What a fix's target reads as, taken from the scan's own read so a scan makes no extra requests. Null when the item is gone.
- * `present` is the reading every provider gives a live item. A text fix never consults its version, so the course's will do.
- */
 export const fixBasis = (
   fix: TextFixContent | SetContent,
   content: CourseContent,
@@ -371,7 +347,6 @@ const withAfter = (fix: Finding["fix"], after: string): Finding["fix"] =>
 const afterOf = (finding: Finding): string | null =>
   finding.fix?.kind === "text-fix" ? finding.fix.splice.after : null;
 
-/** A rules-only rescan keeps the agent's words. The key hashes the quote, so a key found again means the quote is still there. */
 export const keepWords = (
   next: readonly Finding[],
   prior: readonly Finding[],
@@ -397,7 +372,6 @@ export interface FindingWords {
   after: string | null;
 }
 
-/** Null when the agent spoke of something the rules did not find. An agent's finding only rewords a rule's, so it can mint nothing. */
 export const rewordFinding = (
   findings: readonly Finding[],
   words: FindingWords,

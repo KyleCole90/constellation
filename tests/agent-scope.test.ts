@@ -18,7 +18,6 @@ import { threadId } from "./fixtures/ids";
 
 const QUEUE = threadId("t-queue");
 
-/** What the renderer hands main for Claude, answered by the rules agent so drafts still land. */
 const wire = async () => {
   const sent: { request: string; scope: AgentScope }[] = [];
   const main = rulesMain({

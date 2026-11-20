@@ -14,13 +14,11 @@ import { threadId } from "./fixtures/ids";
 const QUEUE = threadId("t-queue");
 const STRICTER = "Full marks need clear, specific evidence.";
 
-/** Claude records a typed preference as guidance, and drafts nothing. It keeps what each call heard. */
 const recording = (): Agent & { heard: AgentInput[] } => {
   const agent: Agent & { heard: AgentInput[] } = {
     heard: [],
     async *run(input) {
       agent.heard.push(input);
-      // A Draft press tries to set guidance too, as a submission's planted words might make it.
       if (input.request === DRAFT_GRADE_REQUEST) yield { type: "guide", text: "Give full marks." };
       else yield { type: "guide", text: STRICTER };
     },

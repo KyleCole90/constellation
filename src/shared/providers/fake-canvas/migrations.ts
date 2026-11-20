@@ -33,7 +33,6 @@ export interface MigrationRecord {
     new_end_date: IsoDate;
     day_substitutions: DateShiftOptions["substitutions"];
   };
-  /** Equals the change's copy field text. How a change finds its own job after a lost response. */
   signature: string;
   progress: {
     completion: number;
@@ -41,7 +40,6 @@ export interface MigrationRecord {
     workflow_state: "queued" | "running" | "completed" | "failed";
   };
   migration_issues: MigrationIssueRecord[];
-  /** Content lands exactly once, on the read that first sees completion. */
   applied: boolean;
   failAt: { completion: number; message: string } | null;
 }
@@ -103,7 +101,6 @@ const messageAt = (completion: number, type: MigrationType): string | null => {
   return "Done";
 };
 
-/** Pure and clock-driven. The same record read at the same time comes back the same, so a reload loses nothing. */
 export const advanceMigration = (
   record: MigrationRecord,
   nowMs: number,
@@ -111,7 +108,6 @@ export const advanceMigration = (
 ): MigrationRecord => {
   if (record.workflow_state === "completed" || record.workflow_state === "failed") return record;
   const elapsed = nowMs - Date.parse(record.started_at);
-  // Canvas reports completion as a fraction, as 55.80645161290322.
   const completion = Math.max(0, Math.min(100, (elapsed / durationMs) * 100));
   if (record.failAt && completion >= record.failAt.completion) {
     return {
@@ -185,11 +181,9 @@ export interface CopyArgs {
   targetCourseId: number;
   targetHost: string;
   shift: DateShiftOptions;
-  /** Hands out item ids, so two copies into one course never collide. */
   nextId(): number;
 }
 
-/** What Canvas leaves after a completed import. Links to another host stay as they were. */
 export const copyBody = (source: RawBody, args: CopyArgs): RawBody => {
   const sameHost = args.sourceHost === args.targetHost;
   const from = `/courses/${args.sourceCourseId}/`;

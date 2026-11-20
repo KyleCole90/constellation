@@ -1,4 +1,3 @@
-/** Test mints for branded ids: the one test file where `constellation/no-brand-cast` allows a brand cast. */
 import type {
   ChangeId,
   IsoDate,

@@ -4,7 +4,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { startUpdates } from "../src/main/updates";
 
-/** Stands in for electron-updater's `autoUpdater`: an emitter whose check resolves or rejects as the test says. */
 const fakeUpdater = (check: () => Promise<unknown> = async () => null) => {
   const emitter = new EventEmitter();
   const calls = { checks: 0, installs: 0 };
@@ -50,7 +49,6 @@ describe("updates", () => {
       throw new Error("net::ERR_INTERNET_DISCONNECTED");
     });
     startUpdates(updater, async () => false);
-    // An emitter with no `error` listener throws; electron-updater emits one for each failure.
     expect(() => updater.emit("error", new Error("No published versions on GitHub"))).not.toThrow();
     await settle();
   });

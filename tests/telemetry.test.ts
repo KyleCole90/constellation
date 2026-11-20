@@ -10,14 +10,12 @@ import * as v from "valibot";
 import { createTelemetry, type TelemetryOptions } from "../src/main/telemetry";
 import { errorReport } from "../src/shared/ipc";
 
-/** An app's folder with a built bundle in it: the only files a frame may name. */
 const APP_ROOT = realpathSync(mkdtempSync(join(tmpdir(), "constellation-app-")));
 for (const file of ["out/dist/assets/index-Ab12.js", "out/main/index.mjs"]) {
   mkdirSync(dirname(join(APP_ROOT, file)), { recursive: true });
   writeFileSync(join(APP_ROOT, file), "");
 }
 
-/** Student data, planted wherever an error can carry it, as plain identifiers too. None of it may reach PostHog. */
 const STUDENT = {
   name: "Maria Garcia",
   identifier: "MayaLopez",
@@ -34,10 +32,6 @@ const PLANTED = Object.values(STUDENT);
 
 type Saved = ReturnType<TelemetryOptions["saved"]["read"]>;
 
-/**
- * Telemetry over an in-memory `telemetry.json`. Each POST takes the next of `answers`, a status or a thrown network
- * error, then 200 once they run out. The timer never fires in a test, so only a full queue or `flush` sends.
- */
 const rig = (overrides: Partial<TelemetryOptions> = {}, answers: (number | Error)[] = []) => {
   const sent: { url: string; body: string }[] = [];
   let saved: Saved = { enabled: true };
@@ -60,7 +54,6 @@ const rig = (overrides: Partial<TelemetryOptions> = {}, answers: (number | Error
     },
     ...overrides,
   });
-  /** Every event PostHog was handed, batch by batch, retries included. */
   const events = () => sent.flatMap((request) => batchOf(request));
   return { telemetry, sent, events, saved: () => saved };
 };
@@ -73,7 +66,6 @@ const expectNoStudentData = (body: string) => {
   expect(body).not.toContain("/Users/");
 };
 
-/** A real thrown error whose message, name and function name all carry student data. */
 const studentError = (functionName: string, errorName = "TypeError") => {
   const handlers = {
     [functionName]: () => {
@@ -95,7 +87,6 @@ const studentError = (functionName: string, errorName = "TypeError") => {
   throw new Error("expected a throw");
 };
 
-/** A renderer stack, with student data in every place it can hide, in the app's own files and outside them. */
 const RENDERER_STACK = [
   `TypeError: ${STUDENT.name} has no grade`,
   `    at ${STUDENT.email} (app://constellation/assets/index-Ab12.js:3:40)`,

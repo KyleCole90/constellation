@@ -19,16 +19,12 @@ import { cartridgeContent, copyContent, termOf } from "./term";
 export interface TermContractHarness {
   provider: LmsProvider;
   school: SchoolId;
-  /** An empty, unpublished course for the new term. */
   shell: CourseShell;
-  /** A course to copy from. */
   source: SourceCourse;
-  /** Moves the clock the job runs on. */
   advance(ms: number): void;
   loseNext(): void;
   failNextMigration(stage: "pre_processing" | "running", message: string): void;
   writeCount(): number;
-  /** Whether the LMS lists sample packages to import. Real Canvas lists none. */
   offersPackages: boolean;
 }
 
@@ -44,14 +40,12 @@ const setupOf = (provider: LmsProvider): TermSetup => {
   return provider.termSetup;
 };
 
-/** What the writeback would see for the copy field after the job is created. */
 const copyRemote = async (provider: LmsProvider, content: CourseCopyContent) => {
   const remote = await unwrap(provider.observe(content));
   if (remote.kind !== "course-copy") throw new Error("expected a course-copy remote");
   return remote;
 };
 
-/** A provider that offers term setup passes this too: the fake, and real Canvas over recorded HTTP. */
 export const runTermSetupContract = (
   name: string,
   makeHarness: () => Promise<TermContractHarness>,
@@ -297,13 +291,11 @@ export const runTermSetupContract = (
         where: shell.code,
         intent: { set: "due-at", at: isoTime("2027-02-04T00:00:00.000Z") },
       };
-      // Real Canvas can't observe this pair, so the permit comes from a basis rather than a read.
       const draft = { ...newDraft("ch-mismatch", content, setRemote), school };
       const permit = mintSendPermit(sending(approved(draft)), ["value"]);
       if (!permit) throw new Error("no permit");
       const writes = writeCount();
       const outcome = (await provider.apply(permit)).value;
-      // A provider refuses it. Over the bridge, main may refuse the input first, which the renderer reads as in doubt.
       expect(["failed", "unknown"]).toContain(outcome?.status);
       if (outcome?.status === "failed") expect(outcome.error.kind).toBe("rejected");
       expect(writeCount()).toBe(writes);

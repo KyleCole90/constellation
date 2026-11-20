@@ -27,21 +27,16 @@ import {
 type Status = Awaited<ReturnType<Handlers["claudeCode.status"]>>;
 type Env = Readonly<Record<string, string | undefined>>;
 
-/** One model request in a run, with its tokens split as the benchmark weighs them. */
 interface Call {
   model: string;
   usage: { input: number; cacheWrite: number; cacheRead: number; output: number };
 }
 
 interface ClaudeCodeOptions {
-  /** Where `claude` is, or null when it isn't installed. By default, the install locations, then the login shell. */
   locate?: (env: Env) => Promise<string | null>;
-  /** The environment each run starts from, before the API-key variables come out. */
   env?: Env;
-  /** Where each run's empty working folder goes. */
   tmpRoot?: string;
   timeoutMs?: number;
-  /** Each finished run's model requests and the time the model took, for the benchmark. */
   onUsage?: (calls: readonly Call[], modelMs: number) => void;
 }
 
@@ -72,10 +67,6 @@ const limitReached = (resetsAt: IsoTime | undefined): Answer => ({
   limited: true,
 });
 
-/**
- * Every built-in tool, MCP server, setting source and slash command off, and no session saved, so student work reaches
- * nothing on the Mac. `--bare` would also turn these off, but it accepts only an API key, never the teacher's sign-in.
- */
 const ARGS = [
   "-p",
   "--input-format",
@@ -99,14 +90,12 @@ const ARGS = [
   "--disable-slash-commands",
   "--no-session-persistence",
 ];
-/** Without these the teacher's subscription pays, never an API key that happens to be in the environment. */
 const API_KEY_VARIABLES = new Set([
   "ANTHROPIC_API_KEY",
   "ANTHROPIC_AUTH_TOKEN",
   "ANTHROPIC_BASE_URL",
 ]);
 const FIVE_MINUTES = 5 * 60_000;
-/** The CLI retries an unreachable API for minutes. Two misses with no HTTP status is offline enough. */
 const OFFLINE_AFTER_ATTEMPTS = 2;
 
 const Init = v.looseObject({
@@ -116,13 +105,11 @@ const Init = v.looseObject({
   claude_code_version: v.string(),
 });
 const Retry = v.looseObject({ attempt: v.number(), error_status: v.nullish(v.number()) });
-/** Epoch seconds, as a time. A value no Date can hold fails the parse, so its event is dropped. */
 const ResetsAt = v.pipe(
   v.number(),
   v.check((seconds) => Number.isFinite(new Date(seconds * 1000).getTime())),
   v.transform((seconds) => isoTime(seconds * 1000)),
 );
-/** `utilization` is a fraction. */
 const Window = v.looseObject({ utilization: v.number(), resetsAt: ResetsAt });
 const RateLimitInfo = v.looseObject({
   status: v.optional(v.string()),
@@ -178,7 +165,6 @@ const weeklyOf = (info: v.InferOutput<typeof RateLimitInfo>): Status["weekly"] =
     : null;
 };
 
-/** When the limit that stopped a run lifts. */
 const resetOf = (info: v.InferOutput<typeof RateLimitInfo>): IsoTime | undefined =>
   info.resetsAt ?? info.unifiedWindows?.seven_day?.resetsAt;
 
@@ -191,7 +177,6 @@ const isExecutable = (path: string) =>
     () => false,
   );
 
-/** Apps opened from the Finder don't get the shell's PATH, so the usual install locations come first, then one login-shell lookup. */
 const findClaude = async (env: Env): Promise<string | null> => {
   for (const path of [
     join(homedir(), ".local/bin/claude"),
@@ -220,11 +205,6 @@ interface Exec {
   stdout: string;
 }
 
-/**
- * `agent.run` through the teacher's own installed, unmodified Claude Code, plus its status for Settings. One `claude`
- * runs at a time, in order, whoever asked. What comes back is raw, like the key's provider: the renderer's
- * `parseAgentEffect` decides what counts.
- */
 export const claudeCodeAgent = (options: ClaudeCodeOptions = {}) => {
   const base = options.env ?? process.env;
   const env: Record<string, string> = { CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1" };
@@ -239,7 +219,6 @@ export const claudeCodeAgent = (options: ClaudeCodeOptions = {}) => {
   let running: ChildProcess | null = null;
   let tail: Promise<unknown> = Promise.resolve();
 
-  /** Runs `work` on the remembered `claude`, searching again once if that path stopped working. Null with none to run. */
   const onClaude = async <T>(work: (path: string) => Promise<T | "gone">): Promise<T | null> => {
     for (const fresh of [false, true]) {
       if (fresh || found === null) found = await locate(base);
@@ -270,7 +249,6 @@ export const claudeCodeAgent = (options: ClaudeCodeOptions = {}) => {
     return result?.ok ? versionIn(result.stdout) : null;
   };
 
-  /** One run of `claude`. "early" when it died before saying who it is, as a CLI too old for a flag does. */
   const once = (path: string, cwd: string, input: Input) =>
     new Promise<Answer | "gone" | "early">((resolve) => {
       const child = spawn(path, ARGS, { cwd, env, stdio: ["pipe", "pipe", "ignore"] });
@@ -354,7 +332,6 @@ export const claudeCodeAgent = (options: ClaudeCodeOptions = {}) => {
       },
     }));
     options.onUsage?.(calls, result.duration_api_ms);
-    // The CLI's `total_cost_usd` is an estimate, not a bill: the plan pays, so a thread shows no dollars.
     const spend = {
       tokens: calls.reduce(
         (sum, { usage }) => sum + usage.input + usage.cacheWrite + usage.cacheRead + usage.output,
@@ -362,7 +339,6 @@ export const claudeCodeAgent = (options: ClaudeCodeOptions = {}) => {
       ),
       usd: 0,
     };
-    // A refusal can stop partway through, so nothing it wrote is kept.
     if (refused || result.stop_reason === "refusal")
       return { ok: true, effects: [{ type: "decline", text: DECLINED }], spend };
     if (result.is_error) return UNUSABLE;
@@ -399,7 +375,6 @@ export const claudeCodeAgent = (options: ClaudeCodeOptions = {}) => {
     return turn;
   };
 
-  /** Only what the contract names: never the account's email, organization or token. */
   const status = async (): Promise<Status> => {
     const have = await version();
     if (have === null) return { installed: false, weekly };
@@ -414,7 +389,6 @@ export const claudeCodeAgent = (options: ClaudeCodeOptions = {}) => {
     };
   };
 
-  /** Kills the run in progress, the only `claude` this app has running. Main calls it as the app quits. */
   const stop = () => {
     running?.kill("SIGKILL");
   };

@@ -11,8 +11,6 @@ import { applySplice, spliceState } from "./splice";
 import { keysOf } from "../keys-of";
 import type { DateShiftOptions, TermPlan } from "./term";
 
-// ---- What a change proposes. Vendor neutral. Hashing this is what an approval covers. ----
-
 export interface RubricScore {
   criterion: LmsRef<"criterion">;
   name: string;
@@ -22,7 +20,6 @@ export interface RubricScore {
 export interface LatePenalty {
   days: number;
   pointsPerDay: number;
-  /** An extension or a documented absence. The penalty stays on the draft so the teacher sees what was waived. */
   waived: boolean;
 }
 interface AttachmentDraft {
@@ -32,16 +29,13 @@ interface AttachmentDraft {
 export interface GradeContent {
   kind: "grade";
   target: LmsRef<"submission">;
-  /** Used when there is no rubric. With a rubric the raw score is the rubric total. */
   points: number | null;
   outOf: number;
   rubric: readonly RubricScore[] | null;
   late: LatePenalty | null;
   comment: string | null;
   attachment: AttachmentDraft | null;
-  /** The teacher's total, sent as the grade in place of the scores minus the late penalty. A score edit or an excuse clears it. */
   override: number | null;
-  /** A documented absence. Holds no score: `applyPatch` clears the scores when it sets this, and a score or an override clears it. */
   excused: boolean;
 }
 interface ReplyContent {
@@ -49,7 +43,6 @@ interface ReplyContent {
   target: LmsRef<"conversation">;
   body: string;
 }
-/** Starts a new conversation with the submission's student, about its assignment, without touching the grade. */
 interface MessageContent {
   kind: "message";
   target: LmsRef<"submission">;
@@ -72,12 +65,10 @@ export type ChangeContent =
   | SetContent;
 export type { CourseCopyContent, SetContent, TextFixContent };
 
-/** What an agent may draft or edit. A copy's dates and a setting's value are confirmed by a person in the setup screens. */
 export type AgentContent = Exclude<ChangeContent, CourseCopyContent | SetContent>;
 export const isAgentContent = (content: ChangeContent): content is AgentContent =>
   content.kind !== "course-copy" && content.kind !== "item-set";
 
-/** One open change per slot. A grade and a message on the same submission are separate work. */
 export const slotOf = ({ kind, target }: Pick<ChangeContent, "kind" | "target">): string =>
   `${kind}:${target}`;
 export const sameSlot = (
@@ -85,10 +76,6 @@ export const sameSlot = (
   b: Pick<ChangeContent, "kind" | "target">,
 ): boolean => slotOf(a) === slotOf(b);
 
-/**
- * Set fields replace a value. Append fields add an entry, so replaying one would duplicate it.
- * A splice field rewrites one passage, and the passage itself says whether it landed.
- */
 const FIELD_MODE = {
   grade: "set",
   rubric: "set",
@@ -105,7 +92,6 @@ const FIELD_MODE = {
 export type FieldKey = keyof typeof FIELD_MODE;
 const isFieldKey = (value: string): value is FieldKey => Object.hasOwn(FIELD_MODE, value);
 export const FIELD_KEYS: readonly FieldKey[] = Object.keys(FIELD_MODE).filter(isFieldKey);
-/** An append field adds an entry each time it is written, so sending it twice posts twice. */
 export const appendsEntry = (field: FieldKey): boolean => FIELD_MODE[field] === "append";
 
 export const fieldsOf = (content: ChangeContent): readonly FieldKey[] => {
@@ -147,7 +133,6 @@ export const rawScore = (content: GradeContent): number | null => {
 };
 export const latePenalty = (content: GradeContent): number =>
   content.late && !content.late.waived ? content.late.days * content.late.pointsPerDay : 0;
-/** What the grade field sends. A draft saved before overrides existed has no `override`, which reads as none. */
 export const finalGrade = (content: GradeContent): number | null => {
   if (content.override != null) return content.override;
   const raw = rawScore(content);
@@ -215,14 +200,11 @@ export type ChangePatch =
   | { kind: "text-fix"; after: string }
   | { kind: "item-set"; at: IsoTime };
 
-// ---- What the LMS holds right now, in neutral terms. Providers report this and decide nothing. ----
-
 export interface RemoteEntry {
   id: string;
   mine: boolean;
   text: string;
 }
-/** targetVersion changes when the target itself moved: a new attempt, or a student writing again. */
 export type RemoteState =
   | {
       kind: "grade";
@@ -233,10 +215,8 @@ export type RemoteState =
       comments: readonly RemoteEntry[];
       attachments: readonly RemoteEntry[];
     }
-  /** For a message, `messages` opens each conversation with the student about this assignment, matched by subject. */
   | { kind: "reply" | "message"; targetVersion: string; messages: readonly RemoteEntry[] }
   | { kind: "announcement"; targetVersion: string; posts: readonly RemoteEntry[] }
-  /** `students` and `items` are what a copy would land on top of. Either above zero makes the change risky. */
   | {
       kind: "course-copy";
       targetVersion: string;
@@ -245,7 +225,6 @@ export type RemoteState =
       migrations: readonly RemoteEntry[];
     }
   | { kind: "text-fix"; targetVersion: string; body: string }
-  /** `value` is the current reading of whatever the intent sets, in the same words `fieldText` would write. */
   | { kind: "item-set"; targetVersion: string; value: string | null };
 
 export interface Basis {
@@ -253,7 +232,6 @@ export interface Basis {
   remote: RemoteState;
 }
 
-/** Read from the basis, which the fingerprint covers, so a later read that changes the counts also makes the approval stale. */
 export const riskOf = ({ basis: { remote } }: Pick<ChangeRecord, "basis">): RiskKey | null =>
   remote.kind === "course-copy" && (remote.students > 0 || remote.items > 0)
     ? riskKey(remote.students, remote.items)
@@ -276,12 +254,6 @@ export type FieldDecision =
   | { do: "write" }
   | { do: "conflict"; conflict: FieldConflict };
 
-/**
- * Pure, and the only place duplicate and conflict rules exist, so a new provider inherits them.
- * Set fields check desired first, so a retry reads its own earlier write as success rather than someone else's change.
- * Append fields look for my entries missing from `seen`, the ids present when the send first started.
- * A fresh entry of mine with different text may be my write after the LMS normalized it, so it never auto-posts.
- */
 export const classify = (
   content: ChangeContent,
   basis: Basis,
@@ -383,7 +355,6 @@ const classifyExcuse = (
   if (remote.excused) return { do: "already-there" };
   if (remote.targetVersion !== basis.targetVersion)
     return targetMoved("excuse", content, basis, remote);
-  // A basis saved before excuses existed has no `excused`, which reads as not excused.
   if (!basis.excused && remote.grade === basis.grade) return { do: "write" };
   return {
     do: "conflict",
@@ -397,7 +368,6 @@ const classifyExcuse = (
   };
 };
 
-/** One plain value, in the same order as a grade: desired first, so a retry reads its own write as done. */
 const classifyValue = (
   content: SetContent,
   field: FieldKey,
@@ -417,7 +387,6 @@ const classifyValue = (
   };
 };
 
-/** The passage says whether it landed, so the target version is not consulted and a neighbor's fix leaves this one valid. */
 const classifySplice = (
   content: ChangeContent,
   field: FieldKey,
@@ -484,7 +453,6 @@ const appendEntries = (remote: RemoteState, field: FieldKey): readonly RemoteEnt
   }
 };
 
-/** An LMS may normalize whitespace on the way in, and that must not read as someone else's text. */
 const sameText = (a: string, b: string): boolean =>
   a.replace(/\s+/g, " ").trim() === b.replace(/\s+/g, " ").trim();
 const numberText = (value: number | null): string | null => (value === null ? null : String(value));
@@ -498,7 +466,6 @@ const rubricText = (
     ? null
     : (content.rubric ?? []).map((r) => `${r.name} ${scores[r.criterion] ?? "(none)"}`).join(", ");
 
-/** The value a field would write, as display text. Also what entries are matched against. */
 export const fieldText = (content: ChangeContent, field: FieldKey): string => {
   switch (content.kind) {
     case "grade":
@@ -522,14 +489,9 @@ export const fieldText = (content: ChangeContent, field: FieldKey): string => {
   }
 };
 
-/**
- * Equals the migration's signature the LMS reports, so a change finds its job by text alone. Only the source: Canvas
- * doesn't echo a job's date shift back, and `seen` already keeps an earlier job from passing as this one.
- */
 export const copySignature = ({ source }: Pick<CourseCopyContent, "source">): string =>
   source.kind === "course" ? source.ref : `cartridge:${source.name}`;
 
-/** Also the words a provider reports as the current value, so the two compare as plain strings. */
 const intentText = (intent: SetIntent): string => {
   switch (intent.set) {
     case "due-at":
@@ -544,7 +506,6 @@ const intentText = (intent: SetIntent): string => {
   }
 };
 
-/** Entry ids per append field, taken once before anything is written. A new entry of mine that isn't here came from a send. */
 export type Seen = Readonly<Record<string, readonly string[]>>;
 
 export const seenOf = (remote: RemoteState): Seen => {
@@ -573,7 +534,6 @@ export type LmsError =
   | { kind: "not_found" }
   | { kind: "rejected"; reason: string }
   | { kind: "unavailable"; status: number | null }
-  /** The request may have applied. Only a later read can say. */
   | { kind: "lost_response" }
   | { kind: "unsupported"; capability: string };
 
@@ -587,7 +547,6 @@ export interface SendRun {
   attempt: number;
   startedAt: IsoTime;
   fields: Readonly<Partial<Record<FieldKey, FieldRun>>>;
-  /** Epoch ms. Set while waiting out a 429 or a retry delay, so the UI can say why nothing is moving. */
   waitingUntil: number | null;
 }
 
@@ -596,21 +555,14 @@ type HoldCause =
   | { tag: "forbidden"; missingScope: string | null }
   | { tag: "failed"; error: LmsError; retriesExhausted: boolean }
   | { tag: "rejected"; reason: string }
-  /** A response was lost and a settle-window read still could not confirm it. Resuming is a human press. */
   | { tag: "in-doubt"; since: IsoTime }
-  /** The tab went away mid-send. Boot only reads, and a human press resumes. */
   | { tag: "interrupted"; since: IsoTime };
 
-/**
- * The approval rule is the shape of this union. `sending` and `held` cannot exist without an approval,
- * and `draft` has no approval field, so an edited change cannot still read as approved.
- */
 type ChangeState =
   | { tag: "draft"; approvalReset: null | "edited" | "agent-edited" | "rebased" | "revoked" }
   | { tag: "approved"; approval: Approval }
   | { tag: "sending"; approval: Approval; run: SendRun }
   | { tag: "held"; approval: Approval; run: SendRun; cause: HoldCause }
-  /** No approval: resolving a conflict changes what would be written, so it always needs a fresh one. */
   | { tag: "conflicted"; run: SendRun; conflicts: readonly FieldConflict[] }
   | { tag: "sent"; approval: Approval; run: SendRun; at: IsoTime }
   | { tag: "discarded"; at: IsoTime };
@@ -622,7 +574,6 @@ interface ActivityEntry {
   text: string;
 }
 
-/** Local reasoning shown beside the document. Outside the fingerprint and never written to the LMS. */
 export interface PassageAnchor {
   paragraph: number;
   start: number;
@@ -633,7 +584,6 @@ export interface Rationale {
   why: string;
   anchors: readonly PassageAnchor[];
 }
-/** `Rationale.field` for a score with no rubric criterion behind it. */
 export const OVERALL_RATIONALE = "overall";
 
 const scoreFor = (content: ChangeContent, field: string): number | null | undefined => {
@@ -649,19 +599,14 @@ export interface ChangeRecord {
   subject: string;
   content: ChangeContent;
   basis: Basis;
-  /** Fields already in the LMS from an earlier partial send. Their values are the new baseline. */
   landed: readonly FieldKey[];
-  /** Set when the first send starts, and kept through every edit, conflict and discard, because a write can land after any of them. */
   seen: Seen | null;
   rationale: readonly Rationale[];
-  /** The comment as the agent last wrote it. An excuse drops the comment while it still reads this way, because the agent wrote it for a score. */
   agentComment: string | null;
   state: ChangeState;
-  /** Appended only by `transition`, so it cannot disagree with state. */
   activity: readonly ActivityEntry[];
 }
 
-/** When the teacher's latest reply to a conversation went out, which `awaitsReply` weighs against the student's last word. */
 export const repliedAt = (changes: readonly ChangeRecord[], conversation: string): IsoTime | null =>
   changes.reduce<IsoTime | null>(
     (latest, change) =>
@@ -674,8 +619,6 @@ export const repliedAt = (changes: readonly ChangeRecord[], conversation: string
     null,
   );
 
-// ---- Events. Screens get UserEvent. The store adds HostEvent. Only the writeback runner gets RunEvent. ----
-
 export type ConflictChoice = "keep-mine" | "use-theirs" | "it-landed";
 export type UserEvent =
   | { type: "edit"; by: "you"; patch: ChangePatch; at: IsoTime }
@@ -683,7 +626,6 @@ export type UserEvent =
   | { type: "revoke"; at: IsoTime }
   | { type: "discard"; at: IsoTime };
 
-/** The store sends these. An agent's edit has to say so, and resolving a conflict carries a read of the LMS that a screen can't vouch for. */
 type HostEvent =
   | { type: "edit"; by: "agent"; patch: ChangePatch; at: IsoTime }
   | {
@@ -702,7 +644,6 @@ type RunEvent =
   | { type: "conflict"; conflicts: readonly FieldConflict[]; at: IsoTime }
   | { type: "finish"; at: IsoTime }
   | { type: "interrupt"; at: IsoTime }
-  /** A read-only look found fields already in the LMS. Writes nothing, and finishes the change if nothing is left. */
   | { type: "confirm"; outcomes: SendRun["fields"]; at: IsoTime };
 
 export type ChangeEvent = UserEvent | HostEvent | RunEvent;
@@ -718,7 +659,6 @@ export type Rejection =
   | "not-sending"
   | "not-conflicted";
 
-/** The activity entries that put your words in the change. Approving, undoing and resolving a conflict are yours too, but write nothing. */
 const YOUR_WORDS: ReadonlySet<string> = new Set(["Started", "Edited", "Edited, approval reset"]);
 
 export const editedByYou = ({ activity }: ChangeRecord): boolean =>
@@ -747,7 +687,6 @@ export const newChangeRecord = (
   activity: [{ at: init.at, actor: init.by, text: init.by === "agent" ? "Drafted" : "Started" }],
 });
 
-/** Takes out what this school's LMS can't accept, so a change never carries a field that could only fail. */
 export const fitContent = (
   content: ChangeContent,
   can: { rubricWrite: boolean; attachments: boolean },
@@ -761,7 +700,6 @@ export const fitContent = (
   };
 };
 
-/** One click on missing work: every criterion at 0 on a rubric, otherwise a score of 0. */
 export const zeroPatch = (content: GradeContent): ChangePatch =>
   content.rubric
     ? {
@@ -819,7 +757,6 @@ export const applyPatch = (content: ChangeContent, patch: ChangePatch): ChangeCo
     return { ...content, plan: patch.plan ?? content.plan, shift: patch.shift ?? content.shift };
   if (content.kind === "text-fix" && patch.kind === "text-fix")
     return { ...content, splice: { ...content.splice, after: patch.after } };
-  // Only a due date has a value to edit. The other intents are a single choice, so the patch has nothing to say.
   if (content.kind === "item-set" && patch.kind === "item-set")
     return !isCourseSet(content) && content.intent.set === "due-at"
       ? { ...content, intent: { set: "due-at", at: patch.at } }
@@ -830,7 +767,6 @@ export const applyPatch = (content: ChangeContent, patch: ChangePatch): ChangeCo
 const landedFieldsOf = (run: SendRun): readonly FieldKey[] =>
   keysOf(run.fields).filter((field) => run.fields[field]?.status === "landed");
 
-/** Moves what a run landed into the baseline, so a later conflict check compares against the value now in the LMS. */
 const absorbRun = (record: ChangeRecord, run: SendRun, at: IsoTime): ChangeRecord => {
   const fresh = landedFieldsOf(run).filter((field) => !record.landed.includes(field));
   if (fresh.length === 0) return record;
@@ -875,7 +811,6 @@ const withLanded = (remote: RemoteState, content: ChangeContent, field: FieldKey
   }
 };
 
-/** A field that might still land has to be settled by Check again or a Resume before the change can be reworked. */
 export const mayStillLand = (run: SendRun): boolean =>
   Object.values(run.fields).some((field) => field.status === "unknown");
 
@@ -886,10 +821,6 @@ const emptyRun = (at: IsoTime): SendRun => ({
   waitingUntil: null,
 });
 
-/**
- * `seen` for a change about to send for the first time. A discarded change that started sending may still have a
- * write on its way, so the next draft of that target keeps watching for it, until a later send settles the target.
- */
 export const seenForFirstSend = (
   records: readonly ChangeRecord[],
   content: ChangeContent,
@@ -906,7 +837,6 @@ export const seenForFirstSend = (
   return abandoned?.seen ?? seenOf(remote);
 };
 
-/** "Post mine anyway" means the entries there now aren't this change's write, so they stop being suspects. */
 const withKeptEntries = (
   seen: Seen | null,
   fields: readonly FieldKey[],
@@ -949,7 +879,6 @@ const HOLD_TEXT: Readonly<Record<HoldCause["tag"], string>> = {
 const useTheirs = (content: ChangeContent, field: FieldKey, remote: RemoteState): ChangeContent => {
   if (content.kind !== "grade" || remote.kind !== "grade") return content;
   switch (field) {
-    // Rubric scores set the grade, so keeping their grade means not sending the rubric either.
     case "grade":
       if (remote.excused)
         return {
@@ -990,7 +919,6 @@ const useTheirs = (content: ChangeContent, field: FieldKey, remote: RemoteState)
       return { ...content, comment: null };
     case "attachment":
       return { ...content, attachment: null };
-    // A grade has none of these fields.
     case "message":
     case "conversation":
     case "post":
@@ -1001,14 +929,6 @@ const useTheirs = (content: ChangeContent, field: FieldKey, remote: RemoteState)
   }
 };
 
-/**
- * The only way a change moves. Pure.
- * - edit from approved, held, or draft goes to draft. Coming from approved or held records approvalReset.
- * - approve only from draft, and the witness must cover this change's current fingerprint.
- * - begin-send only from approved or held, and only while the approval's fingerprint still matches.
- * - hold and conflict also accept approved and held, because the first observe can fail before begin-send.
- * - resolve-conflict only from conflicted, always to draft, or to discarded if nothing is left to write.
- */
 export function transition(
   record: ChangeRecord,
   event: ChangeEvent,
@@ -1071,7 +991,6 @@ export function transition(
               ? commentOf(content)
               : base.agentComment,
           landed: base.landed.filter((field) => !moved.includes(field)),
-          // A reason explains one score, so it goes when that score changes.
           rationale: base.rationale.filter(
             ({ field }) => scoreFor(base.content, field) === scoreFor(content, field),
           ),
@@ -1144,7 +1063,6 @@ export function transition(
         const choice = event.choices[field] ?? "keep-mine";
         if (choice === "keep-mine") continue;
         if (choice === "use-theirs") content = useTheirs(content, field, event.remote);
-        // A dropped comment simply leaves fieldsOf, and can come back. Anything else we stop writing joins `landed`.
         if (fieldsOf(content).includes(field)) landed.add(field);
       }
       const left = fieldsOf(content).filter((field) => !landed.has(field));
@@ -1314,10 +1232,7 @@ export function transition(
   }
 }
 
-// ---- What screens read. Derived, so no screen knows a vendor or a state machine. ----
-
 type Recovery = "reconnect" | "retry" | "resume" | "resolve-conflict" | "rescan" | "edit" | "none";
-/** Which designed banner the panel shows. A screen picks a banner from this and never reads the state machine. */
 type RecoveryBanner =
   | "reconnect"
   | "forbidden"
@@ -1338,17 +1253,13 @@ export interface ChangeSummary {
   canUndoApproval: boolean;
   canDiscard: boolean;
   missing: readonly string[];
-  /** Why the change is stuck, in words. */
   reason: string | null;
   retriesExhausted: boolean;
-  /** Who reset the approval, so the panel and the chat can name them. */
   approvalReset: Extract<ChangeState, { tag: "draft" }>["approvalReset"];
   approvedAt: IsoTime | null;
   sentAt: IsoTime | null;
   conflicts: readonly FieldConflict[];
-  /** Epoch ms the send is waiting until. */
   waitingUntil: number | null;
-  /** The school's token is the only thing in the way. Set by the store, which knows about connections. */
   waitingOnReconnect: boolean;
 }
 
@@ -1425,7 +1336,6 @@ export const summarize = (record: ChangeRecord): ChangeSummary => {
         waitingUntil: state.run.waitingUntil,
       };
     case "conflicted": {
-      // A moved passage has no "theirs" to pick. A fresh scan reads the item again and drafts the fix where the text now sits.
       const moved = state.conflicts.some(({ reason }) => reason === "passage-moved");
       return {
         ...QUIET,
