@@ -27,6 +27,7 @@ jobs:
           node-version-file: .node-version
           cache: npm
       - run: npm ci
+      - run: git fetch --no-tags --depth=1 origin main
       - run: npm run check
       - run: npm run knip
 

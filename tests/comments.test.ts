@@ -5,6 +5,8 @@ import { dirname, join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
+const ESSAY = "the reason this cast is fine goes on, sentence after sentence, ".repeat(3);
+
 const FIXTURES: Record<string, { code: string; flagged: number }> = {
   "src/shared/explained.ts": { code: "// Sums the two.\nexport const sum = 1 + 1;", flagged: 1 },
   "src/shared/documented.ts": { code: "/** The answer. */\nexport const answer = 42;", flagged: 1 },
@@ -25,6 +27,22 @@ const FIXTURES: Record<string, { code: string; flagged: number }> = {
     flagged: 0,
   },
   "scripts/run.mjs": { code: "#!/usr/bin/env node\nexport const ran = true;", flagged: 0 },
+  "tests/essay-forged.test.ts": {
+    code: `// forged: ${ESSAY}\nexport const w = {} as unknown as Set<string>;`,
+    flagged: 1,
+  },
+  "src/shared/essay-disable.ts": {
+    code: `// oxlint-disable-next-line eslint/no-console -- ${ESSAY}\nconsole.log(1);`,
+    flagged: 1,
+  },
+  "src/shared/block-disable.ts": {
+    code: "/* oxlint-disable-next-line eslint/no-console -- the CLI prints\n   its report, and here is why */\nconsole.log(1);",
+    flagged: 1,
+  },
+  "src/shared/ruleless-disable.ts": {
+    code: "// oxlint-disable-next-line -- the CLI prints its report\nconsole.log(1);",
+    flagged: 1,
+  },
 };
 
 const root = mkdtempSync(join(tmpdir(), "no-comments-"));
@@ -59,7 +77,10 @@ const flaggedIn = (): Map<string, number> => {
 
 describe("the no-comments ratchet", () => {
   it("matches the baseline to every file's comments", () => {
-    const run = spawnSync("node", ["scripts/comments.mjs", "--check"], { encoding: "utf8" });
+    const run = spawnSync("node", ["scripts/comments.mjs", "--check"], {
+      encoding: "utf8",
+      env: { ...process.env, COMMENT_BASE: "HEAD" },
+    });
     expect(run.stdout).toBe("");
     expect(run.status).toBe(0);
   });

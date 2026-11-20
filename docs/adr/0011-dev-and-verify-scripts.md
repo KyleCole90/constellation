@@ -7,6 +7,7 @@
 - `scripts/verify.mjs` launches Electron with `CONSTELLATION_WINDOW=hidden`. Chromium gives a covered or minimised window no frames. A window that is never shown still paints, can't be covered and doesn't take focus.
 - `scripts/verify.mjs` sets `CONSTELLATION_LMS=fake`, so only the fake LMS answers and no address typed in a run reaches a real Canvas host.
 - `scripts/verify.mjs` and `scripts/smoke-packaged.mjs` drop `ELECTRON_RUN_AS_NODE` from the app's environment. Some agent shells set it, and Electron then starts as plain Node.
+- `scripts/verify.mjs` launches Electron with `--use-mock-keychain`. `safeStorage` still encrypts, so the vault's paths run for real, but verify never writes to the teacher's login Keychain or waits on its permission prompt.
 - `freshPage` in `scripts/verify.mjs` relaunches Electron on a new profile for each fresh visit. Electron can't open a new browser context over CDP, and only a new profile starts with storage that a late write from an earlier page can't reach.
 - `steady` in `scripts/verify.mjs` waits until no finite animation runs and a value holds across painted frames, not across time. Headless Chrome on a hosted runner can go 100 ms without a frame, and an animation can hold its first frame until one comes.
 - `t.click` in `scripts/verify.mjs` passes when no press record comes back, because a full navigation discards the old page's `window.__press`. Only an aimed click with no press at all fails.

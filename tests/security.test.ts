@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -38,6 +39,18 @@ describe("window options", () => {
       preload: "/preload.cjs",
       additionalArguments: ["--constellation-fakes"],
     });
+  });
+});
+
+describe("src/main/security.ts", () => {
+  it("loads in plain Node, the way verify's scripts import it", () => {
+    const run = spawnSync(
+      "node",
+      ["--input-type=module", "-e", 'await import("./src/main/security.ts")'],
+      { encoding: "utf8" },
+    );
+    expect(run.stderr).toBe("");
+    expect(run.status).toBe(0);
   });
 });
 

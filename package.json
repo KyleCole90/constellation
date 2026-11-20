@@ -13,7 +13,7 @@
     "lint": "vp lint --report-unused-disable-directives",
     "fmt": "vp fmt",
     "fmt:check": "vp fmt --check",
-    "check": "vp check",
+    "check": "vp check && node scripts/comments.mjs --check",
     "knip": "knip",
     "verify": "npm run build && node scripts/verify.mjs",
     "dev:web": "vp dev",

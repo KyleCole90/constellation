@@ -8,12 +8,18 @@ import { parseSync } from "oxc-parser";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const BASELINE = "scripts/comment-baseline.json";
 
-const CODE = /\.(?:[cm]?[jt]sx?|css)$/;
+const CODE = /\.(?:[cm]?[jt]sx?|css|html)$/;
 const ROOT_CONFIG = /^(?:tsconfig[\w.]*|knip)\.json$/;
-const GENERATED = new Set(["src/renderer/routeTree.gen.ts"]);
+const SKIPPED = new Map([
+  ["src/renderer/routeTree.gen.ts", "@tanstack/router-plugin rewrites it on every build"],
+]);
 
+const TOOL_COMMENT_MAX = 160;
+const RULES = String.raw`[\w@/-]+(?:\s*,\s*[\w@/-]+)*`;
 const TOOL_COMMENTS = [
-  /^\s*(?:eslint|oxlint)-(?:disable|enable)(?:-next-line|-line)?\s+\S.*\s--\s+\S/s,
+  new RegExp(
+    String.raw`^\s*(?:eslint|oxlint)-(?:disable|enable)(?:-next-line|-line)?\s+${RULES}\s+--\s+\S`,
+  ),
   /^\s*@ts-(?:expect-error|ignore|nocheck|check)\b/,
   /^\/\s*<reference\s/,
   /^\s*forged:\s+\S/,
@@ -22,9 +28,21 @@ const TOOL_COMMENTS = [
   /^\s*@vite-ignore\s*$/,
 ];
 
+const isToolComment = (value) =>
+  !value.includes("\n") &&
+  value.length <= TOOL_COMMENT_MAX &&
+  TOOL_COMMENTS.some((pattern) => pattern.test(value));
+
 export const counts = (comment, source) =>
-  !TOOL_COMMENTS.some((pattern) => pattern.test(comment.value)) &&
-  !source.startsWith("#!", comment.range?.[0] ?? comment.start);
+  !isToolComment(comment.value) && !source.startsWith("#!", comment.range?.[0] ?? comment.start);
+
+const htmlComments = (source) =>
+  [...source.matchAll(/<!--([\s\S]*?)(?:-->|$)/g)].map((match) => ({
+    type: "Block",
+    value: match[1] ?? "",
+    start: match.index,
+    end: match.index + match[0].length,
+  }));
 
 const cssComments = (source) => {
   const found = [];
@@ -46,15 +64,14 @@ const cssComments = (source) => {
 
 const rawComments = (path, source) => {
   if (path.endsWith(".css")) return cssComments(source);
+  if (path.endsWith(".html")) return htmlComments(source);
   if (path.endsWith(".json"))
     return parseSync("config.js", `(${source})`).comments.map((comment) => ({
       ...comment,
       start: comment.start - 1,
       end: comment.end - 1,
     }));
-  return parseSync(path, source).comments.filter(
-    (comment) => !source.startsWith("#!", comment.start),
-  );
+  return parseSync(path, source).comments;
 };
 
 const lineAt = (source, offset) => source.slice(0, offset).split("\n").length;
@@ -84,12 +101,7 @@ const trackedFiles = () =>
     encoding: "utf8",
   })
     .split("\n")
-    .filter(
-      (path) =>
-        !GENERATED.has(path) &&
-        !path.startsWith(".claude/") &&
-        (CODE.test(path) || ROOT_CONFIG.test(path)),
-    );
+    .filter((path) => !SKIPPED.has(path) && (CODE.test(path) || ROOT_CONFIG.test(path)));
 
 const inventory = () => {
   const files = {};
@@ -106,13 +118,40 @@ const inventory = () => {
   return files;
 };
 
-export const readBaseline = () => {
-  const parsed = JSON.parse(readFileSync(join(ROOT, BASELINE), "utf8"));
+const countsIn = (json) => {
+  const parsed = JSON.parse(json);
   const baseline = {};
   for (const [path, count] of Object.entries(parsed))
     if (typeof count === "number") baseline[path] = count;
   return baseline;
 };
+
+export const readBaseline = () => countsIn(readFileSync(join(ROOT, BASELINE), "utf8"));
+
+const BASE = process.env.COMMENT_BASE ?? "origin/main";
+
+const git = (...args) =>
+  execFileSync("git", args, { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+
+const baseBaseline = () => {
+  try {
+    git("rev-parse", "--verify", "--quiet", `${BASE}^{commit}`);
+  } catch {
+    throw new Error(
+      `Can't read ${BASE}, the base the baseline may only shrink from. Run \`git fetch origin main\`, or set COMMENT_BASE.`,
+    );
+  }
+  try {
+    return countsIn(git("show", `${BASE}:${BASELINE}`));
+  } catch {
+    return null;
+  }
+};
+
+const growth = (baseline, base) =>
+  Object.entries(baseline)
+    .filter(([path, count]) => count > (base[path] ?? 0))
+    .map(([path, count]) => ({ path, count, before: base[path] ?? 0 }));
 
 const baselineDrift = (files, baseline) => {
   const drift = [];
@@ -129,8 +168,8 @@ const isJsxFiller = (node) =>
   (node?.type === "JSXExpressionContainer" && node.expression.type === "JSXEmptyExpression") ||
   (node?.type === "JSXText" && node.value.trim() === "" && node.value.includes("\n"));
 const shape = (path, source) => {
-  if (path.endsWith(".css")) {
-    const comments = cssComments(source);
+  if (/\.(?:css|html)$/.test(path)) {
+    const comments = rawComments(path, source);
     let text = source;
     for (const comment of comments.reverse())
       text = text.slice(0, comment.start) + text.slice(comment.end);
@@ -201,11 +240,11 @@ const summary = (files) => {
   };
 };
 
-const USAGE = `node scripts/comments.mjs [--tsv | --summary | --check | --write-baseline]
+const USAGE = `node scripts/comments.mjs [--tsv | --summary | --check | --write-baseline | --delete <path>…]
   --tsv             every comment: file, line, line count, own-line, text (newlines as \\n)
   --summary         comment count and line totals (default)
-  --check           exit 1 when ${BASELINE} differs from the tree
-  --write-baseline  rewrite ${BASELINE} from the tree
+  --check           exit 1 when ${BASELINE} differs from the tree, or allows more than on $COMMENT_BASE (default origin/main)
+  --write-baseline  lower ${BASELINE} to the tree; refuses to raise or add an entry
   --delete <path>…  delete every comment in each file under the paths, refusing a file whose code would change`;
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -218,19 +257,32 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
           `${path}\t${comment.line}\t${comment.lines}\t${comment.own ? "own" : "trailing"}\t${comment.text.replaceAll("\n", "\\n")}\n`,
         );
   } else if (mode === "--summary") {
-    process.stdout.write(`${JSON.stringify(summary(files), null, 2)}\n`);
+    process.stdout.write(
+      `${JSON.stringify({ ...summary(files), skipped: Object.fromEntries(SKIPPED) }, null, 2)}\n`,
+    );
   } else if (mode === "--check") {
-    const drift = baselineDrift(files, readBaseline());
+    const baseline = readBaseline();
+    const drift = baselineDrift(files, baseline);
     for (const { path, actual, allowed } of drift)
       process.stdout.write(`${path}: ${actual} comments, baseline allows ${allowed}\n`);
-    process.exitCode = drift.length > 0 ? 1 : 0;
+    const base = baseBaseline();
+    const grown = base ? growth(baseline, base) : [];
+    for (const { path, count, before } of grown)
+      process.stdout.write(`${path}: baseline allows ${count}, ${BASE} allowed ${before}\n`);
+    process.exitCode = drift.length + grown.length > 0 ? 1 : 0;
   } else if (mode === "--write-baseline") {
     const counts = Object.fromEntries(
       Object.entries(files)
         .map(([path, comments]) => [path, comments.length])
         .sort(([a], [b]) => a.localeCompare(b)),
     );
-    writeFileSync(join(ROOT, BASELINE), `${JSON.stringify(counts, null, 2)}\n`);
+    const grown = growth(counts, readBaseline());
+    for (const { path, count, before } of grown)
+      process.stdout.write(
+        `${path}: has ${count} comments, baseline allows ${before}; delete them\n`,
+      );
+    if (grown.length > 0) process.exitCode = 1;
+    else writeFileSync(join(ROOT, BASELINE), `${JSON.stringify(counts, null, 2)}\n`);
   } else if (mode === "--delete" && process.argv.length > 3) {
     const prefixes = process.argv.slice(3);
     for (const path of Object.keys(files).filter((file) =>
