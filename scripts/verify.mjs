@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -46,7 +47,12 @@ const AUDIT_OUT = process.env.VERIFY_AUDIT_OUT
 const AUDIT_GATE = process.env.VERIFY_AUDIT !== "report";
 const TWIN = { width: 1180, height: 800 };
 const CHROME =
-  process.env.CHROME_BIN ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  process.env.CHROME_BIN ??
+  [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium",
+  ].find((path) => existsSync(path));
 const WAIT_MS = 10_000;
 const POLL_MS = 40;
 const SETTLE_MS = 500;

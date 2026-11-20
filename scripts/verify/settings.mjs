@@ -1401,8 +1401,10 @@ const ai = async (t, shot) => {
   await says("Anthropic key", "the key stays until the removal is confirmed");
   await t.click("Remove key", { within: DIALOG });
   await says("Off", "confirming Remove key turns AI off");
+  const undoMac = await pretendPlatform(t, "MacIntel", "macOS");
   await t.click("Use on-device model", { within: row });
   await says("On-device model", "the on-device model can be chosen in Settings");
+  await undoMac();
   await t.click("Turn off AI", { within: row });
   await t.click("Turn off AI", { within: DIALOG });
   await says("Off", "confirming Turn off AI turns it off");
