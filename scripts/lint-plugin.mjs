@@ -1,6 +1,9 @@
 /** Project lint rules, loaded by `lint.jsPlugins` in vite.config.ts. */
 
-import { dirname, normalize, resolve } from "node:path";
+import { dirname, normalize, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { BASELINE, counts, readBaseline } from "./comments.mjs";
 
 const MESSAGE =
   "Don't spawn `vp {{command}}` as a child process: `vp` doesn't forward SIGTERM, so vite outlives it and keeps the port (#138, #142). " +
@@ -330,6 +333,44 @@ const useIsoTime = {
   },
 };
 
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const allowedComments = readBaseline();
+
+const noComments = {
+  meta: {
+    type: "problem",
+    messages: {
+      comment:
+        "{{path}} has {{actual}} comments and " +
+        BASELINE +
+        " allows {{allowed}}. Delete this one: make the code say it, " +
+        "file an issue for a hack, or record a decision in docs/adr/ (see .claude/skills/delete-comment/SKILL.md). Never raise the baseline.",
+      stale:
+        "{{path}} has {{actual}} comments but " +
+        BASELINE +
+        " allows {{allowed}}. Lower its entry to {{actual}} " +
+        "(`node scripts/comments.mjs --write-baseline`), so the baseline only shrinks.",
+    },
+  },
+  create(context) {
+    const path = relative(ROOT, context.filename);
+    const allowed = allowedComments[path] ?? 0;
+    return {
+      "Program:exit"(program) {
+        const comments = context.sourceCode
+          .getAllComments()
+          .filter((comment) => counts(comment, context.sourceCode.text));
+        const data = { path, actual: comments.length, allowed };
+        if (comments.length > allowed)
+          for (const comment of comments)
+            context.report({ loc: comment.loc, messageId: "comment", data });
+        else if (comments.length < allowed)
+          context.report({ node: program, messageId: "stale", data });
+      },
+    };
+  },
+};
+
 export default {
   meta: { name: "constellation" },
   rules: {
@@ -341,5 +382,6 @@ export default {
     "no-double-assertion": noDoubleAssertion,
     "no-brand-cast": noBrandCast,
     "use-iso-time": useIsoTime,
+    "no-comments": noComments,
   },
 };

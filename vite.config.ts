@@ -113,6 +113,7 @@ export default defineConfig({
       "constellation/no-double-assertion": "error",
       "constellation/no-brand-cast": "error",
       "constellation/use-iso-time": "error",
+      "constellation/no-comments": "error",
       "eslint/no-restricted-imports": ["error", { patterns: [NO_POSTHOG_SDK] }],
       "typescript/no-explicit-any": "error",
       "typescript/switch-exhaustiveness-check": "error",
