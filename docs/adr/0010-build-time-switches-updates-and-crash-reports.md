@@ -1,0 +1,8 @@
+# Updates and telemetry are switched on at build time
+
+Only the signed release build checks for updates and sends crash reports. The switches are baked into main when it is built, so the environment of a packaged app can't turn them on or point them elsewhere.
+
+- `vite.config.ts` bakes `CONSTELLATION_UPDATES` and the PostHog key and host into main. A build without them, as in CI and verify, sends nothing.
+- `UPDATES` in `src/main/index.ts` is true only in a packaged build made with `CONSTELLATION_UPDATES=on`, which only `.github/workflows/release.yml` sets. An unsigned local or `smoke:packaged` build never checks GitHub Releases.
+- The update prompt in `src/main/index.ts` sets `defaultId` and `cancelId` to "Later". A Return meant for the app can't restart it in the middle of work.
+- `src/main/index.ts` reports main crashes from `uncaughtExceptionMonitor`, not `uncaughtException`, because a monitor keeps Node's crash on an uncaught error. The `unhandledRejection` listener prints the `UnhandledPromiseRejectionWarning` itself, because any listener turns off the default warning.

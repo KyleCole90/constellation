@@ -1,0 +1,16 @@
+# The dev and verify scripts drive only their own app
+
+`npm run dev`, `npm run verify` and `npm run smoke:packaged` start an app and drive it. Each choice below keeps a run on its own checkout, its own clean state and painted frames, and away from real Canvas.
+
+- `startDevServer` and `startBuiltServer` in `scripts/dev-server.mjs` serve vite in the script's process, on port 0 and one host. A spawned `vp dev` left a grandchild serving an old worktree on `[::1]` while `127.0.0.1` probed free, so a run could drive another checkout's app. `constellation/no-vp-server-spawn` enforces the in-process part.
+- `scripts/dev.mjs` stops Electron in a process `exit` handler. Vite's dev server handles SIGTERM with `process.exit`, which skips `quit()`, and Electron would outlive `npm run dev`.
+- `scripts/verify.mjs` launches Electron with `CONSTELLATION_WINDOW=hidden`. Chromium gives a covered or minimised window no frames. A window that is never shown still paints, can't be covered and doesn't take focus.
+- `scripts/verify.mjs` sets `CONSTELLATION_LMS=fake`, so only the fake LMS answers and no address typed in a run reaches a real Canvas host.
+- `scripts/verify.mjs` and `scripts/smoke-packaged.mjs` drop `ELECTRON_RUN_AS_NODE` from the app's environment. Some agent shells set it, and Electron then starts as plain Node.
+- `freshPage` in `scripts/verify.mjs` relaunches Electron on a new profile for each fresh visit. Electron can't open a new browser context over CDP, and only a new profile starts with storage that a late write from an earlier page can't reach.
+- `steady` in `scripts/verify.mjs` waits until no finite animation runs and a value holds across painted frames, not across time. Headless Chrome on a hosted runner can go 100 ms without a frame, and an animation can hold its first frame until one comes.
+- `t.click` in `scripts/verify.mjs` passes when no press record comes back, because a full navigation discards the old page's `window.__press`. Only an aimed click with no press at all fails.
+- `firstFrames` in `scripts/verify/theme.mjs` pauses the reloaded page at its first script, then starts the CDP screencast. A screencast started before the reload can miss the first paints, and a page that holds still sends no more frames.
+- `scripts/verify/theme.mjs` runs every OS scheme and stored choice (`COMBOS`) against the built app on `app://`. The production build lowers CSS `light-dark()` to variables that only a stylesheet `color-scheme` sets, so dev CSS can't stand in for it.
+- `scripts/verify/north-star-start.mjs` scores North Star as a black box. Half the score is checks on the running app and half is what fresh readers take from one screenshot. It knows only the composer and the sidebar, so the score can't follow how the start screen is built. `compareOne` puts the screen under test on a random side for each reader, so position bias cancels out. Against the frozen baseline, 50 means no better.
+- `inStore` in `scripts/smoke-packaged.mjs` searches for a JSON fragment in Latin-1 and in UTF-16LE, because Chromium stores a localStorage value in its leveldb log in either encoding.

@@ -17,6 +17,10 @@ Run these before you open a PR. CI runs the same commands, plus the full verify 
 
 Run `npm run fmt` to fix formatting. The pre-commit hook runs fmt and lint on staged files, then knip. Fix a finding in the code. A disable comment needs a reason after `--`. A `TS review debt:` disable marks a known violation to fix; don't copy it to new code.
 
+## Decisions
+
+`docs/adr/` records, by subject, the decisions the code can't show. Read the ADR that names a file before you change it, and record a new decision there, not in a comment.
+
 ## UI components
 
 - `src/renderer/components/ui` exports own their look. Pick a `variant` or `size`; do not restyle one with `className`. If none fits and the look is a generic concept, add a variant to the component. Layout classes (width, flex, margin, position) belong on the parent. `shadcn/no-restyle` fails lint on violations.
