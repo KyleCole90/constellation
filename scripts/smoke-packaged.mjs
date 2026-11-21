@@ -125,12 +125,9 @@ const checkWindowAndInspect = async () => {
   }
 };
 
-const checkRefused = async (args, env, what) => {
+const checkRefused = async (what, env = {}) => {
   const port = await freePort();
-  const app = await launch(
-    args.map((arg) => `${arg}=${port}`),
-    env,
-  );
+  const app = await launch(what.startsWith("--") ? [`${what}=${port}`] : [], env);
   try {
     const deadline = Date.now() + WAIT_MS;
     while (app.running()) {
@@ -150,5 +147,5 @@ const checkRefused = async (args, env, what) => {
 console.log(`smoke: ${APP}`);
 await checkFuses();
 await checkWindowAndInspect();
-for (const name of REFUSED_SWITCHES) await checkRefused([`--${name}`], {}, `--${name}`);
-for (const name of REFUSED_ENV) await checkRefused([], { [name]: join(tmpdir(), "refused") }, name);
+for (const name of REFUSED_SWITCHES) await checkRefused(`--${name}`);
+for (const name of REFUSED_ENV) await checkRefused(name, { [name]: join(tmpdir(), "refused") });
