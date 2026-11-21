@@ -149,9 +149,15 @@ describe("a packaged launch", () => {
     "ignore-certificate-errors-spki-list",
     "ssl-key-log-file",
     "log-net-log",
-  ])("is refused with --%s, which would let another program read main's traffic", (name) => {
-    expect(launch([name])).toBe(true);
-  });
+    "auth-server-whitelist",
+    "auth-negotiate-delegate-whitelist",
+    "no-proxy-server",
+  ])(
+    "is refused with --%s, which would change where main's traffic goes or what it carries",
+    (name) => {
+      expect(launch([name])).toBe(true);
+    },
+  );
 
   it("is refused when SSLKEYLOGFILE asks Chromium to write its TLS keys", () => {
     expect(launch([], { SSLKEYLOGFILE: "/tmp/keys.log" })).toBe(true);
