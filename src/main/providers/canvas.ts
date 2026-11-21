@@ -91,7 +91,7 @@ const errorOf = async (response: Response): Promise<LmsError> => {
     case 401:
       return { kind: "auth_expired" };
     case 403: {
-      const body = await response.text().catch(() => "");
+      const body = (await textUpTo(response, MAX_ANSWER_BYTES).catch(() => null)) ?? "";
       return /rate limit exceeded/i.test(body)
         ? { kind: "rate_limited", retryAfterMs: retryAfterMs(response) }
         : { kind: "forbidden", missingScope: null };
@@ -319,6 +319,7 @@ const bodyOf = (row: v.InferOutput<typeof SubmissionRow>): SubmissionBody => {
 };
 
 const MAX_FILE_BYTES = 50 * 1024 * 1024;
+const MAX_ANSWER_BYTES = 50 * 1024 * 1024;
 const MAX_EXPORT_BYTES = 20 * 1024 * 1024;
 const EXPORT_TIMEOUT_MS = 20_000;
 
@@ -345,6 +346,11 @@ const bytesUpTo = async (
     at += chunk.byteLength;
   }
   return data;
+};
+
+const textUpTo = async (response: Response, max: number): Promise<string | null> => {
+  const data = await bytesUpTo(response, max);
+  return data && new TextDecoder().decode(data);
 };
 
 const PreAttachment = v.object({
@@ -394,17 +400,18 @@ export const createCanvasProvider = (deps: {
     token: string,
   ): Promise<Result<{ body: unknown; link: string | null }, LmsError>> => {
     let response: Response;
-    let text: string;
+    let text: string | null;
     try {
       response = await deps.fetch(url, {
         headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
         redirect: "manual",
       });
       if (!response.ok) return { ok: false, error: await errorOf(response) };
-      text = await response.text();
+      text = await textUpTo(response, MAX_ANSWER_BYTES);
     } catch {
       return OFFLINE;
     }
+    if (text === null) return unreadable("an answer");
     let body: unknown;
     try {
       body = JSON.parse(text);
@@ -598,7 +605,7 @@ export const createCanvasProvider = (deps: {
           }),
         );
 
-      let text: string;
+      let text: string | null;
       try {
         const created = await withToken(`${origin}/api/v1${path}`, {
           method: "POST",
@@ -606,13 +613,13 @@ export const createCanvasProvider = (deps: {
           body: form.toString(),
         });
         if (!created.ok) return { status: "failed", error: await errorOf(created) };
-        text = await created.text();
+        text = await textUpTo(created, MAX_ANSWER_BYTES);
       } catch {
         return lost;
       }
       let body: unknown;
       try {
-        body = JSON.parse(text);
+        body = text === null ? null : JSON.parse(text);
       } catch {
         body = null;
       }
@@ -912,8 +919,8 @@ export const createCanvasProvider = (deps: {
     try {
       const response = await deps.fetch(storage.toString(), {});
       if (!response.ok) return { ok: false, error: await errorOf(response) };
-      const data = new Uint8Array(await response.arrayBuffer());
-      if (data.byteLength > MAX_FILE_BYTES) return tooBig;
+      const data = await bytesUpTo(response, MAX_FILE_BYTES);
+      if (!data) return tooBig;
       return { ok: true, value: { mediaType: listed["content-type"], data } };
     } catch {
       return OFFLINE;
