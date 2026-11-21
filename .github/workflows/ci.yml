@@ -100,7 +100,7 @@ jobs:
       - run: npm ci
       - run: npm run verify:web
 
-  # `npm run smoke:packaged` packages the app unsigned, reads its fuses back, boots it, and checks it refuses a debugger.
+  # `npm run smoke:packaged` packages the app unsigned, reads its fuses back, boots it, and checks it refuses a debugger and the switches that expose its traffic.
   smoke-packaged:
     name: Packaged smoke
     runs-on: macos-15
