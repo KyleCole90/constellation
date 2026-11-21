@@ -33,6 +33,14 @@ export const run = async (t) => {
     JSON.stringify({ good, bad }),
   );
   t.assert(await t.eval(`window.open(location.href) === null`), "window.open opens nothing");
+  const permissions = await t.eval(
+    `Promise.all([Notification.requestPermission(), navigator.permissions.query({ name: "notifications" }).then((status) => status.state)])`,
+  );
+  t.assert(
+    JSON.stringify(permissions) === '["denied","denied"]',
+    "the page is refused a permission it asks for, and a check reports it as not held",
+    JSON.stringify(permissions),
+  );
 
   const away = new URL("/welcome", t.origin).href;
   const offs = [];

@@ -9,6 +9,7 @@ import {
   APP_URL,
   CSP,
   appFile,
+  denyPermissions,
   lockNavigation,
   trustedSender,
   windowOptions,
@@ -129,6 +130,37 @@ describe("navigation lock", () => {
     lock.navigate("https://c.example/");
     lock.navigate("smb://d.example/share");
     expect(lock.opened).toEqual(["https://a.example/x", "https://c.example/"]);
+  });
+});
+
+describe("permissions", () => {
+  const denied = () => {
+    let request = (
+      _contents: unknown,
+      _permission: string,
+      _grant: (granted: boolean) => void,
+    ) => {};
+    let check: (_contents: unknown, _permission: string) => boolean = () => true;
+    denyPermissions({
+      setPermissionRequestHandler: (handler) => (request = handler),
+      setPermissionCheckHandler: (handler) => (check = handler),
+    });
+    return { request, check };
+  };
+
+  it.each([
+    "notifications",
+    "media",
+    "geolocation",
+    "clipboard-read",
+    "openExternal",
+    "fullscreen",
+  ])("refuses a page's request for %s and reports it as not held", (permission) => {
+    const { request, check } = denied();
+    const grants: boolean[] = [];
+    request(null, permission, (granted) => grants.push(granted));
+    expect(grants).toEqual([false]);
+    expect(check(null, permission)).toBe(false);
   });
 });
 
