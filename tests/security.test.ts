@@ -148,6 +148,7 @@ describe("a packaged launch", () => {
     "ignore-certificate-errors",
     "ignore-certificate-errors-spki-list",
     "ssl-key-log-file",
+    "log-net-log",
   ])("is refused with --%s, which would let another program read main's traffic", (name) => {
     expect(launch([name])).toBe(true);
   });
