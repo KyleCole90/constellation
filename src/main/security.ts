@@ -64,6 +64,16 @@ export const lockNavigation = (
   });
 };
 
+export const denyPermissions = (session: {
+  setPermissionRequestHandler(
+    handler: (contents: unknown, permission: string, grant: (granted: boolean) => void) => void,
+  ): void;
+  setPermissionCheckHandler(handler: (contents: unknown, permission: string) => boolean): void;
+}) => {
+  session.setPermissionRequestHandler((_contents, _permission, grant) => grant(false));
+  session.setPermissionCheckHandler(() => false);
+};
+
 export const appFile = (root: string, requestUrl: string): string | null => {
   const url = URL.parse(requestUrl);
   if (url?.protocol !== `${APP_SCHEME}:` || url.host !== APP_HOST) return null;

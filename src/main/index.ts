@@ -22,6 +22,7 @@ import {
   APP_URL,
   CSP,
   appFile,
+  denyPermissions,
   lockNavigation,
   trustedSender,
   windowOptions,
@@ -193,6 +194,7 @@ const start = async () => {
     webPreferences: { ...options.webPreferences, offscreen: HIDDEN },
   });
   lockNavigation(window.webContents, (url) => void shell.openExternal(url));
+  denyPermissions(window.webContents.session);
   window.webContents.on("input-event", (_event, input) => {
     if (input.type === "mouseUp") pressedAt = Date.now();
   });
