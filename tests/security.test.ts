@@ -9,6 +9,8 @@ import {
   APP_URL,
   CSP,
   appFile,
+  denyPermissions,
+  launchRefused,
   lockNavigation,
   trustedSender,
   windowOptions,
@@ -129,6 +131,71 @@ describe("navigation lock", () => {
     lock.navigate("https://c.example/");
     lock.navigate("smb://d.example/share");
     expect(lock.opened).toEqual(["https://a.example/x", "https://c.example/"]);
+  });
+});
+
+describe("a packaged launch", () => {
+  const launch = (args: readonly string[], env: Record<string, string> = {}) =>
+    launchRefused((name) => args.includes(name), env);
+
+  it.each([
+    "remote-debugging-port",
+    "remote-debugging-pipe",
+    "proxy-server",
+    "proxy-pac-url",
+    "host-rules",
+    "host-resolver-rules",
+    "ignore-certificate-errors",
+    "ignore-certificate-errors-spki-list",
+    "ssl-key-log-file",
+    "log-net-log",
+    "auth-server-whitelist",
+    "auth-negotiate-delegate-whitelist",
+    "no-proxy-server",
+  ])(
+    "is refused with --%s, which would change where main's traffic goes or what it carries",
+    (name) => {
+      expect(launch([name])).toBe(true);
+    },
+  );
+
+  it("is refused when SSLKEYLOGFILE asks Chromium to write its TLS keys", () => {
+    expect(launch([], { SSLKEYLOGFILE: "/tmp/keys.log" })).toBe(true);
+  });
+
+  it("runs with the switches smoke:packaged isolates itself with", () => {
+    expect(launch(["user-data-dir", "use-mock-keychain"], { HOME: "/Users/teacher" })).toBe(false);
+  });
+});
+
+describe("permissions", () => {
+  const denied = () => {
+    let request = (
+      _contents: unknown,
+      _permission: string,
+      _grant: (granted: boolean) => void,
+    ) => {};
+    let check: (_contents: unknown, _permission: string) => boolean = () => true;
+    denyPermissions({
+      setPermissionRequestHandler: (handler) => (request = handler),
+      setPermissionCheckHandler: (handler) => (check = handler),
+    });
+    return { request, check };
+  };
+
+  it.each([
+    "notifications",
+    "media",
+    "geolocation",
+    "clipboard-read",
+    "openExternal",
+    "fullscreen",
+  ])("refuses a page's request for %s and reports it as not held", (permission) => {
+    const { request, check } = denied();
+    const grants: boolean[] = [];
+    request(null, permission, (granted) => grants.push(granted));
+    expect(grants).toEqual([false]);
+    expect(check(null, permission)).toBe(false);
   });
 });
 

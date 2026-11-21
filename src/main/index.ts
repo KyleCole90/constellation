@@ -22,6 +22,8 @@ import {
   APP_URL,
   CSP,
   appFile,
+  denyPermissions,
+  launchRefused,
   lockNavigation,
   trustedSender,
   windowOptions,
@@ -51,11 +53,8 @@ const AI_OFF = {
   reason: "AI drafts are off. Choose an AI source in Settings to turn them on.",
 } as const;
 const UPDATES = app.isPackaged && process.env.CONSTELLATION_UPDATES === "on";
-const DEBUGGER_ASKED =
-  app.isPackaged &&
-  ["remote-debugging-port", "remote-debugging-pipe"].some((name) =>
-    app.commandLine.hasSwitch(name),
-  );
+const LAUNCH_REFUSED =
+  app.isPackaged && launchRefused((name) => app.commandLine.hasSwitch(name), process.env);
 
 protocol.registerSchemesAsPrivileged([
   { scheme: APP_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
@@ -193,6 +192,7 @@ const start = async () => {
     webPreferences: { ...options.webPreferences, offscreen: HIDDEN },
   });
   lockNavigation(window.webContents, (url) => void shell.openExternal(url));
+  denyPermissions(window.webContents.session);
   window.webContents.on("input-event", (_event, input) => {
     if (input.type === "mouseUp") pressedAt = Date.now();
   });
@@ -220,6 +220,6 @@ const start = async () => {
     });
 };
 
-if (DEBUGGER_ASKED) app.exit(1);
+if (LAUNCH_REFUSED) app.exit(1);
 else if (app.requestSingleInstanceLock()) void start();
 else app.quit();

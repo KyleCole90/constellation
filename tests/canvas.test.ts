@@ -855,6 +855,55 @@ describe("what a Canvas student turned in", () => {
     });
     expect(canvas.requests).toHaveLength(1);
   });
+
+  const MB = 1024 * 1024;
+  const sixtyMegabytes = () => {
+    const chunk = new Uint8Array(MB);
+    const stream = { pulled: 0, body: new ReadableStream<Uint8Array>() };
+    stream.body = new ReadableStream<Uint8Array>({
+      pull: (controller) => {
+        stream.pulled += 1;
+        if (stream.pulled > 60) controller.close();
+        else controller.enqueue(chunk);
+      },
+    });
+    return stream;
+  };
+  const providerAnswering = (answer: (url: string) => Response) =>
+    createCanvasProvider({
+      school: SCHOOL,
+      lease: leaseOf(TOKEN),
+      fetch: async (url) => answer(url),
+      now: () => Date.now(),
+      packageFile: async () => null,
+    });
+
+  it("stops downloading a file past 50 MB, whatever Canvas listed its size as", async () => {
+    const download = sixtyMegabytes();
+    const provider = providerAnswering((url) =>
+      url.startsWith(STORAGE)
+        ? new Response(download.body)
+        : new Response(
+            JSON.stringify(
+              url.endsWith("/public_url")
+                ? { public_url: `${STORAGE}/801/essay.pdf` }
+                : { attachments: [PDF] },
+            ),
+          ),
+    );
+    expect(await provider.file(REF, "801")).toMatchObject({
+      ok: false,
+      error: { kind: "rejected", reason: "essay.pdf is larger than the 50 MB the app opens." },
+    });
+    expect(download.pulled).toBeLessThan(55);
+  });
+
+  it("stops reading a Canvas answer past 50 MB", async () => {
+    const answer = sixtyMegabytes();
+    const provider = providerAnswering(() => new Response(answer.body));
+    expect(await provider.file(REF, "801")).toMatchObject({ ok: false });
+    expect(answer.pulled).toBeLessThan(55);
+  });
 });
 
 describe("a link submission's public export (#71)", () => {

@@ -16,6 +16,30 @@ export const CSP = [
   "frame-ancestors 'none'",
 ].join("; ");
 
+export const REFUSED_SWITCHES = [
+  "remote-debugging-port",
+  "remote-debugging-pipe",
+  "proxy-server",
+  "proxy-pac-url",
+  "host-rules",
+  "host-resolver-rules",
+  "ignore-certificate-errors",
+  "ignore-certificate-errors-spki-list",
+  "ssl-key-log-file",
+  "log-net-log",
+  "auth-server-whitelist",
+  "auth-negotiate-delegate-whitelist",
+  "no-proxy-server",
+] as const;
+export const REFUSED_ENV = ["SSLKEYLOGFILE"] as const;
+
+export const launchRefused = (
+  hasSwitch: (name: string) => boolean,
+  env: Readonly<Record<string, string | undefined>>,
+): boolean =>
+  REFUSED_SWITCHES.some((name) => hasSwitch(name)) ||
+  REFUSED_ENV.some((name) => env[name] !== undefined);
+
 export const windowOptions = (
   preload: string,
   args: readonly string[] = [],
@@ -62,6 +86,16 @@ export const lockNavigation = (
     openIfHttps(url, openExternal);
     return { action: "deny" };
   });
+};
+
+export const denyPermissions = (session: {
+  setPermissionRequestHandler(
+    handler: (contents: unknown, permission: string, grant: (granted: boolean) => void) => void,
+  ): void;
+  setPermissionCheckHandler(handler: (contents: unknown, permission: string) => boolean): void;
+}) => {
+  session.setPermissionRequestHandler((_contents, _permission, grant) => grant(false));
+  session.setPermissionCheckHandler(() => false);
 };
 
 export const appFile = (root: string, requestUrl: string): string | null => {

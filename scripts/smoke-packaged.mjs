@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 import { FuseState, FuseV1Options, getCurrentFuseWire } from "@electron/fuses";
 
+import { REFUSED_ENV, REFUSED_SWITCHES } from "../src/main/security.ts";
+
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const APP =
   process.argv[2] ??
@@ -45,9 +47,9 @@ const answers = async (port) => {
   }
 };
 
-const launch = async (args) => {
+const launch = async (args, extraEnv = {}) => {
   const userData = await mkdtemp(join(tmpdir(), "constellation-smoke-"));
-  const env = { ...process.env, CONSTELLATION_TELEMETRY_ENABLED: "false" };
+  const env = { ...process.env, CONSTELLATION_TELEMETRY_ENABLED: "false", ...extraEnv };
   delete env.ELECTRON_RUN_AS_NODE;
   const child = spawn(BINARY, [`--user-data-dir=${userData}`, "--use-mock-keychain", ...args], {
     env,
@@ -123,22 +125,20 @@ const checkWindowAndInspect = async () => {
   }
 };
 
-const checkRemoteDebugging = async () => {
+const checkRefused = async (what, env = {}) => {
   const port = await freePort();
-  const app = await launch([`--remote-debugging-port=${port}`]);
+  const app = await launch(what.startsWith("--") ? [`${what}=${port}`] : [], env);
   try {
     const deadline = Date.now() + WAIT_MS;
     while (app.running()) {
-      if (await answers(port)) throw new Error(`--remote-debugging-port opened port ${port}`);
-      if (Date.now() > deadline) throw new Error("app kept running with --remote-debugging-port");
+      if (await answers(port)) throw new Error(`${what} opened port ${port}`);
+      if (Date.now() > deadline) throw new Error(`app kept running with ${what}`);
       await sleep(50);
     }
     const code = await app.exited;
-    if (code !== 1) throw new Error(`app exited with ${code}, not 1, on --remote-debugging-port`);
-    if (await storeWritten(app.userData)) throw new Error("app loaded its window before quitting");
-    console.log(
-      `ok --remote-debugging-port=${port}: quit with 1 before any window, port never answered`,
-    );
+    if (code !== 1) throw new Error(`app exited with ${code}, not 1, on ${what}`);
+    if (await storeWritten(app.userData)) throw new Error(`app loaded its window on ${what}`);
+    console.log(`ok ${what}: quit with 1 before any window, port ${port} never answered`);
   } finally {
     await app.stop();
   }
@@ -147,4 +147,5 @@ const checkRemoteDebugging = async () => {
 console.log(`smoke: ${APP}`);
 await checkFuses();
 await checkWindowAndInspect();
-await checkRemoteDebugging();
+for (const name of REFUSED_SWITCHES) await checkRefused(`--${name}`);
+for (const name of REFUSED_ENV) await checkRefused(name, { [name]: join(tmpdir(), "refused") });
