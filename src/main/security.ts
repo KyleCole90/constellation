@@ -27,6 +27,9 @@ export const REFUSED_SWITCHES = [
   "ignore-certificate-errors-spki-list",
   "ssl-key-log-file",
   "log-net-log",
+  "auth-server-whitelist",
+  "auth-negotiate-delegate-whitelist",
+  "no-proxy-server",
 ] as const;
 export const REFUSED_ENV = ["SSLKEYLOGFILE"] as const;
 
