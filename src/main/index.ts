@@ -186,9 +186,11 @@ const start = async () => {
       ...lms,
     },
   );
+  const options = windowOptions(PRELOAD, FAKE_ONLY ? [FAKES_SWITCH] : []);
   const window = new BrowserWindow({
-    ...windowOptions(PRELOAD, FAKE_ONLY ? [FAKES_SWITCH] : []),
+    ...options,
     show: !HIDDEN,
+    webPreferences: { ...options.webPreferences, offscreen: HIDDEN },
   });
   lockNavigation(window.webContents, (url) => void shell.openExternal(url));
   window.webContents.on("input-event", (_event, input) => {
