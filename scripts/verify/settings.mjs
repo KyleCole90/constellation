@@ -778,15 +778,15 @@ const onboarding = async (t, shot) => {
     "setup: Connect again retries the kept token, read-only while it checks",
     JSON.stringify(fieldAfter?.value?.length),
   );
+  t.assert(
+    (await t.eval(`document.querySelector(${JSON.stringify(ROW_ADDRESS(LCC))}).readOnly`)) === true,
+    "setup: the address is locked while it connects",
+  );
   await t.waitFor(
     `document.querySelector('[data-testid="connect-stage"]')?.innerText === "Checking your token"`,
     "Lakeshore shows Checking your token while it waits",
   );
   await shot("connecting-stage");
-  t.assert(
-    (await t.eval(`document.querySelector(${JSON.stringify(ROW_ADDRESS(LCC))}).readOnly`)) === true,
-    "setup: the address is locked while it connects",
-  );
   await t.waitFor(`${rowStatus(LCC)} === "connected"`, "Lakeshore connects", 20_000);
   await t.eval(`window.__faultLab.setNoise({ latencyMs: [120, 240] })`);
   await t.waitFor(
