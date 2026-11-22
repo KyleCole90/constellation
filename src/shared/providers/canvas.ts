@@ -5,7 +5,7 @@ const MIN_TOKEN_LENGTH = 20;
 const CAPABILITIES: Capabilities = {
   messaging: true,
   rubricWrite: true,
-  attachments: false,
+  attachments: true,
   excuse: true,
   commentEffect: "append",
 };
@@ -14,6 +14,8 @@ const SCOPE_WORDS: Readonly<Record<string, string>> = {
   "url:GET|/api/v1/courses": "Read your courses, rosters, and submissions",
   "url:PUT|/api/v1/courses/:course_id/assignments/:assignment_id/submissions/:user_id":
     "Post grades and comments",
+  "url:POST|/api/v1/courses/:course_id/assignments/:assignment_id/submissions/:user_id/comments/files":
+    "Attach files to submission comments",
   "url:POST|/api/v1/conversations/:id/add_message": "Reply to messages",
   "url:POST|/api/v1/conversations": "Message students",
   "url:POST|/api/v1/courses/:course_id/discussion_topics": "Post announcements",

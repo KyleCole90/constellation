@@ -6,8 +6,10 @@ import { isDeepStrictEqual } from "node:util";
 import * as v from "valibot";
 
 import {
+  MAX_ATTACHMENT_BYTES,
   appendsEntry,
   fieldsOf,
+  type AttachmentDraft,
   type ChangeContent,
   type FieldKey,
   type LmsError,
@@ -84,22 +86,41 @@ const failedAll = (fields: readonly FieldKey[], error: LmsError): FieldOutcomes 
 const MAX_PACKAGE_BYTES = 500 * 1024 * 1024;
 const refusal = (reason: string) => ({ ok: false, error: { kind: "rejected", reason } }) as const;
 
+const fileAt = async (
+  path: string,
+  maxBytes: number,
+  tooBig: (name: string) => string,
+): Promise<Result<{ name: string; size: number }, LmsError>> => {
+  const name = basename(path);
+  try {
+    const info = await stat(path);
+    if (!info.isFile() || info.size === 0) return refusal(`${name} is empty or isn't a file.`);
+    if (info.size > maxBytes) return refusal(tooBig(name));
+    return { ok: true, value: { name, size: info.size } };
+  } catch {
+    return refusal(`The app couldn't read ${name}.`);
+  }
+};
+
 const packageAt = async (
   path: string,
 ): Promise<Result<{ name: string; size: number }, LmsError>> => {
   const name = basename(path);
   if (!name.toLowerCase().endsWith(".imscc"))
     return refusal("That file isn't a course export. Choose a file that ends in .imscc.");
-  try {
-    const info = await stat(path);
-    if (!info.isFile() || info.size === 0) return refusal(`${name} is empty or isn't a file.`);
-    if (info.size > MAX_PACKAGE_BYTES)
-      return refusal(`${name} is larger than the 500 MB Canvas imports.`);
-    return { ok: true, value: { name, size: info.size } };
-  } catch {
-    return refusal(`The app couldn't read ${name}.`);
-  }
+  return fileAt(
+    path,
+    MAX_PACKAGE_BYTES,
+    (fileName) => `${fileName} is larger than the 500 MB Canvas imports.`,
+  );
 };
+
+const attachmentAt = (path: string): Promise<Result<{ name: string; size: number }, LmsError>> =>
+  fileAt(
+    path,
+    MAX_ATTACHMENT_BYTES,
+    (fileName) => `${fileName} is larger than the 50 MB Canvas attaches.`,
+  );
 
 const NO_TERM_SETUP = {
   ok: false,
@@ -117,6 +138,7 @@ export const lmsHandlers = (options: {
   leaseFor(key: VaultKey): CredentialLease;
   pressedAt(): number;
   choosePackage(): Promise<string | null>;
+  chooseAttachment(): Promise<string | null>;
 }): Pick<Handlers, LmsChannel> => {
   let offset = 0;
   const now = () => options.realNow() + offset;
@@ -150,6 +172,16 @@ export const lmsHandlers = (options: {
     if (path === undefined || !(await packageAt(path)).ok) return null;
     return openAsBlob(path).catch(() => null);
   };
+  const pickedAttachments = new Map<string, string>();
+  const attachmentFile = async (
+    school: SchoolId,
+    submission: LmsRef<"submission">,
+    name: string,
+  ): Promise<Blob | null> => {
+    const path = pickedAttachments.get(`${school}\n${submission}\n${name}`);
+    if (path === undefined || !(await attachmentAt(path)).ok) return null;
+    return openAsBlob(path).catch(() => null);
+  };
   const canvas = new Map<SchoolId, LmsProvider>();
   const mintedCanvasSchool = (school: School): { school: School; fetch: Fetch } => {
     if (world.kind !== "canvas")
@@ -169,6 +201,7 @@ export const lmsHandlers = (options: {
       fetch,
       now,
       packageFile: (name) => packageFile(minted.id, name),
+      attachmentFile: (submission, name) => attachmentFile(minted.id, submission, name),
     });
     canvas.set(minted.id, created);
     return created;
@@ -352,6 +385,22 @@ export const lmsHandlers = (options: {
           kb: Math.ceil(file.value.size / 1024),
           hint: await packageTerm(path),
         } satisfies PickedPackage,
+      };
+    },
+    "lms.pickAttachment": async ({ school, submission }) => {
+      if (school.provider === "canvas") canvasProvider(school);
+      const path = await options.chooseAttachment();
+      if (path === null) return { ok: true, value: null };
+      const file = await attachmentAt(path);
+      if (!file.ok) return file;
+      if (school.provider === "canvas")
+        pickedAttachments.set(`${school.id}\n${submission}\n${file.value.name}`, path);
+      return {
+        ok: true,
+        value: {
+          name: file.value.name,
+          kb: Math.ceil(file.value.size / 1024),
+        } satisfies AttachmentDraft,
       };
     },
     "lms.lab": async (command) => run(command),

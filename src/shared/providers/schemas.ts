@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import {
   FIELD_KEYS,
+  type AttachmentDraft,
   type ChangeContent,
   type FieldKey,
   type GradeContent,
@@ -460,6 +461,11 @@ export const LatePenaltySchema = v.object({
   waived: v.boolean(),
 }) satisfies v.GenericSchema<LatePenalty>;
 
+export const AttachmentDraftSchema: v.GenericSchema<AttachmentDraft> = v.object({
+  name: text,
+  kb: count,
+});
+
 export const GradeContentSchema = v.object({
   kind: v.literal("grade"),
   target: lmsRef("submission"),
@@ -477,7 +483,7 @@ export const GradeContentSchema = v.object({
   ),
   late: nullable(LatePenaltySchema),
   comment: nullable(text),
-  attachment: nullable(v.object({ name: text, kb: count })),
+  attachment: nullable(AttachmentDraftSchema),
   override: nullable(count),
   excused: v.boolean(),
 }) satisfies v.GenericSchema<GradeContent>;

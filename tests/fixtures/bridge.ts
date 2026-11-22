@@ -28,6 +28,7 @@ export const fakeLmsHandlers = (
     fetch?: Fetch;
     pressedAt?: () => number;
     choosePackage?: () => Promise<string | null>;
+    chooseAttachment?: () => Promise<string | null>;
     onServer?: (server: FakeCanvasServer) => void;
   } = {},
 ) => {
@@ -56,6 +57,7 @@ export const fakeLmsHandlers = (
     leaseFor: (key) => vault.leaseFor(key),
     pressedAt: options.pressedAt ?? (() => Date.now()),
     choosePackage: options.choosePackage ?? (async () => null),
+    chooseAttachment: options.chooseAttachment ?? (async () => null),
   });
 };
 
@@ -64,6 +66,7 @@ export const bridgedLms = (
     fetch?: Fetch;
     pressedAt?: () => number;
     choosePackage?: () => Promise<string | null>;
+    chooseAttachment?: () => Promise<string | null>;
   } = {},
 ) => {
   const clock = new VirtualClock();
@@ -93,6 +96,9 @@ export const bridgedLms = (
         ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
         ...(options.pressedAt === undefined ? {} : { pressedAt: options.pressedAt }),
         ...(options.choosePackage === undefined ? {} : { choosePackage: options.choosePackage }),
+        ...(options.chooseAttachment === undefined
+          ? {}
+          : { chooseAttachment: options.chooseAttachment }),
         onServer: (server) => servers.push(server),
       }),
     },
