@@ -61,6 +61,7 @@ import {
   CourseSchema,
   IsoDateSchema,
   IsoTimeSchema,
+  lmsRef,
   RemoteEntrySchema,
   SchoolIdSchema,
   StudentSchema,
@@ -92,7 +93,7 @@ import {
 import { refParts, refs } from "../canvas-refs";
 import { fixtureBytes, fixtureExport, fixtureFile } from "./files";
 import { NoiseSchema, WriteRecordSchema } from "./lab";
-import { assignmentCanvasId, SEED, type SeedAssignment, type SeedCourse } from "./seed";
+import { SEED, type SeedAssignment, type SeedCourse } from "./seed";
 import {
   COURSE_COPY_ISSUES,
   HOSTS,
@@ -163,7 +164,8 @@ export interface SourceRow {
 interface TermState {
   shells: ShellRow[];
   sources: SourceRow[];
-  content: Record<string, RawBody>;
+  courseContent: Record<LmsRef<"course">, RawBody>;
+  packageContent: Record<string, RawBody>;
   migrations: MigrationRecord[];
   seq: number;
 }
@@ -210,7 +212,6 @@ export interface ServerOptions {
 
 const DEFAULT_MIGRATION_MS = 4000;
 const DAMAGED_FAIL_RATE = 0.4;
-const PACKAGE_KEY = "pkg:";
 const NO_POLICY: SchoolPolicy = { contactDomain: "", statements: [] };
 
 const DAY = 86_400_000;
@@ -285,7 +286,7 @@ const WORKFLOW: Readonly<Record<string, Submission["workflow"]>> = {
   "-": "unsubmitted",
 };
 
-const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): void => {
+const buildCourse = (state: LmsState, course: SeedCourse): void => {
   const school = course.schoolId;
   const courseRef = refs.course({ school, course: course.canvasId });
   const [section, modality] =
@@ -309,8 +310,8 @@ const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): 
     }),
   );
 
-  course.assignments.forEach((assignment, assignmentIndex) => {
-    const assignmentId = assignmentCanvasId(assignment, courseIndex, assignmentIndex);
+  for (const assignment of course.assignments) {
+    const assignmentId = assignment.canvasId;
     const assignmentRef = refs.assignment({
       school,
       course: course.canvasId,
@@ -385,7 +386,7 @@ const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): 
         page: null,
       });
     });
-  });
+  }
 
   for (const message of course.messages) {
     state.conversations.push({
@@ -440,10 +441,11 @@ const buildCourse = (state: LmsState, course: SeedCourse, courseIndex: number): 
 };
 
 const freshTerm = (): TermState => {
-  const content: Record<string, RawBody> = {};
+  const courseContent: Record<LmsRef<"course">, RawBody> = {};
+  const packageContent: Record<string, RawBody> = {};
   const shells = SHELLS.map((shell): ShellRow => {
     const school = shell.school;
-    content[refs.course({ school, course: shell.canvasId })] = structuredClone(shell.body);
+    courseContent[refs.course({ school, course: shell.canvasId })] = structuredClone(shell.body);
     return {
       school,
       canvasId: shell.canvasId,
@@ -462,7 +464,7 @@ const freshTerm = (): TermState => {
   });
   const sources = SOURCES.map((source): SourceRow => {
     const school = source.school;
-    content[refs.course({ school, course: source.canvasId })] = structuredClone(source.body);
+    courseContent[refs.course({ school, course: source.canvasId })] = structuredClone(source.body);
     return {
       school,
       canvasId: source.canvasId,
@@ -475,9 +477,8 @@ const freshTerm = (): TermState => {
       template: source.template,
     };
   });
-  for (const pkg of PACKAGES)
-    if (pkg.body) content[`${PACKAGE_KEY}${pkg.name}`] = structuredClone(pkg.body);
-  return { shells, sources, content, migrations: [], seq: 0 };
+  for (const pkg of PACKAGES) if (pkg.body) packageContent[pkg.name] = structuredClone(pkg.body);
+  return { shells, sources, courseContent, packageContent, migrations: [], seq: 0 };
 };
 
 const text = v.string();
@@ -574,7 +575,14 @@ const TermStateSchema: v.GenericSchema<TermState> = v.object({
       template: v.boolean(),
     }),
   ),
-  content: v.record(text, RawBodySchema),
+  courseContent: v.record(
+    v.pipe(
+      text,
+      v.check((raw) => v.is(lmsRef("course"), raw)),
+    ),
+    RawBodySchema,
+  ),
+  packageContent: v.record(text, RawBodySchema),
   migrations: v.array(MigrationRecordSchema),
   seq: count,
 });
@@ -619,7 +627,7 @@ const freshState = (demoScript: boolean): LmsState => {
     writeLog: [],
     term: freshTerm(),
   };
-  SEED.courses.forEach((course, index) => buildCourse(state, course, index));
+  for (const course of SEED.courses) buildCourse(state, course);
   return state;
 };
 
@@ -829,11 +837,12 @@ export class FakeCanvasServer implements FaultLab {
   #land(record: MigrationRecord): MigrationRecord {
     const { term } = this.#state;
     const targetRef = refs.course({ school: record.school, course: record.course_id });
-    const sourceKey =
+    const source =
       record.settings.file !== undefined
-        ? `${PACKAGE_KEY}${record.settings.file}`
-        : refs.course({ school: record.school, course: record.settings.source_course_id ?? 0 });
-    const source = term.content[sourceKey];
+        ? term.packageContent[record.settings.file]
+        : term.courseContent[
+            refs.course({ school: record.school, course: record.settings.source_course_id ?? 0 })
+          ];
     const pkg = PACKAGES.find((entry) => entry.name === record.settings.file);
     if (!source) return { ...record, applied: true };
     const copied = copyBody(source, {
@@ -850,9 +859,9 @@ export class FakeCanvasServer implements FaultLab {
       },
       nextId: () => 7_000_000 + ++term.seq,
     });
-    const target = term.content[targetRef] ?? { items: [], modules: [], tools: [] };
+    const target = term.courseContent[targetRef] ?? { items: [], modules: [], tools: [] };
     const toolIds = new Set(target.tools.map((tool) => tool.id));
-    term.content[targetRef] = {
+    term.courseContent[targetRef] = {
       items: [...target.items, ...copied.items],
       modules: [...target.modules, ...copied.modules],
       tools: [...target.tools, ...copied.tools.filter((tool) => !toolIds.has(tool.id))],
@@ -901,7 +910,7 @@ export class FakeCanvasServer implements FaultLab {
   #shellOf(ref: LmsRef<"course">): CourseShell | null {
     const [school, , id] = refParts(ref);
     const courseId = Number(id);
-    const body = this.#state.term.content[ref];
+    const body = this.#state.term.courseContent[ref];
     const shell = this.#shell(courseId);
     const source = shell
       ? undefined
@@ -936,7 +945,7 @@ export class FakeCanvasServer implements FaultLab {
     const [owner = "", , courseId, , id] = refParts(ref);
     const school = parseSchoolId(owner);
     if (school === null || courseId === undefined) return null;
-    const body = this.#state.term.content[refs.course({ school, course: Number(courseId) })];
+    const body = this.#state.term.courseContent[refs.course({ school, course: Number(courseId) })];
     const item = body?.items.find((entry) => entry.id === Number(id));
     return body && item ? { body, item, school, courseId: Number(courseId) } : null;
   }
@@ -964,7 +973,7 @@ export class FakeCanvasServer implements FaultLab {
       .filter((source) => source.school === school)
       .map((source): SourceCourse => {
         const ref = refs.course({ school, course: source.canvasId });
-        const dated = (this.#state.term.content[ref]?.items ?? []).flatMap((item) =>
+        const dated = (this.#state.term.courseContent[ref]?.items ?? []).flatMap((item) =>
           item.dueAt === null
             ? []
             : [
@@ -994,7 +1003,7 @@ export class FakeCanvasServer implements FaultLab {
       .sort((a, b) => Number(b.template) - Number(a.template));
   courseContent = (course: LmsRef<"course">): RawCourseContent | null => {
     const shell = this.#shellOf(course);
-    const body = this.#state.term.content[course];
+    const body = this.#state.term.courseContent[course];
     if (!shell || !body) return null;
     const row = this.#shell(shell.ref === course ? Number(refParts(course)[2]) : 0);
     const version = hash53(
@@ -1121,8 +1130,8 @@ export class FakeCanvasServer implements FaultLab {
         const shell = this.#shell(courseId);
         if (!shell) return null;
         const items =
-          this.#state.term.content[refs.course({ school: shell.school, course: courseId })]?.items
-            .length ?? 0;
+          this.#state.term.courseContent[refs.course({ school: shell.school, course: courseId })]
+            ?.items.length ?? 0;
         const migrations = this.#state.term.migrations
           .filter((record) => record.course_id === courseId)
           .map((record) => ({
@@ -1442,7 +1451,7 @@ export class FakeCanvasServer implements FaultLab {
 
   #conversationsWith(student: Student): readonly Conversation[] {
     return this.#state.conversations.filter(
-      (c) => c.course === student.course && c.from === student.name,
+      (c) => c.course === student.course && c.students.includes(student.ref),
     );
   }
 
@@ -1531,7 +1540,7 @@ export class FakeCanvasServer implements FaultLab {
   }
   createShell = (school: SchoolId, code: string, title: string): void => {
     this.#pull();
-    const { shells, sources, content } = this.#state.term;
+    const { shells, sources, courseContent } = this.#state.term;
     const like = shells.find((shell) => shell.school === school);
     if (!like) return;
     const canvasId =
@@ -1545,7 +1554,11 @@ export class FakeCanvasServer implements FaultLab {
       template: false,
       students: [],
     });
-    content[refs.course({ school, course: canvasId })] = { items: [], modules: [], tools: [] };
+    courseContent[refs.course({ school, course: canvasId })] = {
+      items: [],
+      modules: [],
+      tools: [],
+    };
     this.#push();
     this.#changed();
   };

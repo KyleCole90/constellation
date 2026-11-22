@@ -3,7 +3,7 @@ import * as v from "valibot";
 import { isoTime, type ThreadId } from "~/shared/domain/ids";
 import { refs } from "~/shared/providers/canvas-refs";
 import { ThreadIdSchema } from "~/shared/providers/schemas";
-import { assignmentCanvasId, SEED, type SeedAssignment } from "~/shared/providers/fake-canvas/seed";
+import { SEED, type SeedAssignment } from "~/shared/providers/fake-canvas/seed";
 
 import { builtInThreads } from "./builtInThreads";
 import { GRADING_LIST_THREAD } from "./selectors";
@@ -51,13 +51,12 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
     ],
   });
 
-  SEED.courses.forEach((course, courseIndex) => {
+  for (const course of SEED.courses) {
     const school = course.schoolId;
     const courseRef = refs.course({ school, course: course.canvasId });
     for (const thread of course.threads) {
       const updatedAt = at(ageMinutes(thread.time));
-      const assignmentIndex = course.assignments.findIndex((a) => a.id === thread.assignmentId);
-      const found = course.assignments[assignmentIndex];
+      const found = course.assignments.find((a) => a.id === thread.assignmentId);
       let messages: readonly ThreadMessage[] = [];
       if (thread.kind === "grading" && found) {
         // Off-roster students' statuses trail the roster's, and no count holds them (#151).
@@ -124,7 +123,7 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
           assignment: refs.assignment({
             school,
             course: course.canvasId,
-            assignment: assignmentCanvasId(found, courseIndex, assignmentIndex),
+            assignment: found.canvasId,
           }),
         };
       };
@@ -138,7 +137,7 @@ export const seedThreads = (): Readonly<Record<ThreadId, Thread>> => {
         updatedAt,
       });
     }
-  });
+  }
 
   threads.push({
     id: v.parse(ThreadIdSchema, "t-general"),
