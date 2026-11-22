@@ -61,7 +61,7 @@ const SCOPE_WORDS: Readonly<Record<string, string>> = {
   "url:PUT|/api/v1/courses/:course_id/discussion_topics/:topic_id": "Edit announcements",
   "url:DELETE|/api/v1/courses/:course_id/discussion_topics/:topic_id": "Delete an announcement",
 };
-const SCOPES = Object.keys(SCOPE_WORDS);
+const USED_PERMISSIONS = Object.keys(SCOPE_WORDS);
 
 export const FAKE_CANVAS_FACE = {
   vendorLabel: "Canvas",
@@ -263,7 +263,7 @@ const createFakeCanvasProvider = (
     verify: () =>
       read({ ...route("read", "GET /api/v1/users/self"), verify: true }, () => ({
         displayName: INSTRUCTOR,
-        scopes: SCOPES,
+        usedPermissions: USED_PERMISSIONS,
       })),
     courses: () => read(route("read", "GET /api/v1/courses"), () => server.courses(school.id)),
     assignments: (course) =>

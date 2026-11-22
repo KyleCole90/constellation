@@ -299,6 +299,42 @@ describe("Canvas writes, kind by kind", () => {
     expect(after.kind === "announcement" && after.posts.at(-1)?.text).toBe(
       "Quiz moved\n\nThe quiz is Friday.\n\nBring <notes> & a pen.",
     );
+    expect(after.kind === "announcement" && after.posts.at(-1)?.mine).toBe(true);
+  });
+
+  it("marks observed announcements as mine only when their author matches self", async () => {
+    const http = new CanvasHttp();
+    http.topics.push(
+      {
+        id: 3002,
+        title: "Co-teacher note",
+        message: "<p>From someone else.</p>",
+        posted_at: "2026-11-02T15:05:00Z",
+        author: { id: 9999 },
+      },
+      {
+        id: 3003,
+        title: "My note",
+        message: "<p>From me.</p>",
+        posted_at: "2026-11-02T15:10:00Z",
+        author: { id: SELF_ID },
+      },
+    );
+    const content: ChangeContent = {
+      kind: "announcement",
+      target: COURSE,
+      title: "Draft",
+      body: "Body",
+    };
+    const observed = await unwrap(canvasOver(http).observe(content));
+    expect(observed).toMatchObject({
+      kind: "announcement",
+      posts: [
+        { id: "3001", mine: false },
+        { id: "3002", mine: false },
+        { id: "3003", mine: true },
+      ],
+    });
   });
 
   it("refuses a target at another school, and asks Canvas nothing", async () => {

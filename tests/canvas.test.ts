@@ -9,7 +9,7 @@ import { Secret, type CredentialLease } from "~/shared/providers/provider";
 
 import { bridgeCanvas } from "~/renderer/providers/lms";
 import { createMemoryVault } from "~/renderer/providers/vault";
-import { CANVAS, CANVAS_FACE, CANVAS_SCOPES } from "~/shared/providers/canvas";
+import { CANVAS, CANVAS_FACE, CANVAS_USED_PERMISSIONS } from "~/shared/providers/canvas";
 import type { LabCommand } from "~/shared/providers/fake-canvas/lab";
 
 import { bridgedLms, fakeLmsHandlers } from "./fixtures/bridge";
@@ -123,7 +123,7 @@ describe("Canvas reads", () => {
     const canvas = canvasWith(SELF);
     expect(await canvas.provider.verify()).toEqual({
       ok: true,
-      value: { displayName: "Sample Instructor", scopes: CANVAS_SCOPES },
+      value: { displayName: "Sample Instructor", usedPermissions: CANVAS_USED_PERMISSIONS },
     });
     expect(canvas.requests).toEqual([
       { url: `${ORIGIN}/api/v1/users/self`, auth: `Bearer ${TOKEN}` },
@@ -645,6 +645,9 @@ describe("main's lms channels and real Canvas", () => {
     const lms = fakeLmsHandlers({ vault, fetch: network.fetch });
     const forged: School = { ...SCHOOL, host: schoolHost("elsewhere.example.com") };
     await expect(async () => lms["lms.verify"]({ school: forged })).rejects.toThrow(
+      "isn't a Canvas school",
+    );
+    await expect(lms["lms.pickPackage"]({ school: forged })).rejects.toThrow(
       "isn't a Canvas school",
     );
     expect(network.requests).toEqual([]);

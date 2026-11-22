@@ -48,6 +48,7 @@ interface Topic {
   title: string;
   message: string;
   posted_at: string;
+  author?: { id: number } | null;
 }
 
 const AT = "2026-11-02T15:00:00Z";
@@ -316,6 +317,7 @@ export class CanvasHttp {
         title: form.get("title") ?? "",
         message: form.get("message") ?? "",
         posted_at: at,
+        author: { id: SELF_ID },
       };
       this.topics.push(topic);
       return json(topic);

@@ -3,7 +3,6 @@ import * as v from "valibot";
 import { AnalyticsEventSchema } from "./analytics";
 import { LabCommandSchema, LabSnapshotSchema } from "./providers/fake-canvas/lab";
 import type { VaultKey } from "./providers/provider";
-import { keysOf } from "./keys-of";
 import {
   AccountInfoSchema,
   AnnouncementSchema,
@@ -108,6 +107,44 @@ const ClaudeCodeStatus = v.variant("installed", [
 ]);
 export type ClaudeCodeStatus = v.InferOutput<typeof ClaudeCodeStatus>;
 
+const CHANNELS = [
+  "error.report",
+  "analytics.track",
+  "telemetry.status",
+  "telemetry.choose",
+  "vault.enroll",
+  "vault.keys",
+  "vault.forget",
+  "vault.standIn",
+  "agent.run",
+  "agent.source",
+  "claudeCode.status",
+  "lms.schoolAt",
+  "lms.verify",
+  "lms.courses",
+  "lms.assignments",
+  "lms.students",
+  "lms.submissions",
+  "lms.file",
+  "lms.linkExport",
+  "lms.conversations",
+  "lms.announcements",
+  "lms.observe",
+  "lms.apply",
+  "lms.newCourses",
+  "lms.copySources",
+  "lms.courseContent",
+  "lms.migrations",
+  "lms.samplePackages",
+  "lms.pickPackage",
+  "lms.lab",
+  "lms.labNext",
+  "lms.stored",
+  "lms.findSubmission",
+] as const;
+
+type ChannelName = (typeof CHANNELS)[number];
+
 interface Channel {
   readonly input: v.GenericSchema;
   readonly output: v.GenericSchema;
@@ -182,10 +219,9 @@ const ipc = {
     input: v.strictObject({ student: v.string(), assignment: v.string() }),
     output: v.nullable(lmsRef("submission")),
   },
-} satisfies Record<string, Channel>;
+} satisfies Record<ChannelName, Channel>;
 
 type Ipc = typeof ipc;
-type ChannelName = keyof Ipc;
 type Input<C extends ChannelName> = v.InferInput<Ipc[C]["input"]>;
 type Output<C extends ChannelName> = v.InferOutput<Ipc[C]["output"]>;
 
@@ -208,7 +244,7 @@ export const handle = (
   trusted: (sender: string) => boolean,
   handlers: Handlers,
 ) => {
-  for (const channel of keysOf(ipc))
+  for (const channel of CHANNELS)
     register(channel, async (sender, input) => {
       if (sender === null || !trusted(sender)) throw new Error(`${channel}: untrusted sender`);
       return serve(channel, handlers[channel], input);
@@ -223,7 +259,7 @@ export interface Bridge {
 }
 
 const isChannel = (name: unknown): name is ChannelName =>
-  typeof name === "string" && Object.hasOwn(ipc, name);
+  typeof name === "string" && CHANNELS.some((channel) => channel === name);
 
 export const invoker =
   (send: (channel: ChannelName, input: unknown) => Promise<unknown>): Bridge["invoke"] =>

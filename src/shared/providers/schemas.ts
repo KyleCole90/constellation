@@ -119,7 +119,7 @@ export const readOf = <T>(value: v.GenericSchema<T>): v.GenericSchema<Result<T, 
 
 export const AccountInfoSchema: v.GenericSchema<AccountInfo> = v.object({
   displayName: text,
-  scopes: v.array(text),
+  usedPermissions: v.array(text),
 });
 
 export const CourseSchema: v.GenericSchema<Course> = v.object({

@@ -1889,7 +1889,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             status: "connected",
             connectedAt: nowIso(),
             accountName: account.value.displayName,
-            scopes: account.value.scopes,
+            scopes: account.value.usedPermissions,
             syncError: null,
           });
           if (get().notice === expiredNotice(school)) set({ notice: null });

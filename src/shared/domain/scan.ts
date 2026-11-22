@@ -10,7 +10,6 @@ import type {
 } from "./content";
 import type { Brand, ChangeId, LmsRef } from "./ids";
 import { paragraphBounds, spliceAt } from "./splice";
-import { keysOf } from "../keys-of";
 import {
   breakHolding,
   dateOfTime,
@@ -26,22 +25,28 @@ import {
   type TermPlan,
 } from "./term";
 
-export type FindingType =
-  | "plain-date"
-  | "date-in-break"
-  | "date-outside-term"
-  | "old-term-name"
-  | "old-course-link"
-  | "broken-link"
-  | "missing-file"
-  | "lti-link"
-  | "copied-announcement"
-  | "foreign-contact"
-  | "missing-statement"
-  | "unpublished-item"
-  | "empty-module"
-  | "migration-issue";
+export const FINDING_TYPES = [
+  "plain-date",
+  "date-in-break",
+  "date-outside-term",
+  "old-term-name",
+  "old-course-link",
+  "broken-link",
+  "missing-file",
+  "lti-link",
+  "copied-announcement",
+  "foreign-contact",
+  "missing-statement",
+  "unpublished-item",
+  "empty-module",
+  "migration-issue",
+] as const;
+
+export type FindingType = (typeof FINDING_TYPES)[number];
 export type FindingKey = Brand<string, "FindingKey">;
+export const parseFindingKey = (raw: string): FindingKey | null =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: a finding key is any non-empty string
+  raw === "" ? null : (raw as FindingKey);
 export const retiredKey = (key: FindingKey, change: ChangeId): FindingKey =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: no hash contains `:`, so no finding has this key
   `${key}:${change}` as FindingKey;
@@ -491,7 +496,6 @@ export const RULES: Readonly<Record<FindingType, ScanRule>> = {
   "migration-issue": migrationIssue,
 };
 
-export const FINDING_TYPES: readonly FindingType[] = keysOf(RULES);
 export const isFindingType = (value: unknown): value is FindingType =>
   typeof value === "string" && Object.hasOwn(RULES, value);
 

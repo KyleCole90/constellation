@@ -9,6 +9,7 @@ import { isoTime } from "~/shared/domain/ids";
 import { handle, invoker } from "~/shared/ipc";
 import { Secret, revealSecret, type Credential } from "~/shared/providers/provider";
 
+import { knownSchoolId } from "../src/main/lms";
 import { createVault, type Cipher } from "../src/main/vault";
 import { fakeLmsHandlers } from "./fixtures/bridge";
 import { makeStoreRig } from "./fixtures/store-rig";
@@ -38,12 +39,17 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
+const isFakeSchool = (id: ReturnType<typeof schoolId>) => knownSchoolId("fake", id);
+const isCanvasSchool = (id: ReturnType<typeof schoolId>) => knownSchoolId("canvas", id);
+const fakeVault = (file = vaultFile(), available = true) =>
+  createVault(file, fakeCipher(available), isFakeSchool);
+
 const stored = (file: string): unknown => JSON.parse(readFileSync(file, "utf8"));
 
 describe("main's vault", () => {
   it("stores a token only encrypted, and lists its key", async () => {
     const file = vaultFile();
-    const vault = createVault(file, fakeCipher());
+    const vault = fakeVault(file);
     await vault.enroll(LCC, TOKEN);
     expect(vault.keys()).toEqual([LCC]);
     expect(readFileSync(file, "utf8")).not.toContain(TOKEN);
@@ -51,14 +57,14 @@ describe("main's vault", () => {
 
   it("refuses to store a token when encryption isn't available, and writes nothing", async () => {
     const file = vaultFile();
-    const vault = createVault(file, fakeCipher(false));
+    const vault = fakeVault(file, false);
     await expect(vault.enroll(LCC, TOKEN)).rejects.toThrow("can't encrypt");
     expect(() => readFileSync(file)).toThrow();
     expect(vault.keys()).toEqual([]);
   });
 
   it("hands out a stand-in that is stable and gives the token away nowhere", async () => {
-    const vault = createVault(vaultFile(), fakeCipher());
+    const vault = fakeVault();
     await vault.enroll(LCC, TOKEN);
     const standIn = await vault.standIn(LCC);
     expect(standIn).toMatch(/^stand-in:[0-9a-f]{64}$/);
@@ -69,7 +75,7 @@ describe("main's vault", () => {
 
   it("forgetting a key deletes its entry from the file and leaves the others", async () => {
     const file = vaultFile();
-    const vault = createVault(file, fakeCipher());
+    const vault = fakeVault(file);
     await vault.enroll(LCC, TOKEN);
     await vault.enroll(RSU, "another-token");
     vault.forget(LCC);
@@ -79,7 +85,7 @@ describe("main's vault", () => {
 
   it("enrolling a stand-in it handed out puts back the token it stands for", async () => {
     const file = vaultFile();
-    const vault = createVault(file, fakeCipher());
+    const vault = fakeVault(file);
     await vault.enroll(LCC, TOKEN);
     const previous = await vault.standIn(LCC);
     if (previous === null) throw new Error("no stand-in");
@@ -90,7 +96,7 @@ describe("main's vault", () => {
   });
 
   it("restores a stand-in only under the key it was issued for", async () => {
-    const vault = createVault(vaultFile(), fakeCipher());
+    const vault = fakeVault();
     await vault.enroll(LCC, TOKEN);
     await vault.enroll(RSU, "rsu-token");
     const lccStandIn = await vault.standIn(LCC);
@@ -104,7 +110,7 @@ describe("main's vault", () => {
 
   it("forgetting a key voids the stand-ins it handed out", async () => {
     const file = vaultFile();
-    const vault = createVault(file, fakeCipher());
+    const vault = fakeVault(file);
     await vault.enroll(LCC, TOKEN);
     const previous = await vault.standIn(LCC);
     if (previous === null) throw new Error("no stand-in");
@@ -114,13 +120,37 @@ describe("main's vault", () => {
     expect(readFileSync(file, "utf8")).not.toContain(TOKEN);
   });
 
+  it("refuses unknown school ids in both fake and canvas modes", async () => {
+    const unknown = schoolId("not-a-school");
+    const canvasHost = schoolId("canvas.example.edu");
+    const ip = schoolId("127.0.0.1");
+
+    const fake = fakeVault();
+    await expect(fake.enroll(unknown, TOKEN)).rejects.toThrow("Unknown school");
+    await expect(fake.enroll(canvasHost, TOKEN)).rejects.toThrow("Unknown school");
+    expect(() => fake.forget(unknown)).toThrow("Unknown school");
+    await expect(fake.standIn(unknown)).rejects.toThrow("Unknown school");
+    await fake.enroll("ai-key", "sk-ant-test");
+    expect(fake.keys()).toEqual(["ai-key"]);
+
+    const file = vaultFile();
+    const canvas = createVault(file, fakeCipher(), isCanvasSchool);
+    await expect(canvas.enroll(LCC, TOKEN)).rejects.toThrow("Unknown school");
+    await expect(canvas.enroll(ip, TOKEN)).rejects.toThrow("Unknown school");
+    expect(() => canvas.forget(LCC)).toThrow("Unknown school");
+    await expect(canvas.standIn(LCC)).rejects.toThrow("Unknown school");
+    await canvas.enroll(canvasHost, TOKEN);
+    await canvas.enroll("ai-key", "sk-ant-test");
+    expect(canvas.keys()).toEqual([canvasHost, "ai-key"]);
+  });
+
   it.each([
     ["that something else wrote", JSON.stringify({ lcc: 7 })],
     ["that is damaged", '{"lcc": "abc'],
   ])("reads a file %s as empty, and keeps it aside as vault.json.bad", async (_, text) => {
     const file = vaultFile();
     writeFileSync(file, text);
-    const vault = createVault(file, fakeCipher());
+    const vault = fakeVault(file);
     expect(vault.keys()).toEqual([]);
     expect(readFileSync(`${file}.bad`, "utf8")).toBe(text);
     expect(await vault.standIn(LCC)).toBeNull();
@@ -132,7 +162,7 @@ describe("main's vault", () => {
   it("replaces a temp file left by a crash rather than writing through it", async () => {
     const file = vaultFile();
     writeFileSync(`${file}.tmp`, "stale", { mode: 0o644 });
-    const vault = createVault(file, fakeCipher());
+    const vault = fakeVault(file);
     await vault.enroll(LCC, TOKEN);
     expect(vault.keys()).toEqual([LCC]);
     expect(statSync(file).mode & 0o777).toBe(0o600);
@@ -141,7 +171,7 @@ describe("main's vault", () => {
 
 const bridged = () => {
   const file = vaultFile();
-  const main = createVault(file, fakeCipher());
+  const main = fakeVault(file);
   const listeners = new Map<string, (sender: string | null, input: unknown) => Promise<unknown>>();
   handle(
     (channel, listener) => listeners.set(channel, listener),

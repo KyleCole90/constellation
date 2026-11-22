@@ -106,6 +106,9 @@ const NO_TERM_SETUP = {
   error: { kind: "unsupported", capability: "term setup" },
 } as const satisfies Result<never, LmsError>;
 
+export const knownSchoolId = (kind: "fake" | "canvas", id: SchoolId): boolean =>
+  kind === "fake" ? FAKE_SCHOOLS.some((school) => school.id === id) : canvasSchoolAt(id)?.id === id;
+
 export const lmsHandlers = (options: {
   lms:
     | { kind: "fake"; makeServer(now: () => number): FakeCanvasServer }
@@ -148,16 +151,22 @@ export const lmsHandlers = (options: {
     return openAsBlob(path).catch(() => null);
   };
   const canvas = new Map<SchoolId, LmsProvider>();
-  const canvasProvider = (school: School): LmsProvider => {
-    const minted = canvasSchoolAt(school.host);
-    if (world.kind !== "canvas" || minted?.id !== school.id)
+  const mintedCanvasSchool = (school: School): { school: School; fetch: Fetch } => {
+    if (world.kind !== "canvas")
       throw new Error("That isn't a Canvas school this app connects to.");
+    const minted = canvasSchoolAt(school.host);
+    if (minted?.id !== school.id)
+      throw new Error("That isn't a Canvas school this app connects to.");
+    return { school: minted, fetch: world.fetch };
+  };
+  const canvasProvider = (school: School): LmsProvider => {
+    const { school: minted, fetch } = mintedCanvasSchool(school);
     const existing = canvas.get(minted.id);
     if (existing) return existing;
     const created = createCanvasProvider({
       school: minted,
       lease: options.leaseFor(minted.id),
-      fetch: world.fetch,
+      fetch,
       now,
       packageFile: (name) => packageFile(minted.id, name),
     });
@@ -330,12 +339,12 @@ export const lmsHandlers = (options: {
     "lms.migrations": ({ school, course }) => term(school, (setup) => setup.migrations(course)),
     "lms.samplePackages": ({ school }) => term(school, (setup) => setup.samplePackages()),
     "lms.pickPackage": async ({ school }) => {
-      if (school.provider === "canvas") canvasProvider(school);
+      const target = school.provider === "canvas" ? mintedCanvasSchool(school).school : null;
       const path = await options.choosePackage();
       if (path === null) return { ok: true, value: null };
       const file = await packageAt(path);
       if (!file.ok) return file;
-      if (school.provider === "canvas") picked.set(`${school.id}\n${file.value.name}`, path);
+      if (target) picked.set(`${target.id}\n${file.value.name}`, path);
       return {
         ok: true,
         value: {
