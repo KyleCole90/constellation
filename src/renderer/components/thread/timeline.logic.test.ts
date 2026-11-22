@@ -39,7 +39,7 @@ const change = (
         { kind, target: lmsRef<"course">(target), title: "Moved", body: "Class moved." },
         { kind, targetVersion: "v1", posts: [] },
       )),
-  activity: [{ at: at(minute), actor: "agent", text: "Drafted" }],
+  activity: [{ at: at(minute), actor: "agent", kind: "drafted", text: "Drafted" }],
 });
 const focusOn = (id: string | null, expanded = false) => ({
   focus: id === null ? null : changeId(id),

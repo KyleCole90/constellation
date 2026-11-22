@@ -2,6 +2,7 @@ import {
   classify,
   errorWords,
   fieldsOf,
+  pendingFields,
   seenForFirstSend,
   seenOf,
   type ChangeEvent,
@@ -172,9 +173,7 @@ export const createWriteback = (deps: WritebackDeps): Writeback => {
 
   const remainingFields = (record: ChangeRecord): readonly FieldKey[] => {
     const run = runOf(record);
-    return fieldsOf(record.content).filter(
-      (field) => !record.landed.includes(field) && !landedIn(run, field),
-    );
+    return pendingFields(record).filter((field) => !landedIn(run, field));
   };
 
   /**

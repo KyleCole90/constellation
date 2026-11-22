@@ -202,6 +202,17 @@ export type ChangePatch =
   | { kind: "text-fix"; after: string }
   | { kind: "item-set"; at: IsoTime };
 
+export const SET_VALUE = {
+  published: "published",
+  unpublished: "unpublished",
+  deleted: "deleted",
+  template: "template",
+  notTemplate: "not-template",
+  present: "present",
+} as const;
+export type SetValue = (typeof SET_VALUE)[keyof typeof SET_VALUE];
+export const SET_VALUES: readonly SetValue[] = Object.values(SET_VALUE);
+
 export interface RemoteEntry {
   id: string;
   mine: boolean;
@@ -227,7 +238,7 @@ export type RemoteState =
       migrations: readonly RemoteEntry[];
     }
   | { kind: "text-fix"; targetVersion: string; body: string }
-  | { kind: "item-set"; targetVersion: string; value: string | null };
+  | { kind: "item-set"; targetVersion: SetValue; value: SetValue | IsoTime | null };
 
 export interface Basis {
   readAt: IsoTime;
@@ -378,7 +389,7 @@ const classifyValue = (
 ): FieldDecision => {
   if (remote.kind !== "item-set" || basis.kind !== "item-set")
     throw new Error("a value field reads an item-set remote");
-  const mine = fieldText(content, field);
+  const mine = intentText(content.intent);
   if (remote.value === mine) return { do: "already-there" };
   if (remote.targetVersion !== basis.targetVersion)
     return targetMoved(field, content, basis, remote);
@@ -494,17 +505,17 @@ export const fieldText = (content: ChangeContent, field: FieldKey): string => {
 export const copySignature = ({ source }: Pick<CourseCopyContent, "source">): string =>
   source.kind === "course" ? source.ref : `cartridge:${source.name}`;
 
-const intentText = (intent: SetIntent): string => {
+const intentText = (intent: SetIntent): SetValue | IsoTime => {
   switch (intent.set) {
     case "due-at":
       return intent.at;
     case "item-published":
     case "course-published":
-      return "published";
+      return SET_VALUE.published;
     case "item-deleted":
-      return "deleted";
+      return SET_VALUE.deleted;
     case "course-template":
-      return "template";
+      return SET_VALUE.template;
   }
 };
 
@@ -570,11 +581,61 @@ type ChangeState =
   | { tag: "discarded"; at: IsoTime };
 
 export type ActivityActor = "you" | "agent" | "writeback";
-interface ActivityEntry {
+export const ACTIVITY_KINDS = [
+  "drafted",
+  "started",
+  "edited",
+  "edited-reset",
+  "approved",
+  "revoked",
+  "discarded",
+  "conflict-discarded",
+  "conflict-resolved",
+  "sending",
+  "retried",
+  "outcomes",
+  "held",
+  "conflicted",
+  "sent",
+  "confirmed",
+  "unconfirmed",
+] as const;
+export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
+type DynamicActivityKind = "retried" | "outcomes" | "held";
+type FixedActivityKind = Exclude<ActivityKind, DynamicActivityKind>;
+export const ACTIVITY_TEXT: Readonly<Record<FixedActivityKind, string>> = {
+  drafted: "Drafted",
+  started: "Started",
+  edited: "Edited",
+  "edited-reset": "Edited, approval reset",
+  approved: "Approved",
+  revoked: "Approval revoked",
+  discarded: "Discarded",
+  "conflict-discarded": "Conflict resolved, nothing left to write",
+  "conflict-resolved": "Conflict resolved, needs a fresh approval",
+  sending: "Sending",
+  conflicted: "Changed in the LMS since the draft. Nothing was written",
+  sent: "Sent",
+  confirmed: "Confirmed in the LMS. Sent",
+  unconfirmed: "Checked the LMS: still unconfirmed",
+};
+export interface ActivityEntry {
   at: IsoTime;
   actor: ActivityActor;
+  kind: ActivityKind;
   text: string;
 }
+
+const activityEntry = (
+  at: IsoTime,
+  actor: ActivityActor,
+  note: { kind: FixedActivityKind } | { kind: DynamicActivityKind; text: string },
+): ActivityEntry => ({
+  at,
+  actor,
+  kind: note.kind,
+  text: "text" in note ? note.text : ACTIVITY_TEXT[note.kind],
+});
 
 export interface PassageAnchor {
   paragraph: number;
@@ -602,12 +663,20 @@ export interface ChangeRecord {
   content: ChangeContent;
   basis: Basis;
   landed: readonly FieldKey[];
+  skipped: readonly FieldKey[];
   seen: Seen | null;
   rationale: readonly Rationale[];
   agentComment: string | null;
   state: ChangeState;
   activity: readonly ActivityEntry[];
 }
+
+export const pendingFields = (
+  record: Pick<ChangeRecord, "content" | "landed" | "skipped">,
+): readonly FieldKey[] =>
+  fieldsOf(record.content).filter(
+    (field) => !record.landed.includes(field) && !record.skipped.includes(field),
+  );
 
 export const repliedAt = (changes: readonly ChangeRecord[], conversation: string): IsoTime | null =>
   changes.reduce<IsoTime | null>(
@@ -661,10 +730,10 @@ export type Rejection =
   | "not-sending"
   | "not-conflicted";
 
-const YOUR_WORDS: ReadonlySet<string> = new Set(["Started", "Edited", "Edited, approval reset"]);
+const AUTHORED_KINDS: ReadonlySet<ActivityKind> = new Set(["started", "edited", "edited-reset"]);
 
 export const editedByYou = ({ activity }: ChangeRecord): boolean =>
-  activity.some(({ actor, text }) => actor === "you" && YOUR_WORDS.has(text));
+  activity.some(({ actor, kind }) => actor === "you" && AUTHORED_KINDS.has(kind));
 
 const commentOf = (content: ChangeContent): string | null =>
   content.kind === "grade" ? content.comment : null;
@@ -682,11 +751,14 @@ export const newChangeRecord = (
   content: init.content,
   basis: init.basis,
   landed: [],
+  skipped: [],
   seen: null,
   rationale: [],
   agentComment: init.by === "agent" ? commentOf(init.content) : null,
   state: { tag: "draft", approvalReset: null },
-  activity: [{ at: init.at, actor: init.by, text: init.by === "agent" ? "Drafted" : "Started" }],
+  activity: [
+    activityEntry(init.at, init.by, { kind: init.by === "agent" ? "drafted" : "started" }),
+  ],
 });
 
 export const fitContent = (
@@ -809,7 +881,9 @@ const withLanded = (remote: RemoteState, content: ChangeContent, field: FieldKey
         ? { ...remote, body: applySplice(remote.body, content.splice) }
         : remote;
     case "item-set":
-      return { ...remote, value: entry.text };
+      return content.kind === "item-set"
+        ? { ...remote, value: intentText(content.intent) }
+        : remote;
   }
 };
 
@@ -940,12 +1014,12 @@ export function transition(
     next: ChangeRecord,
     at: IsoTime | null,
     actor: ActivityActor,
-    text: string | null,
+    note: { kind: FixedActivityKind } | { kind: DynamicActivityKind; text: string } | null,
   ): Result<ChangeRecord, Rejection> => ({
     ok: true,
     value:
-      at !== null && text !== null
-        ? { ...next, activity: [...next.activity, { at, actor, text }] }
+      at !== null && note !== null
+        ? { ...next, activity: [...next.activity, activityEntry(at, actor, note)] }
         : next,
   });
   const fail = (error: Rejection): Result<ChangeRecord, Rejection> => ({ ok: false, error });
@@ -972,13 +1046,14 @@ export function transition(
         (field) => fieldText(base.content, field) !== fieldText(content, field),
       );
       if (moved.some((field) => FIELD_MODE[field] !== "set")) return fail("field-already-landed");
+      const activeFields = fieldsOf(content);
       const approvalReset =
         state.tag === "draft"
           ? state.approvalReset
           : event.by === "agent"
             ? "agent-edited"
             : "edited";
-      const text = state.tag === "draft" ? "Edited" : "Edited, approval reset";
+      const kind: FixedActivityKind = state.tag === "draft" ? "edited" : "edited-reset";
       const subject =
         content.kind === "announcement" && content.title.trim()
           ? content.title.trim()
@@ -993,6 +1068,11 @@ export function transition(
               ? commentOf(content)
               : base.agentComment,
           landed: base.landed.filter((field) => !moved.includes(field)),
+          skipped: base.skipped.filter(
+            (field) =>
+              activeFields.includes(field) &&
+              fieldText(base.content, field) === fieldText(content, field),
+          ),
           rationale: base.rationale.filter(
             ({ field }) => scoreFor(base.content, field) === scoreFor(content, field),
           ),
@@ -1000,7 +1080,7 @@ export function transition(
         },
         event.at,
         event.by,
-        text,
+        { kind },
       );
     }
     case "approve": {
@@ -1025,29 +1105,23 @@ export function transition(
         },
         event.at,
         "you",
-        "Approved",
+        { kind: "approved" },
       );
     }
     case "revoke": {
       if (state.tag !== "approved" && state.tag !== "held") return fail("not-editable");
       if (state.tag === "held" && mayStillLand(state.run)) return fail("not-editable");
       const base = state.tag === "held" ? absorbRun(record, state.run, event.at) : record;
-      return ok(
-        { ...base, state: { tag: "draft", approvalReset: "revoked" } },
-        event.at,
-        "you",
-        "Approval revoked",
-      );
+      return ok({ ...base, state: { tag: "draft", approvalReset: "revoked" } }, event.at, "you", {
+        kind: "revoked",
+      });
     }
     case "discard": {
       if (state.tag === "sending" || state.tag === "sent" || state.tag === "discarded")
         return fail("not-editable");
-      return ok(
-        { ...record, state: { tag: "discarded", at: event.at } },
-        event.at,
-        "you",
-        "Discarded",
-      );
+      return ok({ ...record, state: { tag: "discarded", at: event.at } }, event.at, "you", {
+        kind: "discarded",
+      });
     }
     case "annotate": {
       const rationale = [
@@ -1061,13 +1135,24 @@ export function transition(
       const base = absorbRun(record, state.run, event.at);
       let content = base.content;
       const landed = new Set(base.landed);
+      const skipped = new Set(base.skipped);
       for (const { field } of state.conflicts) {
         const choice = event.choices[field] ?? "keep-mine";
-        if (choice === "keep-mine") continue;
-        if (choice === "use-theirs") content = useTheirs(content, field, event.remote);
-        if (fieldsOf(content).includes(field)) landed.add(field);
+        if (choice === "keep-mine") {
+          skipped.delete(field);
+          continue;
+        }
+        if (choice === "use-theirs") {
+          content = useTheirs(content, field, event.remote);
+          if (fieldsOf(content).includes(field)) skipped.add(field);
+        } else if (fieldsOf(content).includes(field)) {
+          landed.add(field);
+        }
       }
-      const left = fieldsOf(content).filter((field) => !landed.has(field));
+      const activeFields = fieldsOf(content);
+      const nextLanded = [...landed];
+      const nextSkipped = [...skipped].filter((field) => activeFields.includes(field));
+      const left = pendingFields({ content, landed: nextLanded, skipped: nextSkipped });
       const kept = state.conflicts
         .filter(
           ({ field }) =>
@@ -1077,23 +1162,18 @@ export function transition(
       const next = {
         ...base,
         content,
-        landed: [...landed],
+        landed: nextLanded,
+        skipped: nextSkipped,
         seen: withKeptEntries(base.seen, kept, event.remote),
         basis: { readAt: event.at, remote: event.remote },
       };
       if (left.length === 0)
-        return ok(
-          { ...next, state: { tag: "discarded", at: event.at } },
-          event.at,
-          "you",
-          "Conflict resolved, nothing left to write",
-        );
-      return ok(
-        { ...next, state: { tag: "draft", approvalReset: "rebased" } },
-        event.at,
-        "you",
-        "Conflict resolved, needs a fresh approval",
-      );
+        return ok({ ...next, state: { tag: "discarded", at: event.at } }, event.at, "you", {
+          kind: "conflict-discarded",
+        });
+      return ok({ ...next, state: { tag: "draft", approvalReset: "rebased" } }, event.at, "you", {
+        kind: "conflict-resolved",
+      });
     }
     case "begin-send": {
       if (state.tag === "draft") return fail("not-approved");
@@ -1102,12 +1182,10 @@ export function transition(
       if (state.approval.fingerprint !== fingerprintOf(record)) return fail("stale-approval");
       const prior = state.tag === "held" && state.run.attempt > 0 ? state.run : null;
       const fields = Object.fromEntries(
-        fieldsOf(record.content)
-          .filter((field) => !record.landed.includes(field))
-          .map((field) => {
-            const run = prior?.fields[field];
-            return [field, run?.status === "landed" ? run : ({ status: "pending" } as const)];
-          }),
+        pendingFields(record).map((field) => {
+          const run = prior?.fields[field];
+          return [field, run?.status === "landed" ? run : ({ status: "pending" } as const)];
+        }),
       );
       const run: SendRun = {
         attempt: (prior?.attempt ?? 0) + 1,
@@ -1123,7 +1201,7 @@ export function transition(
         },
         event.at,
         "writeback",
-        prior ? `Retry, attempt ${run.attempt}` : "Sending",
+        prior ? { kind: "retried", text: `Retry, attempt ${run.attempt}` } : { kind: "sending" },
       );
     }
     case "field-outcomes": {
@@ -1139,7 +1217,7 @@ export function transition(
         { ...record, state: { ...state, run: { ...state.run, fields, waitingUntil: null } } },
         event.at,
         "writeback",
-        text || null,
+        text ? { kind: "outcomes", text } : null,
       );
     }
     case "wait": {
@@ -1160,7 +1238,7 @@ export function transition(
         { ...record, state: { tag: "held", approval: state.approval, run, cause: event.cause } },
         event.at,
         "writeback",
-        HOLD_TEXT[event.cause.tag],
+        { kind: "held", text: HOLD_TEXT[event.cause.tag] },
       );
     }
     case "conflict": {
@@ -1172,7 +1250,7 @@ export function transition(
         { ...record, state: { tag: "conflicted", run, conflicts: event.conflicts } },
         event.at,
         "writeback",
-        "Changed in the LMS since the draft. Nothing was written",
+        { kind: "conflicted" },
       );
     }
     case "finish": {
@@ -1189,7 +1267,7 @@ export function transition(
         },
         event.at,
         "writeback",
-        "Sent",
+        { kind: "sent" },
       );
     }
     case "interrupt": {
@@ -1207,28 +1285,23 @@ export function transition(
         },
         event.at,
         "writeback",
-        HOLD_TEXT.interrupted,
+        { kind: "held", text: HOLD_TEXT.interrupted },
       );
     }
     case "confirm": {
       if (state.tag !== "held") return fail("not-sendable");
       const run = { ...state.run, fields: { ...state.run.fields, ...event.outcomes } };
-      const left = fieldsOf(record.content).filter(
-        (field) => !record.landed.includes(field) && run.fields[field]?.status !== "landed",
-      );
+      const left = pendingFields(record).filter((field) => run.fields[field]?.status !== "landed");
       if (left.length === 0)
         return ok(
           { ...record, state: { tag: "sent", approval: state.approval, run, at: event.at } },
           event.at,
           "writeback",
-          "Confirmed in the LMS. Sent",
+          { kind: "confirmed" },
         );
-      return ok(
-        { ...record, state: { ...state, run } },
-        event.at,
-        "writeback",
-        "Checked the LMS: still unconfirmed",
-      );
+      return ok({ ...record, state: { ...state, run } }, event.at, "writeback", {
+        kind: "unconfirmed",
+      });
     }
   }
 }

@@ -298,10 +298,12 @@ const statusOf = (record: ChangeRecord, field: FieldKey): PreviewField["status"]
 };
 
 export const previewOf = (record: ChangeRecord, effect: CommentEffect): readonly PreviewField[] =>
-  fieldsOf(record.content).map((field) => ({
-    field,
-    label: FIELD_LABEL[field],
-    status: statusOf(record, field),
-    body: bodyOf(record, field),
-    note: noteFor(record, field, effect),
-  }));
+  fieldsOf(record.content)
+    .filter((field) => !record.skipped.includes(field))
+    .map((field) => ({
+      field,
+      label: FIELD_LABEL[field],
+      status: statusOf(record, field),
+      body: bodyOf(record, field),
+      note: noteFor(record, field, effect),
+    }));

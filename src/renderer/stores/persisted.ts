@@ -2,7 +2,15 @@ import * as v from "valibot";
 
 import type { AnswerLine, HandoffWork, Source } from "~/shared/agent/agent";
 import { fingerprintOf, type Fingerprint } from "~/shared/domain/approval";
-import type { ChangeRecord, Rationale, SendRun } from "~/shared/domain/change";
+import {
+  ACTIVITY_KINDS,
+  ACTIVITY_TEXT,
+  type ActivityEntry,
+  type ActivityKind,
+  type ChangeRecord,
+  type Rationale,
+  type SendRun,
+} from "~/shared/domain/change";
 import {
   isFindingType,
   type Finding,
@@ -201,6 +209,31 @@ const withLiveApproval = (record: ChangeRecord): ChangeRecord =>
     ? { ...record, state: { tag: "draft", approvalReset: null } }
     : record;
 
+const fixedActivityText = (kind: ActivityKind): string | undefined =>
+  kind === "retried" || kind === "outcomes" || kind === "held" ? undefined : ACTIVITY_TEXT[kind];
+
+const LEGACY_ACTIVITY_KIND: ReadonlyMap<string, ActivityKind> = new Map(
+  ACTIVITY_KINDS.flatMap((kind) => {
+    const label = fixedActivityText(kind);
+    return label === undefined ? [] : [[label, kind] as const];
+  }),
+);
+
+const SavedActivityEntrySchema = v.pipe(
+  v.object({
+    at,
+    actor: v.picklist(["you", "agent", "writeback"]),
+    kind: v.optional(v.picklist(ACTIVITY_KINDS)),
+    text,
+  }),
+  v.transform((entry): ActivityEntry => ({
+    at: entry.at,
+    actor: entry.actor,
+    kind: entry.kind ?? LEGACY_ACTIVITY_KIND.get(entry.text) ?? "outcomes",
+    text: entry.text,
+  })),
+) satisfies v.GenericSchema<unknown, ActivityEntry>;
+
 export const ChangeRecordSchema = v.object({
   id: ChangeIdSchema,
   school: SchoolIdSchema,
@@ -215,12 +248,13 @@ export const ChangeRecordSchema = v.object({
     ]),
   }),
   landed: v.array(FieldKeySchema),
+  skipped: v.optional(v.array(FieldKeySchema), []),
   seen: v.nullable(recordOf(v.array(text))),
   rationale: v.array(RationaleSchema),
   // A change saved before the agent's comment was kept lacks it. Outside the fingerprint, so filling it in keeps the approval.
   agentComment: v.optional(v.nullable(text), null),
   state: ChangeStateSchema,
-  activity: v.array(v.object({ at, actor: v.picklist(["you", "agent", "writeback"]), text })),
+  activity: v.array(SavedActivityEntrySchema),
 });
 
 // ---- Threads ----

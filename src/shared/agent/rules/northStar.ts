@@ -755,19 +755,6 @@ function* refuse({ scope }: Ask, text: string): Generator<AgentEffect, void> {
   };
 }
 
-const latestHandoff = (ask: Ask): NextWork | undefined => {
-  for (let at = ask.history.length - 1; at >= 0; at -= 1) {
-    const said = ask.history[at];
-    if (said?.role !== "user") continue;
-    const earlier: Ask = { ...ask, request: said.text, history: ask.history.slice(0, at) };
-    const intent = INTENTS.find((candidate) => candidate.matches(earlier));
-    if (!intent || intent === FOLLOW_UP || intent === FALLBACK) continue;
-    const handed = [...intent.run(earlier)].findLast((effect) => effect.type === "handoff");
-    if (handed) return handed;
-  }
-  return undefined;
-};
-
 const DRAFT_KIND: Readonly<Record<HandoffWork["kind"], ChangeRecord["content"]["kind"] | null>> = {
   reply: "reply",
   replies: "reply",
@@ -790,7 +777,7 @@ const draftsFrom = (scope: AgentScope, { course, work: handed }: NextWork): Answ
 
 function* followUp(ask: Ask): Generator<AgentEffect, void> {
   const { scope, request } = ask;
-  const latest = latestHandoff(ask);
+  const latest = ask.northStar.lastHandoff;
   if (!latest) return yield* fallback(ask);
   const code = codeOf(scope, latest.course);
   const drafts = draftsFrom(scope, latest);
@@ -836,7 +823,7 @@ function* followUp(ask: Ask): Generator<AgentEffect, void> {
 
 function* fallback(ask: Ask): Generator<AgentEffect, void> {
   const { scope, northStar } = ask;
-  const latest = latestHandoff(ask);
+  const latest = northStar.lastHandoff;
   const next = [
     ...new Set(
       [...(latest ? [latest] : []), ...northStar.next].flatMap((item) => askFor(scope, item) ?? []),
@@ -850,7 +837,7 @@ function* fallback(ask: Ask): Generator<AgentEffect, void> {
 
 function* sameFor(ask: Ask): Generator<AgentEffect, void> {
   const name = SAME_FOR.exec(ask.request)?.[1]?.trim();
-  if (!name || latestHandoff(ask)?.work.kind !== "reply") return yield* fallback(ask);
+  if (!name || ask.northStar.lastHandoff?.work.kind !== "reply") return yield* fallback(ask);
   yield* replies({ ...ask, request: `Reply to ${name}` });
 }
 

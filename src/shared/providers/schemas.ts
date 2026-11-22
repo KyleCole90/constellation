@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import {
   FIELD_KEYS,
+  SET_VALUES,
   type AttachmentDraft,
   type ChangeContent,
   type FieldKey,
@@ -10,6 +11,7 @@ import {
   type LmsError,
   type RemoteEntry,
   type RemoteState,
+  type SetValue,
 } from "../domain/change";
 import {
   CONTENT_ITEM_TYPES,
@@ -254,6 +256,8 @@ export const RemoteGradeSchema = v.object({
   attachments: EntriesSchema,
 }) satisfies v.GenericSchema<Extract<RemoteState, { kind: "grade" }>>;
 
+const SetValueSchema: v.GenericSchema<SetValue> = v.picklist(SET_VALUES);
+
 export const RemoteStateSchema: v.GenericSchema<RemoteState> = v.variant("kind", [
   RemoteGradeSchema,
   v.object({
@@ -270,7 +274,11 @@ export const RemoteStateSchema: v.GenericSchema<RemoteState> = v.variant("kind",
     migrations: EntriesSchema,
   }),
   v.object({ kind: v.literal("text-fix"), targetVersion: text, body: text }),
-  v.object({ kind: v.literal("item-set"), targetVersion: text, value: nullable(text) }),
+  v.object({
+    kind: v.literal("item-set"),
+    targetVersion: SetValueSchema,
+    value: nullable(v.union([SetValueSchema, IsoTimeSchema])),
+  }),
 ]);
 
 const TermNameSchema: v.GenericSchema<TermName | null> = nullable(

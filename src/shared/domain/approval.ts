@@ -28,6 +28,7 @@ export const fingerprintOf = (change: {
   content: ChangeContent;
   basis: Basis;
   landed: readonly FieldKey[];
+  skipped?: readonly FieldKey[];
 }): Fingerprint =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: a hash of the reviewed change is what the brand means
   hash53(
@@ -35,6 +36,9 @@ export const fingerprintOf = (change: {
       content: change.content,
       remote: change.basis.remote,
       landed: [...change.landed].sort(),
+      ...(change.skipped && change.skipped.length > 0
+        ? { skipped: [...change.skipped].sort() }
+        : {}),
     }),
   ) as Fingerprint;
 
