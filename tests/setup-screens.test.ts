@@ -311,7 +311,7 @@ describe("each stage's screen", () => {
   it("a manual row offers I handled it, and a dismissed row offers Restore", async () => {
     const course = await toReview();
     const manual = rowsOf(course).find((row) => row.status === "manual");
-    if (!manual) throw new Error("No manual row.");
+    if (!manual || manual.status !== "manual") throw new Error("No manual row.");
     expect(shown(reviewWith(course, manual.key), "finding-handled")).toBe(true);
     expect(rig.state().dismissFinding(course, manual.key, "No need")).toBeNull();
     const html = reviewWith(course, manual.key);
@@ -333,7 +333,8 @@ describe("each stage's screen", () => {
       const open = rowsOf(course).filter(isOpenRow);
       if (open.length === 0) break;
       for (const row of open)
-        if (row.status !== "fix") rig.state().dismissFinding(course, row.key, null);
+        if (row.status !== "fix" && row.status !== "fixed")
+          rig.state().dismissFinding(course, row.key, null);
       const fixes = open.flatMap((row) =>
         row.status === "fix" && row.change ? [row.change.id] : [],
       );

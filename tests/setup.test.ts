@@ -76,12 +76,14 @@ const setup = (patch: Partial<CourseSetup> = {}): CourseSetup => ({
   shell: {} as CourseShell,
   source: SOURCE,
   plan: PLAN,
+  draft: null,
   copy: id("copy"),
   publish: null,
   scan: null,
   check: null,
   resolved: {},
   fixes: {},
+  written: [],
   ...patch,
 });
 const finding = (
@@ -335,6 +337,7 @@ describe("reconcile", () => {
       create: [finding("a")],
       discard: [],
       fixes: {},
+      written: [],
     });
   });
 
@@ -362,6 +365,7 @@ describe("reconcile", () => {
           create: [],
           discard: [],
           fixes: { a: "fix" },
+          written: [],
         });
       });
     },
@@ -373,6 +377,7 @@ describe("reconcile", () => {
       create: [finding("a")],
       discard: [],
       fixes: {},
+      written: [],
     });
   });
 
@@ -390,6 +395,7 @@ describe("reconcile", () => {
         create: [],
         discard: ["fix"],
         fixes: {},
+        written: [],
       });
     },
   );
@@ -402,20 +408,22 @@ describe("reconcile", () => {
         create: [],
         discard: [],
         fixes: { a: "fix" },
+        written: [],
       });
       expect(
         reconcile(withFix(record, { resolved: DISMISSED }), [finding("a")], mapOf(record)),
-      ).toEqual({ create: [], discard: [], fixes: { a: "fix" } });
+      ).toEqual({ create: [], discard: [], fixes: { a: "fix" }, written: [] });
     },
   );
 
-  it("retires a sent fix whose passage is found again, keeps it as the record, and drafts the passage anew", () => {
+  it("retires a sent fix whose passage is found again, keeps it in written, and drafts the passage anew", () => {
     const record = chain.sent("fix");
     const found = finding("a");
     expect(reconcile(withFix(record), [found], mapOf(record))).toEqual({
       create: [found],
       discard: [],
-      fixes: { "a:fix": "fix" },
+      fixes: {},
+      written: ["fix"],
     });
   });
 
@@ -424,22 +432,23 @@ describe("reconcile", () => {
     const next = chain.draft("next");
     expect(
       reconcile(
-        setup({ fixes: { [k("a:fix")]: record.id, [k("a")]: next.id } }),
+        setup({ written: [record.id], fixes: { [k("a")]: next.id } }),
         [finding("a")],
         mapOf(record, next),
       ),
-    ).toEqual({ create: [], discard: [], fixes: { "a:fix": "fix", a: "next" } });
+    ).toEqual({ create: [], discard: [], fixes: { a: "next" }, written: ["fix"] });
   });
 
   it("leaves a sent fix alone when the finding found again is dismissed or has no fix to draft", () => {
     const record = chain.sent("fix");
     expect(
       reconcile(withFix(record, { resolved: DISMISSED }), [finding("a")], mapOf(record)),
-    ).toEqual({ create: [], discard: [], fixes: { a: "fix" } });
+    ).toEqual({ create: [], discard: [], fixes: { a: "fix" }, written: [] });
     expect(reconcile(withFix(record), [finding("a", null)], mapOf(record))).toEqual({
       create: [],
       discard: [],
       fixes: { a: "fix" },
+      written: [],
     });
   });
 
@@ -449,6 +458,7 @@ describe("reconcile", () => {
       create: [],
       discard: [],
       fixes: { a: "fix" },
+      written: [],
     });
   });
 
@@ -458,6 +468,7 @@ describe("reconcile", () => {
       create: [],
       discard: [],
       fixes: {},
+      written: [],
     });
   });
 
@@ -467,7 +478,7 @@ describe("reconcile", () => {
       const record = chain[state]("fix");
       expect(
         reconcile(withFix(record, { resolved: DISMISSED }), [finding("a")], mapOf(record)),
-      ).toEqual({ create: [], discard: ["fix"], fixes: {} });
+      ).toEqual({ create: [], discard: ["fix"], fixes: {}, written: [] });
     },
   );
 
@@ -485,7 +496,13 @@ describe("reconcile", () => {
       [finding("a")],
       mapOf(record),
     );
-    expect(reconcile(setup({ fixes: first.fixes }), [finding("a")], mapOf(record))).toEqual(first);
+    expect(
+      reconcile(
+        setup({ fixes: first.fixes, written: first.written }),
+        [finding("a")],
+        mapOf(record),
+      ),
+    ).toEqual(first);
   });
 });
 
@@ -535,6 +552,19 @@ describe("reviewRows", () => {
       mapOf(record),
     );
     expect(row).toMatchObject({ status: "fixed", finding: null, change: { id: "fix" } });
+  });
+
+  it("a retired sent fix in written stays as fixed alongside the new draft", () => {
+    const sent = chain.sent("fix");
+    const next = chain.draft("next");
+    const rows = reviewRows(
+      setup({ scan: scanned([finding("a")]), fixes: { [k("a")]: next.id }, written: [sent.id] }),
+      mapOf(sent, next),
+    );
+    expect(rows).toMatchObject([
+      { key: "a", status: "fix", change: { id: "next" } },
+      { key: "fix", status: "fixed", finding: null, change: { id: "fix" } },
+    ]);
   });
 
   it("shows how a finding was resolved", () => {

@@ -2,6 +2,7 @@ import { ArrowUpRight, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { ChangeId, LmsRef, SchoolId, ThreadId } from "~/shared/domain/ids";
+import type { FindingKey } from "~/shared/domain/scan";
 import { isOpenRow, type ReviewRow } from "~/shared/domain/setup";
 import { editableAfter } from "~/shared/domain/splice";
 import { cn } from "~/renderer/lib/utils";
@@ -58,11 +59,11 @@ function EditFix({ view, onDone }: { view: ChangeView; onDone: () => void }) {
 
 function DismissFix({
   course,
-  row,
+  findingKey,
   onDone,
 }: {
   course: LmsRef<"course">;
-  row: ReviewRow;
+  findingKey: FindingKey;
   onDone: () => void;
 }) {
   const [reason, setReason] = useState("");
@@ -70,7 +71,7 @@ function DismissFix({
   const dismiss = () => {
     const problem = workspaceStore()
       .getState()
-      .dismissFinding(course, row.key, reason || null);
+      .dismissFinding(course, findingKey, reason || null);
     setRefused(problem);
     if (!problem) onDone();
   };
@@ -154,7 +155,9 @@ function RowDetail({
         </p>
       )}
       {mode === "edit" && view && <EditFix view={view} onDone={() => setMode(null)} />}
-      {mode === "dismiss" && <DismissFix course={course} row={row} onDone={() => setMode(null)} />}
+      {mode === "dismiss" && row.finding && (
+        <DismissFix course={course} findingKey={row.finding.key} onDone={() => setMode(null)} />
+      )}
       {mode === null && (
         <div className="flex flex-wrap items-center justify-end gap-btn-gap px-card py-row-y empty:hidden">
           <Refusal text={refused} />
@@ -169,7 +172,7 @@ function RowDetail({
               Open in {vendor} <ArrowUpRight className="size-3" />
             </a>
           )}
-          {open && (
+          {open && row.finding && (
             <Button
               variant="ghost-muted"
               size="sm"
@@ -443,8 +446,10 @@ export function ReviewCard({
                 row={row}
                 opened={opened === row.key}
                 onOpen={onOpen}
-                checked={live.includes(row.key)}
-                onCheck={() => toggle(row.key)}
+                checked={row.status !== "fixed" && live.includes(row.key)}
+                onCheck={() => {
+                  if (row.status !== "fixed") toggle(row.key);
+                }}
                 selectable={selectable.has(row.key)}
               />
             ))}

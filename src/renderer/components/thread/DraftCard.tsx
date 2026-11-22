@@ -837,7 +837,7 @@ function GradeCard({
   const prior = record.basis.remote.kind === "grade" ? record.basis.remote.grade : null;
   const late = latePenalty(content);
   const raw = rawScore(content);
-  const overridden = content.override != null;
+  const overridden = content.override !== null;
   // With no rubric and no late penalty the grade is the score, so the card shows that one number once.
   const oneNumber = !content.rubric && !content.late && !overridden && !content.excused;
   const comment = useRef<HTMLTextAreaElement>(null);

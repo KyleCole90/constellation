@@ -338,7 +338,7 @@ export const createSetupActions = (host: SetupHost) => {
     const changes: Record<ChangeId, ChangeRecord> = { ...latestChanges() };
     const setup = setupOf(course);
     if (!setup?.plan) return null;
-    const written = Object.values(setup.fixes).flatMap((id) => {
+    const written = [...Object.values(setup.fixes), ...setup.written].flatMap((id) => {
       const record = changes[id];
       return record?.state.tag === "sent" && record.content.kind === "text-fix"
         ? [record.content]
@@ -380,6 +380,7 @@ export const createSetupActions = (host: SetupHost) => {
     const next: CourseSetup = {
       ...setup,
       fixes,
+      written: planned.written,
       scan: { copy: copy.id, at, version: content.version, findings },
     };
     const publish = next.publish ? changes[next.publish] : undefined;
@@ -543,12 +544,14 @@ export const createSetupActions = (host: SetupHost) => {
         shell,
         source: null,
         plan: null,
+        draft: null,
         copy: null,
         publish: null,
         scan: null,
         check: null,
         resolved: {},
         fixes: {},
+        written: [],
       };
       set({ setups: { ...get().setups, [course]: setup } });
       return thread;

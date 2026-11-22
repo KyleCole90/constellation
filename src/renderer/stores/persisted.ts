@@ -16,7 +16,7 @@ import {
   AssignmentSchema,
   ChangeContentSchema,
   ChangeIdSchema,
-  ConversationSchema,
+  ConversationFields,
   CopySourceSchema,
   CourseSchema,
   CourseShellSchema,
@@ -108,12 +108,17 @@ const ConnectionRecordSchema = v.object({
   ),
 }) satisfies v.GenericSchema<unknown, ConnectionRecord>;
 
+const SavedConversationSchema = v.object({
+  ...ConversationFields,
+  students: v.optional(v.array(lmsRef("student")), []),
+});
+
 const SchoolCacheSchema = v.object({
   courses: v.array(CourseSchema),
   assignments: v.array(AssignmentSchema),
   students: v.array(StudentSchema),
   submissions: v.array(SubmissionSchema),
-  conversations: v.array(ConversationSchema),
+  conversations: v.array(SavedConversationSchema),
   announcements: v.array(AnnouncementSchema),
 }) satisfies v.GenericSchema<unknown, SchoolCache>;
 
@@ -353,7 +358,7 @@ const CourseSetupSchema = v.object({
   shell: CourseShellSchema,
   source: v.nullable(CopySourceSchema),
   plan: v.nullable(TermPlanSchema),
-  draft: v.exactOptional(v.nullable(PlanDraftSchema)),
+  draft: v.optional(v.nullable(PlanDraftSchema), null),
   copy: v.nullable(ChangeIdSchema),
   publish: v.nullable(ChangeIdSchema),
   scan: v.nullable(
@@ -365,6 +370,7 @@ const CourseSetupSchema = v.object({
     FindingKeySchema,
   ),
   fixes: recordOf(ChangeIdSchema, FindingKeySchema),
+  written: v.optional(v.array(ChangeIdSchema), []),
 }) satisfies v.GenericSchema<unknown, CourseSetup>;
 
 // ---- Prefs ----

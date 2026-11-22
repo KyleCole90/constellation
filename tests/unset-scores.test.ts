@@ -1,5 +1,7 @@
+import * as v from "valibot";
 import { describe, expect, it } from "vite-plus/test";
 
+import { ChangeRecordSchema } from "~/renderer/stores/persisted";
 import { fingerprintOf } from "~/shared/domain/approval";
 import { blankAnnouncement, blankGrade, blankReply } from "~/shared/domain/blank";
 import {
@@ -245,10 +247,11 @@ describe("approving and sending a form with blanks", () => {
 });
 
 describe("a record saved before scores could be unset", () => {
-  const record: ChangeRecord = newDraft("ch-old", CONTENT_AT_549E11D, REMOTE_AT_549E11D);
+  const raw: ChangeRecord = newDraft("ch-old", CONTENT_AT_549E11D, REMOTE_AT_549E11D);
+  const record = v.parse(ChangeRecordSchema, raw);
 
   it("keeps the fingerprint its approval was given", () => {
-    expect(fingerprintOf(record)).toBe(FINGERPRINT_AT_549E11D);
+    expect(fingerprintOf(raw)).toBe(FINGERPRINT_AT_549E11D);
   });
 
   it("still writes its grade and rubric, with the stored 0 as a real score", () => {

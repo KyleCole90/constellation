@@ -524,9 +524,9 @@ describe("a reload", () => {
 describe("a fix", () => {
   const firstTextFix = (rig: StoreRig, course: Course) => {
     const row = rows(rig, course).find(
-      (candidate) => candidate.change?.content.kind === "text-fix",
+      (candidate) => candidate.status === "fix" && candidate.change?.content.kind === "text-fix",
     );
-    if (!row?.change) throw new Error("No text fix.");
+    if (!row?.change || row.status === "fixed") throw new Error("No text fix.");
     return { key: row.key, id: row.change.id };
   };
 
@@ -879,7 +879,7 @@ describe("a finding that comes back", () => {
     const handled = rows(rig, course).find(
       (row) => row.status === "handled" || row.status === "dismissed",
     );
-    if (!handled) throw new Error("Nothing was handled.");
+    if (!handled || handled.status === "fixed") throw new Error("Nothing was handled.");
 
     expect(await rig.clock.run(rig.state().restoreFinding(course, handled.key))).toBeNull();
     expect(record(rig, proposed.value).state.tag).toBe("discarded");
@@ -895,7 +895,7 @@ describe("a finding that comes back", () => {
       term: "Fall 2026",
     });
     const manual = rows(rig, course).find((row) => row.status === "manual");
-    if (!manual) throw new Error("No manual row.");
+    if (!manual || manual.status !== "manual") throw new Error("No manual row.");
     expect(rig.state().markHandled(course, manual.key)).toBeNull();
     rig.server.expireToken(LCC);
     expect(await rig.clock.run(rig.state().restoreFinding(course, manual.key))).toEqual(

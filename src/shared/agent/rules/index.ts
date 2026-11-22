@@ -435,7 +435,7 @@ const spread = (rubric: readonly RubricScore[], delta: number): Record<string, n
 };
 
 const setGrade = (change: ChangeRecord, content: GradeContent, final: number): AgentEffect => {
-  if (content.override != null)
+  if (content.override !== null)
     return decline(
       `You set this total to ${content.override} yourself. Change it on the form, or choose Use the scores.`,
     );

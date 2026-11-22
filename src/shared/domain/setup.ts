@@ -15,13 +15,7 @@ import type {
   TextFixContent,
 } from "./content";
 import type { ChangeId, IsoTime, LmsRef, SchoolId, ThreadId } from "./ids";
-import {
-  parseFindingKey,
-  retiredKey,
-  type Finding,
-  type FindingKey,
-  type FindingType,
-} from "./scan";
+import { parseFindingKey, type Finding, type FindingKey, type FindingType } from "./scan";
 import type { PlanDraft, TermPlan } from "./term";
 
 export type ChangeMap = Readonly<Record<ChangeId, ChangeRecord>>;
@@ -39,13 +33,14 @@ export interface CourseSetup {
   shell: CourseShell;
   source: CopySource | null;
   plan: TermPlan | null;
-  draft?: PlanDraft | null;
+  draft: PlanDraft | null;
   copy: ChangeId | null;
   publish: ChangeId | null;
   scan: { copy: ChangeId; at: IsoTime; version: string; findings: readonly Finding[] } | null;
   check: { at: IsoTime; version: string } | null;
   resolved: Readonly<Record<FindingKey, Resolution>>;
   fixes: Readonly<Record<FindingKey, ChangeId>>;
+  written: readonly ChangeId[];
 }
 
 export interface JobView {
@@ -190,17 +185,23 @@ export const reconcile = (
   setup: CourseSetup,
   findings: readonly Finding[],
   changes: ChangeMap,
-): { create: readonly Finding[]; discard: readonly ChangeId[]; fixes: CourseSetup["fixes"] } => {
+): {
+  create: readonly Finding[];
+  discard: readonly ChangeId[];
+  fixes: CourseSetup["fixes"];
+  written: readonly ChangeId[];
+} => {
   const found = new Map(findings.map((finding) => [finding.key, finding]));
   const discard: ChangeId[] = [];
   const fixes: Record<FindingKey, ChangeId> = {};
+  const written = setup.written.filter((id) => changes[id]?.state.tag === "sent");
   for (const key of fixKeys(setup.fixes)) {
     const id = setup.fixes[key];
     const record = id ? changes[id] : undefined;
     if (!record || record.state.tag === "discarded") continue;
-    if (record.state.tag === "sent" && found.get(key)?.fix && !setup.resolved[key])
-      fixes[retiredKey(key, record.id)] = record.id;
-    else if ((!found.has(key) || setup.resolved[key]) && canDropFix(record))
+    if (record.state.tag === "sent" && found.get(key)?.fix && !setup.resolved[key]) {
+      if (!written.includes(record.id)) written.push(record.id);
+    } else if ((!found.has(key) || setup.resolved[key]) && canDropFix(record))
       discard.push(record.id);
     else fixes[key] = record.id;
   }
@@ -210,24 +211,34 @@ export const reconcile = (
     ),
     discard,
     fixes,
+    written,
   };
 };
 
 type RowStatus = "manual" | "fix" | "checking" | "still-here" | "fixed" | "dismissed" | "handled";
 
-export interface ReviewRow {
-  key: FindingKey;
-  finding: Finding | null;
-  status: RowStatus;
-  change: ChangeRecord | null;
-  summary: ChangeSummary | null;
-  resolution: Resolution | null;
-}
+export type ReviewRow =
+  | {
+      key: FindingKey;
+      finding: Finding | null;
+      status: Exclude<RowStatus, "fixed">;
+      change: ChangeRecord | null;
+      summary: ChangeSummary | null;
+      resolution: Resolution | null;
+    }
+  | {
+      key: FindingKey | ChangeId;
+      finding: null;
+      status: "fixed";
+      change: ChangeRecord;
+      summary: ChangeSummary;
+      resolution: null;
+    };
 
 const row = (
   key: FindingKey,
   finding: Finding | null,
-  status: RowStatus,
+  status: Exclude<RowStatus, "fixed">,
   change: ChangeRecord | null,
   resolution: Resolution | null,
 ): ReviewRow => ({
@@ -237,6 +248,15 @@ const row = (
   change,
   summary: change && summarize(change),
   resolution,
+});
+
+const fixedRow = (key: FindingKey | ChangeId, change: ChangeRecord): ReviewRow => ({
+  key,
+  finding: null,
+  status: "fixed",
+  change,
+  summary: summarize(change),
+  resolution: null,
 });
 
 const liveChange = (
@@ -276,10 +296,14 @@ export const reviewRows = (setup: CourseSetup, changes: ChangeMap): readonly Rev
   const gone = fixKeys(setup.fixes).flatMap((key) => {
     const change = found.has(key) ? null : liveChange(setup, key, changes);
     return change
-      ? [row(key, null, change.state.tag === "sent" ? "fixed" : "fix", change, null)]
+      ? [change.state.tag === "sent" ? fixedRow(key, change) : row(key, null, "fix", change, null)]
       : [];
   });
-  return [...findings.map((finding) => rowOfFinding(setup, finding, changes)), ...gone];
+  const written = setup.written.flatMap((id) => {
+    const change = changes[id];
+    return change && change.state.tag !== "discarded" ? [fixedRow(id, change)] : [];
+  });
+  return [...findings.map((finding) => rowOfFinding(setup, finding, changes)), ...gone, ...written];
 };
 
 export const isOpenRow = ({ status }: ReviewRow): boolean => {

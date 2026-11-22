@@ -215,7 +215,7 @@ const totalNote = (content: GradeContent): string | null => {
   const penalty = latePenalty(content);
   const { late } = content;
   const raw = rawScore(content);
-  if (content.override != null)
+  if (content.override !== null)
     return raw === null
       ? "Your total."
       : `Your total, in place of the ${raw} the scores add up to.`;

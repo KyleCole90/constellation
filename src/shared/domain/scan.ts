@@ -8,7 +8,7 @@ import type {
   ItemSetIntent,
   TextFixContent,
 } from "./content";
-import type { Brand, ChangeId, LmsRef } from "./ids";
+import type { Brand, LmsRef } from "./ids";
 import { paragraphBounds, spliceAt } from "./splice";
 import {
   breakHolding,
@@ -47,9 +47,6 @@ export type FindingKey = Brand<string, "FindingKey">;
 export const parseFindingKey = (raw: string): FindingKey | null =>
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: a finding key is any non-empty string
   raw === "" ? null : (raw as FindingKey);
-export const retiredKey = (key: FindingKey, change: ChangeId): FindingKey =>
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- mint: no hash contains `:`, so no finding has this key
-  `${key}:${change}` as FindingKey;
 
 export interface Finding {
   key: FindingKey;

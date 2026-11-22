@@ -348,7 +348,9 @@ export const rowWord = (
 
 /** Rows a checkbox can act on: a fix still waiting on approval or on sending. */
 export const selectableKeys = (rows: readonly ReviewRow[]): readonly FindingKey[] =>
-  rows.filter(({ summary }) => summary?.canApprove || summary?.canSend).map((row) => row.key);
+  rows.flatMap((row) =>
+    row.status !== "fixed" && (row.summary?.canApprove || row.summary?.canSend) ? [row.key] : [],
+  );
 
 /**
  * Approval follows the checkboxes, and a batch never carries a risky change. Sending follows them too, unless none of the approved
