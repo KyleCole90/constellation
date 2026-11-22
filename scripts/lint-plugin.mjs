@@ -1,7 +1,10 @@
-import { dirname, normalize, relative, resolve } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { BASELINE, counts, readBaseline } from "./comments.mjs";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const MESSAGE =
   "Don't spawn `vp {{command}}` as a child process: `vp` doesn't forward SIGTERM, so vite outlives it and keeps the port (#138, #142). " +
@@ -234,19 +237,20 @@ const noDoubleAssertion = {
   },
 };
 
-const BRANDS = new Set([
-  "ChangeId",
-  "FindingKey",
-  "Fingerprint",
-  "IsoDate",
-  "IsoTime",
-  "LmsRef",
-  "RiskKey",
-  "SchoolHost",
-  "SchoolId",
-  "TermName",
-  "ThreadId",
-]);
+const declaredBrands = (srcDir) =>
+  new Set(
+    readdirSync(srcDir, { recursive: true, encoding: "utf8" })
+      .filter((file) => file.endsWith(".ts"))
+      .flatMap((file) =>
+        [
+          ...readFileSync(join(srcDir, file), "utf8").matchAll(
+            /^export type (\w+)(?:<[^>]*>)? = Brand</gm,
+          ),
+        ].map((match) => match[1]),
+      ),
+  );
+
+const BRANDS = declaredBrands(join(ROOT, "src"));
 
 const brandIn = (type) => {
   switch (type.type) {
@@ -321,7 +325,6 @@ const useIsoTime = {
   },
 };
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const allowedComments = readBaseline();
 
 const noComments = {
