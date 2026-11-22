@@ -1852,7 +1852,7 @@ const newCourseWithoutSync = async (t) => {
     !(await t.eval(offered("PHYS 120"))),
     "a course Canvas adds while the teacher is in another window is not offered yet",
   );
-  await t.eval(`{ const real = Date.now; Date.now = () => real() + 3 * 60_000; }`);
+  await t.eval(`window.__faultLab.expireFocusThrottle()`);
   await t.eval(`window.dispatchEvent(new Event("focus"))`);
   await t.waitFor(
     offered("PHYS 120"),

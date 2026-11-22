@@ -50,5 +50,9 @@ export const createAutoSync = (deps: AutoSyncDeps) => {
   const freshen = (): Promise<void> =>
     deps.now() - startedAt < FRESHEN_EVERY_MS ? Promise.resolve() : now();
 
-  return { now, freshen };
+  const expireThrottle = (): void => {
+    startedAt = -Infinity;
+  };
+
+  return { now, freshen, expireThrottle };
 };

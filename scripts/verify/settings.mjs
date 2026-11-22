@@ -26,6 +26,7 @@ const SECRETS = {
   aiAgain: "SENTINEL-aikey-again-17c4d0e9fb",
   fromSidebar: "SENTINEL-token-fromsidebar-a3d95e7c",
   fromDue: "SENTINEL-token-fromdue-5d02b8e17f",
+  real: "SENTINEL-token-real-4c8e2a91f0",
 };
 
 const READ_SURFACES = `async () => {
@@ -1864,104 +1865,24 @@ const reloadStays = async (t) => {
   await assertNoLeak(t, "after a reload");
 };
 
-const REAL_SCHOOL = {
-  id: "verify-real",
-  abbr: "VR",
-  name: "verify-real.instructure.com",
-  host: "verify-real.instructure.com",
-  provider: "canvas",
-};
+const REAL_HOST = "verify-real.instructure.com";
 
-const withSchools = async (t, saved, pick) => {
-  await t.eval(`(() => {
-    const stored = JSON.parse(${JSON.stringify(saved)});
-    stored.state.schools = (${pick})(stored.state.schools, ${JSON.stringify(REAL_SCHOOL)});
-    localStorage.setItem(${KEY}, JSON.stringify(stored));
-  })()`);
-  await t.reload();
-};
-
-const realSchoolSettings = async (t, shot) => {
-  const saved = await t.eval(`localStorage.getItem(${KEY})`);
+const mixedSchoolSettings = async (t, shot) => {
+  const add = '[data-testid="add-institution"]';
   const bodyHas = (text) =>
     t.eval(
       `document.querySelector(${JSON.stringify(BODY)})?.innerText.includes(${JSON.stringify(text)})`,
     );
 
-  await withSchools(t, saved, `(demo, real) => [real]`);
   await t.goto("/settings");
-  await t.waitFor(
-    `document.querySelector('${CARD(REAL_SCHOOL.id)}')`,
-    "the real school's card shows",
-  );
-  const card = await t.text(CARD(REAL_SCHOOL.id));
-  t.assert(
-    card.split(REAL_SCHOOL.host).length === 2,
-    "a school named by its address shows the address once on its card (#60)",
-    card,
-  );
-  const nav = await t.text(NAV);
-  t.assert(!nav.includes("Demo"), "with only a real school, Settings has no Demo section", nav);
-  await shot("real-school-settings");
-
-  await t.goto("/settings?section=demo");
-  await t.waitFor(`document.querySelector('${BODY} h2')`, "a Demo link opens Settings");
-  t.assert(!(await bodyHas("Failure lab")), "a Demo link shows no Failure lab for a real school");
-  t.assert(await t.has(CARD(REAL_SCHOOL.id)), "a Demo link opens Connections instead");
-  await shot("real-school-demo-link");
-
-  await openSection(t, "Appearance");
-  t.assert(!(await bodyHas("browser")), "Appearance doesn't talk about a browser");
-  await shot("real-school-appearance");
-
   await openSection(t, "Connections");
-  await t.click("Connect", { within: CARD(REAL_SCHOOL.id) });
+  await addAddress(t, REAL_HOST, { scope: add });
+  await enter(t, `${add} ${ROW_FIELD(REAL_HOST)}`, SECRETS.real);
+  await t.key("Enter");
   await t.waitFor(
-    `document.querySelector(${JSON.stringify(DIALOG_FIELD)})`,
-    "the token dialog opens",
-  );
-  const dialog = await t.text(DIALOG);
-  t.assert(
-    !dialog.includes("Use a demo token"),
-    "a real school isn't offered a demo token",
-    dialog,
-  );
-  await shot("real-school-token-dialog");
-  await t.key("Escape");
-
-  await t.eval(`(() => {
-    const stored = JSON.parse(${JSON.stringify(saved)});
-    stored.state.schools = [${JSON.stringify(REAL_SCHOOL)}];
-    stored.state.cache = {};
-    localStorage.setItem(${KEY}, JSON.stringify(stored));
-  })()`);
-  await t.reload();
-  await t.waitFor(
-    `document.querySelector('${CARD(REAL_SCHOOL.id)}')`,
-    "real school: Settings is back",
-  );
-  await t.key("Meta+k");
-  await t.waitFor(`document.querySelector('${DIALOG} input')`, "real school: the palette opens");
-  const listed = await t.text(DIALOG);
-  t.assert(
-    ["Reset demo data", "Grade Essay 2", "Reply to late-work emails", "Week 10"].every(
-      (demo) => !listed.includes(demo),
-    ),
-    "with only a real school, search lists no demo threads and no demo reset (#109)",
-    listed,
-  );
-  await shot("real-school-palette");
-  await t.type("Essay 2");
-  await t.waitFor(
-    `document.querySelector(${JSON.stringify(DIALOG)})?.innerText.includes("Nothing matches that.")`,
-    "with only a real school, searching a demo thread's name finds nothing (#109)",
-  );
-  await t.key("Escape");
-
-  await withSchools(t, saved, `(demo, real) => [real, ...demo]`);
-  await t.waitFor(
-    `document.querySelector('${CARD(REAL_SCHOOL.id)}')`,
-    "mixed schools: Settings is back",
+    `${cardStatus(REAL_HOST)} === "connected"`,
+    "mixed schools: the real school connects alongside the demo schools",
+    20_000,
   );
   await t.key("Meta+k");
   await t.waitFor(`document.querySelector('${DIALOG} input')`, "mixed schools: the palette opens");
@@ -1989,19 +1910,118 @@ const realSchoolSettings = async (t, shot) => {
   );
   const target = await t.text('[aria-label="School to expire"]');
   t.assert(
-    target !== REAL_SCHOOL.name,
+    target !== REAL_HOST,
     "beside a demo school, the Failure lab expires only demo schools",
     target,
   );
   await shot("mixed-schools-demo");
 
-  await t.eval(`localStorage.setItem(${KEY}, ${JSON.stringify(saved)})`);
-  await t.reload();
   await openSection(t, "Connections");
+  await t.click("Disconnect", { within: CARD(REAL_HOST) });
+  await t.click("Disconnect", { within: DIALOG });
+  await t.waitFor(
+    `${cardStatus(REAL_HOST)} === "disconnected"`,
+    "mixed schools: the real school disconnects",
+  );
+  await t.click("Remove school", { within: CARD(REAL_HOST) });
+  await t.click("Remove", { within: DIALOG });
+  await t.waitFor(
+    `!document.querySelector('${CARD(REAL_HOST)}')`,
+    "mixed schools: the real school is removed",
+  );
   await t.waitFor(
     `${cardStatus("lcc")} === "connected" && ${cardStatus("rsu")} === "connected"`,
     "the demo workspace comes back",
   );
+};
+
+const onlyRealSchoolSettings = async (t, shot) => {
+  const bodyHas = (text) =>
+    t.eval(
+      `document.querySelector(${JSON.stringify(BODY)})?.innerText.includes(${JSON.stringify(text)})`,
+    );
+
+  await t.fresh();
+  await t.viewport(1440, 900);
+  await t.goto("/welcome");
+  await t.eval(`sessionStorage.setItem("verify.demo", "off")`);
+  await t.reload();
+  await t.click("Set up");
+  await addAddress(t, REAL_HOST);
+  await enter(t, ROW_FIELD(REAL_HOST), SECRETS.real);
+  await t.click(`${ROW(REAL_HOST)} button[type="submit"]`);
+  await t.waitFor(
+    `${rowStatus(REAL_HOST)} === "connected"`,
+    "real school: Setup connects the real school",
+    20_000,
+  );
+  await t.click('input[name="ai-source"][value="none"]');
+  await t.click("Finish setup");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(SIDEBAR)})`,
+    "real school: enters the app",
+  );
+  await t.goto("/settings");
+  await t.waitFor(`document.querySelector('${CARD(REAL_HOST)}')`, "the real school's card shows");
+  const card = await t.text(CARD(REAL_HOST));
+  t.assert(
+    card.split(REAL_HOST).length === 2,
+    "a school named by its address shows the address once on its card (#60)",
+    card,
+  );
+  const nav = await t.text(NAV);
+  t.assert(!nav.includes("Demo"), "with only a real school, Settings has no Demo section", nav);
+  await shot("real-school-settings");
+
+  await t.goto("/settings?section=demo");
+  await t.waitFor(`document.querySelector('${BODY} h2')`, "a Demo link opens Settings");
+  t.assert(!(await bodyHas("Failure lab")), "a Demo link shows no Failure lab for a real school");
+  t.assert(await t.has(CARD(REAL_HOST)), "a Demo link opens Connections instead");
+  await shot("real-school-demo-link");
+
+  await openSection(t, "Appearance");
+  t.assert(!(await bodyHas("browser")), "Appearance doesn't talk about a browser");
+  await shot("real-school-appearance");
+
+  await openSection(t, "Connections");
+  await t.click("Disconnect", { within: CARD(REAL_HOST) });
+  await t.click("Disconnect", { within: DIALOG });
+  await t.waitFor(
+    `${cardStatus(REAL_HOST)} === "disconnected"`,
+    "real school: Disconnect leaves the school disconnected",
+  );
+  await t.click("Connect", { within: CARD(REAL_HOST) });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(DIALOG_FIELD)})`,
+    "the token dialog opens",
+  );
+  const dialog = await t.text(DIALOG);
+  t.assert(
+    !dialog.includes("Use a demo token"),
+    "a real school isn't offered a demo token",
+    dialog,
+  );
+  await shot("real-school-token-dialog");
+  await t.key("Escape");
+
+  await t.key("Meta+k");
+  await t.waitFor(`document.querySelector('${DIALOG} input')`, "real school: the palette opens");
+  const listed = await t.text(DIALOG);
+  t.assert(
+    ["Reset demo data", "Grade Essay 2", "Reply to late-work emails", "Week 10"].every(
+      (demo) => !listed.includes(demo),
+    ),
+    "with only a real school, search lists no demo threads and no demo reset (#109)",
+    listed,
+  );
+  await shot("real-school-palette");
+  await t.type("Essay 2");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(DIALOG)})?.innerText.includes("Nothing matches that.")`,
+    "with only a real school, searching a demo thread's name finds nothing (#109)",
+  );
+  await t.key("Escape");
+  await assertNoLeak(t, "after connecting a real school");
 };
 
 let seededComments = null;
@@ -2696,7 +2716,7 @@ export const run = async (t) => {
   await expireFlow(t, shot);
   await failureLab(t, shot);
   await reloadStays(t);
-  await realSchoolSettings(t, shot);
+  await mixedSchoolSettings(t, shot);
   await openSection(t, "Connections");
   await assertLayout(t, 1440, 900, "1440x900");
   await assertLayout(t, 1180, 800, "1180x800");
@@ -2712,4 +2732,5 @@ export const run = async (t) => {
   await demoShortcut(t, shot);
   await onboard(t);
   await noSchool(t, shot);
+  await onlyRealSchoolSettings(t, shot);
 };

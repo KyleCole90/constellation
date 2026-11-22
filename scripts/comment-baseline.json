@@ -104,6 +104,6 @@
   "src/renderer/stores/setup.ts": 23,
   "src/renderer/stores/storage-key.ts": 1,
   "src/renderer/stores/types.ts": 27,
-  "src/renderer/stores/workspace.ts": 116,
+  "src/renderer/stores/workspace.ts": 115,
   "src/renderer/writeback/writeback.ts": 19
 }

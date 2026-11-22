@@ -6,9 +6,11 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { createFileStorage } from "~/main/lms";
 import type { Fetch } from "~/main/providers/canvas";
+import { isDemoSchool } from "~/shared/domain/lms";
 import { invoker } from "~/shared/ipc";
-import { FAKE_SCHOOLS } from "~/shared/providers/fake-canvas/provider";
+import { FAKE_REAL_SCHOOL, FAKE_SCHOOLS } from "~/shared/providers/fake-canvas/provider";
 import { parseStoredLms } from "~/shared/providers/fake-canvas/server";
+import { Secret } from "~/shared/providers/provider";
 
 import { bridgedLms, fakeLmsHandlers } from "./fixtures/bridge";
 import { LCC } from "./fixtures/rig";
@@ -165,6 +167,32 @@ describe("the lms channels", () => {
     if (!stored) throw new Error("Main's fake would start fresh instead of loading its save.");
     const at = stored.submissions.find((entry) => entry.ref === submission)?.comments.at(-1)?.at;
     expect(Math.abs(Date.parse(at ?? "") - lms.clock.now())).toBeLessThan(1000);
+  });
+
+  it("offers a non-demo school backed by the fake LMS, while refusing unknown hosts", async () => {
+    const lms = bridgedLms();
+    const found = await lms.call("lms.schoolAt", { host: FAKE_REAL_SCHOOL.host });
+    expect(found).toEqual(FAKE_REAL_SCHOOL);
+    expect(isDemoSchool(FAKE_REAL_SCHOOL)).toBe(false);
+    expect(await lms.call("lms.schoolAt", { host: "elsewhere.instructure.com" })).toBeNull();
+    await lms.vault.enroll(FAKE_REAL_SCHOOL.id, {
+      kind: "bearer",
+      token: new Secret("verify-real-token-123"),
+    });
+    expect(await lms.call("lms.verify", { school: FAKE_REAL_SCHOOL })).toMatchObject({ ok: true });
+    expect(await lms.call("lms.courses", { school: FAKE_REAL_SCHOOL })).toEqual({
+      ok: true,
+      value: [],
+    });
+  });
+
+  it("keeps the fake rate-limit bucket usable when the clock moves back to demo time", async () => {
+    const lms = bridgedLms();
+    await lms.connect(LCC);
+    lms.clock.advance(23 * 24 * 60 * 60 * 1000);
+    expect((await lms.provider(LCC).courses()).ok).toBe(true);
+    lms.clock.advance(-23 * 24 * 60 * 60 * 1000);
+    expect((await lms.provider(LCC).courses()).ok).toBe(true);
   });
 });
 

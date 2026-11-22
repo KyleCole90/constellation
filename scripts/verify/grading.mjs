@@ -2193,13 +2193,6 @@ const discard = async (t) => {
     "Undo brings the grade back with your edit",
   );
   await t.waitFor(`location.search.startsWith("?row=")`, "Undo puts the row back in the URL");
-  const discardAt = `JSON.stringify([...document.querySelectorAll('[data-testid="card-actions"] button')].find((b) => b.innerText === "Discard")?.getBoundingClientRect())`;
-  for (let before = null, tries = 0; tries < 20; tries++) {
-    const now = await t.eval(discardAt);
-    if (now === before) break;
-    before = now;
-    await t.sleep(250);
-  }
   await t.click("Discard", { within: '[data-testid="card-actions"]' });
   await opensUndrafted(t, student, "a discarded grade stays on the student, undrafted (#66)");
   t.assert(

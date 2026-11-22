@@ -7,7 +7,7 @@ import {
   type CourseModule,
   type Migration,
 } from "~/shared/domain/content";
-import { isoTime, type LmsRef } from "~/shared/domain/ids";
+import { isoTime, parseSchoolHost, schoolIdOf, type LmsRef } from "~/shared/domain/ids";
 import type { School } from "~/shared/domain/lms";
 import { SendPermit } from "~/shared/domain/permit";
 import type {
@@ -35,6 +35,26 @@ export const FAKE_SCHOOLS: readonly School[] = SCHOOLS_SEED.map((school) => ({
   ...school,
   provider: "fake-canvas",
 }));
+
+const realSchoolAt = (raw: string): School => {
+  const parsed = parseSchoolHost(raw);
+  if (!parsed.ok) throw new Error(parsed.error);
+  const id = schoolIdOf(parsed.value);
+  if (id === null) throw new Error(`Invalid school id for ${parsed.value}`);
+  return {
+    id,
+    abbr: (parsed.value.split(".")[0] ?? parsed.value).slice(0, 4).toUpperCase(),
+    name: parsed.value,
+    host: parsed.value,
+    provider: "canvas",
+  };
+};
+
+export const FAKE_REAL_SCHOOL: School = realSchoolAt("verify-real.instructure.com");
+
+export const fakeSchoolAt = (host: string): School | null =>
+  FAKE_SCHOOLS.find((school) => school.host === host) ??
+  (host === FAKE_REAL_SCHOOL.host ? FAKE_REAL_SCHOOL : null);
 
 const CAPABILITIES: Capabilities = {
   messaging: true,

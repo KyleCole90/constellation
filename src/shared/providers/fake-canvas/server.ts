@@ -758,7 +758,10 @@ export class FakeCanvasServer implements FaultLab {
     const { capacity, refillPerSec } = this.#options.quota ?? { capacity: 700, refillPerSec: 10 };
     const now = this.#options.now();
     const bucket = this.#buckets.get(route.school) ?? { level: capacity, at: now };
-    const level = Math.min(capacity, bucket.level + ((now - bucket.at) / 1000) * refillPerSec);
+    const level = Math.min(
+      capacity,
+      bucket.level + (Math.max(0, now - bucket.at) / 1000) * refillPerSec,
+    );
     const cost = route.kind === "write" ? 10 : 1;
     if (level < cost) {
       this.#buckets.set(route.school, { level, at: now });

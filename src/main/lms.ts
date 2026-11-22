@@ -18,7 +18,12 @@ import { mainReadsAsText, type FileContent, type School } from "../shared/domain
 import { SendPermit } from "../shared/domain/permit";
 import type { Handlers } from "../shared/ipc";
 import { labSnapshot, type LabCommand } from "../shared/providers/fake-canvas/lab";
-import { createFakeCanvasDescriptor, FAKE_SCHOOLS } from "../shared/providers/fake-canvas/provider";
+import {
+  FAKE_REAL_SCHOOL,
+  FAKE_SCHOOLS,
+  createFakeCanvasDescriptor,
+  fakeSchoolAt,
+} from "../shared/providers/fake-canvas/provider";
 import { FakeCanvasServer, type StorageLike } from "../shared/providers/fake-canvas/server";
 import type {
   CredentialLease,
@@ -107,7 +112,9 @@ const NO_TERM_SETUP = {
 } as const satisfies Result<never, LmsError>;
 
 export const knownSchoolId = (kind: "fake" | "canvas", id: SchoolId): boolean =>
-  kind === "fake" ? FAKE_SCHOOLS.some((school) => school.id === id) : canvasSchoolAt(id)?.id === id;
+  kind === "fake"
+    ? id === FAKE_REAL_SCHOOL.id || FAKE_SCHOOLS.some((school) => school.id === id)
+    : canvasSchoolAt(id)?.id === id;
 
 export const lmsHandlers = (options: {
   lms:
@@ -174,6 +181,7 @@ export const lmsHandlers = (options: {
     return created;
   };
   const provider = (school: School): LmsProvider => {
+    if (world.kind === "fake") return fakeProvider(school);
     switch (school.provider) {
       case "canvas":
         return canvasProvider(school);
@@ -183,8 +191,9 @@ export const lmsHandlers = (options: {
   };
   const fakeProvider = (asked: School): LmsProvider => {
     const fake = theFake();
-    const school = FAKE_SCHOOLS.find((entry) => entry.id === asked.id && entry.host === asked.host);
-    if (!school) throw new Error("That isn't one of the demo schools.");
+    const school = fakeSchoolAt(asked.host);
+    if (!school || school.id !== asked.id || school.provider !== asked.provider)
+      throw new Error("That isn't one of the demo schools.");
     const existing = fake.providers.get(school.id);
     if (existing) return existing;
     const created = fake.descriptor.create({ school, lease: options.leaseFor(school.id) });
@@ -311,9 +320,7 @@ export const lmsHandlers = (options: {
 
   return {
     "lms.schoolAt": async ({ host }) =>
-      world.kind === "canvas"
-        ? canvasSchoolAt(host)
-        : (FAKE_SCHOOLS.find((school) => school.host === host) ?? null),
+      world.kind === "canvas" ? canvasSchoolAt(host) : fakeSchoolAt(host),
     "lms.verify": ({ school }) => provider(school).verify(),
     "lms.courses": ({ school }) => provider(school).courses(),
     "lms.assignments": ({ school, course }) => provider(school).assignments(course),
@@ -325,6 +332,8 @@ export const lmsHandlers = (options: {
     "lms.announcements": ({ school, course }) => provider(school).announcements(course),
     "lms.observe": ({ school, content }) => provider(school).observe(content),
     "lms.apply": ({ school, permit: { changeId, content, fields } }) => {
+      if (world.kind === "fake")
+        return fakeProvider(school).apply(SendPermit.relayed(changeId, content, fields));
       switch (school.provider) {
         case "canvas":
           return applyCanvas(school, changeId, content, fields);
@@ -339,7 +348,10 @@ export const lmsHandlers = (options: {
     "lms.migrations": ({ school, course }) => term(school, (setup) => setup.migrations(course)),
     "lms.samplePackages": ({ school }) => term(school, (setup) => setup.samplePackages()),
     "lms.pickPackage": async ({ school }) => {
-      const target = school.provider === "canvas" ? mintedCanvasSchool(school).school : null;
+      const target =
+        world.kind === "canvas" && school.provider === "canvas"
+          ? mintedCanvasSchool(school).school
+          : null;
       const path = await options.choosePackage();
       if (path === null) return { ok: true, value: null };
       const file = await packageAt(path);
