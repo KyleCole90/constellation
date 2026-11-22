@@ -12,25 +12,13 @@ import type { Migration } from "~/shared/domain/content";
 import { type ChangeId, type LmsRef, isoTime } from "~/shared/domain/ids";
 import { isOpenRow, reviewRows } from "~/shared/domain/setup";
 import { setupGroupKey } from "~/renderer/components/sidebar.logic";
-import type { WorkspaceStore } from "~/renderer/stores/workspace";
+import { WorkspaceProvider } from "~/renderer/stores/workspace";
 
 import { clickWitness } from "./fixtures/changes";
 import { LCC, RSU } from "./fixtures/rig";
 import { makeStoreRig, type StoreRig } from "./fixtures/store-rig";
 import { planFor, termOf } from "./fixtures/term";
 
-const holder = vi.hoisted(() => ({ store: null as unknown }));
-
-vi.mock("~/renderer/stores/workspace", async (actual) => {
-  const module = await actual<typeof import("~/renderer/stores/workspace")>();
-  const store = () => holder.store as WorkspaceStore;
-  return {
-    ...module,
-    workspaceStore: store,
-    useWorkspace: (selector: (state: ReturnType<WorkspaceStore["getState"]>) => unknown) =>
-      selector(store().getState()),
-  };
-});
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => () => undefined }));
 
 let rig: StoreRig;
@@ -51,8 +39,10 @@ const threadActions = (rigThread: ThreadActions["threadId"]): ThreadActions => (
   draftRows: async () => undefined,
   setUi: () => undefined,
 });
+const inStore = (...children: readonly ReactNode[]) =>
+  renderToString(createElement(WorkspaceProvider, { value: rig.store }, ...children));
 const inThread = (thread: ThreadActions["threadId"], ...children: readonly ReactNode[]) =>
-  renderToString(
+  inStore(
     createElement(ThreadActionsContext.Provider, { value: threadActions(thread) }, ...children),
   );
 const shown = (html: string, testId: string) => html.includes(`data-testid="${testId}"`);
@@ -147,12 +137,11 @@ const reviewWith = (course: LmsRef<"course">, opened: string) =>
 beforeEach(async () => {
   rig = await makeStoreRig();
   await rig.connectAll();
-  holder.store = rig.store;
 });
 
 describe("the offer", () => {
   const sidebarOffers = () =>
-    renderToString(createElement(SidebarOffers, { school: LCC, activeThread: null }));
+    inStore(createElement(SidebarOffers, { school: LCC, activeThread: null }));
 
   it("folds into one row in the sidebar, names the course once opened, and stays on the Due banner once started, with Continue and Cancel", () => {
     const shells = rig.state().newCourses[LCC] ?? [];
@@ -166,11 +155,11 @@ describe("the offer", () => {
     expect(opened).toContain(`>${COURSE_CODE}<`);
     expect(opened).toContain(">Empty<");
     expect(opened).toContain(">Set up<");
-    const due = renderToString(createElement(DueOffers));
+    const due = inStore(createElement(DueOffers));
     expect(due).toContain("Set up this course");
     expect(due).toContain(COURSE_CODE);
     rig.state().startSetup(offered().ref);
-    const started = renderToString(createElement(DueOffers));
+    const started = inStore(createElement(DueOffers));
     expect(started).toContain(`>${COURSE_CODE}<`);
     expect(started).toContain("Choosing a source");
     expect(started).toContain("Continue setup");

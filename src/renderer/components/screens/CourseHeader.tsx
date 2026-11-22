@@ -5,7 +5,7 @@ import type { LmsRef } from "~/shared/domain/ids";
 import type { Course } from "~/shared/domain/lms";
 import { cn } from "~/renderer/lib/utils";
 import { courseAt, selectCourse } from "~/renderer/stores/selectors";
-import { useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
+import { useWorkspace, useWorkspaceStore } from "~/renderer/stores/workspace";
 
 import { EmptyState } from "../EmptyState";
 import { SchoolBadge } from "../SchoolBadge";
@@ -22,9 +22,10 @@ const TABS = [
 ] as const;
 
 function SyncLine({ course }: { course: Course }) {
+  const store = useWorkspaceStore();
   const connection = useWorkspace((state) => state.connections[course.school]);
   const syncing = useWorkspace((state) => state.syncing[course.school] ?? false);
-  const now = workspaceStore().getState().now();
+  const now = store.getState().now();
   const at = connection?.lastSyncedAt ?? null;
   const error = connection?.syncError ?? null;
   const vendor = useWorkspace((state) => state.vendorLabelFor(course.school) ?? "your school");
@@ -54,7 +55,7 @@ function SyncLine({ course }: { course: Course }) {
       <Button
         size="sm"
         disabled={syncing}
-        onClick={() => void workspaceStore().getState().syncSchool(course.school)}
+        onClick={() => void store.getState().syncSchool(course.school)}
       >
         {syncing ? "Syncing" : "Sync now"}
       </Button>

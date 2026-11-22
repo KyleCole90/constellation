@@ -1,10 +1,16 @@
-import { useSyncExternalStore } from "react";
+import { createContext, useContext, useSyncExternalStore } from "react";
 
 import { errorReport, type Bridge } from "~/shared/ipc";
 
 /** The preload's bridge. The desktop app has one; the web demo, and tests in Node, don't. */
 export const desktopBridge: Bridge | undefined =
   typeof window === "undefined" ? undefined : window.constellation;
+
+const DesktopBridgeContext = createContext<Bridge | undefined>(desktopBridge);
+
+export const DesktopBridgeProvider = DesktopBridgeContext.Provider;
+
+export const useDesktopBridge = (): Bridge | undefined => useContext(DesktopBridgeContext);
 
 /**
  * Hands an error's type and stack to main, which scrubs them and decides whether a report leaves.

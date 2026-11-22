@@ -9,7 +9,12 @@ import {
   selectThreadUi,
 } from "~/renderer/stores/selectors";
 import type { Thread } from "~/renderer/stores/types";
-import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
+import {
+  useAiOn,
+  useWorkspace,
+  useWorkspaceStore,
+  workspaceStore,
+} from "~/renderer/stores/workspace";
 
 import { useSetupStep } from "../setup/SetupScreen";
 import { Button } from "../ui/button";
@@ -44,11 +49,12 @@ export function Composer({
     const { current } = selectThreadUi(state, thread.id);
     return selectSubmissionAt(state, thread.kind, current) !== null;
   });
+  const store = useWorkspaceStore();
   const navigate = useNavigate();
-  const saved = () => selectThreadUi(workspaceStore().getState(), thread.id).composer ?? "";
+  const saved = () => selectThreadUi(store.getState(), thread.id).composer ?? "";
   const [text, setText] = useState(saved);
   useCommitOnLeave(() => {
-    if (text !== saved()) workspaceStore().getState().setThreadUi(thread.id, { composer: text });
+    if (text !== saved()) store.getState().setThreadUi(thread.id, { composer: text });
   });
   const hints = composerHints({
     kind: thread.kind,

@@ -1,6 +1,6 @@
+import { createContext, useContext, useSyncExternalStore } from "react";
 import * as v from "valibot";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
-import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 
 import {
@@ -2812,7 +2812,17 @@ export const faultLab = (): FaultLab | null => {
   return lab;
 };
 
-export const useWorkspace = <T>(selector: (state: WorkspaceState) => T): T =>
-  useStore(workspaceStore(), selector);
+const WorkspaceContext = createContext<WorkspaceStore | null>(null);
+
+export const WorkspaceProvider = WorkspaceContext.Provider;
+
+export const useWorkspaceStore = (): WorkspaceStore =>
+  useContext(WorkspaceContext) ?? workspaceStore();
+
+export const useWorkspace = <T>(selector: (state: WorkspaceState) => T): T => {
+  const store = useWorkspaceStore();
+  const read = () => selector(store.getState());
+  return useSyncExternalStore(store.subscribe, read, read);
+};
 
 export const useAiOn = (): boolean => useWorkspace((state) => state.aiOn());

@@ -5,7 +5,12 @@ import type { ChangePatch, ChangeRecord, ChangeSummary } from "~/shared/domain/c
 import { isoTime, type ChangeId, type ThreadId } from "~/shared/domain/ids";
 import type { PreviewField } from "~/shared/domain/preview";
 import { NOT_STARTED, selectThreadUi, summarizeFor } from "~/renderer/stores/selectors";
-import { REJECTION_TEXT, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
+import {
+  REJECTION_TEXT,
+  useWorkspace,
+  useWorkspaceStore,
+  workspaceStore,
+} from "~/renderer/stores/workspace";
 
 import { showUndoToast } from "../SettleAction";
 import { useThreadActions } from "./context";
@@ -17,6 +22,7 @@ export interface ChangeView {
 }
 
 export const useChange = (id: ChangeId | null): ChangeView | null => {
+  const store = useWorkspaceStore();
   const record = useWorkspace((state) =>
     id ? (state.changes[id] ?? state.blanks[id] ?? null) : null,
   );
@@ -27,7 +33,7 @@ export const useChange = (id: ChangeId | null): ChangeView | null => {
   const online = useWorkspace((state) => state.online);
   return useMemo(() => {
     if (!record) return null;
-    const preview = workspaceStore().getState().previewFor(record.id);
+    const preview = store.getState().previewFor(record.id);
     if (!preview) return null;
     const summary = summarizeFor(record, status, online);
     return {
@@ -35,7 +41,7 @@ export const useChange = (id: ChangeId | null): ChangeView | null => {
       summary: saved ? summary : { ...summary, label: NOT_STARTED.label, canDiscard: false },
       preview,
     };
-  }, [record, status, online, saved]);
+  }, [store, record, status, online, saved]);
 };
 
 const nowIso = () => isoTime(workspaceStore().getState().now());

@@ -1,8 +1,9 @@
+import * as v from "valibot";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { AgentScope } from "~/shared/agent/agent";
 import type { ChangeId } from "~/shared/domain/ids";
 import { invoker, type Bridge } from "~/shared/ipc";
+import { lmsRef } from "~/shared/providers/schemas";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 import {
   selectGradebook,
@@ -12,25 +13,72 @@ import {
 } from "~/renderer/stores/selectors";
 
 import { clickWitness } from "./fixtures/changes";
-import { rulesMain, scopeOf } from "./fixtures/rules-main";
+import { rulesMain } from "./fixtures/rules-main";
 import { makeStoreRig } from "./fixtures/store-rig";
 import { threadId } from "./fixtures/ids";
 
 const QUEUE = threadId("t-queue");
 
+const SentScopeSchema = v.looseObject({
+  submissions: v.array(v.looseObject({ ref: v.string(), studentName: v.string() })),
+  assignments: v.array(
+    v.looseObject({
+      ref: v.string(),
+      rubric: v.unknown(),
+      missing: v.optional(v.number()),
+    }),
+  ),
+  courses: v.array(v.looseObject({ ref: v.string() })),
+  conversations: v.array(
+    v.looseObject({
+      ref: v.string(),
+      awaitingReply: v.optional(v.boolean()),
+    }),
+  ),
+  changes: v.array(
+    v.looseObject({
+      id: v.string(),
+      content: v.unknown(),
+      state: v.unknown(),
+    }),
+  ),
+  northStar: v.optional(
+    v.looseObject({
+      grades: v.array(
+        v.looseObject({
+          course: lmsRef("course"),
+          students: v.array(
+            v.looseObject({
+              name: v.string(),
+              percent: v.nullable(v.number()),
+              missing: v.number(),
+            }),
+          ),
+          counts: v.optional(v.unknown()),
+        }),
+      ),
+    }),
+  ),
+});
+
+type SentScope = v.InferOutput<typeof SentScopeSchema>;
+
 const wire = async () => {
-  const sent: { request: string; scope: AgentScope }[] = [];
+  const sent: { request: string; scope: SentScope }[] = [];
   const main = rulesMain({
-    before: (run) => (sent.push({ request: run.request, scope: scopeOf(run) }), null),
+    before: (run) => (
+      sent.push({ request: run.request, scope: v.parse(SentScopeSchema, run.scope) }),
+      null
+    ),
   });
   const bridge: Bridge = {
     fakes: false,
     invoke: invoker(async (channel, raw) => {
       if (channel !== "agent.run") throw new Error(`unexpected ${channel}`);
-      return main(raw);
+      return main.handle(raw);
     }),
   };
-  const rig = await makeStoreRig({ agent: createBridgeAgent(bridge, () => true) });
+  const rig = await makeStoreRig({ agent: main.agent(createBridgeAgent(bridge, () => true)) });
   await rig.connectAll();
   return { rig, sent };
 };

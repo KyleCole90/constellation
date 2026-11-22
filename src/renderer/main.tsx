@@ -5,10 +5,16 @@ import * as v from "valibot";
 
 import "./index.css";
 
-import { reportError } from "./desktop";
+import { DesktopBridgeProvider, desktopBridge, reportError } from "./desktop";
 import { keepFocusOnThePage } from "./lib/lostFocus";
 import { router } from "./router";
-import { NoisePatchSchema, faultLab, setAgentStandIn, workspaceStore } from "./stores/workspace";
+import {
+  NoisePatchSchema,
+  WorkspaceProvider,
+  faultLab,
+  setAgentStandIn,
+  workspaceStore,
+} from "./stores/workspace";
 
 const start = async () => {
   window.addEventListener("error", (event) => reportError(event.error));
@@ -42,7 +48,11 @@ const start = async () => {
   if (!root) throw new Error("index.html has no #root to render into.");
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
-      <RouterProvider router={router} />
+      <DesktopBridgeProvider value={desktopBridge}>
+        <WorkspaceProvider value={workspaceStore()}>
+          <RouterProvider router={router} />
+        </WorkspaceProvider>
+      </DesktopBridgeProvider>
     </React.StrictMode>,
   );
 };
