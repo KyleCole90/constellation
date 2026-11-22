@@ -1757,7 +1757,7 @@ const afterPublish = async (t) => {
   const published = await lms(
     t,
     `lms.term.shells.filter((s) => s.workflow_state === "available").map((s) => {
-      const item = lms.term.content[s.school + ":course:" + s.canvasId].items.find((i) => i.type === "assignment" && i.dueAt);
+      const item = lms.term.courseContent[s.school + ":course:" + s.canvasId].items.find((i) => i.type === "assignment" && i.dueAt);
       return { prefix: s.school + ":assignment:" + s.canvasId + ":", ref: s.school + ":assignment:" + s.canvasId + ":" + item.id, day: item.dueAt.slice(0, 10) };
     })`,
   );

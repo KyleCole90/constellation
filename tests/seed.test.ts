@@ -9,9 +9,10 @@ import { FINDING_TYPES } from "~/shared/domain/scan";
 import { SEED, type SeedPiece } from "~/shared/providers/fake-canvas/seed";
 import { termName } from "~/shared/domain/term";
 import { HOSTS, PACKAGES, SOURCES } from "~/shared/providers/fake-canvas/seed-term";
+import { LMS_STORAGE_KEY, parseStoredLms } from "~/shared/providers/fake-canvas/server";
 
 import { permitFor } from "./fixtures/provider-contract";
-import { LCC, RSU } from "./fixtures/rig";
+import { LCC, RSU, makeRig } from "./fixtures/rig";
 import { cartridgeContent, copyContent, makeTermRig, planFor } from "./fixtures/term";
 
 const IMSCC_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "imscc");
@@ -78,6 +79,96 @@ describe("the seed", () => {
 
   it("the demo clock starts where the mockup does", () => {
     expect(SEED.now).toBe("2026-10-30T11:42");
+  });
+
+  it("every seeded assignment has a unique canvasId within its school", () => {
+    const bySchool = new Map<string, Set<number>>();
+    for (const course of SEED.courses) {
+      const seen = bySchool.get(course.schoolId) ?? new Set<number>();
+      bySchool.set(course.schoolId, seen);
+      for (const assignment of course.assignments) {
+        expect(seen.has(assignment.canvasId), assignment.id).toBe(false);
+        seen.add(assignment.canvasId);
+      }
+    }
+  });
+});
+
+describe("fake Canvas server state", () => {
+  it("stores course content and sample packages in separate maps", async () => {
+    const rig = await makeRig();
+    const raw = await rig.server.stored();
+    expect(raw).not.toBeNull();
+    const parsed = parseStoredLms(JSON.parse(raw ?? "null"));
+    expect(parsed).not.toBeNull();
+    if (!parsed) return;
+    expect(Object.keys(parsed.term.courseContent).length).toBeGreaterThan(0);
+    expect(Object.keys(parsed.term.packageContent).sort()).toEqual(
+      PACKAGES.filter((pkg) => pkg.body !== null)
+        .map((pkg) => pkg.name)
+        .sort(),
+    );
+    expect(Object.keys(parsed.term.courseContent).some((key) => key.startsWith("pkg:"))).toBe(
+      false,
+    );
+    const corrupted = {
+      ...parsed,
+      term: {
+        ...parsed.term,
+        courseContent: {
+          ...parsed.term.courseContent,
+          "not-a-ref": { items: [], modules: [], tools: [] },
+        },
+      },
+    };
+    expect(parseStoredLms(corrupted)).toBeNull();
+  });
+
+  it("matches conversations to students by student ref, not display name", async () => {
+    const rig = await makeRig();
+    const course = rig.server.courses(LCC)[0];
+    if (!course) throw new Error("no LCC course");
+    const [firstStudent, secondStudent] = rig.server.students(course.ref);
+    if (!firstStudent || !secondStudent) throw new Error("not enough students");
+    const firstSub = rig.server.submissions(course.ref).find((s) => s.student === firstStudent.ref);
+    if (!firstSub) throw new Error("no submission for first student");
+
+    const raw = await rig.server.stored();
+    const state = parseStoredLms(JSON.parse(raw ?? "null"));
+    if (!state) throw new Error("stored state did not parse");
+    const template = state.conversations[0];
+    const opening = template?.messages[0];
+    if (!template || !opening) throw new Error("no seeded conversation");
+
+    state.conversations = [
+      {
+        ...template,
+        course: course.ref,
+        subject: "Name check",
+        from: secondStudent.name,
+        students: [firstStudent.ref],
+        messages: [{ ...opening, id: "by-ref", text: "matched by ref" }],
+      },
+      {
+        ...template,
+        course: course.ref,
+        subject: "Name check",
+        from: firstStudent.name,
+        students: [secondStudent.ref],
+        messages: [{ ...opening, id: "by-name", text: "matched by name" }],
+      },
+    ];
+    rig.storage.setItem(LMS_STORAGE_KEY, JSON.stringify(state));
+
+    const observed = await rig.provider(LCC).observe({
+      kind: "message",
+      target: firstSub.ref,
+      subject: "Name check",
+      body: "hello",
+    });
+    expect(observed.ok).toBe(true);
+    if (!observed.ok || observed.value.kind !== "message") return;
+    expect(observed.value.messages.map((m) => m.text)).toEqual(["matched by ref"]);
   });
 });
 

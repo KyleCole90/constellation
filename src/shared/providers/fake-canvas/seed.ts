@@ -43,7 +43,7 @@ export interface SeedAssignment {
   due: string;
   pts: number;
   statuses: string;
-  canvasId?: number;
+  canvasId: number;
   lateRate?: number;
   kind?: "video" | "discussion";
   work?: Readonly<Record<number, SeedWork>>;
@@ -147,6 +147,7 @@ export const SEED: SeedData = {
           due: "2026-10-22T23:59",
           pts: 20,
           statuses: "GGGGGGGGGGMGGG",
+          canvasId: 310433,
           fixedGrades: { "13": 12 },
           work: {
             "0": {
@@ -280,6 +281,7 @@ export const SEED: SeedData = {
           due: "2026-11-06T23:59",
           pts: 30,
           statuses: "--------------",
+          canvasId: 310460,
         },
       ],
       threads: [
@@ -391,6 +393,7 @@ export const SEED: SeedData = {
           due: "2026-10-23T23:59",
           pts: 20,
           statuses: "GGGGGGGGGGG",
+          canvasId: 310574,
         },
         {
           id: "e102-bib",
@@ -441,6 +444,7 @@ export const SEED: SeedData = {
           due: "2026-11-05T23:59",
           pts: 100,
           statuses: "-----------",
+          canvasId: 310599,
         },
       ],
       threads: [
@@ -525,6 +529,7 @@ export const SEED: SeedData = {
           due: "2026-10-25T23:59",
           pts: 10,
           statuses: "GGGMGGGGG",
+          canvasId: 310691,
           kind: "discussion",
           pieces: [
             {
@@ -717,6 +722,7 @@ export const SEED: SeedData = {
           due: "2026-10-20T23:59",
           pts: 25,
           statuses: "GGGGGGGGGGGM",
+          canvasId: 88201,
         },
         {
           id: "e210-close2",
@@ -769,6 +775,7 @@ export const SEED: SeedData = {
           due: "2026-11-04T17:00",
           pts: 150,
           statuses: "------------",
+          canvasId: 88224,
         },
       ],
       threads: [
@@ -916,6 +923,7 @@ export const SEED: SeedData = {
           due: "2026-11-06T23:59",
           pts: 75,
           statuses: "----------",
+          canvasId: 88263,
         },
       ],
       threads: [
@@ -1067,6 +1075,7 @@ export const SEED: SeedData = {
           due: "2026-11-04T23:59",
           pts: 10,
           statuses: "---------------",
+          canvasId: 88325,
         },
       ],
       threads: [
@@ -1146,9 +1155,3 @@ export const SEED: SeedData = {
     },
   ],
 };
-
-export const assignmentCanvasId = (
-  assignment: { canvasId?: number },
-  courseIndex: number,
-  assignmentIndex: number,
-): number => assignment.canvasId ?? 900000 + courseIndex * 100 + assignmentIndex;
