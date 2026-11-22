@@ -401,7 +401,7 @@ export const lmsHandlers = (options: {
       };
     },
     "lms.pickAttachment": async ({ school, submission }) => {
-      if (school.provider === "canvas") canvasProvider(school);
+      const target = school.provider === "canvas" ? mintedCanvasSchool(school).school : null;
       const path = await options.chooseAttachment();
       if (path === null) return { ok: true, value: null };
       const file = await attachmentAt(path);
@@ -410,8 +410,8 @@ export const lmsHandlers = (options: {
       if (bytes === null || bytes.byteLength === 0 || bytes.byteLength > MAX_ATTACHMENT_BYTES)
         return refusal(`The app couldn't read ${file.value.name}.`);
       const sha256 = sha256Of(bytes);
-      if (school.provider === "canvas")
-        pickedAttachments.set(`${school.id}\n${submission}\n${file.value.name}`, {
+      if (target)
+        pickedAttachments.set(`${target.id}\n${submission}\n${file.value.name}`, {
           path,
           size: bytes.byteLength,
           sha256,
