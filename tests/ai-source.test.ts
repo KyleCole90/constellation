@@ -51,13 +51,12 @@ const fakeMain = (answers: Answers) => {
 
 const claudeCodeRuns = (allowed: number) => {
   let runs = 0;
-  const answers: Answers = {
-    "agent.run": rulesMain({
-      spend: { tokens: 1200, usd: 0 },
-      before: () => (++runs > allowed ? { ok: false, reason: LIMIT_REASON, limited: true } : null),
-    }),
-  };
-  return { runs: () => runs, answers };
+  const main = rulesMain({
+    spend: { tokens: 1200, usd: 0 },
+    before: () => (++runs > allowed ? { ok: false, reason: LIMIT_REASON, limited: true } : null),
+  });
+  const answers: Answers = { "agent.run": main.handle };
+  return { runs: () => runs, answers, agent: main.agent };
 };
 
 describe("the Claude Code source", () => {
@@ -169,7 +168,7 @@ describe("a Claude Code thread", () => {
     const rig = await makeStoreRig({
       noKey: true,
       agentMain: main.agentMain,
-      agent: createBridgeAgent(main.bridge, () => true),
+      agent: runs.agent(createBridgeAgent(main.bridge, () => true)),
     });
     await rig.connectAll();
     await rig.state().chooseClaudeCode();

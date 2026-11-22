@@ -1,4 +1,4 @@
-import { desktopBridge } from "~/renderer/desktop";
+import { useDesktopBridge } from "~/renderer/desktop";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 
 import type { Bridge } from "~/shared/ipc";
@@ -39,7 +39,7 @@ interface Status {
  * The usage-data and crash-report choice main keeps, which the setup page and Settings both show and change. Null
  * until main answers, and always in the web demo, which sends nothing.
  */
-const createTelemetryChoice = (bridge: Bridge | undefined) => {
+const createTelemetryChoice = (bridge: Bridge) => {
   let status: Status | null = null;
   const listeners = new Set<() => void>();
   const set = (next: Status) => {
@@ -53,26 +53,42 @@ const createTelemetryChoice = (bridge: Bridge | undefined) => {
       return () => listeners.delete(listener);
     },
     load: async () => {
-      if (bridge) set(await bridge.invoke("telemetry.status", undefined));
+      set(await bridge.invoke("telemetry.status", undefined));
     },
     choose: async (enabled: boolean) => {
-      if (!bridge || !status) return;
+      if (!status) return;
       set({ ...status, enabled });
       await bridge.invoke("telemetry.choose", { enabled });
     },
   };
 };
 
-export const telemetryChoice = createTelemetryChoice(desktopBridge);
+const choices = new WeakMap<Bridge, ReturnType<typeof createTelemetryChoice>>();
 
-const useTelemetryChoice = (): Status | null => {
+export const telemetryChoiceFor = (bridge: Bridge) => {
+  let choice = choices.get(bridge);
+  if (!choice) {
+    choice = createTelemetryChoice(bridge);
+    choices.set(bridge, choice);
+  }
+  return choice;
+};
+
+const noopSubscribe = () => () => {};
+const noStatus = (): Status | null => null;
+
+const useTelemetryChoice = () => {
+  const bridge = useDesktopBridge();
+  const choice = bridge ? telemetryChoiceFor(bridge) : null;
   const status = useSyncExternalStore(
-    telemetryChoice.subscribe,
-    telemetryChoice.get,
-    telemetryChoice.get,
+    choice ? choice.subscribe : noopSubscribe,
+    choice ? choice.get : noStatus,
+    choice ? choice.get : noStatus,
   );
-  useEffect(() => void telemetryChoice.load(), []);
-  return status;
+  useEffect(() => {
+    void choice?.load();
+  }, [choice]);
+  return { choice, status };
 };
 
 /**
@@ -80,8 +96,8 @@ const useTelemetryChoice = (): Status | null => {
  * environment) says so instead of offering a choice that does nothing. Hidden in the web demo, which has nothing to turn off.
  */
 function TelemetryToggle() {
-  const status = useTelemetryChoice();
-  if (!status) return null;
+  const { choice, status } = useTelemetryChoice();
+  if (!choice || !status) return null;
   if (!status.available)
     return (
       <p data-testid="usage-data" className="text-meta text-muted-foreground">
@@ -94,7 +110,7 @@ function TelemetryToggle() {
         type="checkbox"
         className="mt-1 size-3.5 flex-none accent-primary"
         checked={status.enabled}
-        onChange={(event) => void telemetryChoice.choose(event.target.checked)}
+        onChange={(event) => void choice.choose(event.target.checked)}
       />
       <span className="flex flex-col">
         <span className="text-body font-medium">Send usage data and crash reports</span>
@@ -110,12 +126,13 @@ function TelemetryToggle() {
 
 /** The setup page's privacy step: the opt-out, then the whole notice behind a disclosure. */
 export function SetupPrivacy({ title }: { title: ReactNode }) {
-  const sends = useTelemetryChoice()?.available === true;
+  const bridge = useDesktopBridge();
+  const sends = useTelemetryChoice().status?.available === true;
   return (
     <section data-testid="setup-privacy" className="flex flex-col gap-3">
       {title}
       <p className="text-meta text-muted-foreground">
-        {!desktopBridge
+        {!bridge
           ? "This web demo sends nothing anywhere."
           : sends
             ? "There is no Constellation server. Only your school, Anthropic (with your key or through your Claude Code), and PostHog, for usage data and scrubbed crash reports, hear from this Mac. Constellation never asks for, sees or stores your Claude login."
@@ -133,17 +150,18 @@ export function SetupPrivacy({ title }: { title: ReactNode }) {
 }
 
 export function PrivacySection() {
+  const bridge = useDesktopBridge();
   return (
     <SettingsSection
       title="Privacy"
       description={
-        desktopBridge
+        bridge
           ? "There is no Constellation server. Here is everything that leaves this Mac."
           : "This web demo sends nothing anywhere. Here is what the desktop app sends."
       }
     >
       <SettingsCard data-testid="privacy-card">
-        {desktopBridge && (
+        {bridge && (
           <SettingsRow title="Usage data and crash reports">
             <TelemetryToggle />
           </SettingsRow>

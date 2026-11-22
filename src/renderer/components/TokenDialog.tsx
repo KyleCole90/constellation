@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { SchoolId } from "~/shared/domain/ids";
-import { useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
+import { useWorkspace, useWorkspaceStore } from "~/renderer/stores/workspace";
 
 import { TokenForm } from "./TokenForm";
 import { Dialog, DialogDescription, DialogPopup, DialogTitle } from "./ui/dialog";
@@ -29,11 +29,12 @@ const WORDS = {
 
 /** Mounted only while open, so its words stay put when connecting flips the school's status underneath it. */
 function TokenDialogBody({ school, onDone }: { school: SchoolId; onDone: () => void }) {
+  const store = useWorkspaceStore();
   const name = useWorkspace(
     (state) => state.schools.find((s) => s.id === school)?.name ?? "this school",
   );
   const [words] = useState(
-    () => WORDS[workspaceStore().getState().connections[school]?.status ?? "disconnected"],
+    () => WORDS[store.getState().connections[school]?.status ?? "disconnected"],
   );
   return (
     <>

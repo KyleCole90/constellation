@@ -7,7 +7,7 @@ import mark from "~/renderer/assets/mark.svg";
 import type { School } from "~/shared/domain/lms";
 import { cn } from "~/renderer/lib/utils";
 import type { AiSource } from "~/renderer/stores/types";
-import { useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
+import { useWorkspace, useWorkspaceStore, workspaceStore } from "~/renderer/stores/workspace";
 
 import { Brand, PRODUCT_NAME } from "../Brand";
 import { isMacDevice } from "../device";
@@ -262,9 +262,10 @@ export function SetupScreen() {
       .map((school) => school.name)
       .join(" and "),
   );
+  const store = useWorkspaceStore();
   const keySaved = useWorkspace((state) => state.aiSource === "key");
   const [choice, setChoice] = useState<AiSource | null>(() => {
-    const saved = workspaceStore().getState().aiSource;
+    const saved = store.getState().aiSource;
     return saved === "none" ? null : saved;
   });
   const claudeCode = useClaudeCode(choice === "claude-code");
