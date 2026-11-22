@@ -8,9 +8,10 @@ import type {
   LmsError,
   RemoteState,
   SetContent,
+  SetValue,
   TextFixContent,
 } from "../../shared/domain/change";
-import { copySignature, fieldText } from "../../shared/domain/change";
+import { SET_VALUE, copySignature, fieldText } from "../../shared/domain/change";
 import {
   isContentItemType,
   type ContentItem,
@@ -833,7 +834,7 @@ export const canvasTermSetup = (client: CanvasClient) => {
     }
   };
 
-  const valueOf = (targetVersion: string, value: string | null): Read<RemoteState> =>
+  const valueOf = (targetVersion: SetValue, value: SetValue | IsoTime | null): Read<RemoteState> =>
     Promise.resolve({ ok: true, value: { kind: "item-set", targetVersion, value } });
 
   const observe = async (content: SetupContent): Read<RemoteState> => {
@@ -881,10 +882,15 @@ export const canvasTermSetup = (client: CanvasClient) => {
           const read = await course(id);
           if (!read.ok) return read;
           return intent.set === "course-template"
-            ? valueOf("present", read.value.template ? "template" : "not-template")
+            ? valueOf(
+                SET_VALUE.present,
+                read.value.template ? SET_VALUE.template : SET_VALUE.notTemplate,
+              )
             : valueOf(
-                "present",
-                read.value.workflow_state === "available" ? "published" : "unpublished",
+                SET_VALUE.present,
+                read.value.workflow_state === "available"
+                  ? SET_VALUE.published
+                  : SET_VALUE.unpublished,
               );
         }
         const at = itemAt(content.target);
@@ -892,18 +898,24 @@ export const canvasTermSetup = (client: CanvasClient) => {
         const publish = publishOf(at);
         const path = publish && (publish.read ?? publish.path);
         if (path === null)
-          return valueOf("present", intent.set === "item-deleted" ? "present" : null);
+          return valueOf(
+            SET_VALUE.present,
+            intent.set === "item-deleted" ? SET_VALUE.present : null,
+          );
         const read = await one(path, v.object({ ...Published.entries, due_at: OptionalTime }));
-        if (!read.ok) return read.error.kind === "not_found" ? valueOf("deleted", "deleted") : read;
+        if (!read.ok)
+          return read.error.kind === "not_found"
+            ? valueOf(SET_VALUE.deleted, SET_VALUE.deleted)
+            : read;
         switch (intent.set) {
           case "due-at":
-            return valueOf("present", read.value.due_at);
+            return valueOf(SET_VALUE.present, read.value.due_at);
           case "item-published": {
             const shown = at.type === "file" ? !read.value.locked : read.value.published !== false;
-            return valueOf("present", shown ? "published" : "unpublished");
+            return valueOf(SET_VALUE.present, shown ? SET_VALUE.published : SET_VALUE.unpublished);
           }
           case "item-deleted":
-            return valueOf("present", "present");
+            return valueOf(SET_VALUE.present, SET_VALUE.present);
         }
       }
     }

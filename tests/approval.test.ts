@@ -161,6 +161,11 @@ describe("who started a change", () => {
     expect(editedByYou(step(undone, EDIT))).toBe(true);
     expect(editedByYou(step(approved(), EDIT))).toBe(true);
     expect(editedByYou(newChangeRecord({ ...draft, at: AT, by: "you" }))).toBe(true);
+    const reworded = {
+      ...step(draft, EDIT),
+      activity: step(draft, EDIT).activity.map((entry) => ({ ...entry, text: "Custom wording" })),
+    };
+    expect(editedByYou(reworded)).toBe(true);
   });
 });
 
@@ -527,7 +532,43 @@ describe("resolving a conflict by keeping their grade", () => {
     });
     expect(next.content.kind === "grade" && next.content.rubric).toBeNull();
     expect(fieldsOf(next.content)).not.toContain("rubric");
-    expect(next.landed).toContain("grade");
+    expect(next.skipped).toContain("grade");
+    expect(next.landed).not.toContain("grade");
+  });
+
+  it("editing a skipped field clears it from skipped so the new value can be sent", () => {
+    const resolved = step(conflicted(), {
+      type: "resolve-conflict",
+      choices: { grade: "use-theirs" },
+      remote: gradeRemote({ grade: 65 }),
+      at: AT,
+    });
+    const edited = step(resolved, {
+      type: "edit",
+      by: "you",
+      patch: { kind: "grade", points: 72 },
+      at: AT,
+    });
+    expect(edited.skipped).toEqual([]);
+    expect(edited.landed).toEqual([]);
+  });
+
+  it("skips declined fields when beginning a send instead of marking them landed", () => {
+    const resolved = step(conflicted(), {
+      type: "resolve-conflict",
+      choices: { grade: "use-theirs" },
+      remote: gradeRemote({ grade: 65 }),
+      at: AT,
+    });
+    const reapproved = step(resolved, {
+      type: "approve",
+      witness: clickWitness(resolved),
+      at: AT,
+    });
+    const sent = step(reapproved, { type: "begin-send", seen: {}, at: AT });
+    expect(sent.state.tag === "sending" && Object.keys(sent.state.run.fields)).toEqual(["comment"]);
+    expect(sent.landed).toEqual([]);
+    expect(sent.skipped).toEqual(["grade"]);
   });
 });
 

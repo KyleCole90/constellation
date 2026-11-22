@@ -213,6 +213,25 @@ describe("the send preview", () => {
     expect(comment.status).toBe("landed");
     expect(comment.note).toBeNull();
   });
+
+  it("omits fields declined during conflict resolution instead of showing them as landed", () => {
+    const clash = step(sending(), {
+      type: "conflict",
+      conflicts: [
+        { field: "grade", reason: "changed-by-other", basis: null, theirs: "65", mine: "18" },
+      ],
+      at: AT,
+    });
+    const resolved = step(clash, {
+      type: "resolve-conflict",
+      choices: { grade: "use-theirs" },
+      remote: gradeRemote({ grade: 65 }),
+      at: AT,
+    });
+    const fields = previewOf(resolved, "append");
+    expect(fields.map((field) => field.field)).toEqual(["comment"]);
+    expect(fields[0]?.status).toBe("proposed");
+  });
 });
 
 describe("the course copy preview", () => {

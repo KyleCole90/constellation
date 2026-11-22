@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import { hash53 } from "~/shared/domain/approval";
 import {
+  SET_VALUE,
   copySignature,
   finalGrade,
   scoredRubricPoints,
@@ -1212,25 +1213,26 @@ export class FakeCanvasServer implements FaultLab {
       const value =
         content.intent.set === "course-template"
           ? row.template
-            ? "template"
-            : "not-template"
+            ? SET_VALUE.template
+            : SET_VALUE.notTemplate
           : !("workflow_state" in row) || row.workflow_state === "available"
-            ? "published"
-            : "unpublished";
-      return { kind: "item-set", targetVersion: "present", value };
+            ? SET_VALUE.published
+            : SET_VALUE.unpublished;
+      return { kind: "item-set", targetVersion: SET_VALUE.present, value };
     }
     const found = this.#item(content.target);
-    if (!found) return { kind: "item-set", targetVersion: "deleted", value: "deleted" };
+    if (!found)
+      return { kind: "item-set", targetVersion: SET_VALUE.deleted, value: SET_VALUE.deleted };
     const { item } = found;
     const value =
       content.intent.set === "due-at"
         ? item.dueAt
         : content.intent.set === "item-published"
           ? item.published
-            ? "published"
-            : "unpublished"
-          : "present";
-    return { kind: "item-set", targetVersion: "present", value };
+            ? SET_VALUE.published
+            : SET_VALUE.unpublished
+          : SET_VALUE.present;
+    return { kind: "item-set", targetVersion: SET_VALUE.present, value };
   }
 
   #fireDemoConflict(submission: Submission): void {

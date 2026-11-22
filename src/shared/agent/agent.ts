@@ -123,6 +123,7 @@ export interface AgentScope {
     schools: readonly School[];
     now: IsoTime;
     next: readonly NextWork[];
+    lastHandoff?: NextWork;
     grades: readonly CourseGrades[];
     grading: {
       toGrade: readonly LmsRef<"submission">[];

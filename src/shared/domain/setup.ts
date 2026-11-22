@@ -1,4 +1,5 @@
 import {
+  SET_VALUE,
   mayStillLand,
   summarize,
   type ChangeRecord,
@@ -368,10 +369,10 @@ export const fixBasis = (
       ? item.dueAt
       : fix.intent.set === "item-published"
         ? item.published
-          ? "published"
-          : "unpublished"
-        : "present";
-  return { kind: "item-set", targetVersion: "present", value };
+          ? SET_VALUE.published
+          : SET_VALUE.unpublished
+        : SET_VALUE.present;
+  return { kind: "item-set", targetVersion: SET_VALUE.present, value };
 };
 
 const withAfter = (fix: Finding["fix"], after: string): Finding["fix"] =>

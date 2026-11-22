@@ -1168,6 +1168,29 @@ describe("a follow-up to the chat's last handoff", () => {
     expect(lastAgent(rig)?.text).toContain("I didn't catch that");
     expect(lastAgent(rig)?.replies?.[0]).not.toContain("Reply to Imani");
   });
+
+  it("reads the thread's last handoff directly without replaying earlier chat history", async () => {
+    const rig = await connected();
+    const eng = courseByCode(rig, "ENG 101");
+    const conversation = allOf(rig, "conversations").find((c) => c.course === eng.ref);
+    if (!conversation) throw new Error("ENG 101 has a conversation.");
+    const scope = scopeOf(rig);
+    const said = [
+      ...northStarStream(
+        { request: "make it friendlier", thread: { history: [] }, scope },
+        {
+          ...scope.northStar!,
+          lastHandoff: {
+            course: eng.ref,
+            work: { kind: "reply", conversation: conversation.ref },
+          },
+        },
+      ),
+    ].at(-1) as { text: string };
+    expect(said.text).toBe(
+      "I can't change a draft from this chat. Open it in your **ENG 101** thread and say what to change there.",
+    );
+  });
 });
 
 describe("what North Star answers", () => {

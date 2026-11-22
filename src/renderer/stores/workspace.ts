@@ -654,6 +654,30 @@ const targetScope = (state: WorkspaceData, ref: string): Narrow | null => {
   return null;
 };
 
+const lastHandoffOf = (state: WorkspaceData, thread: Thread): NextWork | undefined => {
+  for (let at = thread.messages.length - 1; at >= 0; at -= 1) {
+    const message = thread.messages[at];
+    if (message?.type !== "handoff") continue;
+    switch (message.work.kind) {
+      case "reply":
+        return { course: message.course, work: message.work };
+      case "replies":
+        return { course: message.course, work: { kind: "replies" } };
+      case "thread": {
+        const dest = state.threads[message.to];
+        if (dest?.kind === "grading")
+          return {
+            course: message.course,
+            work: { kind: "grading", assignment: dest.assignment },
+          };
+        if (dest?.kind === "announcement")
+          return { course: message.course, work: { kind: "announcement" } };
+      }
+    }
+  }
+  return undefined;
+};
+
 const scopeOf = (state: WorkspaceData, thread: Thread): Omit<AgentScope, "changes" | "focus"> => {
   const caches = Object.entries(state.cache).flatMap(([school, cache]) =>
     thread.school === null || thread.school === school ? [cache] : [],
@@ -2243,6 +2267,8 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             const courses = get().schools.flatMap(
               (school) => get().cache[school.id]?.courses ?? [],
             );
+            const lastHandoff =
+              current?.kind === "north-star-chat" ? lastHandoffOf(get(), current) : undefined;
             const northStar =
               current?.kind === "north-star-chat"
                 ? {
@@ -2252,6 +2278,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
                       schools: get().schools,
                       now: nowIso(),
                       next: nextWorkOf(get(), get().now()),
+                      ...(lastHandoff ? { lastHandoff } : {}),
                       grades: courses.map((course) => selectCourseGrades(get(), course.ref)),
                       grading: selectGradingRefs(get()),
                     },
