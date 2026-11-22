@@ -26,6 +26,7 @@ export const MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024;
 export interface AttachmentDraft {
   name: string;
   kb: number;
+  sha256?: string;
 }
 export interface GradeContent {
   kind: "grade";

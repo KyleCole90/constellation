@@ -3,6 +3,7 @@ import * as v from "valibot";
 import {
   finalGrade,
   scoredRubricPoints,
+  type AttachmentDraft,
   type ChangeContent,
   type FieldKey,
   type GradeContent,
@@ -387,7 +388,10 @@ export const createCanvasProvider = (deps: {
   fetch: Fetch;
   now(): number;
   packageFile(name: string): Promise<Blob | null>;
-  attachmentFile(submission: LmsRef<"submission">, name: string): Promise<Blob | null>;
+  attachmentFile(
+    submission: LmsRef<"submission">,
+    attachment: AttachmentDraft,
+  ): Promise<Blob | null>;
 }): LmsProvider => {
   const { school, lease } = deps;
   const origin = `https://${school.host}`;
@@ -723,11 +727,12 @@ export const createCanvasProvider = (deps: {
   const uploadAttachment = async (
     submissionPath: string,
     submission: LmsRef<"submission">,
-    name: string,
+    attachment: AttachmentDraft,
   ): Promise<FieldOutcome> => {
-    const file = await deps.attachmentFile(submission, name);
+    const file = await deps.attachmentFile(submission, attachment);
     if (!file) return refused("Choose the attachment again before sending.");
     const offlineOutcome: FieldOutcome = { status: "failed", error: OFFLINE.error };
+    const { name } = attachment;
     const params = new URLSearchParams({ name, size: String(file.size) });
     if (file.type) params.set("content_type", file.type);
 
@@ -808,7 +813,7 @@ export const createCanvasProvider = (deps: {
           case "attachment":
             return content.attachment === null
               ? refused("There is no attachment to send.")
-              : uploadAttachment(at.path, content.target, content.attachment.name);
+              : uploadAttachment(at.path, content.target, content.attachment);
           case "message":
           case "conversation":
           case "post":
@@ -1235,12 +1240,14 @@ export const createCanvasProvider = (deps: {
                     ),
                   )
                 : null,
-              comments: row.submission_comments.map((comment) => ({
-                id: String(comment.id),
-                mine: comment.author_id === mine.value,
-                text: comment.comment,
-                at: comment.created_at,
-              })),
+              comments: row.submission_comments
+                .filter((comment) => comment.comment !== "")
+                .map((comment) => ({
+                  id: String(comment.id),
+                  mine: comment.author_id === mine.value,
+                  text: comment.comment,
+                  at: comment.created_at,
+                })),
               body: bodyOf(row),
               page:
                 row.preview_url !== null && URL.parse(row.preview_url)?.origin === origin

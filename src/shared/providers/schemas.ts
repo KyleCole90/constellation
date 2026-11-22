@@ -464,6 +464,7 @@ export const LatePenaltySchema = v.object({
 export const AttachmentDraftSchema: v.GenericSchema<AttachmentDraft> = v.object({
   name: text,
   kb: count,
+  sha256: v.exactOptional(text),
 });
 
 export const GradeContentSchema = v.object({

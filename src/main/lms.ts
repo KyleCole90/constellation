@@ -1,5 +1,6 @@
+import { createHash } from "node:crypto";
 import { openAsBlob } from "node:fs";
-import { stat } from "node:fs/promises";
+import { readFile as readDiskFile, stat } from "node:fs/promises";
 import { basename } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
@@ -119,8 +120,10 @@ const attachmentAt = (path: string): Promise<Result<{ name: string; size: number
   fileAt(
     path,
     MAX_ATTACHMENT_BYTES,
-    (fileName) => `${fileName} is larger than the 50 MB Canvas attaches.`,
+    (fileName) => `${fileName} is larger than the 50 MB the app attaches.`,
   );
+
+const sha256Of = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 
 const NO_TERM_SETUP = {
   ok: false,
@@ -172,15 +175,25 @@ export const lmsHandlers = (options: {
     if (path === undefined || !(await packageAt(path)).ok) return null;
     return openAsBlob(path).catch(() => null);
   };
-  const pickedAttachments = new Map<string, string>();
+  const pickedAttachments = new Map<string, { path: string; size: number; sha256: string }>();
   const attachmentFile = async (
     school: SchoolId,
     submission: LmsRef<"submission">,
-    name: string,
+    attachment: AttachmentDraft,
   ): Promise<Blob | null> => {
-    const path = pickedAttachments.get(`${school}\n${submission}\n${name}`);
-    if (path === undefined || !(await attachmentAt(path)).ok) return null;
-    return openAsBlob(path).catch(() => null);
+    if (attachment.sha256 === undefined) return null;
+    const entry = pickedAttachments.get(`${school}\n${submission}\n${attachment.name}`);
+    if (!entry || entry.sha256 !== attachment.sha256) return null;
+    const bytes = await readDiskFile(entry.path).catch(() => null);
+    if (
+      bytes === null ||
+      bytes.byteLength === 0 ||
+      bytes.byteLength > MAX_ATTACHMENT_BYTES ||
+      bytes.byteLength !== entry.size ||
+      sha256Of(bytes) !== entry.sha256
+    )
+      return null;
+    return new Blob([bytes]);
   };
   const canvas = new Map<SchoolId, LmsProvider>();
   const mintedCanvasSchool = (school: School): { school: School; fetch: Fetch } => {
@@ -201,7 +214,7 @@ export const lmsHandlers = (options: {
       fetch,
       now,
       packageFile: (name) => packageFile(minted.id, name),
-      attachmentFile: (submission, name) => attachmentFile(minted.id, submission, name),
+      attachmentFile: (submission, attachment) => attachmentFile(minted.id, submission, attachment),
     });
     canvas.set(minted.id, created);
     return created;
@@ -393,13 +406,22 @@ export const lmsHandlers = (options: {
       if (path === null) return { ok: true, value: null };
       const file = await attachmentAt(path);
       if (!file.ok) return file;
+      const bytes = await readDiskFile(path).catch(() => null);
+      if (bytes === null || bytes.byteLength === 0 || bytes.byteLength > MAX_ATTACHMENT_BYTES)
+        return refusal(`The app couldn't read ${file.value.name}.`);
+      const sha256 = sha256Of(bytes);
       if (school.provider === "canvas")
-        pickedAttachments.set(`${school.id}\n${submission}\n${file.value.name}`, path);
+        pickedAttachments.set(`${school.id}\n${submission}\n${file.value.name}`, {
+          path,
+          size: bytes.byteLength,
+          sha256,
+        });
       return {
         ok: true,
         value: {
           name: file.value.name,
-          kb: Math.ceil(file.value.size / 1024),
+          kb: Math.ceil(bytes.byteLength / 1024),
+          sha256,
         } satisfies AttachmentDraft,
       };
     },

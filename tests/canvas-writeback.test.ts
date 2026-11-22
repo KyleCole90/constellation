@@ -6,7 +6,12 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { SEND_PRESS_MS } from "~/main/lms";
 import { canvasSchoolAt, createCanvasProvider } from "~/main/providers/canvas";
-import { fieldsOf, type ChangeContent, type GradeContent } from "~/shared/domain/change";
+import {
+  fieldsOf,
+  type AttachmentDraft,
+  type ChangeContent,
+  type GradeContent,
+} from "~/shared/domain/change";
 import { mintSendPermit } from "~/shared/domain/permit";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
 import { Secret, type LmsProvider } from "~/shared/providers/provider";
@@ -55,7 +60,10 @@ const grade = (patch: Partial<GradeContent> = {}): GradeContent => ({
 
 const canvasOver = (
   http: CanvasHttp,
-  attachmentFile: (submission: string, name: string) => Promise<Blob | null> = async () => null,
+  attachmentFile: (
+    submission: string,
+    attachment: AttachmentDraft,
+  ) => Promise<Blob | null> = async () => null,
 ) =>
   createCanvasProvider({
     school: SCHOOL,
@@ -401,7 +409,11 @@ describe("Canvas submission comment attachments", () => {
     const picked = await unwrap(
       provider.pickAttachment?.(SUBMISSION) ?? Promise.reject(new Error("no picker")),
     );
-    expect(picked).toEqual({ name: "feedback.pdf", kb: Math.ceil(bytes.byteLength / 1024) });
+    expect(picked).toMatchObject({
+      name: "feedback.pdf",
+      kb: Math.ceil(bytes.byteLength / 1024),
+      sha256: expect.any(String),
+    });
     expect(JSON.stringify(picked)).not.toContain(path);
 
     const content = grade({ comment: "See attached.", attachment: picked });
@@ -419,14 +431,58 @@ describe("Canvas submission comment attachments", () => {
     expect(after.kind === "grade" && after.comments).toEqual([
       expect.objectContaining({ mine: true, text: "See attached." }),
     ]);
+
+    const listed = await unwrap(provider.submissions(COURSE));
+    const maya = listed.find((row) => row.ref === SUBMISSION);
+    expect(maya?.comments).toEqual([
+      expect.objectContaining({ mine: true, text: "See attached." }),
+    ]);
+  });
+
+  it("refuses to send when the picked file changes on disk or is replaced by another file of the same name", async () => {
+    const original = new TextEncoder().encode("original feedback bytes");
+    const path = onDisk("feedback.pdf", original);
+    let nextPath: string | null = path;
+    const { http, lms, provider } = bridgedCanvas(async () => nextPath);
+    await lms.vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TOKEN) });
+
+    const picked = await unwrap(
+      provider.pickAttachment?.(SUBMISSION) ?? Promise.reject(new Error("no picker")),
+    );
+    if (!picked) throw new Error("expected picked attachment");
+    const content = grade({ comment: null, attachment: picked });
+
+    writeFileSync(path, new TextEncoder().encode("tampered feedback bytes"));
+    const tampered = await provider.apply(
+      await permitFor(provider, content, ["attachment"], SCHOOL.id),
+    );
+    expect(tampered.attachment).toMatchObject({
+      status: "failed",
+      error: { kind: "rejected" },
+    });
+    expect(http.uploads).toHaveLength(0);
+
+    writeFileSync(path, original);
+    const secondPath = onDisk("feedback.pdf", new TextEncoder().encode("different file same name"));
+    nextPath = secondPath;
+    await unwrap(provider.pickAttachment?.(SUBMISSION) ?? Promise.reject(new Error("no picker")));
+
+    const stale = await provider.apply(
+      await permitFor(provider, content, ["attachment"], SCHOOL.id),
+    );
+    expect(stale.attachment).toMatchObject({
+      status: "failed",
+      error: { kind: "rejected" },
+    });
+    expect(http.uploads).toHaveLength(0);
   });
 
   it("follows a same-origin create_success redirect and attaches the file", async () => {
     const bytes = new TextEncoder().encode("redirected upload");
     const http = new CanvasHttp();
     http.confirmRedirect = true;
-    const provider = canvasOver(http, async (submission, name) =>
-      submission === SUBMISSION && name === "notes.txt" ? new Blob([bytes]) : null,
+    const provider = canvasOver(http, async (submission, attachment) =>
+      submission === SUBMISSION && attachment.name === "notes.txt" ? new Blob([bytes]) : null,
     );
     const content = grade({ comment: null, attachment: { name: "notes.txt", kb: 1 } });
     const sent = await provider.apply(
