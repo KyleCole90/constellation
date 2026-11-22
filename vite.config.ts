@@ -28,6 +28,27 @@ const NO_POSTHOG_SDK = {
   message:
     "Analytics go through src/main/telemetry.ts's batch POST, so only its typed events and scrubbed crash reports leave the app. No PostHog SDK.",
 };
+
+interface RestrictedPath {
+  name: string;
+  importNames?: string[];
+  message: string;
+}
+
+interface RestrictedPattern {
+  group: string[];
+  message: string;
+}
+
+const restrictImports = (
+  options: { paths?: RestrictedPath[]; patterns?: RestrictedPattern[] } = {},
+): ["error", { paths?: RestrictedPath[]; patterns: RestrictedPattern[] }] => [
+  "error",
+  {
+    ...(options.paths ? { paths: options.paths } : {}),
+    patterns: [...(options.patterns ?? []), NO_POSTHOG_SDK],
+  },
+];
 const RENDERER_IS_UNTRUSTED =
   "The renderer is untrusted and gets no network or Node access. Ask main over IPC.";
 
@@ -102,7 +123,7 @@ export default defineConfig({
       "constellation/no-brand-cast": "error",
       "constellation/use-iso-time": "error",
       "constellation/no-comments": "error",
-      "eslint/no-restricted-imports": ["error", { patterns: [NO_POSTHOG_SDK] }],
+      "eslint/no-restricted-imports": restrictImports(),
       "typescript/no-explicit-any": "error",
       "typescript/switch-exhaustiveness-check": "error",
       "typescript/no-unnecessary-type-assertion": "error",
@@ -161,41 +182,33 @@ export default defineConfig({
       {
         files: ["src/renderer/**", "src/shared/**"],
         rules: {
-          "eslint/no-restricted-imports": [
-            "error",
-            {
-              paths: [
-                { name: "electron", message: ELECTRON_ONLY_IN_MAIN },
-                { name: "@anthropic-ai/sdk", message: ANTHROPIC_ONLY_IN_MAIN },
-                ...builtinModules.map((name) => ({ name, message: NODE_ONLY_IN_MAIN })),
-              ],
-              patterns: [
-                { group: ["electron/*"], message: ELECTRON_ONLY_IN_MAIN },
-                { group: ["@anthropic-ai/*"], message: ANTHROPIC_ONLY_IN_MAIN },
-                { group: ["node:*", "node:*/**"], message: NODE_ONLY_IN_MAIN },
-                NO_POSTHOG_SDK,
-              ],
-            },
-          ],
+          "eslint/no-restricted-imports": restrictImports({
+            paths: [
+              { name: "electron", message: ELECTRON_ONLY_IN_MAIN },
+              { name: "@anthropic-ai/sdk", message: ANTHROPIC_ONLY_IN_MAIN },
+              ...builtinModules.map((name) => ({ name, message: NODE_ONLY_IN_MAIN })),
+            ],
+            patterns: [
+              { group: ["electron/*"], message: ELECTRON_ONLY_IN_MAIN },
+              { group: ["@anthropic-ai/*"], message: ANTHROPIC_ONLY_IN_MAIN },
+              { group: ["node:*", "node:*/**"], message: NODE_ONLY_IN_MAIN },
+            ],
+          }),
         },
       },
       {
         files: ["src/main/**", "src/preload/**"],
         excludeFiles: ["src/main/index.ts", "src/preload/index.ts"],
         rules: {
-          "eslint/no-restricted-imports": [
-            "error",
-            {
-              paths: [
-                {
-                  name: "electron",
-                  importNames: ["ipcMain", "ipcRenderer"],
-                  message: IPC_THROUGH_THE_MAP,
-                },
-              ],
-              patterns: [NO_POSTHOG_SDK],
-            },
-          ],
+          "eslint/no-restricted-imports": restrictImports({
+            paths: [
+              {
+                name: "electron",
+                importNames: ["ipcMain", "ipcRenderer"],
+                message: IPC_THROUGH_THE_MAP,
+              },
+            ],
+          }),
         },
       },
       {

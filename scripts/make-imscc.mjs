@@ -3,6 +3,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateRawSync } from "node:zlib";
 
+import { SAMPLE_PACKAGES } from "../src/shared/providers/fake-canvas/sample-package-names.ts";
+
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", "imscc");
 
 const CRC_TABLE = new Uint32Array(256).map((_, n) => {
@@ -124,9 +126,8 @@ const assignmentSettings = (title, due) => `<?xml version="1.0" encoding="UTF-8"
 const page = (title, body) =>
   `<html><head><title>${title}</title></head><body>${body}</body></html>`;
 
-const PACKAGES = [
-  {
-    name: "comm110-lakeshore-fall2026-export.imscc",
+const PACKAGES = {
+  comm110: {
     title: "COMM 110 Public Speaking, Fall 2026",
     pages: [
       [
@@ -142,8 +143,7 @@ const PACKAGES = [
       ["Persuasive Speech", "2026-10-22"],
     ],
   },
-  {
-    name: "eng210-northgate-spring2026-export.imscc",
+  eng210: {
     title: "ENG 210 Intro to Literature, Spring 2026 (Northgate College)",
     pages: [
       [
@@ -158,17 +158,18 @@ const PACKAGES = [
       ],
     ],
   },
-  {
-    name: "damaged-export.imscc",
+  damaged: {
     title: "Damaged export",
     pages: [["syllabus", "Syllabus", "<p>This package is missing most of its files.</p>"]],
     settings: { start: "2026-01-20", conclude: null },
     missing: true,
   },
-];
+};
 
 mkdirSync(OUT, { recursive: true });
-for (const pkg of PACKAGES) {
+for (const { key, name } of SAMPLE_PACKAGES) {
+  const pkg = PACKAGES[key];
+  if (!pkg) throw new Error(`missing imscc definition for ${key}`);
   const resources = pkg.pages.map(([slug, title]) => ({
     id: `res_${slug}`,
     title,
@@ -201,6 +202,6 @@ for (const pkg of PACKAGES) {
       text: assignmentSettings(title, due),
     })),
   ];
-  writeFileSync(join(OUT, pkg.name), zip(entries));
-  console.log(`wrote ${pkg.name}`);
+  writeFileSync(join(OUT, name), zip(entries));
+  console.log(`wrote ${name}`);
 }

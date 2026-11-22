@@ -8,6 +8,7 @@ import {
   type Weekday,
 } from "~/shared/domain/term";
 
+import { SAMPLE_PACKAGES, type SamplePackageKey } from "./sample-package-names";
 import { LCC, RSU, SEED, seeded } from "./seed";
 
 interface RawLink {
@@ -499,9 +500,8 @@ export const SHELLS: readonly ShellSeed[] = [
   },
 ];
 
-export const PACKAGES: readonly PackageSeed[] = [
-  {
-    name: "comm110-lakeshore-fall2026-export.imscc",
+const PACKAGE_SEEDS: Readonly<Record<SamplePackageKey, Omit<PackageSeed, "name">>> = {
+  comm110: {
     kb: 2840,
     note: "COMM 110 as exported from Lakeshore at the end of Fall 2026.",
     hint: hintOf(FALL_2026(TUE_THU)),
@@ -525,8 +525,7 @@ export const PACKAGES: readonly PackageSeed[] = [
     }),
     damaged: false,
   },
-  {
-    name: "eng210-northgate-spring2026-export.imscc",
+  eng210: {
     kb: 4120,
     note: "ENG 210 from Northgate College, Spring 2026. Northgate is not connected here.",
     hint: hintOf(SPRING_2026(TUE_THU)),
@@ -555,8 +554,7 @@ export const PACKAGES: readonly PackageSeed[] = [
     }),
     damaged: false,
   },
-  {
-    name: "damaged-export.imscc",
+  damaged: {
     kb: 96,
     note: "A package that fails partway through, for trying the failure path.",
     hint: null,
@@ -566,7 +564,12 @@ export const PACKAGES: readonly PackageSeed[] = [
     body: null,
     damaged: true,
   },
-];
+};
+
+export const PACKAGES: readonly PackageSeed[] = SAMPLE_PACKAGES.map(({ key, name }) => ({
+  name,
+  ...PACKAGE_SEEDS[key],
+}));
 
 export const COURSE_COPY_ISSUES: readonly PackageIssueSeed[] = [
   {
