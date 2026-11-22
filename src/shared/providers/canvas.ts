@@ -29,7 +29,7 @@ const SCOPE_WORDS: Readonly<Record<string, string>> = {
   "url:DELETE|/api/v1/courses/:course_id/discussion_topics/:topic_id": "Delete an announcement",
   "url:PUT|/api/v1/files/:id": "Show files to students",
 };
-export const CANVAS_SCOPES = Object.keys(SCOPE_WORDS);
+export const CANVAS_USED_PERMISSIONS = Object.keys(SCOPE_WORDS);
 
 export const CANVAS_FACE = {
   vendorLabel: "Canvas",

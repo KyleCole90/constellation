@@ -28,7 +28,7 @@ import {
   trustedSender,
   windowOptions,
 } from "./security";
-import { createFileStorage, fakeServer, lmsHandlers } from "./lms";
+import { createFileStorage, fakeServer, knownSchoolId, lmsHandlers } from "./lms";
 import { anthropicAgent } from "./providers/anthropic";
 import { claudeCodeAgent } from "./providers/claude-code";
 import { jsonFile } from "./json-file";
@@ -123,7 +123,9 @@ const start = async () => {
     );
     reportMain(reason);
   });
-  const vault = createVault(join(userData, "vault.json"), safeStorage);
+  const vault = createVault(join(userData, "vault.json"), safeStorage, (id) =>
+    knownSchoolId(FAKE_ONLY ? "fake" : "canvas", id),
+  );
   const keyAgent = anthropicAgent({
     lease: vault.lease("ai-key"),
     fetch: (url, init) => net.fetch(url, init),

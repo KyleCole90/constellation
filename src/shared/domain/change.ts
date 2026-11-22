@@ -8,7 +8,6 @@ import {
   type TextFixContent,
 } from "./content";
 import { applySplice, spliceState } from "./splice";
-import { keysOf } from "../keys-of";
 import type { DateShiftOptions, TermPlan } from "./term";
 
 export interface RubricScore {
@@ -765,7 +764,7 @@ export const applyPatch = (content: ChangeContent, patch: ChangePatch): ChangeCo
 };
 
 const landedFieldsOf = (run: SendRun): readonly FieldKey[] =>
-  keysOf(run.fields).filter((field) => run.fields[field]?.status === "landed");
+  FIELD_KEYS.filter((field) => run.fields[field]?.status === "landed");
 
 const absorbRun = (record: ChangeRecord, run: SendRun, at: IsoTime): ChangeRecord => {
   const fresh = landedFieldsOf(run).filter((field) => !record.landed.includes(field));
@@ -1127,11 +1126,10 @@ export function transition(
     case "field-outcomes": {
       if (state.tag !== "sending") return fail("not-sending");
       const fields = { ...state.run.fields, ...event.outcomes };
-      const text = keysOf(event.outcomes)
-        .map((field) => {
-          const run = event.outcomes[field];
-          return run ? outcomeText(field, run) : null;
-        })
+      const text = FIELD_KEYS.map((field) => {
+        const run = event.outcomes[field];
+        return run ? outcomeText(field, run) : null;
+      })
         .filter((line) => line !== null)
         .join(", ");
       return ok(

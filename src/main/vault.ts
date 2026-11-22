@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import * as v from "valibot";
 
+import type { SchoolId } from "../shared/domain/ids";
 import { VaultKeySchema } from "../shared/ipc";
 import { Secret, type CredentialLease, type VaultKey } from "../shared/providers/provider";
 
@@ -20,9 +21,17 @@ const STAND_IN = "stand-in:";
 const standInFor = (token: string) =>
   `${STAND_IN}${createHash("sha256").update(token).digest("hex")}`;
 
-export const createVault = (file: string, cipher: Cipher) => {
+export const createVault = (
+  file: string,
+  cipher: Cipher,
+  knownSchool: (id: SchoolId) => boolean,
+) => {
   const { read, write } = jsonFile<Entries>(file, Entries, {});
   const issued = new Map<VaultKey, Map<string, string>>();
+  const isKnown = (key: VaultKey): boolean => key === "ai-key" || knownSchool(key);
+  const checkKey = (key: VaultKey): void => {
+    if (!isKnown(key)) throw new Error("Unknown school for vault key.");
+  };
   const tokenOf = async (key: VaultKey): Promise<string | null> => {
     const sealed = read()[key];
     if (sealed === undefined) return null;
@@ -31,6 +40,7 @@ export const createVault = (file: string, cipher: Cipher) => {
 
   return {
     enroll: async (key: VaultKey, token: string) => {
+      checkKey(key);
       if (!(await cipher.isAsyncEncryptionAvailable()))
         throw new Error("This Mac can't encrypt the token, so it wasn't saved.");
       const restored = issued.get(key)?.get(token);
@@ -39,13 +49,18 @@ export const createVault = (file: string, cipher: Cipher) => {
       const sealed = await cipher.encryptStringAsync(restored ?? token);
       write({ ...read(), [key]: sealed.toString("base64") });
     },
-    keys: (): VaultKey[] => Object.keys(read()).filter((key) => v.is(VaultKeySchema, key)),
+    keys: (): VaultKey[] =>
+      Object.keys(read())
+        .filter((key) => v.is(VaultKeySchema, key))
+        .filter(isKnown),
     forget: (key: VaultKey) => {
+      checkKey(key);
       const { [key]: _forgotten, ...rest } = read();
       write(rest);
       issued.delete(key);
     },
     standIn: async (key: VaultKey): Promise<string | null> => {
+      checkKey(key);
       const saved = await tokenOf(key);
       if (saved === null) return null;
       const standIn = standInFor(saved);

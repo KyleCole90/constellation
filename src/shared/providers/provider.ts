@@ -52,7 +52,7 @@ export interface Capabilities {
 
 export interface AccountInfo {
   displayName: string;
-  scopes: readonly string[];
+  usedPermissions: readonly string[];
 }
 
 export type FieldOutcome = Exclude<FieldRun, { status: "pending" }>;

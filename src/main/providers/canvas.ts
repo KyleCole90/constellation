@@ -31,7 +31,7 @@ import {
   type SubmissionFile,
 } from "../../shared/domain/lms";
 import { SendPermit } from "../../shared/domain/permit";
-import { CANVAS_FACE, CANVAS_SCOPES } from "../../shared/providers/canvas";
+import { CANVAS_FACE, CANVAS_USED_PERMISSIONS } from "../../shared/providers/canvas";
 import { refParts, refs } from "../../shared/providers/canvas-refs";
 import {
   revealSecret,
@@ -191,6 +191,7 @@ const AnnouncementRow = v.object({
   title: v.string(),
   message: v.nullish(v.string(), ""),
   posted_at: OptionalTime,
+  author: v.nullish(v.object({ id: v.nullish(Id, null) }), null),
 });
 
 const ENTITIES: Readonly<Record<string, string>> = {
@@ -872,6 +873,8 @@ export const createCanvasProvider = (deps: {
       }
       case "announcement":
         return inCourse(content.target, async (id) => {
+          const mine = await me();
+          if (!mine.ok) return mine;
           const rows = await list(
             `/courses/${id}/discussion_topics?only_announcements=true`,
             AnnouncementRow,
@@ -884,7 +887,7 @@ export const createCanvasProvider = (deps: {
               targetVersion: "course",
               posts: rows.value.map((row) => ({
                 id: String(row.id),
-                mine: true,
+                mine: row.author?.id === mine.value,
                 text: `${row.title}\n\n${paragraphsOf(row.message).join("\n\n")}`,
               })),
             },
@@ -996,7 +999,10 @@ export const createCanvasProvider = (deps: {
     verify: async () => {
       const self = await one("/users/self", Self);
       return self.ok
-        ? { ok: true, value: { displayName: self.value.name, scopes: CANVAS_SCOPES } }
+        ? {
+            ok: true,
+            value: { displayName: self.value.name, usedPermissions: CANVAS_USED_PERMISSIONS },
+          }
         : self;
     },
     courses: async () => {

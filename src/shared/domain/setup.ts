@@ -15,8 +15,13 @@ import type {
   TextFixContent,
 } from "./content";
 import type { ChangeId, IsoTime, LmsRef, SchoolId, ThreadId } from "./ids";
-import { retiredKey, type Finding, type FindingKey, type FindingType } from "./scan";
-import { keysOf } from "../keys-of";
+import {
+  parseFindingKey,
+  retiredKey,
+  type Finding,
+  type FindingKey,
+  type FindingType,
+} from "./scan";
 import type { PlanDraft, TermPlan } from "./term";
 
 export type ChangeMap = Readonly<Record<ChangeId, ChangeRecord>>;
@@ -178,6 +183,9 @@ export const canCancelSetup = (setup: CourseSetup, changes: ChangeMap): boolean 
   return !copy || copy.state.tag === "discarded" || canDropFix(copy);
 };
 
+const fixKeys = (fixes: CourseSetup["fixes"]): readonly FindingKey[] =>
+  Object.keys(fixes).flatMap((raw) => parseFindingKey(raw) ?? []);
+
 export const reconcile = (
   setup: CourseSetup,
   findings: readonly Finding[],
@@ -186,7 +194,7 @@ export const reconcile = (
   const found = new Map(findings.map((finding) => [finding.key, finding]));
   const discard: ChangeId[] = [];
   const fixes: Record<FindingKey, ChangeId> = {};
-  for (const key of keysOf(setup.fixes)) {
+  for (const key of fixKeys(setup.fixes)) {
     const id = setup.fixes[key];
     const record = id ? changes[id] : undefined;
     if (!record || record.state.tag === "discarded") continue;
@@ -265,7 +273,7 @@ const rowOfFinding = (setup: CourseSetup, finding: Finding, changes: ChangeMap):
 export const reviewRows = (setup: CourseSetup, changes: ChangeMap): readonly ReviewRow[] => {
   const findings = setup.scan?.findings ?? [];
   const found = new Set(findings.map((finding) => finding.key));
-  const gone = keysOf(setup.fixes).flatMap((key) => {
+  const gone = fixKeys(setup.fixes).flatMap((key) => {
     const change = found.has(key) ? null : liveChange(setup, key, changes);
     return change
       ? [row(key, null, change.state.tag === "sent" ? "fixed" : "fix", change, null)]
