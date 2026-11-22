@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # Electron is pinned exactly and updates in its own PR, so a new major is never buried in a group.
+  # Electron and vite-plus update in their own PRs: an Electron major is never buried in a group, and docs/adr/0014 says why vite-plus is apart.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -8,7 +8,7 @@ updates:
     groups:
       npm:
         patterns: ["*"]
-        exclude-patterns: ["electron"]
+        exclude-patterns: ["electron", "vite-plus"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
