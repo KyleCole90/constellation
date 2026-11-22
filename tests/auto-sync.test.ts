@@ -187,4 +187,22 @@ describe("automatic sync", () => {
     await second.clock.flush();
     expect(courseReads(second, LCC)).toBe(2);
   });
+
+  it("expiring the focus throttle lets the next focus sync run immediately", async () => {
+    let focus = () => {};
+    const first = await makeStoreRig();
+    await first.connectAll();
+    const second = await relaunch(first, { subscribeFocus: (onFocus) => (focus = onFocus) });
+    second.server.createShell(LCC, "BIO 105", "Biology");
+
+    focus();
+    await second.clock.flush();
+    expect(courseReads(second, LCC)).toBe(1);
+
+    second.store.expireFocusThrottle();
+    focus();
+    await second.clock.flush();
+    expect(courseReads(second, LCC)).toBe(2);
+    expect(shellCodes(second)).toContain("BIO 105");
+  });
 });

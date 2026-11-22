@@ -92,6 +92,7 @@ import {
   FAKE_CANVAS_FACE,
   FAKE_SCHOOLS,
   createFakeCanvasDescriptor,
+  fakeSchoolAt,
 } from "~/shared/providers/fake-canvas/provider";
 import { SEED } from "~/shared/providers/fake-canvas/seed";
 import { ChangeIdSchema, ThreadIdSchema } from "~/shared/providers/schemas";
@@ -361,7 +362,10 @@ export interface WorkspaceDeps {
   track?(event: AnalyticsEvent): void;
 }
 
-export type WorkspaceStore = StoreApi<WorkspaceState> & { syncFromStorage(): void };
+export type WorkspaceStore = StoreApi<WorkspaceState> & {
+  syncFromStorage(): void;
+  expireFocusThrottle(): void;
+};
 
 /**
  * Version 2 seeded two fixed schools and stepped through them one by one. Every school, connection, change, and thread
@@ -2597,7 +2601,10 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
     store.getState().resumeSetups();
   });
 
-  return Object.assign(store, { syncFromStorage: () => syncFromStorage() });
+  return Object.assign(store, {
+    syncFromStorage: () => syncFromStorage(),
+    expireFocusThrottle: () => autoSync.expireThrottle(),
+  });
 };
 
 /** What a draft sends Claude besides the scope, and the line that tells the teacher what that was. */
@@ -2690,9 +2697,12 @@ let lab: FaultLab | null = null;
 const FAKE_HOSTS = FAKE_SCHOOLS.map((school) => school.host);
 
 const fakeBackend = (descriptor: ProviderDescriptor, reset: () => void): Backend => ({
-  schoolAt: async (host) => FAKE_SCHOOLS.find((school) => school.host === host) ?? null,
+  schoolAt: async (host) => fakeSchoolAt(host),
   newSchoolProvider: "fake-canvas",
-  descriptors: { "fake-canvas": descriptor },
+  descriptors: {
+    "fake-canvas": descriptor,
+    canvas: { ...descriptor, kind: "canvas" },
+  },
   demo: { hosts: FAKE_HOSTS, epoch: new Date(SEED.now).getTime(), seedThreads, reset },
 });
 
@@ -2733,11 +2743,6 @@ const bridgeFakeBackend =
       ...(import.meta.env.DEV && sessionStorage.getItem("verify.demo") === "off"
         ? { demo: null }
         : {}),
-      // Main refuses every Canvas read here, but verify still renders a saved real school's screens through it.
-      descriptors: {
-        ...backend.descriptors,
-        canvas: bridgeCanvas(bridge, CANVAS, CANVAS_FACE, now),
-      },
     };
   };
 

@@ -25,10 +25,12 @@ import {
   calendarSummary,
   calendarView,
   LANE_WIDTH,
+  MIN_DAY_WIDTH,
   nextDue,
   rangeLabel,
   TONE_LOOK,
   toneOf,
+  TWO_WEEK_MIN_WIDTH,
   weekOf,
   weeksThatFit,
   wideLaneFits,
@@ -539,6 +541,8 @@ export function CalendarScreen() {
             <div
               ref={measureOnAttach}
               data-testid="calendar-grid"
+              data-min-day-width={MIN_DAY_WIDTH}
+              data-two-week-width={TWO_WEEK_MIN_WIDTH}
               className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-4"
             >
               <Tooltip.Provider delay={150}>

@@ -17,7 +17,13 @@ const start = async () => {
     const lab = faultLab();
     Object.assign(window, {
       __setAgentStandIn: setAgentStandIn,
-      ...(lab ? { __faultLab: lab } : {}),
+      ...(lab
+        ? {
+            __faultLab: Object.assign(lab, {
+              expireFocusThrottle: () => workspaceStore().expireFocusThrottle(),
+            }),
+          }
+        : {}),
     });
     const noise = sessionStorage.getItem("verify.noise");
     if (lab && noise) {

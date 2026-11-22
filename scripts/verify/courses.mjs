@@ -505,8 +505,6 @@ const dueReplies = async (t) => {
   await t.shot("issue-127-overview", null);
 };
 
-const MIN_DAY_WIDTH = 83;
-
 const calendar = async (t) => {
   const dayCount = (expected, label) =>
     t.waitFor(`document.querySelectorAll('[data-calendar-day]').length === ${expected}`, label);
@@ -552,7 +550,10 @@ const calendar = async (t) => {
     "1440 with the sidebar open shows one week, where a chip title fits its column",
   );
   const chromeWidth = 1440 - (await t.box(CALENDAR)).width;
-  const narrowestTwoWeeks = chromeWidth + 160 + 14 * MIN_DAY_WIDTH;
+  const { minDayWidth, twoWeekWidth } = await t.eval(
+    `(({ minDayWidth, twoWeekWidth }) => ({ minDayWidth: Number(minDayWidth), twoWeekWidth: Number(twoWeekWidth) }))(document.querySelector(${JSON.stringify(CALENDAR)}).dataset)`,
+  );
+  const narrowestTwoWeeks = chromeWidth + twoWeekWidth;
   await t.viewport(narrowestTwoWeeks, 900);
   await dayCount(14, "the narrowest window that fits two weeks shows two weeks");
   const summary = await t.text('[data-testid="calendar-summary"]');
@@ -871,7 +872,7 @@ const calendar = async (t) => {
 
   await dayCount(14, "the narrowest window that still fits two weeks shows two weeks");
   t.assert(
-    (await t.box("[data-calendar-day]")).width < MIN_DAY_WIDTH,
+    (await t.box("[data-calendar-day]")).width < minDayWidth,
     "and the day columns are at their narrowest",
     String((await t.box("[data-calendar-day]")).width),
   );
@@ -1014,12 +1015,33 @@ const calendar = async (t) => {
   await t.viewport(1440, 900);
 };
 
+const REAL_HOST = "verify-real.instructure.com";
+
 const realSchoolCalendar = async (t) => {
-  const saved = await t.eval(`localStorage.getItem(${KEY})`);
-  await t.eval(
-    `(() => { const stored = JSON.parse(localStorage.getItem(${KEY})); stored.state.schools.push({ id: "verify-real", abbr: "VR", name: "Verify Real Canvas", host: "verify-real.instructure.com", provider: "canvas" }); localStorage.setItem(${KEY}, JSON.stringify(stored)); })()`,
+  const add = '[data-testid="add-institution"]';
+  const card = `[data-school="${REAL_HOST}"]`;
+  const dialog = '[role="dialog"]';
+  await t.goto("/settings");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(add)})`,
+    "Settings opens to add a real school",
   );
-  await t.reload();
+  await t.click('[data-testid="address-field"]', { within: add });
+  await t.type(REAL_HOST);
+  await t.key("Enter");
+  const tokenField = `${add} [data-host="${REAL_HOST}"] input[type="password"]`;
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(tokenField)})`,
+    "the real school row asks for a token",
+  );
+  await t.click(tokenField);
+  await t.type("verify-real-token-0123456789");
+  await t.key("Enter");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(card)})?.dataset.connection === "connected"`,
+    "the real school connects",
+    20_000,
+  );
   await t.click("Calendar", { within: SIDEBAR });
   await t.waitFor(`document.querySelector('[aria-current="date"]')`, "the Calendar marks today");
   const today = await t.eval(
@@ -1030,8 +1052,20 @@ const realSchoolCalendar = async (t) => {
   );
   t.assert(today === wall, "with a real school, today is the real date", `${today} vs ${wall}`);
   await t.shot("calendar-real-school", null);
-  await t.eval(`localStorage.setItem(${KEY}, ${JSON.stringify(saved)})`);
-  await t.reload();
+  await t.goto("/settings");
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(card)})`,
+    "Settings shows the real school",
+  );
+  await t.click("Disconnect", { within: card });
+  await t.click("Disconnect", { within: dialog });
+  await t.waitFor(
+    `document.querySelector(${JSON.stringify(card)})?.dataset.connection === "disconnected"`,
+    "the real school disconnects",
+  );
+  await t.click("Remove school", { within: card });
+  await t.click("Remove", { within: dialog });
+  await t.waitFor(`!document.querySelector(${JSON.stringify(card)})`, "the real school is removed");
   await t.click("Calendar", { within: SIDEBAR });
   await t.waitFor(
     `document.querySelector('[aria-current="date"]')?.innerText.replace(/\\s+/g, " ").trim() === "Fri 30"`,

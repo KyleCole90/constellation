@@ -9,9 +9,9 @@ import type { SchoolFilter } from "./due.logic";
 export const LANE_WIDTH = 160;
 /* Room for the longest word in a seeded chip title ("Bibliography" is 70.5px at text-meta) plus the chip's 12px of padding, border and cell inset, rounded up. */
 export const MIN_DAY_WIDTH = 83;
+export const TWO_WEEK_MIN_WIDTH = LANE_WIDTH + 14 * MIN_DAY_WIDTH;
 
-export const weeksThatFit = (gridWidth: number): 1 | 2 =>
-  (gridWidth - LANE_WIDTH) / 14 >= MIN_DAY_WIDTH ? 2 : 1;
+export const weeksThatFit = (gridWidth: number): 1 | 2 => (gridWidth >= TWO_WEEK_MIN_WIDTH ? 2 : 1);
 
 /** Whether one week fits beside the wide course lane. When it doesn't, the lane drops to course codes so no chip word breaks. */
 export const wideLaneFits = (gridWidth: number): boolean =>
