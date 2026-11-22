@@ -557,11 +557,6 @@ describe("missing work: excuse and zero", () => {
     expect(excuse(gradeRemote(), gradeRemote())).toEqual({ do: "write" });
   });
 
-  it("a basis saved before excuses existed still writes the excuse", () => {
-    const { excused: _, ...saved } = gradeRemote() as Extract<RemoteState, { kind: "grade" }>;
-    expect(excuse(saved as RemoteState, gradeRemote())).toEqual({ do: "write" });
-  });
-
   it("an excuse already in the LMS reads as already there", () => {
     expect(excuse(gradeRemote(), gradeRemote({ excused: true }))).toEqual({ do: "already-there" });
   });
@@ -685,11 +680,6 @@ describe("late waiver and total override", () => {
 
   it("an override replaces the late penalty too", () => {
     expect(finalGrade(edited(late, { kind: "grade", override: 25 }))).toBe(25);
-  });
-
-  it("a draft saved before overrides existed reads as no override", () => {
-    const { override: _, ...saved } = late;
-    expect(finalGrade(saved as GradeContent)).toBe(12);
   });
 
   it.each([

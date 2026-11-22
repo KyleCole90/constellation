@@ -212,7 +212,7 @@ export const FileContentSchema: v.GenericSchema<FileContent> = v.object({
   data: v.instance(Uint8Array),
 });
 
-export const ConversationSchema: v.GenericSchema<Conversation> = v.object({
+export const ConversationFields = {
   ref: lmsRef("conversation"),
   school: SchoolIdSchema,
   course: lmsRef("course"),
@@ -223,7 +223,9 @@ export const ConversationSchema: v.GenericSchema<Conversation> = v.object({
   messages: v.array(
     v.object({ id: text, mine: v.boolean(), author: text, text, at: IsoTimeSchema }),
   ),
-});
+};
+
+export const ConversationSchema: v.GenericSchema<Conversation> = v.object(ConversationFields);
 
 export const AnnouncementSchema: v.GenericSchema<Announcement> = v.object({
   ref: lmsRef("announcement"),

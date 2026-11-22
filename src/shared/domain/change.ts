@@ -133,7 +133,7 @@ export const rawScore = (content: GradeContent): number | null => {
 export const latePenalty = (content: GradeContent): number =>
   content.late && !content.late.waived ? content.late.days * content.late.pointsPerDay : 0;
 export const finalGrade = (content: GradeContent): number | null => {
-  if (content.override != null) return content.override;
+  if (content.override !== null) return content.override;
   const raw = rawScore(content);
   return raw === null ? null : withoutFloatNoise(Math.max(0, raw - latePenalty(content)));
 };

@@ -307,7 +307,7 @@ export const askedInLms = (
     if (
       !opening?.mine ||
       conversation.course !== submission.course ||
-      !(conversation.students ?? []).includes(submission.student) ||
+      !conversation.students.includes(submission.student) ||
       !namesAssignment(`${conversation.subject}\n${opening.text}`, assignment)
     )
       continue;

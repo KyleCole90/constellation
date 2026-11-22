@@ -944,4 +944,29 @@ describe("a workspace saved before this", () => {
     expect(summarize(record).missing).toEqual([]);
     expect(transition(record, { type: "begin-send", seen: {}, at: isoTime(at) }).ok).toBe(false);
   });
+
+  it("fills missing students on cached conversations and missing draft and written on saved setups", async () => {
+    const { rig } = await noKeyRig();
+    const shell = rig.state().newCourses[LCC]?.[0];
+    if (!shell) throw new Error("No new course shell.");
+    rig.state().startSetup(shell.ref);
+    const raw = rawSave(rig.storage);
+    const cache = jsonObject(jsonObject(raw.state.cache)[LCC]);
+    const conversations = cache["conversations"];
+    if (!Array.isArray(conversations) || conversations.length === 0)
+      throw new Error("No cached conversations.");
+    delete jsonObject(conversations[0])["students"];
+    const savedSetup = jsonObject(jsonObject(raw.state.setups)[shell.ref]);
+    delete savedSetup["draft"];
+    delete savedSetup["written"];
+    rig.storage.setItem(WORKSPACE_STORAGE_KEY, JSON.stringify(raw));
+    rig.server.expireToken(LCC);
+
+    const next = await reload(rig);
+
+    expect(next.state().connections[RSU]?.status).toBe("connected");
+    expect(next.state().cache[LCC]?.conversations[0]?.students).toEqual([]);
+    expect(next.state().setups[shell.ref]?.draft).toBeNull();
+    expect(next.state().setups[shell.ref]?.written).toEqual([]);
+  });
 });

@@ -1656,6 +1656,8 @@ describe("the failure lab", () => {
     ["a collection that isn't a list", (stored) => (stored["courses"] = "nope")],
     ["no demo script", (stored) => delete stored["script"]],
     ["another version", (stored) => (stored["version"] = 1)],
+    ["v4 with no write log", (stored) => delete stored["writeLog"]],
+    ["v4 with no term", (stored) => delete stored["term"]],
     [
       "a new term with no copy jobs",
       (stored) => (stored["term"] = { shells: [], sources: [], content: {} }),
@@ -1671,16 +1673,45 @@ describe("the failure lab", () => {
     expect(make().noise().rate5xx).toBe(0);
   });
 
-  it("a stored LMS from before the write log and the new term keeps everything else", () => {
+  it("migrates a v3 stored LMS from before the write log and the new term, keeping everything else", () => {
     const storage = memoryStorage();
     const make = () =>
       new FakeCanvasServer({ storage, now: () => 0, sleep: async () => {}, random: () => 0.5 });
     make().setNoise({ rate5xx: 0.25 });
     const stored = rawLms(storage);
+    stored["version"] = 3;
     delete stored["writeLog"];
     delete stored["term"];
     storage.setItem(LMS_STORAGE_KEY, JSON.stringify(stored));
     expect(make().noise().rate5xx).toBe(0.25);
+    expect(rawLms(storage)["version"]).toBe(3);
+    make().setNoise({ rate5xx: 0.3 });
+    expect(rawLms(storage)["version"]).toBe(4);
+  });
+
+  it("migrates a v3 stored LMS with a single term.content map into courseContent and packageContent", () => {
+    const storage = memoryStorage();
+    const make = () =>
+      new FakeCanvasServer({ storage, now: () => 0, sleep: async () => {}, random: () => 0.5 });
+    make().setNoise({ rate5xx: 0.25 });
+    const stored = rawLms(storage);
+    const term = stored["term"] as Record<string, unknown>;
+    const courseContent = term["courseContent"] as Record<string, unknown>;
+    const packageContent = term["packageContent"] as Record<string, unknown>;
+    const content: Record<string, unknown> = { ...courseContent };
+    for (const [name, body] of Object.entries(packageContent)) content[`pkg:${name}`] = body;
+    delete term["courseContent"];
+    delete term["packageContent"];
+    term["content"] = content;
+    stored["version"] = 3;
+    storage.setItem(LMS_STORAGE_KEY, JSON.stringify(stored));
+    const migrated = make();
+    expect(migrated.noise().rate5xx).toBe(0.25);
+    migrated.setNoise({ rate5xx: 0.3 });
+    const saved = rawLms(storage);
+    expect(saved["version"]).toBe(4);
+    expect((saved["term"] as Record<string, unknown>)["courseContent"]).toEqual(courseContent);
+    expect((saved["term"] as Record<string, unknown>)["packageContent"]).toEqual(packageContent);
   });
 });
 

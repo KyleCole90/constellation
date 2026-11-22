@@ -182,7 +182,7 @@ export interface RawCourseContent {
 }
 
 export interface LmsState {
-  version: 3;
+  version: 4;
   seq: number;
   writes: number;
   tokens: Record<string, TokenBook>;
@@ -544,7 +544,7 @@ const MigrationRecordSchema: v.GenericSchema<MigrationRecord> = v.object({
   failAt: v.nullable(v.object({ completion: count, message: text })),
 });
 
-const TermStateSchema: v.GenericSchema<TermState> = v.object({
+const TermStateCore = {
   shells: v.array(
     v.object({
       school: SchoolIdSchema,
@@ -575,6 +575,12 @@ const TermStateSchema: v.GenericSchema<TermState> = v.object({
       template: v.boolean(),
     }),
   ),
+  migrations: v.array(MigrationRecordSchema),
+  seq: count,
+};
+
+const TermStateSchema: v.GenericSchema<TermState> = v.object({
+  ...TermStateCore,
   courseContent: v.record(
     v.pipe(
       text,
@@ -583,12 +589,14 @@ const TermStateSchema: v.GenericSchema<TermState> = v.object({
     RawBodySchema,
   ),
   packageContent: v.record(text, RawBodySchema),
-  migrations: v.array(MigrationRecordSchema),
-  seq: count,
 });
 
-const LmsStateSchema: v.GenericSchema<unknown, LmsState> = v.object({
-  version: v.literal(3),
+const LegacyTermStateV3Schema = v.object({
+  ...TermStateCore,
+  content: v.record(text, RawBodySchema),
+});
+
+const LmsStateCore = {
   seq: count,
   writes: count,
   tokens: v.record(text, v.object({ accepted: v.array(text), revoked: v.array(text) })),
@@ -600,19 +608,55 @@ const LmsStateSchema: v.GenericSchema<unknown, LmsState> = v.object({
   conversations: v.array(ConversationSchema),
   announcements: v.array(AnnouncementSchema),
   script: v.object({ enabled: v.boolean(), fired: v.array(v.picklist(DEMO_FAULTS)) }),
-  writeLog: v.optional(v.array(WriteRecordSchema), () => []),
-  term: v.optional(TermStateSchema, freshTerm),
   noise: v.exactOptional(NoiseSchema),
+};
+
+const LmsStateSchema: v.GenericSchema<LmsState> = v.object({
+  version: v.literal(4),
+  ...LmsStateCore,
+  writeLog: v.array(WriteRecordSchema),
+  term: TermStateSchema,
+});
+
+const LmsStateV3Schema = v.object({
+  version: v.literal(3),
+  ...LmsStateCore,
+  writeLog: v.optional(v.array(WriteRecordSchema)),
+  term: v.optional(v.union([TermStateSchema, LegacyTermStateV3Schema])),
+});
+
+const migrateTermV3 = (
+  term: TermState | v.InferOutput<typeof LegacyTermStateV3Schema>,
+): TermState => {
+  if (!("content" in term)) return term;
+  const courseContent: Record<LmsRef<"course">, RawBody> = {};
+  const packageContent: Record<string, RawBody> = {};
+  const courseRef = lmsRef("course");
+  for (const [key, body] of Object.entries(term.content)) {
+    if (key.startsWith("pkg:")) packageContent[key.slice(4)] = body;
+    else if (v.is(courseRef, key)) courseContent[key] = body;
+  }
+  const { content: _content, ...rest } = term;
+  return { ...rest, courseContent, packageContent };
+};
+
+const migrateV3 = (stored: v.InferOutput<typeof LmsStateV3Schema>): LmsState => ({
+  ...stored,
+  version: 4,
+  writeLog: stored.writeLog ?? [],
+  term: stored.term ? migrateTermV3(stored.term) : freshTerm(),
 });
 
 export const parseStoredLms = (stored: unknown): LmsState | null => {
-  const parsed = v.safeParse(LmsStateSchema, stored);
-  return parsed.success ? parsed.output : null;
+  const current = v.safeParse(LmsStateSchema, stored);
+  if (current.success) return current.output;
+  const legacy = v.safeParse(LmsStateV3Schema, stored);
+  return legacy.success ? migrateV3(legacy.output) : null;
 };
 
 const freshState = (demoScript: boolean): LmsState => {
   const state: LmsState = {
-    version: 3,
+    version: 4,
     seq: 0,
     writes: 0,
     tokens: {},

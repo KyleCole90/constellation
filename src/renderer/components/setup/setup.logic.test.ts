@@ -42,15 +42,30 @@ const change = (id: string) =>
     basis: { remote: { kind: "text-fix" } },
   }) as ChangeRecord;
 const finding = (type: Finding["type"], where = "Syllabus") => ({ type, where }) as Finding;
-const row = (key: string, patch: Partial<ReviewRow> = {}): ReviewRow => ({
-  key: findingKey(key),
-  finding: finding("plain-date"),
-  status: "fix",
-  change: null,
-  summary: null,
-  resolution: null,
-  ...patch,
-});
+const row = (
+  key: string,
+  patch:
+    | Partial<Exclude<ReviewRow, { status: "fixed" }>>
+    | { status: "fixed"; finding?: null; change?: ChangeRecord; summary?: ChangeSummary } = {},
+): ReviewRow =>
+  patch.status === "fixed"
+    ? {
+        key: findingKey(key),
+        finding: null,
+        status: "fixed",
+        change: patch.change ?? change(`c-${key}`),
+        summary: patch.summary ?? summary({}),
+        resolution: null,
+      }
+    : {
+        key: findingKey(key),
+        finding: finding("plain-date"),
+        status: "fix",
+        change: null,
+        summary: null,
+        resolution: null,
+        ...patch,
+      };
 const pending = (key: string, can: Partial<ChangeSummary>) =>
   row(key, { change: change(`c-${key}`), summary: summary(can) });
 const term = (start: string, end: string) => ({
@@ -116,7 +131,7 @@ describe("meeting days", () => {
 
 describe("the plan a form opens with", () => {
   it("fills the old term from a course source and defaults new days to the old ones", () => {
-    const opened = formPlan({ plan: null, shell, source: null }, source("a", false));
+    const opened = formPlan({ plan: null, draft: null, shell, source: null }, source("a", false));
     expect(opened.oldTerm).toEqual({
       name: "Spring",
       start: "2026-01-12",
@@ -132,9 +147,9 @@ describe("the plan a form opens with", () => {
   });
   it("keeps a plan already confirmed over the source", () => {
     const confirmed = plan();
-    expect(formPlan({ plan: confirmed, shell, source: null }, source("a", false))).toEqual(
-      draftOf(confirmed),
-    );
+    expect(
+      formPlan({ plan: confirmed, draft: null, shell, source: null }, source("a", false)),
+    ).toEqual(draftOf(confirmed));
   });
   it("reopens with what was last typed over a confirmed plan", () => {
     const typed = draft({
@@ -144,7 +159,12 @@ describe("the plan a form opens with", () => {
   });
   it("leaves the old term blank for a package with no hint, and the form refuses it", () => {
     const opened = formPlan(
-      { plan: null, shell, source: { kind: "cartridge", name: "x.imscc", kb: 1, hint: null } },
+      {
+        plan: null,
+        draft: null,
+        shell,
+        source: { kind: "cartridge", name: "x.imscc", kb: 1, hint: null },
+      },
       null,
     );
     expect(problemsOf(opened)).toContain("Fill in the old term's dates.");
@@ -259,6 +279,7 @@ describe("a package that leaves its end out", () => {
     const opened = formPlan(
       {
         plan: null,
+        draft: null,
         shell: { ...shell, startAt: spring.start, endAt: spring.end },
         source: { kind: "cartridge", name: "x.imscc", kb: 1, hint: { ...hint, dated: [] } },
       },
@@ -284,14 +305,14 @@ describe("a package that leaves its end out", () => {
   };
 
   it("guesses the old end once the teacher types the new term's dates", () => {
-    const opened = { plan: null, shell: undated, source: cartridge };
+    const opened = { plan: null, draft: null, shell: undated, source: cartridge };
     expect(formPlan(opened, null).oldTerm.end).toBe("");
     const typed = edit(edit(opened, { start: spring.start }), { end: spring.end });
     expect(formPlan(typed, null).oldTerm.end).toBe("2026-05-15");
     expect(formPlan(edit(typed, { end: date("2027-05-28") }), null).oldTerm.end).toBe("2026-05-29");
   });
   it("keeps an old end the teacher typed when the new term's dates change", () => {
-    const opened = { plan: null, shell: undated, source: cartridge };
+    const opened = { plan: null, draft: null, shell: undated, source: cartridge };
     const typed = typedPlan(opened, null);
     const kept = {
       ...opened,
@@ -304,7 +325,10 @@ describe("a package that leaves its end out", () => {
     expect(formPlan(kept, null).oldTerm.end).toBe("2026-05-01");
   });
   it("fills the new term from the course's own dates when the course gets them after Dates opened", () => {
-    const typed = edit({ plan: null, shell: undated, source: cartridge }, { name: "Spring 2027" });
+    const typed = edit(
+      { plan: null, draft: null, shell: undated, source: cartridge },
+      { name: "Spring 2027" },
+    );
     const dated = formPlan(
       { ...typed, shell: { ...shell, startAt: spring.start, endAt: spring.end } },
       null,
