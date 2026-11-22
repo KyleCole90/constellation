@@ -1,4 +1,5 @@
 import type {
+  AttachmentDraft,
   ChangeContent,
   FieldKey,
   FieldRun,
@@ -72,6 +73,7 @@ export interface LmsProvider {
   announcements(course: LmsRef<"course">): Read<readonly Announcement[]>;
   observe(content: ChangeContent): Read<RemoteState>;
   apply(permit: SendPermit): Promise<FieldOutcomes>;
+  pickAttachment?(submission: LmsRef<"submission">): Read<AttachmentDraft | null>;
   describeScope(scope: string): string;
   readonly termSetup?: TermSetup;
 }

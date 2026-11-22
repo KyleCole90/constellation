@@ -1,8 +1,17 @@
-import { describe, expect, it } from "vite-plus/test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import { SEND_PRESS_MS } from "~/main/lms";
 import { canvasSchoolAt, createCanvasProvider } from "~/main/providers/canvas";
-import { fieldsOf, type ChangeContent, type GradeContent } from "~/shared/domain/change";
+import {
+  fieldsOf,
+  type AttachmentDraft,
+  type ChangeContent,
+  type GradeContent,
+} from "~/shared/domain/change";
 import { mintSendPermit } from "~/shared/domain/permit";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
 import { Secret, type LmsProvider } from "~/shared/providers/provider";
@@ -49,7 +58,13 @@ const grade = (patch: Partial<GradeContent> = {}): GradeContent => ({
   ...patch,
 });
 
-const canvasOver = (http: CanvasHttp) =>
+const canvasOver = (
+  http: CanvasHttp,
+  attachmentFile: (
+    submission: string,
+    attachment: AttachmentDraft,
+  ) => Promise<Blob | null> = async () => null,
+) =>
   createCanvasProvider({
     school: SCHOOL,
     lease: {
@@ -59,6 +74,7 @@ const canvasOver = (http: CanvasHttp) =>
     fetch: http.fetch,
     now: () => Date.now(),
     packageFile: async () => null,
+    attachmentFile,
   });
 
 const writesOf = (http: CanvasHttp) =>
@@ -354,5 +370,213 @@ describe("Canvas writes, kind by kind", () => {
       grade: { status: "failed", error: { kind: "rejected" } },
     });
     expect(http.requests).toEqual([]);
+  });
+
+  it("advertises attachments capability on Canvas", () => {
+    expect(CANVAS_FACE.capabilities.attachments).toBe(true);
+  });
+});
+
+describe("Canvas submission comment attachments", () => {
+  const dirs: string[] = [];
+  const onDisk = (name: string, bytes: Uint8Array) => {
+    const dir = mkdtempSync(join(tmpdir(), "canvas-attach-"));
+    dirs.push(dir);
+    const path = join(dir, name);
+    writeFileSync(path, bytes);
+    return path;
+  };
+  afterEach(() => {
+    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  const bridgedCanvas = (chooseAttachment: () => Promise<string | null>) => {
+    const http = new CanvasHttp();
+    const lms = bridgedLms({ fetch: http.fetch, chooseAttachment });
+    const provider = bridgeCanvas(lms.bridge, CANVAS, CANVAS_FACE, () => Date.now()).create({
+      school: SCHOOL,
+      lease: createMemoryVault().leaseFor(SCHOOL.id),
+    });
+    return { http, lms, provider };
+  };
+
+  it("picks a real file in main, hides its path, uploads its bytes, and observes it back", async () => {
+    const bytes = new TextEncoder().encode("%PDF-1.4\nannotated feedback");
+    const path = onDisk("feedback.pdf", bytes);
+    const { http, lms, provider } = bridgedCanvas(async () => path);
+    await lms.vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TOKEN) });
+
+    const picked = await unwrap(
+      provider.pickAttachment?.(SUBMISSION) ?? Promise.reject(new Error("no picker")),
+    );
+    expect(picked).toMatchObject({
+      name: "feedback.pdf",
+      kb: Math.ceil(bytes.byteLength / 1024),
+      sha256: expect.any(String),
+    });
+    expect(JSON.stringify(picked)).not.toContain(path);
+
+    const content = grade({ comment: "See attached.", attachment: picked });
+    const sent = await provider.apply(
+      await permitFor(provider, content, fieldsOf(content), SCHOOL.id),
+    );
+    expect(sent.attachment?.status).toBe("landed");
+    expect(http.uploads).toHaveLength(1);
+    expect(http.uploads[0]?.bytes).toEqual(bytes);
+
+    const after = await unwrap(provider.observe(content));
+    expect(after.kind === "grade" && after.attachments).toMatchObject([
+      { mine: true, text: "feedback.pdf" },
+    ]);
+    expect(after.kind === "grade" && after.comments).toEqual([
+      expect.objectContaining({ mine: true, text: "See attached." }),
+    ]);
+
+    const listed = await unwrap(provider.submissions(COURSE));
+    const maya = listed.find((row) => row.ref === SUBMISSION);
+    expect(maya?.comments).toEqual([
+      expect.objectContaining({ mine: true, text: "See attached." }),
+    ]);
+  });
+
+  it("refuses to send when the picked file changes on disk or is replaced by another file of the same name", async () => {
+    const original = new TextEncoder().encode("original feedback bytes");
+    const path = onDisk("feedback.pdf", original);
+    let nextPath: string | null = path;
+    const { http, lms, provider } = bridgedCanvas(async () => nextPath);
+    await lms.vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TOKEN) });
+
+    const picked = await unwrap(
+      provider.pickAttachment?.(SUBMISSION) ?? Promise.reject(new Error("no picker")),
+    );
+    if (!picked) throw new Error("expected picked attachment");
+    const content = grade({ comment: null, attachment: picked });
+
+    writeFileSync(path, new TextEncoder().encode("tampered feedback bytes"));
+    const tampered = await provider.apply(
+      await permitFor(provider, content, ["attachment"], SCHOOL.id),
+    );
+    expect(tampered.attachment).toMatchObject({
+      status: "failed",
+      error: { kind: "rejected" },
+    });
+    expect(http.uploads).toHaveLength(0);
+
+    writeFileSync(path, original);
+    const secondPath = onDisk("feedback.pdf", new TextEncoder().encode("different file same name"));
+    nextPath = secondPath;
+    await unwrap(provider.pickAttachment?.(SUBMISSION) ?? Promise.reject(new Error("no picker")));
+
+    const stale = await provider.apply(
+      await permitFor(provider, content, ["attachment"], SCHOOL.id),
+    );
+    expect(stale.attachment).toMatchObject({
+      status: "failed",
+      error: { kind: "rejected" },
+    });
+    expect(http.uploads).toHaveLength(0);
+  });
+
+  it("follows a same-origin create_success redirect and attaches the file", async () => {
+    const bytes = new TextEncoder().encode("redirected upload");
+    const http = new CanvasHttp();
+    http.confirmRedirect = true;
+    const provider = canvasOver(http, async (submission, attachment) =>
+      submission === SUBMISSION && attachment.name === "notes.txt" ? new Blob([bytes]) : null,
+    );
+    const content = grade({ comment: null, attachment: { name: "notes.txt", kb: 1 } });
+    const sent = await provider.apply(
+      await permitFor(provider, content, ["attachment"], SCHOOL.id),
+    );
+    expect(sent.attachment?.status).toBe("landed");
+    expect(http.uploads[0]?.bytes).toEqual(bytes);
+    expect(http.requests).toContain("GET /files/9001/create_success");
+  });
+
+  it("recovers from a lost attachment response without uploading twice", async () => {
+    const bytes = new TextEncoder().encode("annotated");
+    const http = new CanvasHttp();
+    const provider = canvasOver(http, async () => new Blob([bytes]));
+    const content = grade({ comment: null, attachment: { name: "marked.pdf", kb: 1 } });
+    const run = await runnerWith(provider, content);
+    http.loseNext("attachment");
+
+    await run.send();
+    expect(run.stateOf()).toBe("sent");
+    expect(http.uploads).toHaveLength(1);
+    expect(http.writes.filter((w) => w === "attachment")).toHaveLength(1);
+  });
+
+  it("keeps same-named attachments separate per submission", async () => {
+    const theo = lmsRef<"submission">(`${HOST}:submission:${COURSE_ID}:5301:6402`);
+    const mayaBytes = new TextEncoder().encode("maya feedback");
+    const theoBytes = new TextEncoder().encode("theo feedback");
+    const queue = [onDisk("feedback.pdf", mayaBytes), onDisk("feedback.pdf", theoBytes)];
+    const { http, lms, provider } = bridgedCanvas(async () => queue.shift() ?? null);
+    await lms.vault.enroll(SCHOOL.id, { kind: "bearer", token: new Secret(TOKEN) });
+
+    const mayaPicked = await unwrap(
+      provider.pickAttachment?.(SUBMISSION) ?? Promise.reject(new Error("no picker")),
+    );
+    const theoPicked = await unwrap(
+      provider.pickAttachment?.(theo) ?? Promise.reject(new Error("no picker")),
+    );
+    const mayaContent = grade({ target: SUBMISSION, comment: null, attachment: mayaPicked });
+    const theoContent = grade({ target: theo, comment: null, attachment: theoPicked });
+
+    const mayaSent = await provider.apply(
+      await permitFor(provider, mayaContent, ["attachment"], SCHOOL.id),
+    );
+    const theoSent = await provider.apply(
+      await permitFor(provider, theoContent, ["attachment"], SCHOOL.id),
+    );
+    expect(mayaSent.attachment?.status).toBe("landed");
+    expect(theoSent.attachment?.status).toBe("landed");
+    expect(http.uploads.map((u) => u.bytes)).toEqual([mayaBytes, theoBytes]);
+  });
+
+  it("refuses empty, unpicked, non-https, and off-origin redirect uploads, and returns null on cancel", async () => {
+    const emptyPath = onDisk("empty.pdf", new Uint8Array());
+    const empty = bridgedCanvas(async () => emptyPath);
+    expect(await empty.provider.pickAttachment?.(SUBMISSION)).toMatchObject({
+      ok: false,
+      error: { kind: "rejected" },
+    });
+
+    const cancelled = bridgedCanvas(async () => null);
+    expect(await cancelled.provider.pickAttachment?.(SUBMISSION)).toEqual({
+      ok: true,
+      value: null,
+    });
+
+    const http = new CanvasHttp();
+    const unpicked = canvasOver(http);
+    const content = grade({ comment: null, attachment: { name: "forged.pdf", kb: 1 } });
+    expect(
+      await unpicked.apply(await permitFor(unpicked, content, ["attachment"], SCHOOL.id)),
+    ).toMatchObject({
+      attachment: { status: "failed", error: { kind: "rejected" } },
+    });
+    expect(http.requests.filter((r) => !r.startsWith("GET "))).toEqual([]);
+
+    const badUrlHttp = new CanvasHttp();
+    badUrlHttp.uploadUrlOverride = "http://insecure.example.edu/upload";
+    const badUrl = canvasOver(badUrlHttp, async () => new Blob(["ok"]));
+    expect(
+      await badUrl.apply(await permitFor(badUrl, content, ["attachment"], SCHOOL.id)),
+    ).toMatchObject({
+      attachment: { status: "failed", error: { kind: "rejected" } },
+    });
+
+    const offOriginHttp = new CanvasHttp();
+    offOriginHttp.confirmRedirect = true;
+    offOriginHttp.confirmLocationOverride =
+      "https://evil.example.com/api/v1/files/1/create_success";
+    const offOrigin = canvasOver(offOriginHttp, async () => new Blob(["ok"]));
+    expect(
+      await offOrigin.apply(await permitFor(offOrigin, content, ["attachment"], SCHOOL.id)),
+    ).toMatchObject({
+      attachment: { status: "failed", error: { kind: "rejected" } },
+    });
   });
 });

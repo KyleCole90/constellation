@@ -7,6 +7,7 @@ import {
   AccountInfoSchema,
   AnnouncementSchema,
   AssignmentSchema,
+  AttachmentDraftSchema,
   ChangeContentSchema,
   ChangeIdSchema,
   ConversationSchema,
@@ -137,6 +138,7 @@ const CHANNELS = [
   "lms.migrations",
   "lms.samplePackages",
   "lms.pickPackage",
+  "lms.pickAttachment",
   "lms.lab",
   "lms.labNext",
   "lms.stored",
@@ -209,6 +211,10 @@ const ipc = {
   "lms.migrations": { input: ByCourse, output: readOf(listOf(MigrationSchema)) },
   "lms.samplePackages": { input: BySchool, output: readOf(listOf(SamplePackageSchema)) },
   "lms.pickPackage": { input: BySchool, output: readOf(v.nullable(PickedPackageSchema)) },
+  "lms.pickAttachment": {
+    input: v.strictObject({ school: SchoolSchema, submission: lmsRef("submission") }),
+    output: readOf(v.nullable(AttachmentDraftSchema)),
+  },
   "lms.lab": { input: LabCommandSchema, output: v.void() },
   "lms.labNext": {
     input: v.strictObject({ after: v.nullable(v.number()) }),

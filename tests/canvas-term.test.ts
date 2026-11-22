@@ -68,6 +68,7 @@ const canvasOver = (http: CanvasTermHttp, packages: Record<string, Blob> = {}) =
     fetch: http.fetch,
     now: http.now,
     packageFile: async (name) => packages[name] ?? null,
+    attachmentFile: async () => null,
   });
 const setupOf = (provider: LmsProvider): TermSetup => {
   if (!provider.termSetup) throw new Error("Canvas offers no term setup");
@@ -144,6 +145,7 @@ describe("Canvas term setup reads", () => {
       },
       now: http.now,
       packageFile: async () => null,
+      attachmentFile: async () => null,
     });
     expect(await unwrap(setupOf(provider).newCourses())).toHaveLength(21);
     expect(most).toBeGreaterThan(1);
@@ -172,6 +174,7 @@ describe("Canvas term setup reads", () => {
         },
         now: http.now,
         packageFile: async () => null,
+        attachmentFile: async () => null,
       }),
     );
     const counting = setup.newCourses();

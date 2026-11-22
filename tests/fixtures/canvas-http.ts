@@ -2,6 +2,7 @@ import type { Fetch } from "~/main/providers/canvas";
 
 export const HOST = "canvas.example.edu";
 const ORIGIN = `https://${HOST}`;
+const STORAGE_ORIGIN = "https://files.example.edu";
 export const TOKEN = "SENTINEL-canvas-token-71c3";
 export const SELF_ID = 4101;
 export const COURSE_ID = 2201;
@@ -10,13 +11,29 @@ export const MAYA = 6401;
 const THEO = 6402;
 export const CONVERSATION_ID = 7101;
 
-type Field = "grade" | "rubric" | "excuse" | "comment" | "message" | "conversation" | "post";
+type Field =
+  | "grade"
+  | "rubric"
+  | "excuse"
+  | "comment"
+  | "attachment"
+  | "message"
+  | "conversation"
+  | "post";
 
+interface StoredFile {
+  id: number;
+  display_name: string;
+  "content-type": string;
+  size: number;
+  bytes: Uint8Array;
+}
 interface Comment {
   id: number;
   author_id: number;
   comment: string;
   created_at: string;
+  attachments?: Omit<StoredFile, "bytes">[];
 }
 interface SubmissionState {
   assignment_id: number;
@@ -73,6 +90,7 @@ const fieldOf = (method: string, path: string, form: URLSearchParams): Field | n
     if (form.has("submission[excuse]")) return "excuse";
     if (form.has("submission[posted_grade]")) return "grade";
     if (form.has("comment[text_comment]")) return "comment";
+    if (form.has("comment[file_ids][]")) return "attachment";
     if ([...form.keys()].some((key) => key.startsWith("rubric_assessment["))) return "rubric";
     return null;
   }
@@ -88,6 +106,11 @@ export class CanvasHttp {
   #throttleMs: number | null = null;
   #fail: { field: Field; status: number } | null = null;
   #lose: { field: Field | null } | null = null;
+  #staged = new Map<number, StoredFile>();
+  confirmRedirect = false;
+  uploadUrlOverride: string | null = null;
+  confirmLocationOverride: string | null = null;
+  readonly uploads: StoredFile[] = [];
   readonly writes: Field[] = [];
   readonly requests: string[] = [];
   readonly submissions = new Map<number, SubmissionState>(
@@ -146,6 +169,33 @@ export class CanvasHttp {
   readonly fetch: Fetch = async (url, init) => {
     const parsed = new URL(url);
     const method = init.method ?? "GET";
+    if (parsed.origin === STORAGE_ORIGIN && method === "POST" && parsed.pathname === "/upload") {
+      this.requests.push(`POST ${STORAGE_ORIGIN}/upload`);
+      if (new Headers(init.headers).has("authorization"))
+        throw new Error("Bearer token must not be sent to storage upload_url");
+      if (!(init.body instanceof FormData)) return json({ errors: [] }, 400);
+      const file = init.body.get("file");
+      if (!(file instanceof Blob)) return json({ errors: [] }, 400);
+      const rawName = init.body.get("target_name");
+      const name = typeof rawName === "string" ? rawName : "upload.bin";
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const stored: StoredFile = {
+        id: ++this.#seq,
+        display_name: name,
+        "content-type": file.type || "application/octet-stream",
+        size: bytes.byteLength,
+        bytes,
+      };
+      this.#staged.set(stored.id, stored);
+      this.uploads.push(stored);
+      if (this.confirmRedirect) {
+        const location =
+          this.confirmLocationOverride ?? `${ORIGIN}/api/v1/files/${stored.id}/create_success`;
+        return new Response(null, { status: 303, headers: { location } });
+      }
+      const { bytes: _bytes, ...meta } = stored;
+      return json(meta, 201);
+    }
     const path = parsed.pathname.replace(/^\/api\/v1/, "");
     parsed.searchParams.delete("per_page");
     this.requests.push(`${method} ${path}${decodeURIComponent(parsed.search)}`);
@@ -162,6 +212,19 @@ export class CanvasHttp {
     }
     if (method === "GET") return this.#read(path, parsed.searchParams);
     const form = new URLSearchParams(typeof init.body === "string" ? init.body : "");
+    const commentUpload = new RegExp(
+      `^/courses/${COURSE_ID}/assignments/${ASSIGNMENT_ID}/submissions/(\\d+)/comments/files$`,
+    ).exec(path);
+    if (method === "POST" && commentUpload) {
+      const name = form.get("name") ?? "";
+      const size = Number(form.get("size") ?? "0");
+      if (!name || size <= 0) return json({ errors: [{ message: "name and size required" }] }, 400);
+      return json({
+        upload_url: this.uploadUrlOverride ?? `${STORAGE_ORIGIN}/upload`,
+        upload_params: { target_name: name },
+        file_param: "file",
+      });
+    }
     const field = fieldOf(method, path, form);
     if (field === null) return json({ errors: [{ message: "No route." }] }, 404);
     if (this.#fail?.field === field) {
@@ -231,6 +294,13 @@ export class CanvasHttp {
         ? json({ ...found, workflow_state: "read" })
         : json({ errors: [{ message: "The specified resource does not exist." }] }, 404);
     }
+    const confirm = /^\/files\/(\d+)\/create_success$/.exec(path);
+    if (confirm) {
+      const found = this.#staged.get(Number(confirm[1]));
+      if (!found) return json({ errors: [] }, 404);
+      const { bytes: _bytes, ...meta } = found;
+      return json(meta);
+    }
     if (path === `/courses/${COURSE_ID}/discussion_topics`) return json(this.topics);
     return json({ errors: [{ message: "No route." }] }, 404);
   }
@@ -280,6 +350,19 @@ export class CanvasHttp {
           comment,
           created_at: at,
         });
+      const fileId = form.get("comment[file_ids][]");
+      if (fileId !== null) {
+        const stored = this.#staged.get(Number(fileId));
+        if (!stored) return json({ errors: [{ message: "unknown file id" }] }, 400);
+        const { bytes: _bytes, ...meta } = stored;
+        row.submission_comments.push({
+          id: ++this.#seq,
+          author_id: SELF_ID,
+          comment: "",
+          created_at: at,
+          attachments: [meta],
+        });
+      }
       return json(row);
     }
     const reply = /^\/conversations\/(\d+)\/add_message$/.exec(path);

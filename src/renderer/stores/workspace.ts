@@ -283,6 +283,8 @@ interface WorkspaceActions extends SetupActions {
   checkAgain(id: ChangeId): Promise<"confirmed" | "still-unconfirmed" | "unreachable">;
   previewFor(id: ChangeId): readonly PreviewField[] | null;
   capabilitiesFor(school: SchoolId): Capabilities | null;
+  picksAttachment(school: SchoolId): boolean;
+  pickAttachment(id: ChangeId): Promise<string | null>;
   enrollmentFor(school: SchoolId): ProviderDescriptor["enrollment"] | null;
   /** What the add-a-school form renders, before any school exists. */
   newSchoolEnrollment(): ProviderDescriptor["enrollment"] | null;
@@ -2437,6 +2439,23 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
           },
 
           capabilitiesFor: (school) => provider(school)?.capabilities ?? null,
+          picksAttachment: (school) => provider(school)?.pickAttachment !== undefined,
+          pickAttachment: async (id) => {
+            const record = get().changes[id] ?? get().blanks[id];
+            if (!record || record.content.kind !== "grade") return null;
+            const pick = provider(record.school)?.pickAttachment;
+            if (!pick) return null;
+            const picked = await pick(record.content.target);
+            if (!picked.ok) return errorWords(picked.error);
+            if (picked.value === null) return null;
+            const result = get().dispatchUser(id, {
+              type: "edit",
+              by: "you",
+              patch: { kind: "grade", attachment: picked.value },
+              at: nowIso(),
+            });
+            return result.ok ? null : REJECTION_TEXT[result.error];
+          },
 
           enrollmentFor: (school) => {
             const target = schoolById(school);

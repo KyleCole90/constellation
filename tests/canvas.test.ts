@@ -71,6 +71,7 @@ const canvasWith = (
       fetch: network.fetch,
       now: () => Date.now(),
       packageFile: async () => null,
+      attachmentFile: async () => null,
     }),
   };
 };
@@ -192,6 +193,7 @@ describe("Canvas reads", () => {
       fetch: numbered,
       now: () => Date.now(),
       packageFile: async () => null,
+      attachmentFile: async () => null,
     });
     const courses = await provider.courses();
     expect(courses.ok && courses.value.map((course) => course.ref)).toEqual([
@@ -265,6 +267,7 @@ describe("Canvas reads", () => {
       fetch: endless,
       now: () => Date.now(),
       packageFile: async () => null,
+      attachmentFile: async () => null,
     });
     const courses = await provider.courses();
     expect(courses.ok || courses.error.kind).toBe("rejected");
@@ -349,6 +352,7 @@ describe("Canvas reads", () => {
       fetch: numbered,
       now: () => Date.now(),
       packageFile: async () => null,
+      attachmentFile: async () => null,
     });
     const reads = await Promise.all(
       [2201, 2202, 2203].map((id) =>
@@ -879,6 +883,7 @@ describe("what a Canvas student turned in", () => {
       fetch: async (url) => answer(url),
       now: () => Date.now(),
       packageFile: async () => null,
+      attachmentFile: async () => null,
     });
 
   it("stops downloading a file past 50 MB, whatever Canvas listed its size as", async () => {
@@ -930,6 +935,7 @@ describe("a link submission's public export (#71)", () => {
       },
       now: () => Date.now(),
       packageFile: async () => null,
+      attachmentFile: async () => null,
     });
     return { provider, sent };
   };

@@ -81,6 +81,7 @@ describe("Canvas reads against a live school", () => {
       name === LIVE_PACKAGE?.name
         ? new Blob([await readFile(new URL(`../fixtures/imscc/${name}`, import.meta.url))])
         : null,
+    attachmentFile: async () => null,
   });
 
   const finished = async (course: LmsRef<"course">, signature: string) => {

@@ -3,6 +3,7 @@ import * as v from "valibot";
 import {
   finalGrade,
   scoredRubricPoints,
+  type AttachmentDraft,
   type ChangeContent,
   type FieldKey,
   type GradeContent,
@@ -39,6 +40,7 @@ import {
   type FieldOutcome,
   type LmsProvider,
   type Read,
+  type Secret,
 } from "../../shared/providers/provider";
 
 import { canvasTermSetup } from "./canvas-term";
@@ -162,7 +164,15 @@ const SubmissionRow = v.object({
     null,
   ),
   submission_comments: v.nullish(
-    v.array(v.object({ id: Id, author_id: Id, comment: v.string(), created_at: Time })),
+    v.array(
+      v.object({
+        id: Id,
+        author_id: Id,
+        comment: v.string(),
+        created_at: Time,
+        attachments: Attachments,
+      }),
+    ),
     [],
   ),
   user: v.nullish(v.object({ name: v.string() }), null),
@@ -354,16 +364,16 @@ const textUpTo = async (response: Response, max: number): Promise<string | null>
   return data && new TextDecoder().decode(data);
 };
 
-const PreAttachment = v.object({
-  pre_attachment: v.object({
-    upload_url: v.pipe(v.string(), v.url()),
-    upload_params: v.nullish(
-      v.record(v.string(), v.union([v.string(), v.number(), v.boolean()])),
-      {},
-    ),
-    file_param: v.nullish(v.string(), "file"),
-  }),
+const UploadTarget = v.object({
+  upload_url: v.pipe(v.string(), v.url()),
+  upload_params: v.nullish(
+    v.record(v.string(), v.union([v.string(), v.number(), v.boolean()])),
+    {},
+  ),
+  file_param: v.nullish(v.string(), "file"),
 });
+const PreAttachment = v.object({ pre_attachment: UploadTarget });
+const UploadedFile = v.object({ id: Id });
 
 const PER_PAGE = 100;
 const PARALLEL_PAGES = 8;
@@ -378,6 +388,10 @@ export const createCanvasProvider = (deps: {
   fetch: Fetch;
   now(): number;
   packageFile(name: string): Promise<Blob | null>;
+  attachmentFile(
+    submission: LmsRef<"submission">,
+    attachment: AttachmentDraft,
+  ): Promise<Blob | null>;
 }): LmsProvider => {
   const { school, lease } = deps;
   const origin = `https://${school.host}`;
@@ -581,58 +595,75 @@ export const createCanvasProvider = (deps: {
   const refused = (reason: string): Promise<FieldOutcome> =>
     Promise.resolve({ status: "failed", error: { kind: "rejected", reason } });
 
-  const importPackage = (path: string, form: URLSearchParams, file: Blob, name: string) =>
-    lease.use(async (credential): Promise<FieldOutcome> => {
-      if (!credential) return { status: "failed", error: { kind: "auth_expired" } };
+  const parseJson = (text: string | null): unknown => {
+    if (text === null) return null;
+    try {
+      return JSON.parse(text);
+    } catch {
+      return null;
+    }
+  };
+
+  const withBearer =
+    (secret: Secret) =>
+    (
+      url: string,
+      init: { method: "GET" | "POST"; headers?: Record<string, string>; body?: string },
+    ) =>
+      revealSecret(secret, (token) =>
+        deps.fetch(url, {
+          ...init,
+          headers: {
+            ...init.headers,
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+          redirect: "manual",
+        }),
+      );
+
+  const canvasUpload = (step: {
+    path: string;
+    form: URLSearchParams;
+    file: Blob;
+    name: string;
+    targetOf: (body: unknown) => v.InferOutput<typeof UploadTarget> | null;
+    onNetworkError: FieldOutcome;
+    what: string;
+    noAddress: string;
+  }): Promise<{ ok: true; response: Response } | { ok: false; outcome: FieldOutcome }> =>
+    lease.use(async (credential) => {
+      if (!credential)
+        return { ok: false, outcome: { status: "failed", error: { kind: "auth_expired" } } };
       const secret = credential.kind === "bearer" ? credential.token : credential.access;
-      const lost: FieldOutcome = { status: "unknown", since: isoTime(deps.now()) };
-      const rejected = (reason: string): FieldOutcome => ({
-        status: "failed",
-        error: { kind: "rejected", reason },
+      const withToken = withBearer(secret);
+      const rejected = (reason: string): { ok: false; outcome: FieldOutcome } => ({
+        ok: false,
+        outcome: { status: "failed", error: { kind: "rejected", reason } },
       });
-      const withToken = (
-        url: string,
-        init: { method: "GET" | "POST"; headers?: Record<string, string>; body?: string },
-      ) =>
-        revealSecret(secret, (token) =>
-          deps.fetch(url, {
-            ...init,
-            headers: {
-              ...init.headers,
-              Authorization: `Bearer ${token}`,
-              Accept: "application/json",
-            },
-            redirect: "manual",
-          }),
-        );
 
       let text: string | null;
       try {
-        const created = await withToken(`${origin}/api/v1${path}`, {
+        const created = await withToken(`${origin}/api/v1${step.path}`, {
           method: "POST",
           headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: form.toString(),
+          body: step.form.toString(),
         });
-        if (!created.ok) return { status: "failed", error: await errorOf(created) };
+        if (!created.ok)
+          return { ok: false, outcome: { status: "failed", error: await errorOf(created) } };
         text = await textUpTo(created, MAX_ANSWER_BYTES);
       } catch {
-        return lost;
+        return { ok: false, outcome: step.onNetworkError };
       }
-      let body: unknown;
-      try {
-        body = text === null ? null : JSON.parse(text);
-      } catch {
-        body = null;
-      }
-      const parsed = v.safeParse(PreAttachment, body);
-      const upload = parsed.success ? parsed.output.pre_attachment : null;
-      if (!upload || new URL(upload.upload_url).protocol !== "https:")
-        return rejected("Canvas started the import but gave no address to upload the package to.");
+
+      const upload = step.targetOf(parseJson(text));
+      if (!upload || URL.parse(upload.upload_url)?.protocol !== "https:")
+        return rejected(step.noAddress);
 
       const files = new FormData();
       for (const [key, value] of Object.entries(upload.upload_params))
         files.append(key, String(value));
-      files.append(upload.file_param, file, name);
+      files.append(upload.file_param, step.file, step.name);
       let uploaded: Response;
       try {
         uploaded = await deps.fetch(upload.upload_url, {
@@ -641,14 +672,14 @@ export const createCanvasProvider = (deps: {
           redirect: "manual",
         });
       } catch {
-        return lost;
+        return { ok: false, outcome: step.onNetworkError };
       }
-      const landed: FieldOutcome = { status: "landed", at: isoTime(deps.now()), via: "response" };
-      if (uploaded.ok) return landed;
+      if (uploaded.ok) return { ok: true, response: uploaded };
       if (uploaded.type === "opaqueredirect")
         return rejected("Canvas's file storage redirected the upload where the app can't follow.");
       if (uploaded.status < 300 || uploaded.status >= 400)
-        return rejected(`The package upload was refused (status ${uploaded.status}).`);
+        return rejected(`The ${step.what} upload was refused (status ${uploaded.status}).`);
+
       const location = uploaded.headers.get("location");
       const confirm =
         location !== null && URL.canParse(location, upload.upload_url)
@@ -663,11 +694,79 @@ export const createCanvasProvider = (deps: {
         );
       try {
         const confirmed = await withToken(confirm.toString(), { method: "GET" });
-        return confirmed.ok ? landed : { status: "failed", error: await errorOf(confirmed) };
+        return confirmed.ok
+          ? { ok: true, response: confirmed }
+          : { ok: false, outcome: { status: "failed", error: await errorOf(confirmed) } };
       } catch {
-        return lost;
+        return { ok: false, outcome: step.onNetworkError };
       }
     });
+
+  const importPackage = async (
+    path: string,
+    form: URLSearchParams,
+    file: Blob,
+    name: string,
+  ): Promise<FieldOutcome> => {
+    const done = await canvasUpload({
+      path,
+      form,
+      file,
+      name,
+      targetOf: (body) => {
+        const parsed = v.safeParse(PreAttachment, body);
+        return parsed.success ? parsed.output.pre_attachment : null;
+      },
+      onNetworkError: { status: "unknown", since: isoTime(deps.now()) },
+      what: "package",
+      noAddress: "Canvas started the import but gave no address to upload the package to.",
+    });
+    return done.ok ? { status: "landed", at: isoTime(deps.now()), via: "response" } : done.outcome;
+  };
+
+  const uploadAttachment = async (
+    submissionPath: string,
+    submission: LmsRef<"submission">,
+    attachment: AttachmentDraft,
+  ): Promise<FieldOutcome> => {
+    const file = await deps.attachmentFile(submission, attachment);
+    if (!file) return refused("Choose the attachment again before sending.");
+    const offlineOutcome: FieldOutcome = { status: "failed", error: OFFLINE.error };
+    const { name } = attachment;
+    const params = new URLSearchParams({ name, size: String(file.size) });
+    if (file.type) params.set("content_type", file.type);
+
+    const done = await canvasUpload({
+      path: `${submissionPath}/comments/files`,
+      form: params,
+      file,
+      name,
+      targetOf: (body) => {
+        const parsed = v.safeParse(UploadTarget, body);
+        return parsed.success ? parsed.output : null;
+      },
+      onNetworkError: offlineOutcome,
+      what: "attachment",
+      noAddress: "Canvas gave no address to upload the attachment to.",
+    });
+    if (!done.ok) return done.outcome;
+
+    let uploadedText: string | null;
+    try {
+      uploadedText = await textUpTo(done.response, MAX_ANSWER_BYTES);
+    } catch {
+      return offlineOutcome;
+    }
+    const uploaded = v.safeParse(UploadedFile, parseJson(uploadedText));
+    if (!uploaded.success)
+      return refused("Canvas uploaded the file, but didn't return its file id.");
+
+    return write(
+      "PUT",
+      submissionPath,
+      new URLSearchParams({ "comment[file_ids][]": String(uploaded.output.id) }),
+    );
+  };
 
   const term = canvasTermSetup({
     school,
@@ -712,6 +811,9 @@ export const createCanvasProvider = (deps: {
               ? refused("There is no feedback to send.")
               : write("PUT", at.path, form({ "comment[text_comment]": content.comment }));
           case "attachment":
+            return content.attachment === null
+              ? refused("There is no attachment to send.")
+              : uploadAttachment(at.path, content.target, content.attachment);
           case "message":
           case "conversation":
           case "post":
@@ -821,12 +923,20 @@ export const createCanvasProvider = (deps: {
                 )
               : null,
             excused: row.excused,
-            comments: row.submission_comments.map((comment) => ({
-              id: String(comment.id),
-              mine: comment.author_id === mine.value,
-              text: comment.comment,
-            })),
-            attachments: [],
+            comments: row.submission_comments
+              .filter((comment) => comment.comment !== "")
+              .map((comment) => ({
+                id: String(comment.id),
+                mine: comment.author_id === mine.value,
+                text: comment.comment,
+              })),
+            attachments: row.submission_comments.flatMap((comment) =>
+              comment.attachments.map((attachment) => ({
+                id: String(attachment.id),
+                mine: comment.author_id === mine.value,
+                text: attachment.display_name,
+              })),
+            ),
           },
         };
       }
@@ -1130,12 +1240,14 @@ export const createCanvasProvider = (deps: {
                     ),
                   )
                 : null,
-              comments: row.submission_comments.map((comment) => ({
-                id: String(comment.id),
-                mine: comment.author_id === mine.value,
-                text: comment.comment,
-                at: comment.created_at,
-              })),
+              comments: row.submission_comments
+                .filter((comment) => comment.comment !== "")
+                .map((comment) => ({
+                  id: String(comment.id),
+                  mine: comment.author_id === mine.value,
+                  text: comment.comment,
+                  at: comment.created_at,
+                })),
               body: bodyOf(row),
               page:
                 row.preview_url !== null && URL.parse(row.preview_url)?.origin === origin

@@ -66,6 +66,14 @@ const createBridgeProvider = (
         .invoke("lms.apply", { school, permit: { changeId, content, fields } })
         .catch(() => unknown(fields));
     },
+    pickAttachment: (submission) =>
+      bridge.invoke("lms.pickAttachment", { school, submission }).catch(
+        () =>
+          ({
+            ok: false,
+            error: { kind: "rejected", reason: "The file picker didn't open. Try again." },
+          }) as const,
+      ),
   };
 };
 

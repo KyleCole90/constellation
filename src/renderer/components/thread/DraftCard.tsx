@@ -1,8 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import { Check, Minus, Paperclip, Pencil, Plus } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type RefObject,
+} from "react";
 
 import {
+  MAX_ATTACHMENT_BYTES,
   finalGrade,
   latePenalty,
   OVERALL_RATIONALE,
@@ -827,6 +835,7 @@ function GradeCard({
   const canAttach = useWorkspace(
     (state) => state.capabilitiesFor(record.school)?.attachments ?? false,
   );
+  const nativePicker = useWorkspace((state) => state.picksAttachment(record.school));
   const canExcuse = useWorkspace((state) => state.capabilitiesFor(record.school)?.excuse ?? false);
   const missing = useWorkspace(
     (state) => selectSubmission(state, content.target)?.workflow === "missing",
@@ -841,25 +850,55 @@ function GradeCard({
   // With no rubric and no late penalty the grade is the score, so the card shows that one number once.
   const oneNumber = !content.rubric && !content.late && !overridden && !content.excused;
   const comment = useRef<HTMLTextAreaElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const commentScrolls = useCommentFit(comment);
+  const onAttachmentFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size === 0) {
+      setError(`${file.name} is empty or isn't a file.`);
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      setError(`${file.name} is larger than the 50 MB limit.`);
+      return;
+    }
+    setError(
+      editChange(record.id, {
+        kind: "grade",
+        attachment: { name: file.name, kb: Math.ceil(file.size / 1024) },
+      }),
+    );
+  };
   const attachControl = canAttach && !content.attachment && (
-    <Button
-      variant="ghost-muted"
-      size="sm"
-      title="Attach an annotated PDF"
-      disabled={!summary.canEdit}
-      onClick={() =>
-        setError(
-          editChange(record.id, {
-            kind: "grade",
-            attachment: { name: `${record.subject.replace(/\W+/g, "_")}_feedback.pdf`, kb: 120 },
-          }),
-        )
-      }
-    >
-      <Paperclip />
-      Attach PDF
-    </Button>
+    <>
+      {!nativePicker && (
+        <input
+          ref={fileInput}
+          type="file"
+          className="hidden"
+          aria-label="Attach a file"
+          onChange={onAttachmentFile}
+        />
+      )}
+      <Button
+        variant="ghost-muted"
+        size="sm"
+        title="Attach a file"
+        disabled={!summary.canEdit}
+        onClick={() => {
+          if (nativePicker) {
+            void workspaceStore().getState().pickAttachment(record.id).then(setError);
+            return;
+          }
+          fileInput.current?.click();
+        }}
+      >
+        <Paperclip />
+        Attach file
+      </Button>
+    </>
   );
   return (
     <>
@@ -1007,9 +1046,7 @@ function GradeCard({
         <div className="flex items-center gap-2 text-meta">
           <Paperclip className="size-3.5 flex-none text-muted-foreground" />
           <span className="truncate text-meta">{content.attachment.name}</span>
-          <span className="flex-none text-muted-foreground">
-            {content.attachment.kb} KB, annotated copy
-          </span>
+          <span className="flex-none text-muted-foreground">{content.attachment.kb} KB</span>
           <span className="flex-1" />
           <Button
             variant="ghost"

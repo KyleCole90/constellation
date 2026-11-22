@@ -46,6 +46,9 @@ const DEV_ORIGIN = app.isPackaged
   : (DEV_URL ?? process.env.CONSTELLATION_VERIFY_ORIGIN);
 const FAKE_ONLY = !app.isPackaged && process.env.CONSTELLATION_LMS === "fake";
 const PICKED_PACKAGE_FILE = app.isPackaged ? undefined : process.env.CONSTELLATION_PICKED_PACKAGE;
+const PICKED_ATTACHMENT_FILE = app.isPackaged
+  ? undefined
+  : process.env.CONSTELLATION_PICKED_ATTACHMENT;
 const CLAUDE_OVERRIDE = app.isPackaged ? undefined : process.env.CONSTELLATION_CLAUDE;
 const TELEMETRY_SINK = app.isPackaged ? undefined : process.env.CONSTELLATION_TELEMETRY_SINK;
 const AI_OFF = {
@@ -146,6 +149,14 @@ const start = async () => {
     }
   };
   let pressedAt = Number.NEGATIVE_INFINITY;
+  const chooseFile = async (
+    override: string | undefined,
+    dialogOptions: Electron.OpenDialogOptions,
+  ): Promise<string | null> => {
+    if (override) return (await readFile(override, "utf8").catch(() => "")).trim() || null;
+    const { canceled, filePaths } = await dialog.showOpenDialog(window, dialogOptions);
+    return canceled ? null : (filePaths[0] ?? null);
+  };
   const lms = lmsHandlers({
     lms: FAKE_ONLY
       ? { kind: "fake", makeServer: fakeServer(createFileStorage(join(userData, "lms.json"))) }
@@ -153,16 +164,17 @@ const start = async () => {
     realNow: () => Date.now(),
     leaseFor: (key) => vault.lease(key),
     pressedAt: () => pressedAt,
-    choosePackage: async () => {
-      if (PICKED_PACKAGE_FILE)
-        return (await readFile(PICKED_PACKAGE_FILE, "utf8").catch(() => "")).trim() || null;
-      const { canceled, filePaths } = await dialog.showOpenDialog(window, {
+    choosePackage: () =>
+      chooseFile(PICKED_PACKAGE_FILE, {
         title: "Choose a course export",
         properties: ["openFile"],
         filters: [{ name: "Common Cartridge", extensions: ["imscc"] }],
-      });
-      return canceled ? null : (filePaths[0] ?? null);
-    },
+      }),
+    chooseAttachment: () =>
+      chooseFile(PICKED_ATTACHMENT_FILE, {
+        title: "Attach a file",
+        properties: ["openFile"],
+      }),
   });
   handle(
     (channel, listener) =>
