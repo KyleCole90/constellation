@@ -79,7 +79,7 @@ describe("the Claude Code source", () => {
     expect([reloaded.state().aiSource, reloaded.state().aiOn()]).toEqual(["claude-code", true]);
   });
 
-  it("tells main the source on load and on every change, and the on-device model runs nothing in main", async () => {
+  it("tells main the source on load and on every change", async () => {
     const main = fakeMain({});
     const rig = await makeStoreRig({ noKey: true, agentMain: main.agentMain });
     await rig.clock.run(rig.state().boot());
@@ -87,8 +87,7 @@ describe("the Claude Code source", () => {
     await rig.state().addAiKey(new Secret(STORE_TOKEN));
     await rig.state().chooseClaudeCode();
     await rig.state().turnOffAi();
-    await rig.state().chooseOnDeviceModel();
-    expect(main.told).toEqual(["none", "claude-code", "key", "claude-code", "none", "none"]);
+    expect(main.told).toEqual(["none", "claude-code", "key", "claude-code", "none"]);
 
     await rig.state().chooseClaudeCode();
     const next = fakeMain({});
@@ -104,9 +103,7 @@ describe("the Claude Code source", () => {
     expect(next.told).toEqual(["claude-code"]);
   });
 
-  it("reads no status without a main, or when main doesn't answer", async () => {
-    const web = await makeStoreRig({ noKey: true });
-    expect(await web.state().claudeCodeStatus()).toBeNull();
+  it("reads no status when main doesn't answer", async () => {
     const broken = fakeMain({ "claudeCode.status": async () => ({ installed: "yes" }) });
     const rig = await makeStoreRig({ noKey: true, agentMain: broken.agentMain });
     expect(await rig.state().claudeCodeStatus()).toBeNull();

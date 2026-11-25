@@ -48,7 +48,7 @@ const start = async () => {
   if (!root) throw new Error("index.html has no #root to render into.");
   ReactDOM.createRoot(root).render(
     <React.StrictMode>
-      <DesktopBridgeProvider value={desktopBridge}>
+      <DesktopBridgeProvider value={desktopBridge()}>
         <WorkspaceProvider value={workspaceStore()}>
           <RouterProvider router={router} />
         </WorkspaceProvider>

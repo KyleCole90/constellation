@@ -2,26 +2,27 @@ import { createContext, useContext, useSyncExternalStore } from "react";
 
 import { errorReport, type Bridge } from "~/shared/ipc";
 
-/** The preload's bridge. The desktop app has one; the web demo, and tests in Node, don't. */
-export const desktopBridge: Bridge | undefined =
-  typeof window === "undefined" ? undefined : window.constellation;
+export const desktopBridge = (): Bridge => window.constellation;
 
-const DesktopBridgeContext = createContext<Bridge | undefined>(desktopBridge);
+const DesktopBridgeContext = createContext<Bridge | null>(null);
 
 export const DesktopBridgeProvider = DesktopBridgeContext.Provider;
 
-export const useDesktopBridge = (): Bridge | undefined => useContext(DesktopBridgeContext);
-
-/**
- * Hands an error's type and stack to main, which scrubs them and decides whether a report leaves.
- * The web demo has no main, so it sends nothing.
- */
-export const reportError = (error: unknown) => {
-  void desktopBridge?.invoke("error.report", errorReport(error)).catch(() => {});
+export const useDesktopBridge = (): Bridge => {
+  const bridge = useContext(DesktopBridgeContext);
+  if (!bridge) throw new Error("Render inside a DesktopBridgeProvider.");
+  return bridge;
 };
 
-/** Drafts and chat come from Claude in main. Otherwise, in the web demo and in verify, from the rules agent. */
-export const REAL_AI = desktopBridge !== undefined && !desktopBridge.fakes;
+/** Hands an error's type and stack to main, which scrubs them and decides whether a report leaves. */
+export const reportError = (error: unknown) => {
+  void desktopBridge()
+    .invoke("error.report", errorReport(error))
+    .catch(() => {});
+};
+
+/** Drafts and chat come from Claude in main. Under verify, which runs on fakes, from the rules agent. */
+export const realAi = (): boolean => !desktopBridge().fakes;
 
 /** Anthropic's console page where the teacher caps what their key spends. The app has no cap of its own. */
 export const SPEND_LIMITS_URL = "https://platform.claude.com/settings/limits";
@@ -30,7 +31,7 @@ export const SPEND_LIMITS_URL = "https://platform.claude.com/settings/limits";
 export const CLAUDE_CODE_SETUP_URL = "https://code.claude.com/docs/en/setup";
 
 /** Where saved tokens and keys live, as the UI names it. */
-export const VAULT_PLACE = desktopBridge ? "your Mac's Keychain" : "this browser's vault";
+export const VAULT_PLACE = "your Mac's Keychain";
 
 /** Claude needs the network; the rules agent doesn't. Offline, AI is disabled up front rather than queued. */
 export const OFFLINE_REASON =
@@ -55,4 +56,4 @@ export const onConnectivity = (change: () => void) => {
 
 /** False only when Claude would be asked and the Mac is offline. */
 export const useAiReachable = (): boolean =>
-  useSyncExternalStore(onConnectivity, () => !REAL_AI || isOnline());
+  useSyncExternalStore(onConnectivity, () => !realAi() || isOnline());

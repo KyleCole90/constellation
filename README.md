@@ -16,8 +16,7 @@ Constellation is a desktop app for adjunct instructors who teach at more than on
 - **Approve, then send.** Every grade, comment, reply, and course edit waits on a preview of exactly what will be sent. **Send** stays off until you press **Approve**, and the AI has no way to approve or send. If a send fails partway, the app reads Canvas before it tries again, so a comment is not posted twice.
 - **AI sources.** Choose one in setup or in **Settings**:
   - Claude with your Anthropic API key. The desktop app keeps the key in your Mac's Keychain and never shows it again.
-  - Claude with your own Claude Code subscription (desktop app only).
-  - The on-device model built into macOS (web demo only).
+  - Claude with your own Claude Code subscription.
   - No AI. You fill in grades and replies by hand.
 
 ## Get it
@@ -30,9 +29,7 @@ Constellation is a desktop app for adjunct instructors who teach at more than on
 npm install && npm run dev
 ```
 
-`npm run dev` starts the desktop app. `npm run dev:web` starts the web demo alone, at http://localhost:4320/.
-
-The web demo runs on a fake LMS with two invented schools and talks to no real Canvas. On the setup page, click **Try it with demo schools**, then **Connect** on each row. In the web demo, AI drafts come from built-in rules, and a fake school accepts any token of at least 20 characters.
+`npm run dev` starts the desktop app.
 
 ## Keyboard shortcuts
 
@@ -59,15 +56,14 @@ Enter or Space on the focused **Approve** button approves.
 
 Run these checks before you open a pull request. CI runs the same ones.
 
-| Command                  | What it checks                                                            |
-| ------------------------ | ------------------------------------------------------------------------- |
-| `npm run check`          | Formatting and lint.                                                      |
-| `npm run knip`           | Unused files, exports, and dependencies.                                  |
-| `npm run typecheck`      | Every TypeScript project.                                                 |
-| `npm test`               | The Vitest suite.                                                         |
-| `npm run build`          | The renderer and web demo to `out/dist`, and Electron's main and preload. |
-| `npm run verify:web`     | The web demo loads in headless Chrome, and onboarding finishes.           |
-| `npm run smoke:packaged` | The packaged app keeps its security fuses and boots.                      |
+| Command                  | What it checks                                               |
+| ------------------------ | ------------------------------------------------------------ |
+| `npm run check`          | Formatting and lint.                                         |
+| `npm run knip`           | Unused files, exports, and dependencies.                     |
+| `npm run typecheck`      | Every TypeScript project.                                    |
+| `npm test`               | The Vitest suite.                                            |
+| `npm run build`          | The renderer to `out/dist`, and Electron's main and preload. |
+| `npm run smoke:packaged` | The packaged app keeps its security fuses and boots.         |
 
 `npm run verify -- --only=<module>` drives the real Electron app in a hidden window for one module in `scripts/verify/`. `npm run fmt` fixes formatting. [CLAUDE.md](CLAUDE.md) lists the project's rules and the check that enforces each one.
 

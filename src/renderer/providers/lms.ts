@@ -172,7 +172,6 @@ export const bridgeFakeLms = (
       // One failed ask mustn't freeze the lab for the session; ask again shortly.
       () => setTimeout(() => follow(after), 1000),
     );
-  // A fresh renderer gets a fresh fake, as a page reload does in the web demo.
   command({ do: "reload" });
   follow(null);
 

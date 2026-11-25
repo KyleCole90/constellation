@@ -476,7 +476,7 @@ const WorkspaceDataFields = v.object({
   schools: v.array(SchoolSchema),
   connections: recordOf(ConnectionRecordSchema, SchoolIdSchema),
   onboarding: v.picklist(["welcome", "setup", "done"]),
-  aiSource: v.picklist(["none", "key", "on-device", "claude-code"]),
+  aiSource: v.picklist(["none", "key", "claude-code"]),
   cache: recordOf(SchoolCacheSchema, SchoolIdSchema),
   changes: recordOf(ChangeRecordSchema, ChangeIdSchema),
   threads: recordOf(ThreadSchema, ThreadIdSchema),

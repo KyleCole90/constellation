@@ -226,19 +226,17 @@ describe("removeSchool", () => {
 });
 
 describe("the AI source", () => {
-  it("turns AI on for a key or the on-device model, and off for none", async () => {
+  it("turns AI on for a key, and off for none", async () => {
     const rig = await makeStoreRig({ noKey: true });
     expect(rig.state().aiOn()).toBe(false);
     await rig.state().addAiKey(new Secret(STORE_TOKEN));
     expect([rig.state().aiSource, rig.state().aiOn()]).toEqual(["key", true]);
-    await rig.state().chooseOnDeviceModel();
-    expect([rig.state().aiSource, rig.state().aiOn()]).toEqual(["on-device", true]);
-    expect(await rig.vault.has("ai-key")).toBe(false);
     await rig.state().turnOffAi();
     expect([rig.state().aiSource, rig.state().aiOn()]).toEqual(["none", false]);
+    expect(await rig.vault.has("ai-key")).toBe(false);
   });
 
-  it("a reload with the key gone from the vault turns AI off, and the on-device model survives a reload", async () => {
+  it("a reload with the key gone from the vault turns AI off", async () => {
     const first = await makeStoreRig({ noKey: true });
     await first.state().addAiKey(new Secret(STORE_TOKEN));
     const emptied = await makeStoreRig({
@@ -249,16 +247,6 @@ describe("the AI source", () => {
     });
     await emptied.clock.run(emptied.state().boot());
     expect(emptied.state().aiSource).toBe("none");
-
-    await first.state().chooseOnDeviceModel();
-    const reloaded = await makeStoreRig({
-      noKey: true,
-      storage: first.storage,
-      vault: first.vault,
-      clock: first.clock,
-    });
-    await reloaded.clock.run(reloaded.state().boot());
-    expect(reloaded.state().aiSource).toBe("on-device");
   });
 });
 

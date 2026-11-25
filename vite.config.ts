@@ -62,7 +62,6 @@ export default defineConfig({
     tailwindcss(),
   ],
   resolve: { alias: { "~": fileURLToPath(new URL("./src", import.meta.url)) } },
-  server: { port: 4320, allowedHosts: [".ts.net"] },
   build: { outDir: "out/dist" },
   pack: [
     {
