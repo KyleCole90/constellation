@@ -1,11 +1,10 @@
-import { REAL_AI, SPEND_LIMITS_URL, VAULT_PLACE, desktopBridge } from "~/renderer/desktop";
+import { SPEND_LIMITS_URL, VAULT_PLACE, realAi } from "~/renderer/desktop";
 import { ArrowUpRight } from "lucide-react";
 import { useState } from "react";
 
-import type { AiSource } from "~/renderer/stores/types";
+import type { AiSource } from "~/shared/ai-source";
 import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
-import { isMacDevice } from "../device";
 import { Badge, type BadgeTone } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Dialog, DialogDescription, DialogPopup, DialogTitle } from "../ui/dialog";
@@ -27,11 +26,6 @@ const SOURCE_VIEW: Readonly<Record<AiSource, { label: string; badge: BadgeTone; 
       badge: "success",
       words: "Drafts and chat come from Claude through your Claude Code subscription.",
     },
-    "on-device": {
-      label: "On-device model",
-      badge: "success",
-      words: "Drafts are set to come from the model built into macOS, so nothing leaves this Mac.",
-    },
     none: {
       label: "Off",
       badge: "neutral",
@@ -40,11 +34,7 @@ const SOURCE_VIEW: Readonly<Record<AiSource, { label: string; badge: BadgeTone; 
   };
 
 const CHATS_KEPT = "Your chats are kept and come back when AI is on.";
-const TURN_ON = desktopBridge
-  ? REAL_AI
-    ? "Add a key or use Claude Code"
-    : "Add a key, use Claude Code, or use the on-device model"
-  : "Add a key or use the on-device model";
+const TURN_ON = "Add a key or use Claude Code";
 
 function ClaudeCodeRow() {
   const { reading, weekly, check } = useClaudeCode(true);
@@ -69,7 +59,7 @@ export function AiSection() {
   const [entering, setEntering] = useState(false);
   const [turnOff, setTurnOff] = useState({ open: false, key: false });
   const [keyToClaudeCode, setKeyToClaudeCode] = useState(false);
-  const mac = isMacDevice();
+  const real = realAi();
   const view = SOURCE_VIEW[source];
   const store = () => workspaceStore().getState();
   return (
@@ -77,7 +67,7 @@ export function AiSection() {
       title="AI"
       description={
         ai
-          ? !REAL_AI
+          ? !real
             ? "AI is on. Drafts come from built-in rules for now, because no model is wired up in this prototype."
             : source === "claude-code"
               ? "AI is on. Drafts and chat come from Claude through your Claude Code subscription, and count against your plan's limits."
@@ -103,7 +93,7 @@ export function AiSection() {
               >
                 {source === "key" ? "Replace key" : "Use a key"}
               </Button>
-              {desktopBridge && source !== "claude-code" && (
+              {source !== "claude-code" && (
                 <Button
                   variant={source === "none" ? "default" : "outline"}
                   onClick={() =>
@@ -111,15 +101,6 @@ export function AiSection() {
                   }
                 >
                   Use Claude Code
-                </Button>
-              )}
-              {!REAL_AI && source !== "on-device" && (
-                <Button
-                  disabled={!mac}
-                  title={mac ? undefined : "Only on a Mac with Apple Intelligence."}
-                  onClick={() => void store().chooseOnDeviceModel()}
-                >
-                  Use on-device model
                 </Button>
               )}
               {source !== "none" && (
@@ -134,7 +115,7 @@ export function AiSection() {
           }
         />
         {source === "claude-code" && <ClaudeCodeRow />}
-        {REAL_AI && source !== "claude-code" && (
+        {real && source !== "claude-code" && (
           <SettingsRow
             data-testid="ai-spend-row"
             title="Spend limit"
@@ -152,11 +133,6 @@ export function AiSection() {
           />
         )}
       </SettingsCard>
-      {!REAL_AI && !mac && (
-        <p className="text-meta text-muted-foreground">
-          The on-device model is only on a Mac with Apple Intelligence.
-        </p>
-      )}
       <ConfirmDialog
         open={turnOff.open}
         onOpenChange={(open) => setTurnOff((state) => ({ ...state, open }))}
@@ -188,7 +164,7 @@ export function AiSection() {
           <DialogTitle>{source === "key" ? "Replace the AI key" : "Add an AI key"}</DialogTitle>
           <DialogDescription>
             The key goes in {VAULT_PLACE} and is never shown again. A saved key turns on AI drafts,
-            {REAL_AI ? " which come from Claude." : " which come from built-in rules for now."}
+            {real ? " which come from Claude." : " which come from built-in rules for now."}
           </DialogDescription>
           <AiKeyForm
             submitLabel={source === "key" ? "Replace key" : "Save key"}

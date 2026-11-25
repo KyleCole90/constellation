@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
@@ -16,9 +15,8 @@ import {
   TWIN_IMAGES,
   unnumbered,
 } from "./verify/layout-audit.mjs";
-import { startBuiltServer, startDevServer } from "./dev-server.mjs";
+import { startDevServer } from "./dev-server.mjs";
 
-const WEB = process.argv.includes("--web");
 const ONLY = process.argv.find((arg) => arg.startsWith("--only="))?.slice(7);
 const ALL_MODULES = [
   "shell",
@@ -33,7 +31,7 @@ const ALL_MODULES = [
   "focus",
   "theme",
 ];
-const MODULES = WEB ? ["web"] : ONLY ? [ONLY] : ALL_MODULES;
+const MODULES = ONLY ? [ONLY] : ALL_MODULES;
 const strayTwins = Object.keys(TWIN_IMAGES).filter((name) => !ALL_MODULES.includes(name));
 if (strayTwins.length) throw new Error(`TWIN_IMAGES names no verify module: ${strayTwins}`);
 
@@ -46,13 +44,6 @@ const AUDIT_OUT = process.env.VERIFY_AUDIT_OUT
   : join(tmpdir(), "constellation-layout-audit.json");
 const AUDIT_GATE = process.env.VERIFY_AUDIT !== "report";
 const TWIN = { width: 1180, height: 800 };
-const CHROME =
-  process.env.CHROME_BIN ??
-  [
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    "/usr/bin/google-chrome",
-    "/usr/bin/chromium",
-  ].find((path) => existsSync(path));
 const WAIT_MS = 10_000;
 const POLL_MS = 40;
 const SETTLE_MS = 500;
@@ -105,40 +96,21 @@ const fakeClaudeFile = (profile) => join(profile, "fake-claude.txt");
 const telemetrySinkFile = (profile) => join(profile, "telemetry.jsonl");
 const FAKE_CLAUDE = join(ROOT, "scripts/verify/fake-claude.mjs");
 const launch = (port, profile, origin) =>
-  WEB
-    ? spawn(
-        CHROME,
-        [
-          "--headless=new",
-          "--disable-gpu",
-          "--no-first-run",
-          "--hide-scrollbars",
-          `--remote-debugging-port=${port}`,
-          `--user-data-dir=${profile}`,
-          "about:blank",
-        ],
-        { stdio: "ignore" },
-      )
-    : spawn(
-        electron,
-        [
-          `--remote-debugging-port=${port}`,
-          `--user-data-dir=${profile}`,
-          "--use-mock-keychain",
-          ROOT,
-        ],
-        {
-          stdio: "ignore",
-          env: {
-            ...APP_ENV,
-            CONSTELLATION_VERIFY_ORIGIN: origin,
-            CONSTELLATION_PICKED_PACKAGE: pickedPackageFile(profile),
-            CONSTELLATION_CLAUDE: FAKE_CLAUDE,
-            CONSTELLATION_FAKE_CLAUDE_STATE: fakeClaudeFile(profile),
-            CONSTELLATION_TELEMETRY_SINK: telemetrySinkFile(profile),
-          },
-        },
-      );
+  spawn(
+    electron,
+    [`--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, "--use-mock-keychain", ROOT],
+    {
+      stdio: "ignore",
+      env: {
+        ...APP_ENV,
+        CONSTELLATION_VERIFY_ORIGIN: origin,
+        CONSTELLATION_PICKED_PACKAGE: pickedPackageFile(profile),
+        CONSTELLATION_CLAUDE: FAKE_CLAUDE,
+        CONSTELLATION_FAKE_CLAUDE_STATE: fakeClaudeFile(profile),
+        CONSTELLATION_TELEMETRY_SINK: telemetrySinkFile(profile),
+      },
+    },
+  );
 
 const stop = (child) =>
   new Promise((resolve) => {
@@ -176,7 +148,7 @@ const main = async () => {
       (await readdir(SHOTS)).map((name) => rm(join(SHOTS, name), { recursive: true, force: true })),
     );
   await mkdir(SHOTS, { recursive: true });
-  const vite = WEB ? await startBuiltServer() : await startDevServer();
+  const vite = await startDevServer();
   const { origin } = vite;
   let app = null;
   let profile = null;
@@ -266,7 +238,7 @@ const main = async () => {
       const version = `http://127.0.0.1:${port}/json/version`;
       const { webSocketDebuggerUrl } = await until(
         async () => (await fetch(version)).json(),
-        `${WEB ? "Chrome" : "Electron"} did not come up at ${version}`,
+        `Electron did not come up at ${version}`,
       );
       socket = new WebSocket(webSocketDebuggerUrl);
       socket.addEventListener("message", onMessage);
@@ -278,9 +250,8 @@ const main = async () => {
         "no page opened",
       );
       ({ sessionId: session } = await send("Target.attachToTarget", { targetId, flatten: true }));
-      const first = WEB ? "about:" : "app:";
       await until(
-        () => evaluate(`location.protocol === "${first}" && document.readyState === "complete"`),
+        () => evaluate(`location.protocol === "app:" && document.readyState === "complete"`),
         "the first page never loaded",
       );
       loaded.length = 0;
@@ -382,12 +353,8 @@ const main = async () => {
 
     const t = {
       origin,
-      vaultFile: () =>
-        WEB
-          ? Promise.resolve("{}")
-          : readFile(join(profile, "vault.json"), "utf8").catch(() => "{}"),
-      telemetrySink: () =>
-        WEB ? Promise.resolve("") : readFile(telemetrySinkFile(profile), "utf8").catch(() => ""),
+      vaultFile: () => readFile(join(profile, "vault.json"), "utf8").catch(() => "{}"),
+      telemetrySink: () => readFile(telemetrySinkFile(profile), "utf8").catch(() => ""),
       shots: SHOTS,
       pickPackage: (path) => writeFile(pickedPackageFile(profile), path ?? ""),
       signInClaude: (signedIn) =>

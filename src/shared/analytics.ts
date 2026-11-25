@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
-const AiSourceSchema = v.picklist(["none", "key", "on-device", "claude-code"]);
+import { AiSourceSchema } from "./ai-source";
+
 const DraftKindSchema = v.picklist(["grade", "reply", "announcement", "message"]);
 export type DraftKind = v.InferOutput<typeof DraftKindSchema>;
 

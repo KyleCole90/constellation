@@ -81,17 +81,17 @@ import {
 } from "~/shared/domain/lms";
 import type { SetupLive } from "~/shared/domain/setup";
 import type { AnalyticsEvent, DraftKind } from "~/shared/analytics";
-import type { AgentSource, Bridge, ClaudeCodeStatus } from "~/shared/ipc";
+import type { AiSource } from "~/shared/ai-source";
+import type { Bridge, ClaudeCodeStatus } from "~/shared/ipc";
 import { workName } from "~/shared/domain/workName";
 import { isRecord } from "~/shared/is-record";
-import { FakeCanvasServer, type StorageLike } from "~/shared/providers/fake-canvas/server";
-import type { FaultLab, NoiseConfig } from "~/shared/providers/fake-canvas/faults";
+import type { StorageLike } from "~/shared/providers/fake-canvas/server";
+import type { FaultLab } from "~/shared/providers/fake-canvas/faults";
 export { NoisePatchSchema } from "~/shared/providers/fake-canvas/lab";
 import {
   FAKE_CANVAS,
   FAKE_CANVAS_FACE,
   FAKE_SCHOOLS,
-  createFakeCanvasDescriptor,
   fakeSchoolAt,
 } from "~/shared/providers/fake-canvas/provider";
 import { SEED } from "~/shared/providers/fake-canvas/seed";
@@ -109,18 +109,12 @@ import {
   type SecretRefusal,
   type Vault,
 } from "~/shared/providers/provider";
-import {
-  OFFLINE_SEND_REASON,
-  REAL_AI,
-  desktopBridge,
-  isOnline,
-  onConnectivity,
-} from "~/renderer/desktop";
+import { OFFLINE_SEND_REASON, desktopBridge, isOnline, onConnectivity } from "~/renderer/desktop";
 import { createAutoSync, type AutoSyncDeps } from "~/renderer/stores/autoSync";
 import { createBridgeAgent } from "~/renderer/providers/agent";
 import { bridgeCanvas, bridgeFakeLms } from "~/renderer/providers/lms";
 import { CANVAS, CANVAS_FACE } from "~/shared/providers/canvas";
-import { createAppVault } from "~/renderer/providers/vault";
+import { createBridgeVault } from "~/renderer/providers/vault";
 import {
   DEFAULT_RETRY_POLICY,
   createWriteback,
@@ -154,7 +148,6 @@ import {
 import { createSetupActions, type SetupActions, type SetupOptions } from "./setup";
 import { WORKSPACE_STORAGE_KEY } from "./storage-key";
 import type {
-  AiSource,
   ConnectionRecord,
   FieldEdit,
   HandedWork,
@@ -215,12 +208,11 @@ interface WorkspaceActions extends SetupActions {
   removeSchool(school: SchoolId): Promise<boolean>;
   disconnect(school: SchoolId): Promise<void>;
   addAiKey(secret: Secret): Promise<void>;
-  chooseOnDeviceModel(): Promise<void>;
   /** The teacher's own Claude Code, which keeps no secret here, so any saved key is forgotten. */
   chooseClaudeCode(): Promise<void>;
   /** Forgets any saved key. */
   turnOffAi(): Promise<void>;
-  /** What main reads of the teacher's Claude Code. Null when there is no main to ask, as in the web demo, or it didn't answer. */
+  /** What main reads of the teacher's Claude Code. Null when main didn't answer. */
   claudeCodeStatus(): Promise<ClaudeCodeStatus | null>;
   scopeWordsFor(school: SchoolId): readonly string[];
   syncSchool(school: SchoolId): Promise<boolean>;
@@ -352,15 +344,15 @@ export interface WorkspaceDeps {
   subscribeStorage?(onChange: () => void): void;
   /** Calls back when the teacher comes back to the window. */
   subscribeFocus?(onFocus: () => void): void;
-  /** The desktop app's network. Without one, as in the web demo, whose LMS is in the page, the app is always online. */
+  /** The desktop app's network. Without one the app is always online. */
   connectivity?: { online(): boolean; subscribe(onChange: () => void): void };
   timer?: AutoSyncDeps["timer"];
-  /** Main's half of the AI source: which source `agent.run` follows, and the teacher's Claude Code. The web demo has none. */
+  /** Main's half of the AI source: which source `agent.run` follows, and the teacher's Claude Code. */
   agentMain?: {
-    source(source: AgentSource): Promise<void>;
+    source(source: AiSource): Promise<void>;
     claudeCode(): Promise<ClaudeCodeStatus>;
   };
-  /** Hands main one usage event, which it sends only if the teacher allows it. The web demo has none. */
+  /** Hands main one usage event, which it sends only if the teacher allows it. */
   track?(event: AnalyticsEvent): void;
 }
 
@@ -410,13 +402,6 @@ const migrateV3 = (state: Record<string, unknown>): Record<string, unknown> => {
   return { ...state, threads: Object.fromEntries(migrated) };
 };
 
-/** The web demo's on-device model never reaches main, so main runs nothing for it. */
-const AGENT_SOURCE: Readonly<Record<AiSource, AgentSource>> = {
-  none: "none",
-  key: "key",
-  "on-device": "none",
-  "claude-code": "claude-code",
-};
 const STEP_ORDER: readonly OnboardingStep[] = ["welcome", "setup", "done"];
 /** Moving past a step completes it, so `STEP_ORDER` up to `done`. */
 const COMPLETABLE = ["welcome", "setup"] as const;
@@ -899,7 +884,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
         // The reset that follows overwrites this key, and this may be the only record of what already landed.
         deps.storage.setItem(UNREADABLE_BACKUP_KEY, raw);
         loadNotice =
-          "Saved data could not be read, so the workspace was reset. A copy of it was kept in this browser.";
+          "Saved data could not be read, so the workspace was reset. A copy of it was kept on this Mac.";
       }
       return parsed;
     },
@@ -921,7 +906,7 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
 
   // Main starts with no source and never falls back, so it hears the teacher's choice on load and on every change.
   const tellMain = (source: AiSource) =>
-    deps.agentMain?.source(AGENT_SOURCE[source]).catch(() => {}) ?? Promise.resolve();
+    deps.agentMain?.source(source).catch(() => {}) ?? Promise.resolve();
   const track = (event: AnalyticsEvent) => deps.track?.(event);
 
   // Set just below, once the store exists. Actions only run after that.
@@ -2043,12 +2028,6 @@ export const createWorkspaceStore = (deps: WorkspaceDeps): WorkspaceStore => {
             dropBlanks();
           },
 
-          chooseOnDeviceModel: async () => {
-            await deps.vault.forget("ai-key");
-            chooseSource("on-device");
-            dropBlanks();
-          },
-
           chooseClaudeCode: async () => {
             await deps.vault.forget("ai-key");
             chooseSource("claude-code");
@@ -2701,33 +2680,22 @@ const agentMainOf = (bridge: Bridge): NonNullable<WorkspaceDeps["agentMain"]> =>
   claudeCode: () => bridge.invoke("claudeCode.status", undefined),
 });
 
-const browserDeps = (): WorkspaceDeps => ({
+const desktopDeps = (bridge: Bridge): WorkspaceDeps => ({
   storage: localStorage,
-  vault: createAppVault(),
-  backend: !desktopBridge
-    ? fakeCanvasBackend({})
-    : desktopBridge.fakes
-      ? bridgeFakeBackend(desktopBridge)
-      : bridgeCanvasBackend(desktopBridge),
-  agent:
-    REAL_AI && desktopBridge ? createBridgeAgent(desktopBridge) : standInFor(createRuleAgent()),
-  ...(desktopBridge
-    ? {
-        connectivity: { online: isOnline, subscribe: onConnectivity },
-        agentMain: agentMainOf(desktopBridge),
-        track: (event: AnalyticsEvent) =>
-          void desktopBridge?.invoke("analytics.track", event).catch(() => {}),
-      }
-    : {}),
-  // Verify and the web demo run the fake LMS, which changes only when a test changes it, so no timer races their steps.
-  ...(REAL_AI
-    ? {
+  vault: createBridgeVault(bridge),
+  connectivity: { online: isOnline, subscribe: onConnectivity },
+  agentMain: agentMainOf(bridge),
+  track: (event: AnalyticsEvent) => void bridge.invoke("analytics.track", event).catch(() => {}),
+  ...(bridge.fakes
+    ? { backend: bridgeFakeBackend(bridge), agent: standInFor(createRuleAgent()) }
+    : {
+        backend: bridgeCanvasBackend(bridge),
+        agent: createBridgeAgent(bridge),
         timer: (run, ms) => {
           const id = setTimeout(run, ms);
           return () => clearTimeout(id);
         },
-      }
-    : {}),
+      }),
   realNow: () => Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   random: () => Math.random(),
@@ -2742,7 +2710,7 @@ const browserDeps = (): WorkspaceDeps => ({
 let lab: FaultLab | null = null;
 const FAKE_HOSTS = FAKE_SCHOOLS.map((school) => school.host);
 
-const fakeBackend = (descriptor: ProviderDescriptor, reset: () => void): Backend => ({
+export const fakeBackend = (descriptor: ProviderDescriptor, reset: () => void): Backend => ({
   schoolAt: async (host) => fakeSchoolAt(host),
   newSchoolProvider: "fake-canvas",
   descriptors: {
@@ -2751,30 +2719,6 @@ const fakeBackend = (descriptor: ProviderDescriptor, reset: () => void): Backend
   },
   demo: { hosts: FAKE_HOSTS, epoch: new Date(SEED.now).getTime(), seedThreads, reset },
 });
-
-/** Wires the fake LMS in. A real provider replaces this one function and the screens never notice. */
-export const fakeCanvasBackend =
-  (options: {
-    noise?: NoiseConfig;
-    demoScript?: boolean;
-    storage?: StorageLike;
-    sleep?: (ms: number) => Promise<void>;
-    random?: () => number;
-    onServer?: (server: FakeCanvasServer) => void;
-  }) =>
-  (now: () => number): Backend => {
-    const server = new FakeCanvasServer({
-      storage: options.storage ?? localStorage,
-      now,
-      sleep: options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
-      random: options.random ?? (() => Math.random()),
-      ...(options.noise ? { noise: options.noise } : {}),
-      ...(options.demoScript === undefined ? {} : { demoScript: options.demoScript }),
-    });
-    lab = server;
-    options.onServer?.(server);
-    return fakeBackend(createFakeCanvasDescriptor(server, now), () => server.reset());
-  };
 
 /** Under verify, the desktop app's fake LMS runs in main, so here it is a client of the bridge. */
 const bridgeFakeBackend =
@@ -2804,7 +2748,7 @@ const bridgeCanvasBackend =
 
 let instance: WorkspaceStore | null = null;
 export const workspaceStore = (): WorkspaceStore =>
-  (instance ??= createWorkspaceStore(browserDeps()));
+  (instance ??= createWorkspaceStore(desktopDeps(desktopBridge())));
 
 /** The fake LMS's failure lab, or null when the app runs no fake. */
 export const faultLab = (): FaultLab | null => {

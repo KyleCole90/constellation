@@ -8,12 +8,11 @@ Run these before you open a PR. CI runs the same commands, plus the full verify 
 - `npm run knip`: unused files, exports and dependencies.
 - `npm run typecheck`: the renderer (DOM), shared (no DOM or Node), main (Node, no DOM), preload, test and tooling (`electron`, `scripts` and root `*.ts` files) TypeScript projects.
 - `npm test`: Vitest.
-- `npm run build`: writes the renderer to `out/dist` (`vp build`, also the web demo) and Electron's main and preload to `out/main` and `out/preload` (`vp pack`).
+- `npm run build`: writes the renderer to `out/dist` (`vp build`) and Electron's main and preload to `out/main` and `out/preload` (`vp pack`).
 - `npm run verify -- --only=<module>` for each verify module your change touches, in the foreground. `npm run verify` builds, then drives the real Electron app in a hidden window. CI runs the full suite (about 9 minutes); don't run it locally.
-- `npm run verify:web`: the web demo build loads in headless Chrome, and onboarding finishes.
 - `npm run smoke:packaged`: packages the app unsigned with electron-builder into `out/release`, reads its fuses back, boots it, and checks it ignores `--inspect` and quits on each switch and variable `src/main/security.ts` refuses (about 15 seconds).
 
-`npm run dev` runs the desktop app against vite and restarts it when `src/main`, `src/preload` or `src/shared` changes; `npm run dev:web` runs the web app alone. After `npm run build`, `npx electron .` runs the built app from `app://`.
+`npm run dev` runs the desktop app against vite and restarts it when `src/main`, `src/preload` or `src/shared` changes. After `npm run build`, `npx electron .` runs the built app from `app://`.
 
 Run `npm run fmt` to fix formatting. The pre-commit hook runs fmt and lint on staged files, then knip. Fix a finding in the code. A disable comment needs a reason after `--`. A `TS review debt:` disable marks a known violation to fix; don't copy it to new code.
 

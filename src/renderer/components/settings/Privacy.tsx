@@ -35,10 +35,7 @@ interface Status {
   readonly available: boolean;
 }
 
-/**
- * The usage-data and crash-report choice main keeps, which the setup page and Settings both show and change. Null
- * until main answers, and always in the web demo, which sends nothing.
- */
+/** The usage-data and crash-report choice main keeps, which the setup page and Settings both show and change. Null until main answers. */
 const createTelemetryChoice = (bridge: Bridge) => {
   let status: Status | null = null;
   const listeners = new Set<() => void>();
@@ -74,30 +71,22 @@ export const telemetryChoiceFor = (bridge: Bridge) => {
   return choice;
 };
 
-const noopSubscribe = () => () => {};
-const noStatus = (): Status | null => null;
-
 const useTelemetryChoice = () => {
-  const bridge = useDesktopBridge();
-  const choice = bridge ? telemetryChoiceFor(bridge) : null;
-  const status = useSyncExternalStore(
-    choice ? choice.subscribe : noopSubscribe,
-    choice ? choice.get : noStatus,
-    choice ? choice.get : noStatus,
-  );
+  const choice = telemetryChoiceFor(useDesktopBridge());
+  const status = useSyncExternalStore(choice.subscribe, choice.get, choice.get);
   useEffect(() => {
-    void choice?.load();
+    void choice.load();
   }, [choice]);
   return { choice, status };
 };
 
 /**
  * The one opt-out, on by default. A copy of the app that can't send (no build key, not packaged, or turned off in its
- * environment) says so instead of offering a choice that does nothing. Hidden in the web demo, which has nothing to turn off.
+ * environment) says so instead of offering a choice that does nothing.
  */
 function TelemetryToggle() {
   const { choice, status } = useTelemetryChoice();
-  if (!choice || !status) return null;
+  if (!status) return null;
   if (!status.available)
     return (
       <p data-testid="usage-data" className="text-meta text-muted-foreground">
@@ -126,17 +115,14 @@ function TelemetryToggle() {
 
 /** The setup page's privacy step: the opt-out, then the whole notice behind a disclosure. */
 export function SetupPrivacy({ title }: { title: ReactNode }) {
-  const bridge = useDesktopBridge();
   const sends = useTelemetryChoice().status?.available === true;
   return (
     <section data-testid="setup-privacy" className="flex flex-col gap-3">
       {title}
       <p className="text-meta text-muted-foreground">
-        {!bridge
-          ? "This web demo sends nothing anywhere."
-          : sends
-            ? "There is no Constellation server. Only your school, Anthropic (with your key or through your Claude Code), and PostHog, for usage data and scrubbed crash reports, hear from this Mac. Constellation never asks for, sees or stores your Claude login."
-            : "There is no Constellation server. Only your school, and Anthropic if you add a key or use Claude Code, hear from this Mac. Constellation never asks for, sees or stores your Claude login."}
+        {sends
+          ? "There is no Constellation server. Only your school, Anthropic (with your key or through your Claude Code), and PostHog, for usage data and scrubbed crash reports, hear from this Mac. Constellation never asks for, sees or stores your Claude login."
+          : "There is no Constellation server. Only your school, and Anthropic if you add a key or use Claude Code, hear from this Mac. Constellation never asks for, sees or stores your Claude login."}
       </p>
       <TelemetryToggle />
       <details className="rounded-xl border border-border bg-card px-card py-3">
@@ -150,22 +136,15 @@ export function SetupPrivacy({ title }: { title: ReactNode }) {
 }
 
 export function PrivacySection() {
-  const bridge = useDesktopBridge();
   return (
     <SettingsSection
       title="Privacy"
-      description={
-        bridge
-          ? "There is no Constellation server. Here is everything that leaves this Mac."
-          : "This web demo sends nothing anywhere. Here is what the desktop app sends."
-      }
+      description="There is no Constellation server. Here is everything that leaves this Mac."
     >
       <SettingsCard data-testid="privacy-card">
-        {bridge && (
-          <SettingsRow title="Usage data and crash reports">
-            <TelemetryToggle />
-          </SettingsRow>
-        )}
+        <SettingsRow title="Usage data and crash reports">
+          <TelemetryToggle />
+        </SettingsRow>
         <SettingsRow title="The full notice">
           <PrivacyNotice />
         </SettingsRow>

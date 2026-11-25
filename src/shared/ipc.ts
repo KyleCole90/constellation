@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { AiSourceSchema } from "./ai-source";
 import { AnalyticsEventSchema } from "./analytics";
 import { LabCommandSchema, LabSnapshotSchema } from "./providers/fake-canvas/lab";
 import type { VaultKey } from "./providers/provider";
@@ -89,9 +90,6 @@ const AgentRunOutput = v.variant("ok", [
   }),
 ]);
 
-const AgentSourceSchema = v.picklist(["none", "key", "claude-code"]);
-export type AgentSource = v.InferOutput<typeof AgentSourceSchema>;
-
 const WeeklyUsage = v.strictObject({
   usedPercent: v.pipe(v.number(), v.minValue(0)),
   resetsAt: v.pipe(v.string(), v.isoTimestamp()),
@@ -168,7 +166,7 @@ const ipc = {
   "vault.forget": { input: ByKey, output: v.void() },
   "vault.standIn": { input: ByKey, output: v.nullable(v.string()) },
   "agent.run": { input: AgentRunInput, output: AgentRunOutput },
-  "agent.source": { input: v.strictObject({ source: AgentSourceSchema }), output: v.void() },
+  "agent.source": { input: v.strictObject({ source: AiSourceSchema }), output: v.void() },
   "claudeCode.status": { input: v.void(), output: ClaudeCodeStatus },
   "lms.schoolAt": { input: v.strictObject({ host: v.string() }), output: v.nullable(SchoolSchema) },
   "lms.verify": { input: BySchool, output: readOf(AccountInfoSchema) },

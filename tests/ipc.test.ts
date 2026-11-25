@@ -134,7 +134,7 @@ describe("main's handlers", () => {
     ],
     ["agent.run", { request: "Draft a grade.", history: [], scope: {}, model: "claude-fable-5-2" }],
     ["agent.source", "key"],
-    ["agent.source", { source: "on-device" }],
+    ["agent.source", { source: "rules" }],
     ["agent.source", { source: "key", token: "sk-ant-x" }],
     ["claudeCode.status", { path: "/bin/sh" }],
   ])("reject %s with a bad input %j", async (channel, input) => {

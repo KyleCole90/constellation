@@ -1,4 +1,5 @@
 import type { AnswerLine, HandoffWork } from "~/shared/agent/agent";
+import type { AiSource } from "~/shared/ai-source";
 import type { ChangeRecord, LmsError } from "~/shared/domain/change";
 import type { CourseShell } from "~/shared/domain/content";
 import type { CourseSetup } from "~/shared/domain/setup";
@@ -116,9 +117,6 @@ export type Thread = ThreadSubject & {
 };
 
 export type OnboardingStep = "welcome" | "setup" | "done";
-
-/** Where AI drafts come from. A key lives in the vault, the on-device model needs a Mac, and Claude Code is the teacher's own install. */
-export type AiSource = "none" | "key" | "on-device" | "claude-code";
 
 export type QueueFilter =
   | "all"

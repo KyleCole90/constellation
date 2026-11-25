@@ -59,7 +59,7 @@ const READ_SURFACES = `async () => {
     indexedStores: indexedValues.map((entry) => entry.store),
     window: Object.getOwnPropertyNames(window).map((name) => { try { const value = window[name]; return typeof value === "string" ? value : ""; } catch { return ""; } }).join("\\n"),
     // What DevTools can ask main for: every key, and each one's stand-in.
-    bridge: window.constellation ? JSON.stringify(await Promise.all((await window.constellation.invoke("vault.keys")).map(async (key) => [key, await window.constellation.invoke("vault.standIn", { key })]))) : "",
+    bridge: JSON.stringify(await Promise.all((await window.constellation.invoke("vault.keys")).map(async (key) => [key, await window.constellation.invoke("vault.standIn", { key })]))),
   };
 }`;
 
@@ -510,19 +510,6 @@ const refusesDuplicate = async (
   );
 };
 
-const pretendPlatform = async (t, platform, brand) => {
-  const { identifier } = await t.cdp("Page.addScriptToEvaluateOnNewDocument", {
-    source: `Object.defineProperty(Navigator.prototype, "platform", { get: () => ${JSON.stringify(platform)} }); Object.defineProperty(Navigator.prototype, "userAgentData", { get: () => ({ platform: ${JSON.stringify(brand)} }) });`,
-  });
-  await t.reload();
-  return async () => {
-    await t.cdp("Page.removeScriptToEvaluateOnNewDocument", { identifier });
-    await t.reload();
-  };
-};
-
-const onDeviceRadio = `document.querySelector('input[name="ai-source"][value="on-device"]')`;
-
 const finishReason = (t) =>
   t.eval(`(() => {
     const button = [...document.querySelectorAll("main button")].find((b) => b.innerText === "Finish setup");
@@ -608,7 +595,7 @@ const onboarding = async (t, shot) => {
     `document.querySelector('[data-testid="setup-privacy"]').textContent`,
   );
   t.assert(
-    !/whatever you choose|CONSTELLATION_|JavaScript|web demo/.test(privacyWords),
+    !/whatever you choose|CONSTELLATION_|JavaScript/.test(privacyWords),
     "setup: Privacy has no checkbox that does nothing and no developer words",
     privacyWords,
   );
@@ -921,12 +908,6 @@ const onboarding = async (t, shot) => {
     await t.vaultFile(),
   );
   t.assert(
-    !(await t.eval(
-      `indexedDB.databases().then((dbs) => dbs.some((db) => db.name === "lms-app-vault"))`,
-    )),
-    "the desktop app keeps no vault in IndexedDB",
-  );
-  t.assert(
     (await surfaces(t)).bridge.match(/stand-in:/g)?.length === 2,
     "DevTools can get a stand-in for each school from main, and the leak scan read both",
   );
@@ -956,43 +937,6 @@ const onboarding = async (t, shot) => {
   await enter(t, ROW_FIELD(RSU), SECRETS.rsu);
   await t.key("Enter");
   await t.waitFor(`${rowStatus(RSU)} === "connected"`, "a removed school connects again", 20_000);
-
-  const undoWindows = await pretendPlatform(t, "Win32", "Windows");
-  await t.waitFor(`${onDeviceRadio}`, "the AI choice is back after reloading as Windows");
-  t.assert(
-    (await t.eval(`${onDeviceRadio}.disabled`)) === true,
-    "not a Mac: the on-device option is disabled",
-  );
-  t.assert(
-    (await t.text('[data-ai-source="on-device"]')).includes("Only on a Mac"),
-    "not a Mac: the on-device option says why",
-  );
-  await t.click('input[name="ai-source"][value="on-device"]', { timeout: 300 }).catch(() => {});
-  t.assert(
-    (await t.eval(`${onDeviceRadio}.checked`)) === false,
-    "not a Mac: clicking the on-device option selects nothing",
-  );
-  await shot("ai-not-mac");
-  await undoWindows();
-  const undoMac = await pretendPlatform(t, "MacIntel", "macOS");
-  await t.waitFor(`${onDeviceRadio}`, "the AI choice is back after reloading as a Mac");
-  t.assert(
-    (await t.eval(`${onDeviceRadio}.disabled`)) === false,
-    "a Mac: the on-device option is enabled",
-  );
-  await t.click('input[name="ai-source"][value="on-device"]');
-  t.assert(
-    (await t.eval(`${onDeviceRadio}.checked`)) === true,
-    "a Mac: the on-device option can be chosen",
-  );
-  t.assert(
-    !(await t.eval(
-      `[...document.querySelectorAll("main button")].find((b) => b.innerText === "Finish setup").disabled`,
-    )),
-    "a Mac: on-device is enough to finish",
-  );
-  await shot("ai-on-device");
-  await undoMac();
 
   const claudeCode = '[data-ai-source="claude-code"]';
   const claudeCodeReads = (reading, tag) =>
@@ -1402,10 +1346,8 @@ const ai = async (t, shot) => {
   await says("Anthropic key", "the key stays until the removal is confirmed");
   await t.click("Remove key", { within: DIALOG });
   await says("Off", "confirming Remove key turns AI off");
-  const undoMac = await pretendPlatform(t, "MacIntel", "macOS");
-  await t.click("Use on-device model", { within: row });
-  await says("On-device model", "the on-device model can be chosen in Settings");
-  await undoMac();
+  await t.click("Use Claude Code", { within: row });
+  await says("Claude Code", "Claude Code can be chosen in Settings");
   await t.click("Turn off AI", { within: row });
   await t.click("Turn off AI", { within: DIALOG });
   await says("Off", "confirming Turn off AI turns it off");

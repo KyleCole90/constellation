@@ -2,8 +2,8 @@ import type { Agent, AgentScope } from "~/shared/agent/agent";
 import type { ChangeRecord } from "~/shared/domain/change";
 import type { ChangeId, SchoolId } from "~/shared/domain/ids";
 import { QUIET_NOISE, type NoiseConfig } from "~/shared/providers/fake-canvas/faults";
-import { FAKE_SCHOOLS } from "~/shared/providers/fake-canvas/provider";
-import type { FakeCanvasServer } from "~/shared/providers/fake-canvas/server";
+import { FAKE_SCHOOLS, createFakeCanvasDescriptor } from "~/shared/providers/fake-canvas/provider";
+import { FakeCanvasServer } from "~/shared/providers/fake-canvas/server";
 import {
   Secret,
   type Capabilities,
@@ -13,7 +13,7 @@ import {
 import { createMemoryVault } from "~/renderer/providers/vault";
 import {
   createWorkspaceStore,
-  fakeCanvasBackend,
+  fakeBackend,
   type WorkspaceDeps,
   type WorkspaceStore,
 } from "~/renderer/stores/workspace";
@@ -58,14 +58,16 @@ export const makeStoreRig = async (options: StoreRigOptions = {}) => {
     storage,
     vault,
     backend: (now) => {
-      const backend = fakeCanvasBackend({
+      const created = new FakeCanvasServer({
         storage,
-        noise: options.noise ?? QUIET_NOISE,
-        demoScript: options.demoScript ?? false,
+        now,
         sleep: clock.sleep,
         random: () => 0.5,
-        onServer: (created) => (server = created),
-      })(now);
+        noise: options.noise ?? QUIET_NOISE,
+        demoScript: options.demoScript ?? false,
+      });
+      server = created;
+      const backend = fakeBackend(createFakeCanvasDescriptor(created, now), () => created.reset());
       const descriptor = backend.descriptors["fake-canvas"];
       if (!descriptor) return backend;
       const narrowed = { ...descriptor };

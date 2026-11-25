@@ -23,7 +23,7 @@ export function ResetDemoDialog({
         await navigate({ to: "/welcome", replace: true });
       }}
     >
-      <p>This wipes everything in this browser and starts over at the welcome screen:</p>
+      <p>This wipes everything in the app and starts over at the welcome screen:</p>
       <ul className="flex list-disc flex-col gap-0.5 pl-4">
         <li>Every change, draft, and approval</li>
         <li>Every thread and its messages</li>

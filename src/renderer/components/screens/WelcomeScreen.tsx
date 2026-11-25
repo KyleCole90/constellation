@@ -1,4 +1,4 @@
-import { REAL_AI, VAULT_PLACE, desktopBridge } from "~/renderer/desktop";
+import { VAULT_PLACE, realAi } from "~/renderer/desktop";
 import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
 import { Check, Lock } from "lucide-react";
 import { useState } from "react";
@@ -6,11 +6,10 @@ import { useState } from "react";
 import mark from "~/renderer/assets/mark.svg";
 import type { School } from "~/shared/domain/lms";
 import { cn } from "~/renderer/lib/utils";
-import type { AiSource } from "~/renderer/stores/types";
+import type { AiSource } from "~/shared/ai-source";
 import { useWorkspace, useWorkspaceStore, workspaceStore } from "~/renderer/stores/workspace";
 
 import { Brand, PRODUCT_NAME } from "../Brand";
-import { isMacDevice } from "../device";
 import { AiKeyForm } from "../settings/AiKeyForm";
 import type { ClaudeCodeReading } from "../settings/claude-code.logic";
 import { ClaudeCodeCheck, useClaudeCode } from "../settings/ClaudeCode";
@@ -25,60 +24,39 @@ import {
 import { Button } from "../ui/button";
 import { setupBlocker } from "./setup.logic";
 
-const NO_MODEL = REAL_AI
-  ? "Drafts and chat come from Claude, billed to your Anthropic key or counted against your Claude subscription."
-  : "No model is wired up in this build yet, so AI drafts come from built-in rules for now.";
+const REAL_MODEL =
+  "Drafts and chat come from Claude, billed to your Anthropic key or counted against your Claude subscription.";
+const RULES_MODEL =
+  "No model is wired up in this build yet, so AI drafts come from built-in rules for now.";
 const PROMISE = "Nothing reaches your LMS until you approve it.";
 
 interface AiOption {
   source: AiSource;
   title: string;
-  body(mac: boolean): string;
-  needsMac?: true;
+  body: string;
 }
 
 const AI_OPTIONS: readonly AiOption[] = [
   {
     source: "key",
     title: "Claude, with your Anthropic API key",
-    body: () => `The key stays in ${VAULT_PLACE} and is never shown again.`,
+    body: `The key stays in ${VAULT_PLACE} and is never shown again.`,
   },
-  // Only the desktop app can run the teacher's Claude Code. It shows even when Claude Code isn't found, so the teacher can install it.
-  ...(desktopBridge
-    ? [
-        {
-          source: "claude-code",
-          title: "Claude, with your Claude Code subscription",
-          body: () =>
-            "Your own Claude Code on this Mac runs each draft. Usage counts against your Claude plan.",
-        } satisfies AiOption,
-      ]
-    : []),
-  // The desktop app drafts with Claude alone, so it offers no on-device model.
-  ...(REAL_AI
-    ? []
-    : [
-        {
-          source: "on-device",
-          title: "On-device model",
-          body: (mac: boolean) =>
-            mac
-              ? "The model built into macOS. Nothing leaves this Mac."
-              : "Only on a Mac with Apple Intelligence.",
-          needsMac: true,
-        } satisfies AiOption,
-      ]),
+  {
+    source: "claude-code",
+    title: "Claude, with your Claude Code subscription",
+    body: "Your own Claude Code on this Mac runs each draft. Usage counts against your Claude plan.",
+  },
   {
     source: "none",
     title: "No AI",
-    body: () => "You fill in grades and replies by hand. Turn on AI later in Settings.",
+    body: "You fill in grades and replies by hand. Turn on AI later in Settings.",
   },
 ];
 
 const AI_WORDS: Readonly<Record<AiSource, string>> = {
   key: "Claude, with your key",
   "claude-code": "Claude, with Claude Code",
-  "on-device": "this Mac",
   none: "off",
 };
 
@@ -140,7 +118,6 @@ function AiChoices({
   claudeCode: { reading: ClaudeCodeReading; check: () => void };
 }) {
   const keySaved = useWorkspace((state) => state.aiSource === "key");
-  const mac = isMacDevice();
   return (
     <fieldset disabled={disabled} data-testid="ai-choices" className="flex flex-col gap-3">
       <legend className="contents">
@@ -148,7 +125,7 @@ function AiChoices({
       </legend>
       <p className="flex items-center gap-1.5 text-meta text-muted-foreground">
         {disabled && <Lock aria-hidden className="size-3 flex-none" />}
-        {disabled ? "Connect a school first." : NO_MODEL}
+        {disabled ? "Connect a school first." : realAi() ? REAL_MODEL : RULES_MODEL}
       </p>
       <div
         className={cn(
@@ -157,9 +134,6 @@ function AiChoices({
         )}
       >
         {AI_OPTIONS.map((option) => {
-          const unavailable = option.needsMac === true && !mac;
-          // Tertiary text instead of opacity, so an option you can't pick yet reads as off and still clears 4.5:1.
-          const off = unavailable && !disabled;
           return (
             <div
               key={option.source}
@@ -169,7 +143,7 @@ function AiChoices({
               <label
                 className={cn(
                   "flex items-start gap-3",
-                  off || disabled ? "cursor-not-allowed" : "cursor-pointer",
+                  disabled ? "cursor-not-allowed" : "cursor-pointer",
                 )}
               >
                 <input
@@ -177,21 +151,13 @@ function AiChoices({
                   name="ai-source"
                   value={option.source}
                   className="mt-1 accent-primary disabled:opacity-40"
-                  disabled={unavailable}
                   checked={choice === option.source}
                   onChange={() => onChoose(option.source)}
                 />
                 <span className="flex flex-col">
-                  <span className={cn("text-title", off && "text-tertiary-label")}>
-                    {option.title}
-                  </span>
-                  <span
-                    className={cn(
-                      "text-meta",
-                      off ? "text-tertiary-label" : !disabled && "text-muted-foreground",
-                    )}
-                  >
-                    {option.body(mac)}
+                  <span className="text-title">{option.title}</span>
+                  <span className={cn("text-meta", !disabled && "text-muted-foreground")}>
+                    {option.body}
                   </span>
                 </span>
               </label>
@@ -279,7 +245,6 @@ export function SetupScreen() {
 
   const finish = async () => {
     const store = workspaceStore().getState();
-    if (choice === "on-device") await store.chooseOnDeviceModel();
     if (choice === "claude-code") await store.chooseClaudeCode();
     if (choice === "none") await store.turnOffAi();
     store.setOnboarding("done");

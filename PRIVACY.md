@@ -10,7 +10,7 @@ Constellation runs on your Mac. There is no Constellation server, and no account
 4. **Usage data and scrubbed crash reports to PostHog.** The app tells PostHog, an analytics service, which parts of the app you use, so we can see where teachers get stuck. It sends only these events, each with fixed words and counts, never text:
    - the app opened;
    - a setup step finished (welcome or setup), with which AI source you had chosen, and setup finished;
-   - you changed your AI source, from which to which (none, your key, the on-device model, Claude Code);
+   - you changed your AI source, from which to which (none, your key, Claude Code);
    - you asked for a draft of a grade, reply, announcement or message, and whether you approved it as written, approved it after editing, discarded it, Claude's answer was refused as invalid, or your Claude plan's limit stopped it;
    - how many grades one send posted.
 

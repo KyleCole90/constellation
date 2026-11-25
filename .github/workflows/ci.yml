@@ -80,26 +80,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-  # `npm run verify:web` checks in headless Chrome that the web demo build loads and onboarding finishes.
-  verify-web:
-    name: Verify web
-    runs-on: macos-15
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version-file: .node-version
-          cache: npm
-      # Same lookup as scripts/verify.mjs. The macos-15 image ships Google Chrome in /Applications.
-      - name: Require Google Chrome
-        run: |
-          chrome="${CHROME_BIN:-/Applications/Google Chrome.app/Contents/MacOS/Google Chrome}"
-          test -x "$chrome" || { echo "::error::Chrome not found at $chrome. Set CHROME_BIN."; exit 1; }
-          "$chrome" --version
-      - run: npm ci
-      - run: npm run verify:web
-
   # `npm run smoke:packaged` packages the app unsigned, reads its fuses back, boots it, and checks it refuses a debugger and the switches that expose its traffic.
   smoke-packaged:
     name: Packaged smoke
@@ -119,7 +99,7 @@ jobs:
   check:
     name: Check
     if: ${{ always() }}
-    needs: [lint, build, test, verify, verify-web, smoke-packaged]
+    needs: [lint, build, test, verify, smoke-packaged]
     runs-on: macos-15
     timeout-minutes: 5
     steps:
