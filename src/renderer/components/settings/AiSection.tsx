@@ -2,7 +2,7 @@ import { SPEND_LIMITS_URL, VAULT_PLACE, realAi } from "~/renderer/desktop";
 import { ArrowUpRight } from "lucide-react";
 import { useState } from "react";
 
-import type { AiSource } from "~/renderer/stores/types";
+import type { AiSource } from "~/shared/ai-source";
 import { useAiOn, useWorkspace, workspaceStore } from "~/renderer/stores/workspace";
 
 import { Badge, type BadgeTone } from "../ui/badge";

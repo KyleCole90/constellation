@@ -102,7 +102,7 @@
   "src/renderer/stores/selectors.ts": 68,
   "src/renderer/stores/setup.ts": 23,
   "src/renderer/stores/storage-key.ts": 1,
-  "src/renderer/stores/types.ts": 27,
+  "src/renderer/stores/types.ts": 26,
   "src/renderer/stores/workspace.ts": 112,
   "src/renderer/writeback/writeback.ts": 19
 }

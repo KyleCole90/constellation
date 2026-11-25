@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { CLAUDE_CODE_MINIMUM, olderThan } from "~/shared/claude-code";
-import { invoker, serve, type AgentSource, type Bridge, type ClaudeCodeStatus } from "~/shared/ipc";
+import type { AiSource } from "~/shared/ai-source";
+import { invoker, serve, type Bridge, type ClaudeCodeStatus } from "~/shared/ipc";
 import { Secret } from "~/shared/providers/provider";
 import { setupBlocker } from "~/renderer/components/screens/setup.logic";
 import {
@@ -31,7 +32,7 @@ const SIGNED_OUT: ClaudeCodeStatus = {
 type Answers = Record<string, (input: unknown) => Promise<unknown>>;
 
 const fakeMain = (answers: Answers) => {
-  const told: AgentSource[] = [];
+  const told: AiSource[] = [];
   const bridge: Bridge = {
     fakes: false,
     invoke: invoker(async (channel, input) => {

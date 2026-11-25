@@ -6,7 +6,7 @@ import { useState } from "react";
 import mark from "~/renderer/assets/mark.svg";
 import type { School } from "~/shared/domain/lms";
 import { cn } from "~/renderer/lib/utils";
-import type { AiSource } from "~/renderer/stores/types";
+import type { AiSource } from "~/shared/ai-source";
 import { useWorkspace, useWorkspaceStore, workspaceStore } from "~/renderer/stores/workspace";
 
 import { Brand, PRODUCT_NAME } from "../Brand";

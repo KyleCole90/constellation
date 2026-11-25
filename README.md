@@ -15,7 +15,7 @@ Constellation is a desktop app for adjunct instructors who teach at more than on
 - **Start of term.** For each new course, Constellation copies a previous course or an `.imscc` export into it. It shifts the dates to the new term and scans for stale content. Then it drafts fixes, checks the course before you publish it, and saves it as a template at the end of term.
 - **Approve, then send.** Every grade, comment, reply, and course edit waits on a preview of exactly what will be sent. **Send** stays off until you press **Approve**, and the AI has no way to approve or send. If a send fails partway, the app reads Canvas before it tries again, so a comment is not posted twice.
 - **AI sources.** Choose one in setup or in **Settings**:
-  - Claude with your Anthropic API key. The desktop app keeps the key in your Mac's Keychain and never shows it again.
+  - Claude with your Anthropic API key. The key stays in your Mac's Keychain and is never shown again.
   - Claude with your own Claude Code subscription.
   - No AI. You fill in grades and replies by hand.
 

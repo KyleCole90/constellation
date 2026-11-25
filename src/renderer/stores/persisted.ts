@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import type { AnswerLine, HandoffWork, Source } from "~/shared/agent/agent";
+import { AiSourceSchema } from "~/shared/ai-source";
 import { fingerprintOf, type Fingerprint } from "~/shared/domain/approval";
 import {
   ACTIVITY_KINDS,
@@ -476,7 +477,7 @@ const WorkspaceDataFields = v.object({
   schools: v.array(SchoolSchema),
   connections: recordOf(ConnectionRecordSchema, SchoolIdSchema),
   onboarding: v.picklist(["welcome", "setup", "done"]),
-  aiSource: v.picklist(["none", "key", "claude-code"]),
+  aiSource: AiSourceSchema,
   cache: recordOf(SchoolCacheSchema, SchoolIdSchema),
   changes: recordOf(ChangeRecordSchema, ChangeIdSchema),
   threads: recordOf(ThreadSchema, ThreadIdSchema),

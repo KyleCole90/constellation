@@ -81,7 +81,8 @@ import {
 } from "~/shared/domain/lms";
 import type { SetupLive } from "~/shared/domain/setup";
 import type { AnalyticsEvent, DraftKind } from "~/shared/analytics";
-import type { AgentSource, Bridge, ClaudeCodeStatus } from "~/shared/ipc";
+import type { AiSource } from "~/shared/ai-source";
+import type { Bridge, ClaudeCodeStatus } from "~/shared/ipc";
 import { workName } from "~/shared/domain/workName";
 import { isRecord } from "~/shared/is-record";
 import type { StorageLike } from "~/shared/providers/fake-canvas/server";
@@ -147,7 +148,6 @@ import {
 import { createSetupActions, type SetupActions, type SetupOptions } from "./setup";
 import { WORKSPACE_STORAGE_KEY } from "./storage-key";
 import type {
-  AiSource,
   ConnectionRecord,
   FieldEdit,
   HandedWork,
@@ -349,7 +349,7 @@ export interface WorkspaceDeps {
   timer?: AutoSyncDeps["timer"];
   /** Main's half of the AI source: which source `agent.run` follows, and the teacher's Claude Code. */
   agentMain?: {
-    source(source: AgentSource): Promise<void>;
+    source(source: AiSource): Promise<void>;
     claudeCode(): Promise<ClaudeCodeStatus>;
   };
   /** Hands main one usage event, which it sends only if the teacher allows it. */
@@ -2683,14 +2683,14 @@ const agentMainOf = (bridge: Bridge): NonNullable<WorkspaceDeps["agentMain"]> =>
 const desktopDeps = (bridge: Bridge): WorkspaceDeps => ({
   storage: localStorage,
   vault: createBridgeVault(bridge),
-  backend: bridge.fakes ? bridgeFakeBackend(bridge) : bridgeCanvasBackend(bridge),
-  agent: bridge.fakes ? standInFor(createRuleAgent()) : createBridgeAgent(bridge),
   connectivity: { online: isOnline, subscribe: onConnectivity },
   agentMain: agentMainOf(bridge),
   track: (event: AnalyticsEvent) => void bridge.invoke("analytics.track", event).catch(() => {}),
   ...(bridge.fakes
-    ? {}
+    ? { backend: bridgeFakeBackend(bridge), agent: standInFor(createRuleAgent()) }
     : {
+        backend: bridgeCanvasBackend(bridge),
+        agent: createBridgeAgent(bridge),
         timer: (run, ms) => {
           const id = setTimeout(run, ms);
           return () => clearTimeout(id);

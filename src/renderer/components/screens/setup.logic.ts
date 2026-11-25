@@ -1,4 +1,4 @@
-import type { AiSource } from "~/renderer/stores/types";
+import type { AiSource } from "~/shared/ai-source";
 
 import type { ClaudeCodeReading } from "../settings/claude-code.logic";
 

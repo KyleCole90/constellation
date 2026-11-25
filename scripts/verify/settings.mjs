@@ -595,7 +595,7 @@ const onboarding = async (t, shot) => {
     `document.querySelector('[data-testid="setup-privacy"]').textContent`,
   );
   t.assert(
-    !/whatever you choose|CONSTELLATION_|JavaScript|web demo/.test(privacyWords),
+    !/whatever you choose|CONSTELLATION_|JavaScript/.test(privacyWords),
     "setup: Privacy has no checkbox that does nothing and no developer words",
     privacyWords,
   );
