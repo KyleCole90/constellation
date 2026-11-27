@@ -1,72 +1,71 @@
-# Constellation
+<p align="center">
+  <img src="./build/icon.png" width="80" height="80" alt="Constellation icon" />
+</p>
 
-Each school is a star in your academic journey.
+<h1 align="center">Constellation</h1>
 
-Constellation is a desktop app for adjunct instructors who teach at more than one school. You connect each school's Canvas, and you run the whole week from one workspace: grading, messages, announcements, due dates, and setting up next term's courses. AI can draft the work. Nothing reaches Canvas until you read a plain preview of the change and approve it.
+<p align="center">Each school is a star in your academic journey.</p>
 
-## What it does
+<p align="center">
+  <a href="https://github.com/KyleCole90/constellation/releases"><strong>Download</strong></a> ·
+  <a href="./PRIVACY.md">Privacy</a> ·
+  <a href="./docs/keyboard-shortcuts.md">Shortcuts</a> ·
+  <a href="./CONTRIBUTING.md">Contributing</a>
+</p>
 
-- **North Star** is home, above every course. Ask it a question, and it answers, finds things, or hands the work to the right course thread. Each chat stays in the sidebar.
-- **Course threads.** Each task in a course is a thread: grading an assignment, answering a student, posting an announcement.
-- **What's due** lists what needs you next, across every school.
-- **Grading list.** Open it from What's due and move through submissions with `J` and `K`. Each draft shows the score, the rubric, and the feedback.
-- **Gradebook** and **Announcements** for each course, and **Messages** with students across every school.
-- **Calendar** shows every assignment at every school by the day it is due, with one row per course.
-- **Start of term.** For each new course, Constellation copies a previous course or an `.imscc` export into it. It shifts the dates to the new term and scans for stale content. Then it drafts fixes, checks the course before you publish it, and saves it as a template at the end of term.
-- **Approve, then send.** Every grade, comment, reply, and course edit waits on a preview of exactly what will be sent. **Send** stays off until you press **Approve**, and the AI has no way to approve or send. If a send fails partway, the app reads Canvas before it tries again, so a comment is not posted twice.
-- **AI sources.** Choose one in setup or in **Settings**:
-  - Claude with your Anthropic API key. The key stays in your Mac's Keychain and is never shown again.
-  - Claude with your own Claude Code subscription.
-  - No AI. You fill in grades and replies by hand.
+<p align="center">
+  <img src="./docs/readme/hero.webp" width="100%" alt="Constellation grading an essay: an AI draft with rubric scores and feedback, not sent, waiting on Approve, next to the student's submission" />
+</p>
 
-## Get it
+Constellation is a desktop app for adjunct instructors who teach at more than one school. Connect each school's Canvas, then run the whole week from one workspace: grading, messages, announcements, due dates, and next term's courses.
 
-**Desktop app.** Download the `.dmg` for your Mac (Apple silicon or Intel) from [GitHub Releases](https://github.com/KyleCole90/constellation/releases). On first run, type each school's Canvas address and paste a Canvas access token for it.
+AI can draft the work. Nothing reaches Canvas until you read a plain preview of the change and approve it.
 
-**From source.** Constellation needs the Node.js version in `.node-version`. Run:
+## What you get
 
-```sh
-npm install && npm run dev
-```
+- **North Star.** The home screen sits above every course. Ask it a question, and it answers, finds things, or hands the work to the right course thread.
+- **Course threads.** Each task in a course is a thread: grade an assignment, answer a student, post an announcement.
+- **What's due.** It lists what needs you next, across every school.
+- **Grading list.** Move through submissions with `J` and `K`. Each draft shows the score, the rubric, and the feedback.
+- **Every school in one place.** Each course has a gradebook and announcements. **Messages** and **Calendar** cover every school.
+- **Start of term.** Copy a previous course or an `.imscc` export into a new one. Constellation shifts the dates to the new term and scans for stale content. It drafts fixes and checks the course before you publish it.
+- **Approve, then send.** Every grade, comment, reply, and course edit waits on a preview of what will be sent. The AI cannot approve or send. If a send fails partway, the app reads Canvas before it tries again, so nothing is posted twice.
 
-`npm run dev` starts the desktop app.
+## Install
 
-## Keyboard shortcuts
+### Desktop app
 
-| Keys            | Action                                                                                                                                                                                                                             |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `⌘K`            | Opens the command palette.                                                                                                                                                                                                         |
-| `⌘B`            | Toggles the sidebar.                                                                                                                                                                                                               |
-| `⌘1` to `⌘9`    | Opens that thread.                                                                                                                                                                                                                 |
-| `⌘⇧[` and `⌘⇧]` | Moves to the previous or next thread.                                                                                                                                                                                              |
-| `⌘N`            | Goes to North Star for a new chat. Needs AI on.                                                                                                                                                                                    |
-| `⌘⇧O`           | Starts a thread in the current course. Needs AI on.                                                                                                                                                                                |
-| `⌘D`            | Opens or closes the preview panel.                                                                                                                                                                                                 |
-| `J` and `K`     | Moves through the grading list.                                                                                                                                                                                                    |
-| `/`             | Focuses the composer. Needs AI on.                                                                                                                                                                                                 |
-| `⌘↵`            | Walks to the next step. It never approves. On a draft, it moves focus to **Approve**. On a form with blanks, it stops at the preview. With a correction half typed in the composer, it opens the review and leaves the text there. |
+[Download Constellation](https://github.com/KyleCole90/constellation/releases) for macOS. Each release has a `.dmg` for Apple silicon (`arm64`) and one for Intel. Both are signed and notarised. Every build so far is a pre-release.
 
-Enter or Space on the focused **Approve** button approves.
+### Connect your schools
 
-## Privacy
+On first run, type each school's Canvas address and paste a Canvas access token for it.
 
-[PRIVACY.md](PRIVACY.md) lists everything the desktop app sends and where. The setup page shows the same list, and you can turn crash reports off there or in **Settings**.
+### Choose an AI source
+
+Pick one in setup or in **Settings**:
+
+- **Claude with your Anthropic API key.** The app encrypts the key with your Mac's Keychain and never shows it again.
+- **Claude through your own Claude Code subscription.** The app runs the Claude Code installed on your Mac.
+- **No AI.** You fill in grades and replies by hand.
+
+## "Where does my data go?"
+
+Constellation runs on your Mac. There is no Constellation server and no account. The app talks to your schools' Canvas with the tokens you paste. Student work goes only to the AI source you chose, and the app never switches to another one.
+
+The installed app also sends usage events and scrubbed crash reports, with no text in them. Clear **Send usage data and crash reports** in setup or in **Settings** to stop them. [PRIVACY.md](./PRIVACY.md) lists everything the app sends and where.
+
+## Documentation
+
+- [Privacy](./PRIVACY.md)
+- [Keyboard shortcuts](./docs/keyboard-shortcuts.md)
+- [Decision records](./docs/adr/), for what the app guarantees and why
 
 ## Contributing
 
-Run these checks before you open a pull request. CI runs the same ones.
-
-| Command                  | What it checks                                               |
-| ------------------------ | ------------------------------------------------------------ |
-| `npm run check`          | Formatting and lint.                                         |
-| `npm run knip`           | Unused files, exports, and dependencies.                     |
-| `npm run typecheck`      | Every TypeScript project.                                    |
-| `npm test`               | The Vitest suite.                                            |
-| `npm run build`          | The renderer to `out/dist`, and Electron's main and preload. |
-| `npm run smoke:packaged` | The packaged app keeps its security fuses and boots.         |
-
-`npm run verify -- --only=<module>` drives the real Electron app in a hidden window for one module in `scripts/verify/`. `npm run fmt` fixes formatting. [CLAUDE.md](CLAUDE.md) lists the project's rules and the check that enforces each one.
+- Read [CONTRIBUTING.md](./CONTRIBUTING.md) to build from source and run the checks.
+- [CLAUDE.md](./CLAUDE.md) lists the project's rules and the check that enforces each one.
 
 ## License
 
-AGPL-3.0. See [LICENSE](LICENSE).
+AGPL-3.0. See [LICENSE](./LICENSE).
